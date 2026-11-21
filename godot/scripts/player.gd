@@ -89,14 +89,4 @@ func _process(delta:float)->void:
 
 func _read_joystick()->Vector2:
 	if not joystick_ui: return Vector2.ZERO
-	var viewport_size=joystick_ui.get_viewport_rect().size
-	var center=Vector2(155,565)
-	var radius=75.0
-	var active=Vector2.ZERO
-	for i in range(Input.get_touch_count()):
-		var touch=Input.get_touch_position(i)
-		if touch.distance_to(center)<140 or touch.x<310 and touch.y>420:
-			active=(touch-center)/radius
-			if active.length()>1:active=active.normalized()
-			break
-	return active
+	return joystick_ui.get("value")
