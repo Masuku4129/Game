@@ -10,9 +10,7 @@ blender --background --python tools/generate_assets.py -- --output assets/genera
 ## CI
 GitHub Actions workflow **Generate 3D asset pack** installs Blender on an Ubuntu runner, generates 32 GLB models (eight asset types × four seasonal variants), verifies the expected file count, and publishes a downloadable artifact.
 
-## First batch
-- spruce, pine, birch
-- mixed shrub cluster, fern cluster
-- mossy rock, mossy stump, fallen log
+## First seasonal batch
+Eight asset families are exported as four distinct GLB files each (`_spring`, `_summer`, `_autumn`, `_winter`): spruce, pine, birch, mixed shrub cluster, fern cluster, mossy rock, mossy stump, and fallen log.
 
-These are procedural first-pass geometry assets, not final scanned photogrammetry. The next iteration adds physically based bark/needle/leaf textures, a skinned character, collision proxies, LODs, and biome-specific variants. Keep model generation deterministic.
+Seasonal variants alter foliage palettes and surface appearance. Winter birch and shrub variants remove deciduous leaf geometry; evergreen variants receive snow patches; moss, fern, stone, and deadwood shift toward cold-season appearances. These are procedural first-pass models, not final scanned photogrammetry. Next passes should add high-resolution PBR bark/needle/leaf textures, more regional species, a skinned character, collision proxies, LODs, and biome-specific ecological variants. Keep model generation deterministic.
