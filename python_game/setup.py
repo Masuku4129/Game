@@ -23,6 +23,7 @@ setup(
             "plugins": ["pandagles2", "pandagles"],
             "requirements_path": "requirements.txt",
             "use_optimized_wheels": False,
+            "bam_model_extensions": [".glb"],
             "include_patterns": [
                 "**/*.glb",
                 "**/*.gltf",
