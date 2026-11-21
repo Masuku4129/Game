@@ -6,6 +6,7 @@ from direct.actor.Actor import Actor
 from direct.gui.DirectGui import DirectFrame
 from direct.gui import DirectGuiGlobals as DGG
 from direct.showbase.ShowBase import ShowBase
+import simplepbr
 from panda3d.core import (
     AmbientLight, DirectionalLight, Fog, Geom, GeomNode, GeomTriangles,
     GeomVertexData, GeomVertexFormat, GeomVertexWriter, NodePath,
@@ -179,6 +180,7 @@ def build_terrain(parent: NodePath, ground_texture: Texture, extent: float = 90.
 class WildlandsApp(ShowBase):
     def __init__(self) -> None:
         super().__init__()
+        simplepbr.init()
         props = WindowProperties()
         props.setTitle("Wildlands")
         props.setSize(1280, 720)
