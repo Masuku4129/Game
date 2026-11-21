@@ -76,6 +76,7 @@ class ForestRenderer:GLSurfaceView.Renderer{
     private val treeChunks=ArrayList<TreeChunk>()
     private val shrubChunks=ArrayList<DetailChunk>()
     private val groundDetailChunks=ArrayList<DetailChunk>()
+    private val rockChunks=ArrayList<DetailChunk>()
     private lateinit var playerMesh:GpuMesh
     private lateinit var groundMesh:GpuMesh
     private lateinit var shrubMesh:ForestMesh
@@ -112,6 +113,7 @@ class ForestRenderer:GLSurfaceView.Renderer{
             // Dense, independently batched understory and ground detail around every forest tile.
             val shrubs=ForestMeshBuilder()
             val groundBits=ForestMeshBuilder()
+            val rocks=ForestMeshBuilder()
             repeat(13+rnd.nextInt(8)){
                 val sx=(rnd.nextFloat()-.5f)*chunkSize*.88f
                 val sz=(rnd.nextFloat()-.5f)*chunkSize*.88f
@@ -128,8 +130,25 @@ class ForestRenderer:GLSurfaceView.Renderer{
                 groundBits.triangle(floatArrayOf(gx-w,0f,gz),floatArrayOf(gx+w,0f,gz),floatArrayOf(gx+sway,h,gz+(rnd.nextFloat()-.5f)*.12f),col)
                 groundBits.triangle(floatArrayOf(gx,0f,gz-w),floatArrayOf(gx,0f,gz+w),floatArrayOf(gx+(rnd.nextFloat()-.5f)*.12f,h,gz+sway),col)
             }
+                        repeat(18){
+                val fx=(rnd.nextFloat()-.5f)*chunkSize*.9f
+                val fz=(rnd.nextFloat()-.5f)*chunkSize*.9f
+                val petal=when(rnd.nextInt(4)){0->0xFFE7E0CF.toInt();1->0xFFB6C7D5.toInt();2->0xFFD9C1DF.toInt();else->0xFFF0D18B.toInt()}
+                val rr=.035f+rnd.nextFloat()*.035f
+                for(k in 0..3){val ang=k*PI/2.0;groundBits.ellipsoid(fx+(cos(ang)*rr).toFloat(),.06f,fz+(sin(ang)*rr).toFloat(),rr,.018f,rr*.65f,petal,7,5)}
+                groundBits.ellipsoid(fx,.08f,fz,.025f,.025f,.025f,0xFFD2B45C.toInt(),7,5)
+            }
+            repeat(11+rnd.nextInt(7)){
+                val rx=(rnd.nextFloat()-.5f)*chunkSize*.9f
+                val rz=(rnd.nextFloat()-.5f)*chunkSize*.9f
+                val size=.18f+rnd.nextFloat()*.5f
+                val tint=when(rnd.nextInt(4)){0->0xFF77766E.toInt();1->0xFF6D7168.toInt();2->0xFF817B70.toInt();else->0xFF5D665D.toInt()}
+                rocks.ellipsoid(rx, size*.38f, rz,size*1.15f,size*.55f,size*.8f,tint,9,6)
+                rocks.ellipsoid(rx+size*.38f,size*.25f,rz-size*.32f,size*.6f,size*.42f,size*.58f,tint-0x00040404,8,5)
+            }
             shrubChunks.add(DetailChunk(cx*chunkSize,cz*chunkSize,upload(shrubs.snapshot())))
             groundDetailChunks.add(DetailChunk(cx*chunkSize,cz*chunkSize,upload(groundBits.snapshot())))
+            rockChunks.add(DetailChunk(cx*chunkSize,cz*chunkSize,upload(rocks.snapshot())))
         }
     }
     override fun onSurfaceChanged(gl:GL10?,w:Int,h:Int){width=w.coerceAtLeast(1);height=h.coerceAtLeast(1);android.opengl.GLES20.glViewport(0,0,width,height)}
@@ -155,6 +174,9 @@ class ForestRenderer:GLSurfaceView.Renderer{
             val model=identity();android.opengl.Matrix.translateM(model,0,chunk.x,0f,chunk.z);draw(chunk.mesh,vp,model,true)
         }
         for(chunk in groundDetailChunks){val dx=chunk.x-playerX;val dz=chunk.z-playerZ;if(dx*dx+dz*dz>1400f)continue
+            val model=identity();android.opengl.Matrix.translateM(model,0,chunk.x,0f,chunk.z);draw(chunk.mesh,vp,model,false)
+        }
+        for(chunk in rockChunks){val dx=chunk.x-playerX;val dz=chunk.z-playerZ;if(dx*dx+dz*dz>1400f)continue
             val model=identity();android.opengl.Matrix.translateM(model,0,chunk.x,0f,chunk.z);draw(chunk.mesh,vp,model,false)
         }
         // Softly bobbing and turning toward travel direction (visual base animation).
