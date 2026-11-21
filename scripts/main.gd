@@ -157,8 +157,8 @@ void vertex() {
 void fragment() {
     vec3 surface_color = texture(ground_albedo, UV * 1.0).rgb;
     vec3 ground = surface_color * terrain_vertex_color.rgb;
-    float snow_amount = clamp(max(snow_cover, local_surface_state.r), 0.0, 1.0);
-    float wet_amount = clamp(max(surface_wetness, local_surface_state.g), 0.0, 1.0);
+    float snow_amount = clamp(local_surface_state.r, 0.0, 1.0);
+    float wet_amount = clamp(local_surface_state.g, 0.0, 1.0);
     float track_darkening = local_surface_state.b * 0.22;
     vec3 mud = ground * vec3(0.48, 0.39, 0.29);
     ground = mix(ground, mud, clamp(wet_amount * 0.72 + local_surface_state.a * 0.18, 0.0, 0.82));
@@ -470,12 +470,11 @@ func _set_weather(mode: String) -> void:
 			particle_mesh.size = Vector2(0.018, 0.30)
 			particle_material.albedo_color = Color(0.62, 0.76, 0.86, 0.72)
 			snow_accumulation = 0.0
-			snow_accumulation = 0.0
 			terrain_material.set_shader_parameter("snow_cover", 0.0)
 			_apply_environment_snow(0.0)
-			wetness_accumulation = 0.82
-			terrain_material.set_shader_parameter("surface_wetness", 0.82)
-			_apply_environment_wetness(0.82)
+			wetness_accumulation = 0.0
+			terrain_material.set_shader_parameter("surface_wetness", 0.0)
+			_apply_environment_wetness(0.0)
 			_create_rain_puddles()
 		"snow":
 			weather_particles.amount = 2400
