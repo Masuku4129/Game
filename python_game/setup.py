@@ -26,6 +26,7 @@ setup(
             "bam_model_extensions": [".glb"],
             "include_patterns": [
                 "**/*.glb",
+                "**/*.bam",
                 "**/*.gltf",
                 "**/*.png",
                 "**/*.jpg",
