@@ -99,7 +99,7 @@ class ForestRenderer:GLSurfaceView.Renderer{
                 val sp=rnd.nextInt(speciesMeshes.size)
                 val sc=.78f+rnd.nextFloat()*.75f
                 val rot=rnd.nextFloat()*6.28318f
-                batch.append(speciesMeshes[sp],sx,0f,sz,sc,rot)
+                batch.append(speciesMeshes[sp],sx-cx*chunkSize,0f,sz-cz*chunkSize,sc,rot)
             }
             treeChunks.add(TreeChunk(cx*chunkSize,cz*chunkSize,upload(batch.snapshot())))
         }
