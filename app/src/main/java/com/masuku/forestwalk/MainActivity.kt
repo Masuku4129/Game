@@ -160,7 +160,7 @@ class ForestRenderer:GLSurfaceView.Renderer{
         android.opengl.GLES20.glClear(android.opengl.GLES20.GL_COLOR_BUFFER_BIT or android.opengl.GLES20.GL_DEPTH_BUFFER_BIT)
         android.opengl.GLES20.glUseProgram(program)
         val aspect=width.toFloat()/height.toFloat()
-        val view=lookAt(playerX,15.8f+playerY,playerZ+4.1f,playerX,playerY,playerZ,0f,1f,0f)
+        val view=lookAt(playerX,10.8f+playerY,playerZ+5.3f,playerX,playerY,playerZ,0f,1f,0f)
         val projection=ortho(-5.4f*aspect,5.4f*aspect,-5.4f,5.4f,.1f,70f)
         val vp=mul(projection,view)
         android.opengl.GLES20.glUniform3f(uPlayer,playerX,playerY,playerZ)
