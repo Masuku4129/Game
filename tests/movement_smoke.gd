@@ -51,6 +51,8 @@ func _run_test() -> void:
 	await process_frame
 
 	var joystick_value: Vector2 = joystick.get_value()
+	var root_joystick := game.get("joystick") as Control
+	print("MOVEMENT_LINK: same_node=", root_joystick == joystick, " root_value=", root_joystick.get_value() if root_joystick != null else Vector2.ZERO)
 	if joystick_value.length() < 0.4:
 		printerr("MOVEMENT_TEST_FAIL: touch input did not reach joystick; value=", joystick_value)
 		quit(1)
@@ -59,7 +61,7 @@ func _run_test() -> void:
 	for frame in range(90):
 		await physics_frame
 		if frame % 15 == 0:
-			print("MOVEMENT_TRACE frame=", frame, " position=", player.global_position, " velocity=", player.velocity, " floor=", player.is_on_floor(), " collisions=", player.get_slide_collision_count())
+			print("MOVEMENT_TRACE frame=", frame, " input=", game.get("debug_move_input"), " direction=", game.get("debug_move_direction"), " position=", player.global_position, " velocity=", player.velocity, " floor=", player.is_on_floor(), " collisions=", player.get_slide_collision_count())
 
 	var end_position := Vector2(player.global_position.x, player.global_position.z)
 	var distance := start_position.distance_to(end_position)
