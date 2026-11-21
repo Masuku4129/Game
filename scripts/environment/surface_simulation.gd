@@ -5,7 +5,7 @@ class_name SurfaceSimulation
 # the terrain shader: R=snow depth, G=soil moisture, B=compaction, A=runoff.
 const RESOLUTION := 96
 const CELL_COUNT := RESOLUTION * RESOLUTION
-const UPDATE_INTERVAL := 0.16
+const UPDATE_INTERVAL := 0.32
 
 var world_extent := 90.0
 var snow := PackedFloat32Array()
