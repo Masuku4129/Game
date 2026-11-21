@@ -3,7 +3,7 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from main import height_at
+from world.terrain import height_at
 
 
 def test_terrain_height_is_deterministic():
