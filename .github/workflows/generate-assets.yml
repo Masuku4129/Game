@@ -9,7 +9,7 @@ on:
       - ".github/workflows/generate-assets.yml"
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   generate:
@@ -27,7 +27,7 @@ jobs:
           blender --background --python tools/generate_assets.py -- --output assets/generated
           test "$(find assets/generated -maxdepth 1 -name '*.glb' | wc -l)" -eq 8
           du -h assets/generated/*
-      - name: Upload 3D asset pack
+      - name: Commit generated models\n        run: |\n          git config user.name "github-actions[bot]"\n          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"\n          git add assets/generated/*.glb\n          if ! git diff --cached --quiet; then\n            git commit -m "Generate procedural 3D environment asset pack"\n            git push\n          fi\n      - name: Upload 3D asset pack
         uses: actions/upload-artifact@v4
         with:
           name: game-3d-assets-${{ github.sha }}
