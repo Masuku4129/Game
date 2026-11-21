@@ -2,8 +2,9 @@ extends CharacterBody3D
 
 const SPEED=5.0
 const GRAVITY=18.0
+const CAMERA_HEIGHT=10.5
+const CAMERA_BACK=5.5
 var joystick_ui:Control
-var touch_vector:=Vector2.ZERO
 var camera:Camera3D
 var walk_phase:=0.0
 
@@ -24,11 +25,9 @@ func _build_body() -> void:
 	_add_capsule(Vector3(0.15,0.48,0),0.10,0.5,pants)
 	_add_capsule(Vector3(-0.31,0.95,0),0.10,0.46,jacket)
 	_add_capsule(Vector3(0.31,0.95,0),0.10,0.46,jacket)
-	# Decorative overlapping geometry makes a coherent silhouette with no visible seams.
 	for i in range(52):
 		var angle=float(i)*TAU/52.0
-		var p:=Vector3(cos(angle)*0.12,0.92+sin(angle)*0.16,0.02)
-		_add_sphere(p,0.055,jacket)
+		_add_sphere(Vector3(cos(angle)*0.12,0.92+sin(angle)*0.16,0.02),0.055,jacket)
 	var collision:=CollisionShape3D.new()
 	var shape:=CapsuleShape3D.new()
 	shape.radius=0.26
@@ -60,9 +59,10 @@ func _add_sphere(pos:Vector3,r:float,mat:Material)->void:
 func _build_camera()->void:
 	camera=Camera3D.new()
 	camera.current=true
-	camera.position=Vector3(0,12,14)
-	camera.rotation_degrees=Vector3(-40,0,0)
+	camera.fov=48.0
 	add_child(camera)
+	camera.global_position=global_position+Vector3(0,CAMERA_HEIGHT,CAMERA_BACK)
+	camera.look_at(global_position+Vector3(0,0.75,0),Vector3.UP)
 
 func _process(delta:float)->void:
 	var move:=Vector2.ZERO
@@ -70,22 +70,32 @@ func _process(delta:float)->void:
 		move=_read_joystick()
 	move.x+=Input.get_action_strength("move_right")-Input.get_action_strength("move_left")
 	move.y+=Input.get_action_strength("move_down")-Input.get_action_strength("move_up")
-	if move.length()>1: move=move.normalized()
-	var dir:=Vector3(move.x,0,move.y)
+	if move.length()>1.0:
+		move=move.normalized()
+	# Camera-relative axes remove the inverted-feeling diagonal and vertical controls.
+	var right:=camera.global_transform.basis.x
+	var forward:=-camera.global_transform.basis.z
+	right.y=0.0
+	forward.y=0.0
+	right=right.normalized()
+	forward=forward.normalized()
+	var dir:=right*move.x-forward*move.y
+	if dir.length()>1.0:
+		dir=dir.normalized()
 	velocity.x=dir.x*SPEED
 	velocity.z=dir.z*SPEED
-	if not is_on_floor(): velocity.y-=GRAVITY*delta
-	else: velocity.y=0
+	if not is_on_floor():
+		velocity.y-=GRAVITY*delta
+	else:
+		velocity.y=0.0
 	move_and_slide()
 	if dir.length()>0.08:
 		look_at(global_position+dir,Vector3.UP)
 		walk_phase+=delta*9.0
-		# Lightweight leg swing for movement feedback.
-		if has_node("LegL"): get_node("LegL").rotation.x=sin(walk_phase)*0.35
-		if has_node("LegR"): get_node("LegR").rotation.x=-sin(walk_phase)*0.35
 	if camera:
-		camera.global_position=global_position+Vector3(0,11,13)
-		camera.look_at(global_position+Vector3(0,0.7,0),Vector3.UP)
+		var desired:=global_position+Vector3(0,CAMERA_HEIGHT,CAMERA_BACK)
+		camera.global_position=camera.global_position.lerp(desired,1.0-exp(-8.0*delta))
+		camera.look_at(global_position+Vector3(0,0.75,0),Vector3.UP)
 
 func _read_joystick()->Vector2:
 	if not joystick_ui: return Vector2.ZERO
