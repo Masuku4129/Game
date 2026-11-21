@@ -522,7 +522,7 @@ func _add_footprint(position: Vector3, direction: Vector3) -> void:
 	add_child(mark)
 	footprint_nodes.append(mark)
 	if footprint_nodes.size() > 100:
-		var oldest := footprint_nodes.pop_front()
+		var oldest: MeshInstance3D = footprint_nodes.pop_front()
 		if is_instance_valid(oldest):
 			oldest.queue_free()
 	footprint_side = 1 - footprint_side
@@ -645,8 +645,6 @@ func _physics_process(delta: float) -> void:
 		var target_yaw := atan2(-direction.x, -direction.z)
 		player_visual.rotation.y = lerp_angle(player_visual.rotation.y, target_yaw, 1.0 - exp(-delta * 12.0))
 
-	if weather_particles != null:
-		weather_particles.global_position = player.global_position + Vector3(0, 9, 0)
 	if weather_particles != null:
 		weather_particles.global_position = player.global_position + Vector3(0, 9, 0)
 	var target_position := player.global_position + CAMERA_OFFSET
