@@ -59,7 +59,7 @@ class ForestView(ctx:android.content.Context):GLSurfaceView(ctx){
 }
 
 private data class GpuMesh(val vertices:FloatBuffer,val indices:ShortBuffer,val count:Int)
-private data class TreeInstance(val x:Float,val z:Float,val scale:Float,val species:Int)
+private data class TreeChunk(val x:Float,val z:Float,val mesh:GpuMesh)
 
 class ForestRenderer:GLSurfaceView.Renderer{
     @Volatile var mx=0f;@Volatile var my=0f
