@@ -150,6 +150,7 @@ func _create_ui() -> void:
 	root.add_child(weather_button)
 	var joy:=Control.new()
 	joy.name="TouchJoystick"
+	joy.set_script(preload("res://scripts/joystick.gd"))
 	joy.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	root.add_child(joy)
 	player.set("joystick_ui",joy)
