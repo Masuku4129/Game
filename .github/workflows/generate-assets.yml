@@ -25,7 +25,7 @@ jobs:
       - name: Generate GLB models
         run: |
           blender --background --python tools/generate_assets.py -- --output assets/generated
-          families="tree_spruce tree_pine tree_birch shrub_mixed fern_cluster rock_mossy stump_mossy fallen_log"
+          families="tree_spruce tree_pine tree_birch shrub_mixed fern_cluster rock_mossy grass_tuft stone_cluster stump_mossy fallen_log"
           seasons="spring summer autumn winter"
           seasonal_count=0
           for family in $families; do
@@ -42,7 +42,7 @@ jobs:
           echo "Validated seasonal variants: $seasonal_count"
           echo "Total GLB files including legacy base models: $total_count"
           find assets/generated -maxdepth 1 -type f -name '*.glb' -printf '%f %s bytes\n' | sort
-          test "$seasonal_count" -eq 32
+          test "$seasonal_count" -eq 40
           python3 - <<'PY'
           import json, pathlib, struct
           files = sorted(pathlib.Path("assets/generated").glob("*_*.glb"))
