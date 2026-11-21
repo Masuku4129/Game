@@ -100,7 +100,7 @@ func _make_shrub(rng: RandomNumberGenerator) -> Node3D:
 		shrub_shader.code = "shader_type spatial;\nrender_mode diffuse_burley, specular_schlick_ggx;\nuniform vec4 base_tint : source_color = vec4(0.2,0.35,0.16,1.0);\nvarying vec3 wpos;\nfloat h(vec3 p){return fract(sin(dot(p,vec3(17.13,91.7,47.2)))*43758.54);}\nvoid vertex(){wpos=(MODEL_MATRIX*vec4(VERTEX,1.0)).xyz;}\nvoid fragment(){float v=h(floor(wpos*13.0))*0.25+h(floor(wpos*3.0))*0.75;ALBEDO=base_tint.rgb*(0.72+v*0.55);ROUGHNESS=0.96;}\n"
 		var m := ShaderMaterial.new()
 		m.shader = shrub_shader
-		m.set_shader_parameter("base_tint", base_color.lightened(rng.randf_range(0.0,0.16))
+		m.set_shader_parameter("base_tint", base_color.lightened(rng.randf_range(0.0,0.16)))
 		b.material_override=m
 		root.add_child(b)
 	return root
