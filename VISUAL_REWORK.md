@@ -13,7 +13,7 @@
 - Kotlin native Android app with OpenGL ES 2 renderer.
 - Procedural mesh builder for ellipsoids, tapered cylinders, and triangles; static scenery CPU-batched in chunks.
 - 14 deterministic tree meshes with branching trunks, irregular exposed roots, three silhouette/palette families, pointed leaf blades and cross-plane canopy detail.
-- Increased forest density to 9–11 trees per chunk; increased chunked understory to 19–27 shrubs per chunk, plus, grass blades, wildflower clusters, and layered rock meshes.
+- Increased forest density to 9–11 trees per chunk and chunked understory to 19–27 shrubs per chunk; grass blades, wildflower clusters, and layered rock meshes.
 - 96x96 triangulated ground grid with subtle height variation and multiple earth/green color palettes.
 - Close fixed follow camera, landscape UI, on-screen joystick and player heading updates.
 - Separate body, arm, tool, upper-leg and lower-leg meshes; swinging limbs and knee flexion are animated while moving.
