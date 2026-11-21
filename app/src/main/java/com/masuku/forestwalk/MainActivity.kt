@@ -186,7 +186,8 @@ class ForestRenderer:GLSurfaceView.Renderer{
         val bob=if(moving)abs(sin(phase)).toFloat()*.035f else 0f
         val pm=identity();android.opengl.Matrix.translateM(pm,0,playerX,bob,playerZ);android.opengl.Matrix.rotateM(pm,0,heading*180f/PI.toFloat(),0f,1f,0f)
         draw(playerBody,vp,pm)
-        for(side in listOf(-1f,1f)){
+        for(sideIndex in 0..1){
+            val side=if(sideIndex==0)-1f else 1f
             val armPivot=identity();android.opengl.Matrix.translateM(armPivot,0,side*.23f,1.18f,0f);android.opengl.Matrix.rotateM(armPivot,0,-swing*55f,1f,0f,0f)
             val armModel=mul(pm,armPivot);draw(playerArm,vp,armModel)
             if(side>0f)draw(playerTool,vp,armModel)
