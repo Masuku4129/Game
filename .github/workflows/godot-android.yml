@@ -1,5 +1,9 @@
 name: Godot Android APK
 
+concurrency:
+  group: godot-android-${{ github.ref }}
+  cancel-in-progress: true
+
 on:
   workflow_dispatch:
   push:
