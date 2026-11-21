@@ -63,10 +63,23 @@ jobs:
         working-directory: python_game
         run: |
           mkdir -p android_wheels
-          curl -fL https://rdb.name/panda3d-1.11.0-cp313-cp313-android_arm64.whl \
-            -o android_wheels/panda3d-1.11.0-cp313-cp313-android_arm64.whl
-          test -s android_wheels/panda3d-1.11.0-cp313-cp313-android_arm64.whl
-          unzip -t android_wheels/panda3d-1.11.0-cp313-cp313-android_arm64.whl
+          wheel="android_wheels/panda3d-1.11.0-cp313-cp313-android_arm64.whl"
+          downloaded=false
+          for url in \
+            https://rdb.name/panda3d-1.11.0-cp313-cp313-android_arm64-r26b.whl \
+            https://rdb.name/panda3d-1.11.0-cp313-cp313-android_arm64.whl; do
+            if curl --retry 3 --retry-delay 2 -fL "$url" -o "$wheel"; then
+              if unzip -t "$wheel"; then
+                downloaded=true
+                echo "Using Android ARM64 wheel: $url"
+                break
+              fi
+            fi
+          done
+          test "$downloaded" = true
+          test -s "$wheel"
+          ls -lh "$wheel"
+          unzip -l "$wheel" | head -n 25
 
       - name: Stage authored GLB assets
         run: cp -R assets python_game/assets
