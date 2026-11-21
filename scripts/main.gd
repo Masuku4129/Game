@@ -24,6 +24,8 @@ var active_touch := -1
 var hud_label: Label
 var joystick: Control
 var weather_button: Button
+var season_button: Button
+var environment_instances: Array[MultiMeshInstance3D] = []
 var asset_mesh_cache: Dictionary = {}
 var asset_base_materials: Dictionary = {}
 var debug_move_input := Vector2.ZERO
@@ -319,6 +321,7 @@ func _scatter_environment_asset(asset_name: String, amount: int, min_scale: floa
 	for index in range(transforms.size()):
 		multi.multimesh.set_instance_transform(index, transforms[index])
 	add_child(multi)
+	environment_instances.append(multi)
 	if asset_name in ["shrub_mixed", "fern_cluster", "grass_tuft", "tree_spruce", "tree_pine", "tree_birch"]:
 		_register_wind_batch(multi, transforms, asset_name)
 
@@ -530,6 +533,32 @@ func _set_weather(mode: String) -> void:
 	particle_mesh.material = particle_material
 	weather_particles.draw_pass_1 = particle_mesh
 	weather_particles.emitting = true
+
+
+func _season_label(season: String) -> String:
+	match season:
+		"spring": return "весна"
+		"summer": return "лето"
+		"autumn": return "осень"
+		"winter": return "зима"
+	return season
+
+
+func _cycle_season() -> void:
+	var seasons := ["spring", "summer", "autumn", "winter"]
+	var current_index := seasons.find(active_season)
+	active_season = seasons[(current_index + 1) % seasons.size()]
+	for instance in environment_instances:
+		if is_instance_valid(instance):
+			instance.queue_free()
+	environment_instances.clear()
+	wind_batches.clear()
+	asset_mesh_cache.clear()
+	asset_base_materials.clear()
+	_create_forest()
+	_create_ground_cover()
+	if season_button != null:
+		season_button.text = "Сезон: " + _season_label(active_season)
 
 
 func _cycle_weather() -> void:
@@ -747,6 +776,12 @@ func _create_hud() -> void:
 	weather_button.custom_minimum_size = Vector2(190.0, 48.0)
 	weather_button.pressed.connect(_cycle_weather)
 	layer.add_child(weather_button)
+	season_button = Button.new()
+	season_button.text = "Сезон: " + _season_label(active_season)
+	season_button.position = Vector2(18.0, 144.0)
+	season_button.custom_minimum_size = Vector2(190.0, 48.0)
+	season_button.pressed.connect(_cycle_season)
+	layer.add_child(season_button)
 	add_child(layer)
 	_create_weather_particles()
 
