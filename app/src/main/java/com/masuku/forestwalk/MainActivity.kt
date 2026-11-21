@@ -149,7 +149,7 @@ class ForestRenderer:GLSurfaceView.Renderer{
         draw(groundMesh,vp,identity())
         for(chunk in treeChunks){val dx=chunk.x-playerX;val dz=chunk.z-playerZ;if(dx*dx+dz*dz>1400f)continue
             val model=identity();android.opengl.Matrix.translateM(model,0,chunk.x,0f,chunk.z)
-            draw(chunk.mesh,vp,model,true)
+            android.opengl.GLES20.glEnable(android.opengl.GLES20.GL_BLEND);android.opengl.GLES20.glBlendFunc(android.opengl.GLES20.GL_SRC_ALPHA,android.opengl.GLES20.GL_ONE_MINUS_SRC_ALPHA);android.opengl.GLES20.glDepthMask(false);draw(chunk.mesh,vp,model,true);android.opengl.GLES20.glDepthMask(true);android.opengl.GLES20.glDisable(android.opengl.GLES20.GL_BLEND)
         }
         for(chunk in shrubChunks){val dx=chunk.x-playerX;val dz=chunk.z-playerZ;if(dx*dx+dz*dz>1400f)continue
             val model=identity();android.opengl.Matrix.translateM(model,0,chunk.x,0f,chunk.z);draw(chunk.mesh,vp,model,true)
