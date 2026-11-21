@@ -24,6 +24,15 @@ func _mesh_has_albedo_texture(mesh: Mesh) -> bool:
 	return false
 
 
+func _has_node_type(node: Node, type_name: String) -> bool:
+	if node.get_class() == type_name:
+		return true
+	for child in node.get_children():
+		if _has_node_type(child, type_name):
+			return true
+	return false
+
+
 func _initialize() -> void:
 	call_deferred("_run_test")
 
@@ -112,6 +121,11 @@ func _run_test() -> void:
 		quit(1)
 		return
 
+	var character_visual := game.get("player_visual") as Node3D
+	if character_visual == null or not _has_node_type(character_visual, "Skeleton3D") or not _has_node_type(character_visual, "AnimationPlayer"):
+		printerr("ENVIRONMENT_TEST_FAIL: rigged explorer skeleton or animation player missing")
+		quit(1)
+		return
 	for asset_name in ["tree_spruce", "tree_birch", "fern_cluster", "grass_tuft", "mushroom_cluster"]:
 		var colored_mesh := game.call("_load_environment_mesh", asset_name) as Mesh
 		var minimum_colors := 1 if asset_name == "fern_cluster" else 2
@@ -140,5 +154,5 @@ func _run_test() -> void:
 		quit(1)
 		return
 
-	print("ENVIRONMENT_TEST_PASS: weather, footprints, hydrology, collision deformation, camera elevation/distance, ground normal map, textured grass, colored GLB materials and runtime seasonal rebuild")
+	print("ENVIRONMENT_TEST_PASS: weather, footprints, hydrology, collision deformation, camera elevation/distance, ground normal map, textured grass, colored GLB materials, rigged humanoid skeleton/animation and runtime seasonal rebuild")
 	quit(0)
