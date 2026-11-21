@@ -35,6 +35,8 @@ var footprint_nodes: Array[MeshInstance3D] = []
 var footprint_distance := 0.0
 var footprint_side := 0
 var puddle_nodes: Array[MeshInstance3D] = []
+var snow_accumulation := 0.0
+var wetness_accumulation := 0.0
 
 
 func _ready() -> void:
@@ -283,6 +285,17 @@ func _process(delta: float) -> void:
 	if wind_update_clock < 0.08:
 		return
 	wind_update_clock = 0.0
+	if weather_mode == "snow":
+		snow_accumulation = minf(0.88, snow_accumulation + delta * 0.025)
+		terrain_material.set_shader_parameter("snow_cover", snow_accumulation)
+	elif weather_mode == "rain":
+		wetness_accumulation = minf(1.0, wetness_accumulation + delta * 0.08)
+		terrain_material.set_shader_parameter("surface_wetness", wetness_accumulation)
+	else:
+		snow_accumulation = maxf(0.0, snow_accumulation - delta * 0.003)
+		wetness_accumulation = maxf(0.0, wetness_accumulation - delta * 0.012)
+		terrain_material.set_shader_parameter("snow_cover", snow_accumulation)
+		terrain_material.set_shader_parameter("surface_wetness", wetness_accumulation)
 	var wind_strength := 0.035 if weather_mode == "clear" else 0.075
 	for batch in wind_batches:
 		var instance := batch["node"] as MultiMeshInstance3D
@@ -385,7 +398,9 @@ func _set_weather(mode: String) -> void:
 			process_material.gravity = Vector3(0, -1.5, 0)
 			particle_mesh.size = Vector2(0.018, 0.30)
 			particle_material.albedo_color = Color(0.62, 0.76, 0.86, 0.72)
+			snow_accumulation = 0.0
 			terrain_material.set_shader_parameter("snow_cover", 0.0)
+			wetness_accumulation = 0.82
 			terrain_material.set_shader_parameter("surface_wetness", 0.82)
 			_create_rain_puddles()
 		"snow":
@@ -396,13 +411,15 @@ func _set_weather(mode: String) -> void:
 			process_material.gravity = Vector3(0, -0.28, 0)
 			particle_mesh.size = Vector2(0.075, 0.075)
 			particle_material.albedo_color = Color(0.92, 0.96, 1.0, 0.92)
-			terrain_material.set_shader_parameter("snow_cover", 0.78)
+			wetness_accumulation = 0.08
 			terrain_material.set_shader_parameter("surface_wetness", 0.08)
+			snow_accumulation = maxf(snow_accumulation, 0.12)
+			terrain_material.set_shader_parameter("snow_cover", snow_accumulation)
 			_clear_puddles()
-		_ :
+		_:
 			weather_particles.emitting = false
-			terrain_material.set_shader_parameter("snow_cover", 0.0)
-			terrain_material.set_shader_parameter("surface_wetness", 0.0)
+			terrain_material.set_shader_parameter("snow_cover", snow_accumulation)
+			terrain_material.set_shader_parameter("surface_wetness", wetness_accumulation)
 			_clear_puddles()
 			return
 	particle_mesh.material = particle_material
@@ -571,7 +588,14 @@ func _create_hud() -> void:
 	joystick.offset_right = 218.0
 	joystick.offset_bottom = -28.0
 	layer.add_child(joystick)
+	var weather_button := Button.new()
+	weather_button.text = "Погода: ясно"
+	weather_button.position = Vector2(18.0, 88.0)
+	weather_button.custom_minimum_size = Vector2(190.0, 48.0)
+	weather_button.pressed.connect(_cycle_weather)
+	layer.add_child(weather_button)
 	add_child(layer)
+	_create_weather_particles()
 
 
 func _physics_process(delta: float) -> void:
@@ -605,6 +629,11 @@ func _physics_process(delta: float) -> void:
 	else:
 		player.velocity.y = -0.1
 	player.move_and_slide()
+	if weather_mode != "clear":
+		footprint_distance += Vector2(player.velocity.x, player.velocity.z).length() * delta
+		if footprint_distance >= 0.62 and Vector2(player.velocity.x, player.velocity.z).length() > 0.8:
+			_add_footprint(player.global_position, direction)
+			footprint_distance = 0.0
 	var horizontal_speed := Vector2(player.velocity.x, player.velocity.z).length()
 	var slope_ahead := 0.0
 	if direction.length_squared() > 0.001:
@@ -616,6 +645,8 @@ func _physics_process(delta: float) -> void:
 		var target_yaw := atan2(-direction.x, -direction.z)
 		player_visual.rotation.y = lerp_angle(player_visual.rotation.y, target_yaw, 1.0 - exp(-delta * 12.0))
 
+	if weather_particles != null:
+		weather_particles.global_position = player.global_position + Vector3(0, 9, 0)
 	var target_position := player.global_position + CAMERA_OFFSET
 	camera.global_position = camera.global_position.lerp(target_position, 1.0 - exp(-delta * 5.5))
 	camera.look_at(player.global_position + Vector3.UP * 0.7, Vector3.UP)
