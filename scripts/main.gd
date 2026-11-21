@@ -119,7 +119,7 @@ func _create_environment() -> void:
 	sun.rotation_degrees = Vector3(-42.0, -28.0, 0.0)
 	sun.light_energy = 1.25
 	sun.shadow_enabled = true
-	sun.directional_shadow_max_distance = 65.0
+	sun.directional_shadow_max_distance = 48.0
 	add_child(sun)
 
 
@@ -324,6 +324,7 @@ func _scatter_environment_asset(asset_name: String, amount: int, min_scale: floa
 	for index in range(transforms.size()):
 		multi.multimesh.set_instance_transform(index, transforms[index])
 	add_child(multi)
+	multi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	environment_instances.append(multi)
 	if asset_name in ["shrub_mixed", "fern_cluster", "grass_tuft", "tree_spruce", "tree_pine", "tree_birch"]:
 		_register_wind_batch(multi, transforms, asset_name)
@@ -748,7 +749,7 @@ func _create_camera() -> void:
 	camera.projection = Camera3D.PROJECTION_PERSPECTIVE
 	camera.fov = CAMERA_FOV
 	camera.near = 0.08
-	camera.far = 180.0
+	camera.far = 132.0
 	camera.position = player.position + CAMERA_OFFSET
 	add_child(camera)
 	camera.make_current()
