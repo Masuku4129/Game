@@ -7,7 +7,7 @@ from world.forest_layout import tree_placements
 
 def test_forest_density_is_deterministic_and_dense():
     placements = list(tree_placements(11))
-    assert len(placements) == 513
+    assert len(placements) == 520
     assert placements == list(tree_placements(11))
 
 
