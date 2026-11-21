@@ -49,10 +49,11 @@ func _create_ground() -> void:
 	ground.mesh = mesh
 	ground.rotation_degrees.x = 0
 	ground.position.y = -0.08
-	var mat := StandardMaterial3D.new()
-	mat.albedo_color = Color(0.20, 0.28, 0.18)
-	mat.roughness = 1.0
-	ground.material_override = mat
+	var ground_shader := Shader.new()
+	ground_shader.code = "shader_type spatial;\nrender_mode diffuse_burley, specular_schlick_ggx;\nvarying vec3 world_pos;\nfloat hash(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453);}\nfloat noise(vec2 p){vec2 i=floor(p),f=fract(p);f=f*f*(3.0-2.0);return mix(mix(hash(i),hash(i+vec2(1,0)),f.x),mix(hash(i+vec2(0,1)),hash(i+vec2(1,1)),f.x),f.y);}\nfloat fbm(vec2 p){float v=0.0,a=0.5;for(int i=0;i<5;i++){v+=noise(p)*a;p*=2.03;a*=0.5;}return v;}\nvoid vertex(){world_pos=(MODEL_MATRIX*vec4(VERTEX,1.0)).xyz;}\nvoid fragment(){vec2 p=world_pos.xz;float broad=fbm(p*0.075),mid=fbm(p*0.45),fine=fbm(p*2.2);float blades=noise(p*vec2(3.0,0.7))*noise(p*vec2(0.8,5.0));vec3 color=mix(vec3(0.075,0.12,0.055),vec3(0.24,0.31,0.12),broad*0.75+mid*0.25);color=mix(color,color*vec3(0.82,1.08,0.77),fine*0.3);color+=vec3(0.035,0.055,0.015)*smoothstep(0.60,0.92,blades);ALBEDO=color;ROUGHNESS=0.96;}\n"
+	var ground_material := ShaderMaterial.new()
+	ground_material.shader = ground_shader
+	ground.material_override = ground_material
 	add_child(ground)
 	var floor_body := StaticBody3D.new()
 	floor_body.name = "GroundCollision"
@@ -63,20 +64,6 @@ func _create_ground() -> void:
 	floor_shape.position.y = -0.18
 	floor_body.add_child(floor_shape)
 	add_child(floor_body)
-	# A subtle patchwork of broad, overlapping natural color layers avoids hard tile seams.
-	for i in range(48):
-		var patch := MeshInstance3D.new()
-		var pmesh := SphereMesh.new()
-		pmesh.radius = randf_range(2.5, 8.0)
-		pmesh.height = pmesh.radius * 0.12
-		patch.mesh = pmesh
-		patch.scale = Vector3(1.0, 0.25, randf_range(0.7, 1.6))
-		patch.position = Vector3(randf_range(-95,95), -0.025, randf_range(-95,95))
-		var pm := StandardMaterial3D.new()
-		pm.albedo_color = [Color(0.18,0.26,0.16),Color(0.24,0.31,0.19),Color(0.28,0.32,0.20),Color(0.16,0.23,0.15)][randi()%4]
-		pm.roughness=1.0
-		patch.material_override=pm
-		add_child(patch)
 
 func _spawn_forest() -> void:
 	var rng := RandomNumberGenerator.new()
@@ -109,9 +96,11 @@ func _make_shrub(rng: RandomNumberGenerator) -> Node3D:
 		b.mesh=mesh
 		b.position=Vector3(rng.randf_range(-0.35,0.35),rng.randf_range(0.18,0.48),rng.randf_range(-0.35,0.35))
 		b.scale=Vector3(1.0, rng.randf_range(0.8,1.3),1.0)
-		var m:=StandardMaterial3D.new()
-		m.albedo_color=base_color.lightened(rng.randf_range(0.0,0.16))
-		m.roughness=1.0
+		var shrub_shader := Shader.new()
+		shrub_shader.code = "shader_type spatial;\nrender_mode diffuse_burley, specular_schlick_ggx;\nuniform vec4 base_tint : source_color = vec4(0.2,0.35,0.16,1.0);\nvarying vec3 wpos;\nfloat h(vec3 p){return fract(sin(dot(p,vec3(17.13,91.7,47.2)))*43758.54);}\nvoid vertex(){wpos=(MODEL_MATRIX*vec4(VERTEX,1.0)).xyz;}\nvoid fragment(){float v=h(floor(wpos*13.0))*0.25+h(floor(wpos*3.0))*0.75;ALBEDO=base_tint.rgb*(0.72+v*0.55);ROUGHNESS=0.96;}\n"
+		var m := ShaderMaterial.new()
+		m.shader = shrub_shader
+		m.set_shader_parameter("base_tint", base_color.lightened(rng.randf_range(0.0,0.16))
 		b.material_override=m
 		root.add_child(b)
 	return root
