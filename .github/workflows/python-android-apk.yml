@@ -7,6 +7,12 @@ on:
       - "python_game/**"
       - ".github/workflows/python-android-apk.yml"
       - "assets/**"
+  pull_request:
+    branches: [main]
+    paths:
+      - "python_game/**"
+      - ".github/workflows/python-android-apk.yml"
+      - "assets/**"
   workflow_dispatch:
 
 permissions:
