@@ -142,6 +142,6 @@ class ForestRenderer:GLSurfaceView.Renderer{
     private fun link(v:String,f:String):Int{val p=android.opengl.GLES20.glCreateProgram();android.opengl.GLES20.glAttachShader(p,shader(android.opengl.GLES20.GL_VERTEX_SHADER,v));android.opengl.GLES20.glAttachShader(p,shader(android.opengl.GLES20.GL_FRAGMENT_SHADER,f));android.opengl.GLES20.glLinkProgram(p);val ok=IntArray(1);android.opengl.GLES20.glGetProgramiv(p,android.opengl.GLES20.GL_LINK_STATUS,ok,0);if(ok[0]==0)throw RuntimeException(android.opengl.GLES20.glGetProgramInfoLog(p));return p}
     private fun identity()=FloatArray(16).also{android.opengl.Matrix.setIdentityM(it,0)}
     private fun ortho(l:Float,r:Float,b:Float,t:Float,n:Float,f:Float):FloatArray{val m=FloatArray(16);android.opengl.Matrix.orthoM(m,0,l,r,b,t,n,f);return m}
-    private fun lookAt(ex:Float,ey:Float,ez:Float,cx:Float,cy:Float,cz:Float,ux:Float,uy:Float,uz):FloatArray{val m=FloatArray(16);android.opengl.Matrix.setLookAtM(m,0,ex,ey,ez,cx,cy,cz,ux,uy,uz);return m}
+    private fun lookAt(ex:Float,ey:Float,ez:Float,cx:Float,cy:Float,cz:Float,ux:Float,uy:Float,uz:Float):FloatArray{val m=FloatArray(16);android.opengl.Matrix.setLookAtM(m,0,ex,ey,ez,cx,cy,cz,ux,uy,uz);return m}
     private fun mul(a:FloatArray,b:FloatArray):FloatArray{val o=FloatArray(16);android.opengl.Matrix.multiplyMM(o,0,a,0,b,0);return o}
 }
