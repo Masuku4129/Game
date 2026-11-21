@@ -60,6 +60,7 @@ class ForestView(ctx:android.content.Context):GLSurfaceView(ctx){
 
 private data class GpuMesh(val vertices:FloatBuffer,val indices:ShortBuffer,val count:Int)
 private data class TreeChunk(val x:Float,val z:Float,val mesh:GpuMesh)
+private data class DetailChunk(val x:Float,val z:Float,val mesh:GpuMesh)
 
 class ForestRenderer:GLSurfaceView.Renderer{
     @Volatile var mx=0f;@Volatile var my=0f
@@ -69,6 +70,8 @@ class ForestRenderer:GLSurfaceView.Renderer{
     private var width=1;private var height=1
     private var playerX=0f;private var playerZ=0f;private var heading=0f;private var last=System.nanoTime()
     private val treeChunks=ArrayList<TreeChunk>()
+    private val shrubChunks=ArrayList<DetailChunk>()
+    private val groundDetailChunks=ArrayList<DetailChunk>()
     private lateinit var playerMesh:GpuMesh
     private lateinit var groundMesh:GpuMesh
     private lateinit var shrubMesh:GpuMesh
@@ -76,7 +79,7 @@ class ForestRenderer:GLSurfaceView.Renderer{
     private val fShader="""precision mediump float;varying vec3 vWorld;varying vec3 vNormal;varying vec3 vColor;uniform vec3 uPlayer;uniform float uTime;uniform float uWeather;uniform float uFoliage;
         float hash(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453);}
         float noise(vec2 p){vec2 i=floor(p),f=fract(p);f=f*f*(3.0-2.0);return mix(mix(hash(i),hash(i+vec2(1.,0.)),f.x),mix(hash(i+vec2(0.,1.)),hash(i+vec2(1.,1.)),f.x),f.y);}
-        void main(){float n=noise(vWorld.xz*2.8)*.12+noise(vWorld.xz*13.0)*.045;vec3 base=vColor*(.90+n);vec3 N=normalize(vNormal);vec3 L=normalize(vec3(-.42,.86,.3));float diffuse=max(dot(N,L),0.0);float ambient=.38;float shade=ambient+diffuse*.68;float wet=clamp(uWeather,0.0,1.0);base=mix(base,base*.72+vec3(.035,.045,.05),wet*.55);vec3 viewDir=normalize(vec3(0.0,1.0,0.0));float spec=pow(max(dot(reflect(-L,N),viewDir),0.0),22.0)*wet*.22;float fade=1.0;if(uFoliage>0.5&&vWorld.y>2.3){float d=distance(vWorld.xz,uPlayer.xz);fade=mix(1.0,.18,1.0-smoothstep(.55,3.4,d));}gl_FragColor=vec4(base*shade+spec,fade);}"""
+        void main(){float n=noise(vWorld.xz*2.8)*.12+noise(vWorld.xz*13.0)*.045;float leafgrain=noise(vWorld.xz*47.0)*.14+noise(vWorld.xz*91.0)*.08;vec3 base=vColor*(.80+n+leafgrain);vec3 N=normalize(vNormal);vec3 L=normalize(vec3(-.42,.86,.3));float diffuse=max(dot(N,L),0.0);float ambient=.44;float shade=ambient+diffuse*.72;float wet=clamp(uWeather,0.0,1.0);base=mix(base,base*.72+vec3(.035,.045,.05),wet*.55);vec3 viewDir=normalize(vec3(0.0,1.0,0.0));float spec=pow(max(dot(reflect(-L,N),viewDir),0.0),22.0)*wet*.22;float fade=1.0;if(uFoliage>0.5&&vWorld.y>2.3){float d=distance(vWorld.xz,uPlayer.xz);fade=mix(1.0,.18,1.0-smoothstep(.55,3.4,d));}gl_FragColor=vec4(base*shade+spec,fade);}"""
     override fun onSurfaceCreated(gl:GL10?,cfg:EGLConfig?){
         android.opengl.GLES20.glClearColor(.48f,.62f,.72f,1f)
         android.opengl.GLES20.glEnable(android.opengl.GLES20.GL_DEPTH_TEST)
@@ -86,22 +89,43 @@ class ForestRenderer:GLSurfaceView.Renderer{
         uMvp=android.opengl.GLES20.glGetUniformLocation(program,"uMVP");uModel=android.opengl.GLES20.glGetUniformLocation(program,"uModel");uPlayer=android.opengl.GLES20.glGetUniformLocation(program,"uPlayer");uTime=android.opengl.GLES20.glGetUniformLocation(program,"uTime");uWeather=android.opengl.GLES20.glGetUniformLocation(program,"uWeather");uFoliage=android.opengl.GLES20.glGetUniformLocation(program,"uFoliage");uWalk=android.opengl.GLES20.glGetUniformLocation(program,"uWalk")
         groundMesh=makeGround();playerMesh=upload(ForestModels.character(123));shrubMesh=makeShrub()
         val speciesMeshes=ArrayList<ForestMesh>()
-        for(i in 0 until 10)speciesMeshes.add(ForestModels.tree(300+i,4.4f+(i%4)*.55f).mesh)
+        for(i in 0 until 14)speciesMeshes.add(ForestModels.tree(300+i,5.6f+(i%5)*.65f).mesh)
         // Static trees are CPU-merged into bounded chunks to reduce hundreds of draw calls.
         val rnd=java.util.Random(87129)
         val chunkSize=34f
         for(cz in -2..2)for(cx in -2..2){
             val batch=ForestMeshBuilder()
-            val count=5+rnd.nextInt(4)
+            val count=6+rnd.nextInt(3)
             repeat(count){
                 val sx=cx*chunkSize+(rnd.nextFloat()-.5f)*chunkSize*.82f
                 val sz=cz*chunkSize+(rnd.nextFloat()-.5f)*chunkSize*.82f
                 val sp=rnd.nextInt(speciesMeshes.size)
-                val sc=.78f+rnd.nextFloat()*.75f
+                val sc=.86f+rnd.nextFloat()*.52f
                 val rot=rnd.nextFloat()*6.28318f
                 batch.append(speciesMeshes[sp],sx-cx*chunkSize,0f,sz-cz*chunkSize,sc,rot)
             }
             treeChunks.add(TreeChunk(cx*chunkSize,cz*chunkSize,upload(batch.snapshot())))
+            // Dense, independently batched understory and ground detail around every forest tile.
+            val shrubs=ForestMeshBuilder()
+            val groundBits=ForestMeshBuilder()
+            repeat(13+rnd.nextInt(8)){
+                val sx=(rnd.nextFloat()-.5f)*chunkSize*.88f
+                val sz=(rnd.nextFloat()-.5f)*chunkSize*.88f
+                val scale=.62f+rnd.nextFloat()*.72f
+                shrubs.append(shrubMesh, sx, 0f, sz, scale, rnd.nextFloat()*6.28318f)
+            }
+            repeat(260){
+                val gx=(rnd.nextFloat()-.5f)*chunkSize*.94f
+                val gz=(rnd.nextFloat()-.5f)*chunkSize*.94f
+                val h=.16f+rnd.nextFloat()*.36f
+                val w=.025f+rnd.nextFloat()*.045f
+                val col=when(rnd.nextInt(5)){0->0xFF7B8D42.toInt();1->0xFF87994A.toInt();2->0xFF536D34.toInt();3->0xFFB0A35A.toInt();else->0xFF657C3B.toInt()}
+                val sway=(rnd.nextFloat()-.5f)*.14f
+                groundBits.triangle(floatArrayOf(gx-w,0f,gz),floatArrayOf(gx+w,0f,gz),floatArrayOf(gx+sway,h,gz+(rnd.nextFloat()-.5f)*.12f),col)
+                groundBits.triangle(floatArrayOf(gx,0f,gz-w),floatArrayOf(gx,0f,gz+w),floatArrayOf(gx+(rnd.nextFloat()-.5f)*.12f,h,gz+sway),col)
+            }
+            shrubChunks.add(DetailChunk(cx*chunkSize,cz*chunkSize,upload(shrubs.snapshot())))
+            groundDetailChunks.add(DetailChunk(cx*chunkSize,cz*chunkSize,upload(groundBits.snapshot())))
         }
     }
     override fun onSurfaceChanged(gl:GL10?,w:Int,h:Int){width=w.coerceAtLeast(1);height=h.coerceAtLeast(1);android.opengl.GLES20.glViewport(0,0,width,height)}
@@ -120,7 +144,14 @@ class ForestRenderer:GLSurfaceView.Renderer{
         draw(groundMesh,vp,identity())
         for(chunk in treeChunks){val dx=chunk.x-playerX;val dz=chunk.z-playerZ;if(dx*dx+dz*dz>1400f)continue
             val model=identity();android.opengl.Matrix.translateM(model,0,chunk.x,0f,chunk.z)
-            android.opengl.GLES20.glEnable(android.opengl.GLES20.GL_BLEND);android.opengl.GLES20.glBlendFunc(android.opengl.GLES20.GL_SRC_ALPHA,android.opengl.GLES20.GL_ONE_MINUS_SRC_ALPHA);android.opengl.GLES20.glDepthMask(false);draw(chunk.mesh,vp,model,true);android.opengl.GLES20.glDepthMask(true);android.opengl.GLES20.glDisable(android.opengl.GLES20.GL_BLEND)}
+            draw(chunk.mesh,vp,model,true)
+        }
+        for(chunk in shrubChunks){val dx=chunk.x-playerX;val dz=chunk.z-playerZ;if(dx*dx+dz*dz>1400f)continue
+            val model=identity();android.opengl.Matrix.translateM(model,0,chunk.x,0f,chunk.z);draw(chunk.mesh,vp,model,true)
+        }
+        for(chunk in groundDetailChunks){val dx=chunk.x-playerX;val dz=chunk.z-playerZ;if(dx*dx+dz*dz>1400f)continue
+            val model=identity();android.opengl.Matrix.translateM(model,0,chunk.x,0f,chunk.z);draw(chunk.mesh,vp,model,false)
+        }
         // Softly bobbing and turning toward travel direction (visual base animation).
         val moving=abs(mx)+abs(my)>.06f;val bob=if(moving)sin(now/95000000.0).toFloat()*.035f else 0f
         val pm=identity();android.opengl.Matrix.translateM(pm,0,playerX,.0f+bob,playerZ);android.opengl.Matrix.rotateM(pm,0,heading*180f/PI.toFloat(),0f,1f,0f)
