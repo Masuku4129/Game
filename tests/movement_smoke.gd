@@ -58,6 +58,19 @@ func _run_test() -> void:
 		quit(1)
 		return
 
+	await physics_frame
+	var movement_input: Vector2 = game.get("debug_move_input")
+	var movement_direction: Vector3 = game.get("debug_move_direction")
+	print("MOVEMENT_VECTOR: input=", movement_input, " direction=", movement_direction)
+	if movement_input.length() < 0.4:
+		printerr("MOVEMENT_TEST_FAIL: joystick value did not reach the player controller; input=", movement_input)
+		quit(1)
+		return
+	if Vector2(movement_direction.x, movement_direction.z).length() < 0.9:
+		printerr("MOVEMENT_TEST_FAIL: camera-relative movement direction is zero or too small; direction=", movement_direction)
+		quit(1)
+		return
+
 	for frame in range(90):
 		await physics_frame
 		if frame % 15 == 0:
