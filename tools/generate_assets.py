@@ -116,7 +116,27 @@ def _seasonal_material(source, season):
         if material.use_nodes:
             shader = material.node_tree.nodes.get("Principled BSDF")
             if shader:
-                shader.inputs["Base Color"].default_value = (*color, 1)
+                if source.name.startswith("Grass |"):
+                    size_x, size_y = 128, 256
+                    image = bpy.data.images.new("GrassBlade_%s_%s" % (season, source.name.replace(" ", "_")), width=size_x, height=size_y, alpha=False)
+                    pixels = []
+                    for py in range(size_y):
+                        t = py / float(size_y - 1)
+                        for px in range(size_x):
+                            u = px / float(size_x - 1)
+                            edge = min(1.0, min(u, 1.0 - u) * 8.0)
+                            vein = math.exp(-abs(u - 0.5) * 48.0)
+                            grain = 0.94 + 0.045 * math.sin(px * 0.73 + py * 0.19) + 0.025 * math.sin(px * 1.91 - py * 0.11)
+                            factor = (0.70 + 0.28 * t) * (0.76 + 0.24 * edge) * (0.94 + vein * 0.08) * grain
+                            pixels.extend((min(1.0, color[0] * factor), min(1.0, color[1] * factor), min(1.0, color[2] * factor), 1.0))
+                    image.pixels = pixels
+                    image.pack()
+                    texture_node = material.node_tree.nodes.new("ShaderNodeTexImage")
+                    texture_node.image = image
+                    texture_node.interpolation = "Linear"
+                    material.node_tree.links.new(texture_node.outputs["Color"], shader.inputs["Base Color"])
+                else:
+                    shader.inputs["Base Color"].default_value = (*color, 1)
     return material
 
 
@@ -138,8 +158,10 @@ def _export_seasonal_variant(root, asset_name, season):
                 base_color = shader.inputs.get("Base Color")
                 if base_color:
                     for link in list(base_color.links):
-                        seasonal.node_tree.links.remove(link)
-                    base_color.default_value = seasonal.diffuse_color
+                        if link.from_node.type != "TEX_IMAGE":
+                            seasonal.node_tree.links.remove(link)
+                    if not base_color.is_linked:
+                        base_color.default_value = seasonal.diffuse_color
                 roughness = shader.inputs.get("Roughness")
                 if roughness:
                     roughness.default_value = seasonal.roughness
@@ -273,6 +295,13 @@ def leaf(loc, direction, length, width, material, name="leaf"):
     mesh.from_pydata(vertices, [], faces)
     mesh.materials.append(material)
     mesh.update()
+    uv_layer = mesh.uv_layers.new(name="BladeUV")
+    for polygon in mesh.polygons:
+        for loop_index in polygon.loop_indices:
+            vertex_index = mesh.loops[loop_index].vertex_index
+            row = vertex_index // 3
+            column = vertex_index % 3
+            uv_layer.data[loop_index].uv = (column * 0.5, profile[row][0])
     obj = bpy.data.objects.new(name, mesh)
     bpy.context.collection.objects.link(obj)
     for poly in mesh.polygons:
