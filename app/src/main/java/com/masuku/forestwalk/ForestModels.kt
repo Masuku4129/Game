@@ -50,8 +50,13 @@ internal object ForestModels {
     fun tree(seed:Int,height:Float=6.2f):TreeModel {
         val b=ForestMeshBuilder()
         val rnd=java.util.Random(seed.toLong())
-        val trunk=0xFF58412C.toInt()
-        val palette=intArrayOf(0xFF294F32.toInt(),0xFF32633A.toInt(),0xFF3B7042.toInt(),0xFF477B48.toInt(),0xFF22472E.toInt(),0xFF507E45.toInt())
+        val species=((seed%3)+3)%3
+        val trunk=when(species){1->0xFF493A2C.toInt();2->0xFFB7A88C.toInt();else->0xFF58412C.toInt()}
+        val palette=when(species){
+            1->intArrayOf(0xFF1D4430.toInt(),0xFF27543A.toInt(),0xFF2E6141.toInt(),0xFF376D47.toInt(),0xFF234A35.toInt(),0xFF3B7146.toInt())
+            2->intArrayOf(0xFF487A3B.toInt(),0xFF5E8D45.toInt(),0xFF78A64E.toInt(),0xFF63994A.toInt(),0xFF3E6C39.toInt(),0xFF8AAE5A.toInt())
+            else->intArrayOf(0xFF294F32.toInt(),0xFF32633A.toInt(),0xFF3B7042.toInt(),0xFF477B48.toInt(),0xFF22472E.toInt(),0xFF507E45.toInt())
+        }
         val taper=0.15f+height*.025f
         val leanX=(rnd.nextFloat()-.5f)*height*.045f
         val leanZ=(rnd.nextFloat()-.5f)*height*.045f
@@ -65,11 +70,11 @@ internal object ForestModels {
             components++
         }
         // Branches spiral irregularly up the trunk; foliage clumps are elongated and leaf-like rather than round balls.
-        val branchCount=11+rnd.nextInt(4)
+        val branchCount=when(species){1->8+rnd.nextInt(4);2->12+rnd.nextInt(3);else->11+rnd.nextInt(4)}
         for(i in 0 until branchCount){
             val a=i*2.399963+rnd.nextDouble()*.28
             val startY=height*(.24f+(i.toFloat()/(branchCount))* .56f)
-            val reach=height*(.20f+rnd.nextFloat()*.18f)*(1f-(startY/height)*.22f)
+            val speciesReach=if(species==1)1.22f else if(species==2).86f else 1f\n            val reach=height*(.20f+rnd.nextFloat()*.18f)*speciesReach*(1f-(startY/height)*(if(species==1).62f else .22f))
             val ex=(cos(a)*reach).toFloat()+leanX*(startY/height)
             val ez=(sin(a)*reach).toFloat()+leanZ*(startY/height)
             val ey=startY+height*(.08f+rnd.nextFloat()*.10f)
@@ -88,11 +93,11 @@ internal object ForestModels {
         // Loose asymmetric crown with overlapping canopy lobes and gaps for a natural silhouette.
         for(i in 0 until 12){
             val a=i*PI*2.0/12.0+rnd.nextDouble()*.4
-            val r=height*(.12f+rnd.nextFloat()*.23f)
+            val r=height*(if(species==1).08f else if(species==2).18f else .12f+rnd.nextFloat()*.23f)
             val cx=(cos(a)*r).toFloat()+leanX*.65f
             val cz=(sin(a)*r).toFloat()+leanZ*.65f
             val cy=height*(.68f+rnd.nextFloat()*.25f)
-            val leafSize=height*(.24f+rnd.nextFloat()*.12f)
+            val leafSize=height*(if(species==1).19f+rnd.nextFloat()*.08f else if(species==2).27f+rnd.nextFloat()*.13f else .24f+rnd.nextFloat()*.12f)
             leafCluster(b,cx,cy,cz,leafSize,a,palette[rnd.nextInt(palette.size)],seed+i*31)
             components++
         }
