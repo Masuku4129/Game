@@ -136,6 +136,25 @@ func _run_test() -> void:
 		printerr("ENVIRONMENT_TEST_FAIL: imported explorer walk/run animation clips unavailable: ", clips)
 		quit(1)
 		return
+	var skeleton := _find_node_type(character_visual, "Skeleton3D") as Skeleton3D
+	if skeleton == null or skeleton.get_bone_count() < 12:
+		printerr("ENVIRONMENT_TEST_FAIL: imported explorer skeleton is incomplete")
+		quit(1)
+	character_visual.call("set_motion", 2.0, 0.0)
+	await process_frame
+	if not String(character_visual.get("current_clip")).contains("Walk"):
+		printerr("ENVIRONMENT_TEST_FAIL: controller did not select walk animation")
+		quit(1)
+	character_visual.call("set_motion", 8.0, 0.0)
+	await process_frame
+	if not String(character_visual.get("current_clip")).contains("Run"):
+		printerr("ENVIRONMENT_TEST_FAIL: controller did not select run animation")
+		quit(1)
+	character_visual.call("set_motion", 0.0, 0.0)
+	await process_frame
+	if not String(character_visual.get("current_clip")).contains("Idle"):
+		printerr("ENVIRONMENT_TEST_FAIL: controller did not return to idle animation")
+		quit(1)
 	for asset_name in ["tree_spruce", "tree_birch", "fern_cluster", "grass_tuft", "mushroom_cluster"]:
 		var colored_mesh := game.call("_load_environment_mesh", asset_name) as Mesh
 		var minimum_colors := 1 if asset_name == "fern_cluster" else 2
