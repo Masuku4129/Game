@@ -23,6 +23,8 @@ var active_touch := -1
 var hud_label: Label
 var joystick: Control
 var asset_mesh_cache: Dictionary = {}
+var debug_move_input := Vector2.ZERO
+var debug_move_direction := Vector3.ZERO
 
 
 func _ready() -> void:
@@ -315,6 +317,7 @@ func _physics_process(delta: float) -> void:
 	var keyboard := Input.get_vector("ui_left", "ui_right", "ui_up", "ui_down")
 	var stick: Vector2 = joystick.get_value() if joystick != null else Vector2.ZERO
 	var move_input := (keyboard + stick).limit_length(1.0)
+	debug_move_input = move_input
 	direction.x = move_input.x
 	direction.z = move_input.y
 	direction = direction.limit_length(1.0)
@@ -323,6 +326,7 @@ func _physics_process(delta: float) -> void:
 		direction = camera.global_basis.x * direction.x + camera.global_basis.z * direction.y
 		direction.y = 0.0
 		direction = direction.normalized()
+	debug_move_direction = direction
 
 	var horizontal_velocity := Vector2(player.velocity.x, player.velocity.z)
 	var target_velocity := Vector2(direction.x, direction.z) * PLAYER_SPEED
