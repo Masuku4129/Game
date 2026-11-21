@@ -127,8 +127,8 @@ class ForestRenderer:GLSurfaceView.Renderer{
                 val w=.025f+rnd.nextFloat()*.045f
                 val col=when(rnd.nextInt(5)){0->0xFF7B8D42.toInt();1->0xFF87994A.toInt();2->0xFF536D34.toInt();3->0xFFB0A35A.toInt();else->0xFF657C3B.toInt()}
                 val sway=(rnd.nextFloat()-.5f)*.14f
-                groundBits.triangle(floatArrayOf(gx-w,0f,gz),floatArrayOf(gx+w,0f,gz),floatArrayOf(gx+sway,h,gz+(rnd.nextFloat()-.5f)*.12f),col)
-                groundBits.triangle(floatArrayOf(gx,0f,gz-w),floatArrayOf(gx,0f,gz+w),floatArrayOf(gx+(rnd.nextFloat()-.5f)*.12f,h,gz+sway),col)
+                groundBits.triangleUp(floatArrayOf(gx-w,0f,gz),floatArrayOf(gx+w,0f,gz),floatArrayOf(gx+sway,h,gz+(rnd.nextFloat()-.5f)*.12f),col)
+                groundBits.triangleUp(floatArrayOf(gx,0f,gz-w),floatArrayOf(gx,0f,gz+w),floatArrayOf(gx+(rnd.nextFloat()-.5f)*.12f,h,gz+sway),col)
             }
                         repeat(18){
                 val fx=(rnd.nextFloat()-.5f)*chunkSize*.9f
