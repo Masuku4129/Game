@@ -23,6 +23,10 @@ func _ready() -> void:
 	else:
 		var clips := animation_player.get_animation_list()
 		print("EXPLORER_CLIPS: ", clips)
+		for clip in clips:
+			var animation := animation_player.get_animation(clip)
+			if String(clip).contains("Walk") or String(clip).contains("Run") or String(clip).contains("Idle"):
+				animation.loop_mode = Animation.LOOP_LINEAR
 		_play_matching(["Idle", "idle", "Breathing"])
 	set_season("summer")
 
@@ -42,7 +46,7 @@ func _play_matching(candidates: Array[String]) -> void:
 		for clip in animation_player.get_animation_list():
 			if String(clip).contains(candidate):
 				if current_clip != clip:
-					animation_player.play(clip)
+					animation_player.play(clip, 0.15)
 					current_clip = clip
 				return
 
