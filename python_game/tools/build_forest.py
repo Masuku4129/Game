@@ -2,7 +2,10 @@ from __future__ import annotations
 
 import argparse
 import math
+import sys
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from panda3d.core import NodePath
 from gltf import load_model
