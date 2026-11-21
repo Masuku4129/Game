@@ -194,7 +194,24 @@ class ForestRenderer:GLSurfaceView.Renderer{
         mesh.vertices.position(6);android.opengl.GLES20.glEnableVertexAttribArray(aColor);android.opengl.GLES20.glVertexAttribPointer(aColor,3,android.opengl.GLES20.GL_FLOAT,false,stride,mesh.vertices)
         android.opengl.GLES20.glDrawElements(android.opengl.GLES20.GL_TRIANGLES,mesh.count,android.opengl.GLES20.GL_UNSIGNED_SHORT,mesh.indices)
     }
-    private fun makeGround():GpuMesh{val b=ForestMeshBuilder();val c=0xFF546C42.toInt();b.triangle(floatArrayOf(-90f,0f,-90f),floatArrayOf(90f,0f,90f),floatArrayOf(90f,0f,-90f),c);b.triangle(floatArrayOf(-90f,0f,-90f),floatArrayOf(-90f,0f,90f),floatArrayOf(90f,0f,90f),c);return upload(b.snapshot())}
+    private fun makeGround():GpuMesh{
+        val b=ForestMeshBuilder()
+        val rng=java.util.Random(94721)
+        val colors=intArrayOf(0xFF536B3E.toInt(),0xFF5A7044.toInt(),0xFF647847.toInt(),0xFF4B633A.toInt(),0xFF6C7747.toInt(),0xFF746B42.toInt(),0xFF5D6840.toInt(),0xFF7A784C.toInt(),0xFF4D6540.toInt())
+        val cells=64
+        val step=180f/cells
+        fun y(x:Float,z:Float):Float=(sin(x*.105f)*.12f+cos(z*.13f)*.10f+sin((x+z)*.075f)*.085f+cos((x-z)*.048f)*.055f)
+        for(ix in 0 until cells)for(iz in 0 until cells){
+            val x0=-90f+ix*step;val x1=x0+step
+            val z0=-90f+iz*step;val z1=z0+step
+            val c=colors[rng.nextInt(colors.size)]
+            val a=floatArrayOf(x0,y(x0,z0),z0);val bb=floatArrayOf(x1,y(x1,z0),z0)
+            val cc=floatArrayOf(x1,y(x1,z1),z1);val d=floatArrayOf(x0,y(x0,z1),z1)
+            if((ix+iz)%2==0){b.triangle(a,bb,cc,c);b.triangle(a,cc,d,c)}
+            else{b.triangle(a,bb,d,c);b.triangle(bb,cc,d,c)}
+        }
+        return upload(b.snapshot())
+    }
     private fun makeShrub():ForestMesh{val b=ForestMeshBuilder();for(i in 0..5){val a=i*PI/3;val r=.35f;b.ellipsoid((cos(a)*r).toFloat(),.3f,(sin(a)*r).toFloat(),.42f,.35f,.42f,0xFF386B3C.toInt()+i*0x000201,9,6)};return b.snapshot()}
     private fun upload(m:ForestMesh):GpuMesh=GpuMesh(m.vertexBuffer,m.indexBuffer,m.indexCount)
     private fun shader(type:Int,src:String):Int{val s=android.opengl.GLES20.glCreateShader(type);android.opengl.GLES20.glShaderSource(s,src);android.opengl.GLES20.glCompileShader(s);val ok=IntArray(1);android.opengl.GLES20.glGetShaderiv(s,android.opengl.GLES20.GL_COMPILE_STATUS,ok,0);if(ok[0]==0)throw RuntimeException(android.opengl.GLES20.glGetShaderInfoLog(s));return s}
