@@ -59,6 +59,9 @@ func _run_test() -> void:
 		quit(1)
 		return
 
+	# SceneTree.physics_frame is emitted before node _physics_process callbacks.
+	# Wait for the next tick so the controller has consumed the joystick value.
+	await physics_frame
 	await physics_frame
 	var movement_input: Vector2 = game.get("debug_move_input")
 	var movement_direction: Vector3 = game.get("debug_move_direction")
