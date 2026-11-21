@@ -110,6 +110,26 @@ internal object ForestModels {
             val a=rnd.nextDouble()*PI*2.0
             b.ellipsoid((cos(a)*.13f).toFloat(),.76f+rnd.nextFloat()*.35f,(sin(a)*.13f).toFloat(),.035f,.04f,.035f,leather,8,5); pieces++
         }
+        // Backpack, weathered straps, hood/hat layers, and carried field tool complete the silhouette.
+        b.ellipsoid(0f,1.02f,-.19f,.22f,.29f,.16f,leather,12,8)
+        b.ellipsoid(0f,1.26f,-.20f,.19f,.08f,.15f,0xFF795D3F.toInt(),12,7)
+        b.ellipsoid(-.16f,.91f,-.20f,.07f,.16f,.09f,0xFF76563B.toInt(),10,6)
+        b.ellipsoid(.16f,.91f,-.20f,.07f,.16f,.09f,0xFF76563B.toInt(),10,6)
+        b.ellipsoid(0f,1.12f,-.035f,.21f,.06f,.17f,0xFF51402E.toInt(),10,6)
+        b.ellipsoid(-.12f,1.35f,.015f,.05f,.12f,.045f,leather,9,6)
+        b.ellipsoid(.12f,1.35f,.015f,.05f,.12f,.045f,leather,9,6)
+        // Headwear: brim and crown, with a dark hair/hood rim.
+        b.ellipsoid(0f,1.62f,0f,.19f,.035f,.18f,0xFF3A3027.toInt(),12,7)
+        b.ellipsoid(0f,1.68f,-.005f,.13f,.09f,.13f,0xFF514334.toInt(),12,7)
+        b.ellipsoid(0f,1.55f,-.055f,.14f,.055f,.14f,0xFF352B24.toInt(),12,7)
+        // Tool haft and head carried at the side.
+        b.taperedCylinder(.43f,.68f,.10f,.49f,1.00f,.10f,.035f,.022f,0xFF765337.toInt(),8)
+        b.ellipsoid(.49f,1.02f,.10f,.11f,.055f,.05f,0xFF92999A.toInt(),10,6)
+        b.ellipsoid(.55f,1.01f,.10f,.045f,.07f,.05f,0xFFB6BEC0.toInt(),10,6)
+        repeat(8){i->
+            val side=if(i%2==0)-1f else 1f
+            b.ellipsoid(side*(.10f+(i/2)*.02f),.80f+(i%4)*.10f,-.23f,.025f,.035f,.025f,0xFF8C6B45.toInt(),8,5)
+        }
         return b.snapshot()
     }
 }
