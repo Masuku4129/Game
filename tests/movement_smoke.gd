@@ -18,7 +18,7 @@ func _run_test() -> void:
 
 	var player := game.get_node_or_null("Player") as CharacterBody3D
 	var joystick := game.find_child("MovementJoystick", true, false) as Control
-	var camera := game.get_node_or_null("Camera3D") as Camera3D
+	var camera := game.get_node_or_null("GameplayCamera") as Camera3D
 	var terrain := game.get_node_or_null("TerrainCollision") as StaticBody3D
 	print("MOVEMENT_NODES: player=", player, " joystick=", joystick, " camera=", camera, " terrain=", terrain, " children=", game.get_children().map(func(node): return node.name))
 	if player == null or joystick == null or camera == null or terrain == null:
