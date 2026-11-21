@@ -76,6 +76,24 @@ func _run_test() -> void:
 		printerr("ENVIRONMENT_TEST_FAIL: seasonal mushroom cluster mesh was not loaded with its materials")
 		quit(1)
 		return
+	var distinct_colors: Array[Color] = []
+	var colored_surfaces := 0
+	for surface_index in range(mushroom_mesh.get_surface_count()):
+		var material := mushroom_mesh.surface_get_material(surface_index) as StandardMaterial3D
+		if material == null:
+			continue
+		colored_surfaces += 1
+		var unique := true
+		for existing_color in distinct_colors:
+			if existing_color.is_equal_approx(material.albedo_color):
+				unique = false
+				break
+		if unique:
+			distinct_colors.append(material.albedo_color)
+	if colored_surfaces < 3 or distinct_colors.size() < 3:
+		printerr("ENVIRONMENT_TEST_FAIL: imported GLB materials lost their distinct base colors")
+		quit(1)
+		return
 
 	game.call("_cycle_season")
 	if String(game.get("active_season")) != "autumn":
@@ -92,5 +110,5 @@ func _run_test() -> void:
 		quit(1)
 		return
 
-	print("ENVIRONMENT_TEST_PASS: weather, footprints, hydrology, collision deformation, mushroom assets and runtime seasonal rebuild")
+	print("ENVIRONMENT_TEST_PASS: weather, footprints, hydrology, collision deformation, colored GLB materials, mushroom assets and runtime seasonal rebuild")
 	quit(0)
