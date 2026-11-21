@@ -18,7 +18,7 @@ internal object ForestModels {
     }
     private fun leafCluster(b:ForestMeshBuilder,x:Float,y:Float,z:Float,size:Float,yaw:Double,baseColor:Int,seed:Int){
         val r=java.util.Random(seed.toLong())
-        repeat(7){
+        repeat(5){
             val a=yaw+r.nextDouble()*PI*2.0
             val offset=size*(.05f+r.nextFloat()*.45f)
             val bx=x+(cos(a)*offset).toFloat();val bz=z+(sin(a)*offset).toFloat()
