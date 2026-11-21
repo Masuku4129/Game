@@ -60,6 +60,9 @@ jobs:
           echo "ANDROID_SDK_ROOT=$ANDROID_HOME" >> "$GITHUB_ENV"
           echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/28.1.13356709" >> "$GITHUB_ENV"
 
+      - name: Stage authored GLB assets
+        run: cp -R assets python_game/assets
+
       - name: Build Panda3D Android App Bundle
         working-directory: python_game
         env:
