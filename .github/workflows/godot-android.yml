@@ -1,0 +1,29 @@
+name: Godot Android APK
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'godot/**'
+      - '.github/workflows/godot-android.yml'
+
+jobs:
+  export-apk:
+    runs-on: ubuntu-latest
+    container:
+      image: barichello/godot-ci:4.4.1
+    steps:
+      - uses: actions/checkout@v4
+      - name: Import project
+        run: godot --headless --editor --path godot --quit
+      - name: Export Android debug APK
+        run: |
+          mkdir -p build
+          godot --headless --path godot --export-debug "Android" build/wildlands-debug.apk
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Wildlands-Android-debug
+          path: godot/build/wildlands-debug.apk
+          if-no-files-found: error
+          retention-days: 14
