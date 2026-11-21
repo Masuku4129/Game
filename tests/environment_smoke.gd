@@ -71,5 +71,11 @@ func _run_test() -> void:
 		quit(1)
 		return
 
+	var mushroom_mesh := game.call("_load_environment_mesh", "mushroom_cluster") as Mesh
+	if mushroom_mesh == null or mushroom_mesh.get_surface_count() < 3:
+		printerr("ENVIRONMENT_TEST_FAIL: seasonal mushroom cluster mesh was not loaded with its materials")
+		quit(1)
+		return
+
 	print("ENVIRONMENT_TEST_PASS: snow, rain, footprints, terrain-conforming puddles, collision deformation and wind batches")
 	quit(0)
