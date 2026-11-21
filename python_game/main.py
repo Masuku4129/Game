@@ -9,7 +9,7 @@ from direct.showbase.ShowBase import ShowBase
 from panda3d.core import (
     AmbientLight, DirectionalLight, Fog, Geom, GeomNode, GeomTriangles,
     GeomVertexData, GeomVertexFormat, GeomVertexWriter, NodePath,
-    PNMImage, Texture, TextureStage, TransparencyAttrib, Vec3, Vec4, WindowProperties,
+    PNMImage, Texture, TransparencyAttrib, Vec3, Vec4, WindowProperties,
     globalClock,
 )
 
@@ -48,7 +48,7 @@ class VirtualJoystick:
 
     def __init__(self, app: ShowBase) -> None:
         self.app = app
-        self.center_x = -0.68
+        self.center_x = -1.0
         self.center_y = -0.68
         self.radius = 0.23
         self.value_x = 0.0
@@ -87,7 +87,8 @@ class VirtualJoystick:
         watcher = self.app.mouseWatcherNode
         if not watcher.hasMouse():
             return None
-        return watcher.getMouseX(), watcher.getMouseY()
+        aspect = self.app.win.getXSize() / max(1, self.app.win.getYSize())
+        return watcher.getMouseX() * aspect, watcher.getMouseY()
 
     def _on_down(self) -> None:
         pointer = self._pointer()
