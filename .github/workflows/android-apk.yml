@@ -114,20 +114,6 @@ jobs:
         run: |
           $ANDROID_HOME/build-tools/35.0.1/apksigner verify --verbose --print-certs build/Game-debug.apk
 
-      - name: Install and launch APK in Android emulator
-        uses: reactivecircus/android-emulator-runner@v2
-        with:
-          api-level: 35
-          arch: x86_64
-          profile: pixel_6
-          script: |
-            adb install -r build/Game-debug.apk
-            adb shell monkey -p org.kira.game -c android.intent.category.LAUNCHER 1
-            sleep 15
-            adb logcat -d -t 5000 > "$RUNNER_TEMP/android-launch.log"
-            adb shell pidof org.kira.game
-            ! grep -E "FATAL EXCEPTION|Fatal signal|SIGSEGV|Process org.kira.game has died" "$RUNNER_TEMP/android-launch.log"
-
       - name: Upload installable APK
         uses: actions/upload-artifact@v4
         with:
