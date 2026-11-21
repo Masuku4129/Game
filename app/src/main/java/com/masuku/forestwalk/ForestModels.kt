@@ -74,7 +74,8 @@ internal object ForestModels {
         for(i in 0 until branchCount){
             val a=i*2.399963+rnd.nextDouble()*.28
             val startY=height*(.24f+(i.toFloat()/(branchCount))* .56f)
-            val speciesReach=if(species==1)1.22f else if(species==2).86f else 1f\n            val reach=height*(.20f+rnd.nextFloat()*.18f)*speciesReach*(1f-(startY/height)*(if(species==1).62f else .22f))
+            val speciesReach=if(species==1) 1.22f else if(species==2) .86f else 1f
+            val reach=height*(.20f+rnd.nextFloat()*.18f)*speciesReach*(1f-(startY/height)*(if(species==1).62f else .22f))
             val ex=(cos(a)*reach).toFloat()+leanX*(startY/height)
             val ez=(sin(a)*reach).toFloat()+leanZ*(startY/height)
             val ey=startY+height*(.08f+rnd.nextFloat()*.10f)
@@ -91,8 +92,9 @@ internal object ForestModels {
             }
         }
         // Loose asymmetric crown with overlapping canopy lobes and gaps for a natural silhouette.
-        for(i in 0 until 12){
-            val a=i*PI*2.0/12.0+rnd.nextDouble()*.4
+        val crownCount=if(species==1)7 else if(species==2)15 else 12
+        for(i in 0 until crownCount){
+            val a=i*PI*2.0/crownCount+rnd.nextDouble()*.4
             val r=height*(if(species==1) .08f else if(species==2) .18f else .12f+rnd.nextFloat()*.23f)
             val cx=(cos(a)*r).toFloat()+leanX*.65f
             val cz=(sin(a)*r).toFloat()+leanZ*.65f
