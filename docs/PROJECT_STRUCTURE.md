@@ -54,3 +54,9 @@
 - `scripts/animation/procedural_humanoid.gd` — временный процедурный mesh-rig персонажа, подключённый к Player через метод `set_motion(horizontal_speed, slope)`.
 - Следующая целевая структура (создавать по мере появления реальных файлов): `animation/source/`, `animation/processed/`, `animation/retarget/`, `animation/tests/`, `animation/blender/`.
 - Не считать текущий mesh rig заменой полноценному Skeleton3D, mocap или foot IK.
+
+
+## Визуальный проход 2 — landscape и читаемость сцены
+- `project.godot`: Android orientation = landscape.
+- `scripts/main.gd`: перспективная близкая камера с плавным follow; рельеф 144×144 с дополнительным шумом; четыре силуэтных типа деревьев; обновлённые свет и атмосферная дымка.
+- Статус: исходники отправлены в main; ожидается CI-проверка и Android APK. Реальное качество на телефоне требует повторного пользовательского теста.
