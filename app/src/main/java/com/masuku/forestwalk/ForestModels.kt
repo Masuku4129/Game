@@ -29,6 +29,23 @@ internal object ForestModels {
             leafBlade(b,bx,by,bz,leafLength,leafWidth,a,color)
         }
     }
+    fun shrub(seed:Int=1):ForestMesh{
+        val b=ForestMeshBuilder();val r=java.util.Random(seed.toLong())
+        val greens=intArrayOf(0xFF37663A.toInt(),0xFF4B7843.toInt(),0xFF5D8449.toInt(),0xFF2E5733.toInt())
+        repeat(9){i->
+            val a=i*PI*2.0/9.0+r.nextDouble()*.3
+            val reach=.28f+r.nextFloat()*.40f
+            val x=(cos(a)*reach).toFloat();val z=(sin(a)*reach).toFloat()
+            val y=.18f+r.nextFloat()*.32f
+            b.taperedCylinder(0f,.05f,0f,x,y,z,.045f,.018f,0xFF6A5234.toInt(),6)
+            leafCluster(b,x,y,z,.50f+r.nextFloat()*.55f,a,greens[r.nextInt(greens.size)],seed+i*19)
+        }
+        repeat(5){i->
+            val a=r.nextDouble()*PI*2.0
+            leafCluster(b,(cos(a)*.18f).toFloat(),.40f+r.nextFloat()*.32f,(sin(a)*.18f).toFloat(),.45f,a,greens[r.nextInt(greens.size)],seed+300+i)
+        }
+        return b.snapshot()
+    }
     /** A tree has 30+ separate smooth geometry components, with deterministic seed variation. */
     fun tree(seed:Int,height:Float=6.2f):TreeModel {
         val b=ForestMeshBuilder()
