@@ -77,6 +77,12 @@ jobs:
           godot --headless --path . --script tests/environment_smoke.gd 2>&1 | tee "$RUNNER_TEMP/environment-test.log"
           grep -F "ENVIRONMENT_TEST_PASS" "$RUNNER_TEMP/environment-test.log"
 
+      - name: Test deformable snow, mud and runoff simulation
+        run: |
+          set -o pipefail
+          godot --headless --path . --script tests/surface_simulation_smoke.gd 2>&1 | tee "$RUNNER_TEMP/surface-test.log"
+          grep -F "SURFACE_TEST_PASS" "$RUNNER_TEMP/surface-test.log"
+
       - name: Export Android APK
         run: |
           mkdir -p build
