@@ -4,6 +4,7 @@ import math
 from world.terrain import height_at
 
 from direct.showbase.ShowBase import ShowBase
+from direct.actor.Actor import Actor
 from panda3d.core import (
     AmbientLight, DirectionalLight, Fog, Geom, GeomNode, GeomTriangles,
     GeomVertexData, GeomVertexFormat, GeomVertexWriter, NodePath,
@@ -11,14 +12,6 @@ from panda3d.core import (
 )
 
 SEASON = "summer"
-
-
-def height_at(x: float, y: float) -> float:
-    """Deterministic, continuous height field in Panda3D's Z-up coordinates."""
-    broad = math.sin(x * 0.035) * 1.7 + math.cos(y * 0.028) * 1.35
-    rolling = math.sin((x + y) * 0.012) * 2.0
-    detail = math.sin(x * 0.11 + y * 0.07) * 0.16
-    return broad + rolling + detail
 
 
 def build_terrain(parent: NodePath, extent: float = 90.0, cells: int = 96) -> NodePath:
@@ -133,10 +126,16 @@ class WildlandsApp(ShowBase):
     def _load_player_model(self) -> None:
         model = self.loader.loadModel("assets/character/field_explorer.glb")
         if not model.isEmpty():
-            model.reparentTo(self.render)
-            model.setPos(0, 0, height_at(0, 0))
-            model.setScale(1.0)
-            self.player_model = model
+            actor = Actor(model)
+            actor.reparentTo(self.render)
+            actor.setPos(0, 0, height_at(0, 0))
+            actor.setScale(1.0)
+            clips = actor.getAnimNames()
+            walk_clip = next((clip for clip in clips if "walk" in clip.lower()), None)
+            if walk_clip is not None:
+                actor.loop(walk_clip)
+            self.player_model = actor
+            print(f"PLAYER_MODEL_LOADED: clips={clips}")
             return
         print("ASSET_NOTICE: explorer GLB not found; no substitute primitive spawned")
 
