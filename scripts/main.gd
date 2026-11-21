@@ -111,10 +111,24 @@ func _create_terrain() -> void:
 	var terrain_mesh := surface.commit()
 	var terrain := MeshInstance3D.new()
 	terrain.mesh = terrain_mesh
-	var material := StandardMaterial3D.new()
-	material.vertex_color_use_as_albedo = true
-	material.roughness = 1.0
-	material.cull_mode = BaseMaterial3D.CULL_DISABLED
+	var material := ShaderMaterial.new()
+	var terrain_shader := Shader.new()
+	terrain_shader.code = """
+shader_type spatial;
+render_mode diffuse_burley, specular_schlick_ggx;
+uniform sampler2D ground_albedo : source_color, repeat_enable;
+varying vec4 terrain_vertex_color;
+void vertex() {
+    terrain_vertex_color = COLOR;
+}
+void fragment() {
+    vec3 surface_color = texture(ground_albedo, UV * 1.0).rgb;
+    ALBEDO = surface_color * terrain_vertex_color.rgb;
+    ROUGHNESS = 0.97;
+}
+"""
+	material.shader = terrain_shader
+	material.set_shader_parameter("ground_albedo", _make_ground_texture())
 	terrain.material_override = material
 	add_child(terrain)
 
@@ -140,12 +154,39 @@ func _create_terrain() -> void:
 	add_child(terrain_body)
 
 
+func _make_ground_texture() -> Texture2D:
+	var image := Image.create(512, 512, false, Image.FORMAT_RGBA8)
+	var broad_noise := FastNoiseLite.new()
+	broad_noise.seed = 61021
+	broad_noise.frequency = 0.018
+	broad_noise.fractal_octaves = 4
+	var grain_noise := FastNoiseLite.new()
+	grain_noise.seed = 61022
+	grain_noise.frequency = 0.31
+	grain_noise.fractal_octaves = 2
+	for y in range(512):
+		for x in range(512):
+			var u := float(x) / 512.0
+			var v := float(y) / 512.0
+			var broad := broad_noise.get_noise_2d(float(x), float(y))
+			var grain := grain_noise.get_noise_2d(float(x) * 1.7, float(y) * 1.7)
+			var grit := detail_noise.get_noise_2d(float(x) * 0.73, float(y) * 0.73)
+			var damp := clampf(0.46 + broad * 0.17 + grit * 0.12, 0.16, 0.78)
+			var value := grain * 0.035
+			var moss_mix := clampf((broad + grit * 0.35 + 0.22) * 0.5, 0.0, 0.34)
+			var soil := Color(0.20 + damp * 0.18 + value, 0.145 + damp * 0.13 + value, 0.095 + damp * 0.075 + value)
+			var moss := Color(0.105 + damp * 0.10, 0.145 + damp * 0.13, 0.075 + damp * 0.06)
+			image.set_pixel(x, y, soil.lerp(moss, moss_mix))
+	return ImageTexture.create_from_image(image)
+
+
 func _add_terrain_triangle(surface: SurfaceTool, a: Vector3, b: Vector3, c: Vector3) -> void:
 	for point in [a, b, c]:
 		var variation := detail_noise.get_noise_2d(point.x * 1.7, point.z * 1.7)
 		var height_tint := clampf(0.38 + point.y * 0.009 + variation * 0.09, 0.20, 0.58)
 		var damp := clampf((0.25 - point.y) * 0.08, 0.0, 0.08)
 		surface.set_color(Color(height_tint * (0.88 - damp), height_tint * 1.02, height_tint * (0.72 - damp)))
+		surface.set_uv(Vector2(point.x * 0.075, point.z * 0.075))
 		surface.add_vertex(point)
 
 
