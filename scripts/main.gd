@@ -516,12 +516,24 @@ func _build_conforming_puddle(center: Vector3, radius_x: float, radius_z: float)
 	var patch := MeshInstance3D.new()
 	patch.name = "TerrainConformingPuddle"
 	patch.mesh = tool.commit()
-	var material := StandardMaterial3D.new()
-	material.albedo_color = Color(0.12, 0.19, 0.20, 0.82)
-	material.roughness = 0.12
-	material.metallic = 0.08
-	material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	patch.material_override = material
+	var water_shader := Shader.new()
+	water_shader.code = """
+shader_type spatial;
+render_mode cull_disabled, diffuse_burley, specular_schlick_ggx;
+uniform vec3 water_tint = vec3(0.045, 0.085, 0.09);
+void fragment() {
+    float ripple_a = sin(UV.x * 9.0 + UV.y * 7.0 + TIME * 1.8);
+    float ripple_b = sin(UV.y * 13.0 - UV.x * 5.0 + TIME * 1.2);
+    ALBEDO = water_tint + vec3(0.018) * (ripple_a + ripple_b);
+    ROUGHNESS = 0.12 + abs(ripple_a) * 0.035;
+    METALLIC = 0.08;
+    SPECULAR = 0.85;
+    NORMAL = normalize(vec3(ripple_a * 0.055, 1.0, ripple_b * 0.055));
+}
+"""
+	var water_material := ShaderMaterial.new()
+	water_material.shader = water_shader
+	patch.material_override = water_material
 	return patch
 
 
@@ -542,7 +554,7 @@ func _add_footprint(position: Vector3, direction: Vector3) -> void:
 	if forward.length_squared() < 0.001:
 		forward = Vector3.FORWARD
 	var right := forward.cross(Vector3.UP).normalized()
-	var center := Vector3(position.x, _height_at(position.x, position.z) + 0.025, position.z) + right * (0.13 if footprint_side == 0 else -0.13)
+	var center := Vector3(position.x, _height_at(position.x, position.z) + 0.006, position.z) + right * (0.13 if footprint_side == 0 else -0.13)
 	var tool := SurfaceTool.new()
 	tool.begin(Mesh.PRIMITIVE_TRIANGLES)
 	var segments := 10
@@ -551,8 +563,8 @@ func _add_footprint(position: Vector3, direction: Vector3) -> void:
 		var a1 := TAU * float(i + 1) / segments
 		var p1 := center + right * cos(a0) * 0.105 + forward * sin(a0) * 0.19
 		var p2 := center + right * cos(a1) * 0.105 + forward * sin(a1) * 0.19
-		p1.y = _height_at(p1.x, p1.z) + 0.028
-		p2.y = _height_at(p2.x, p2.z) + 0.028
+		p1.y = _height_at(p1.x, p1.z) + 0.035
+		p2.y = _height_at(p2.x, p2.z) + 0.035
 		for point in [center, p2, p1]:
 			tool.add_vertex(point)
 	tool.generate_normals()
