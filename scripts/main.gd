@@ -38,6 +38,7 @@ var footprint_side := 0
 var puddle_nodes: Array[MeshInstance3D] = []
 var snow_accumulation := 0.0
 var wetness_accumulation := 0.0
+var last_environment_wetness := -1.0
 
 
 func _ready() -> void:
@@ -310,7 +311,7 @@ func _process(delta: float) -> void:
 			var base: Transform3D = bases[index]
 			var phase := wind_clock * 1.4 + base.origin.x * 0.13 + base.origin.z * 0.11
 			var sway := sin(phase) * wind_strength
-			var axis := Vector3.RIGHT if family in ["grass_tuft", "fern_cluster"] else Vector3.FORWARD
+			var axis := Vector3.RIGHT
 			var rotated := base.basis.rotated(axis, sway * (1.8 if family == "grass_tuft" else 1.0))
 			instance.multimesh.set_instance_transform(index, Transform3D(rotated, base.origin))
 
@@ -349,6 +350,9 @@ func _load_environment_mesh(asset_name: String) -> Mesh:
 
 
 func _apply_environment_wetness(amount: float) -> void:
+	if absf(amount - last_environment_wetness) < 0.12:
+		return
+	last_environment_wetness = amount
 	for cache_key in asset_mesh_cache.keys():
 		var mesh := asset_mesh_cache[cache_key] as ArrayMesh
 		var originals: Array = asset_base_materials.get(cache_key, [])
