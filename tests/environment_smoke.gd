@@ -56,6 +56,12 @@ func _run_test() -> void:
 	for index in range(50):
 		simulation.step(0.16, "rain", Vector3.ZERO, 0.0)
 	game.call("_update_puddle_hydrology")
+	game.call("_update_terrain_collision")
+	var collision_shape := game.get("terrain_shape") as HeightMapShape3D
+	if collision_shape == null or collision_shape.map_data.size() != 145 * 145:
+		printerr("ENVIRONMENT_TEST_FAIL: surface displacement was not applied to terrain collision")
+		quit(1)
+		return
 	var active_puddles := 0
 	for puddle in puddles:
 		if puddle.visible:
@@ -65,5 +71,5 @@ func _run_test() -> void:
 		quit(1)
 		return
 
-	print("ENVIRONMENT_TEST_PASS: snow, rain, footprints, terrain-conforming puddles and wind batches")
+	print("ENVIRONMENT_TEST_PASS: snow, rain, footprints, terrain-conforming puddles, collision deformation and wind batches")
 	quit(0)
