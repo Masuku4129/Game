@@ -96,11 +96,12 @@ jobs:
         working-directory: python_game
         env:
           LIBGL_ALWAYS_SOFTWARE: "1"
+          WILDLANDS_HEADLESS: "1"
         run: |
           sudo apt-get update
           sudo apt-get install -y xvfb
           set +e
-          timeout 25s xvfb-run -a python main.py 2>&1 | tee "$RUNNER_TEMP/wildlands-smoke.log"
+          timeout 25s xvfb-run -a python -u main.py 2>&1 | tee "$RUNNER_TEMP/wildlands-smoke.log"
           code=${PIPESTATUS[0]}
           set -e
           if [ "$code" -ne 124 ]; then
