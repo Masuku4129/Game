@@ -53,7 +53,6 @@ func _play_matching(candidates: Array[String]) -> void:
 
 func set_motion(horizontal_speed: float, slope: float) -> void:
 	target_speed = horizontal_speed
-	print("EXPLORER_MOTION_REQUEST speed=", horizontal_speed, " current=", current_clip)
 	if target_speed > 6.0:
 		_play_matching(["Run", "run"])
 	elif target_speed > 0.15:
