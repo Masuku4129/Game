@@ -68,8 +68,7 @@ class ForestRenderer:GLSurfaceView.Renderer{
     private var uMvp=0;private var uModel=0;private var uPlayer=0;private var uTime=0;private var uWeather=0;private var uFoliage=0
     private var width=1;private var height=1
     private var playerX=0f;private var playerZ=0f;private var heading=0f;private var last=System.nanoTime()
-    private val treeCache=ArrayList<GpuMesh>()
-    private val instances=ArrayList<TreeInstance>()
+    private val treeChunks=ArrayList<TreeChunk>()
     private lateinit var playerMesh:GpuMesh
     private lateinit var groundMesh:GpuMesh
     private lateinit var shrubMesh:GpuMesh
@@ -121,7 +120,7 @@ class ForestRenderer:GLSurfaceView.Renderer{
         draw(groundMesh,vp,identity())
         for(chunk in treeChunks){val dx=chunk.x-playerX;val dz=chunk.z-playerZ;if(dx*dx+dz*dz>1400f)continue
             val model=identity();android.opengl.Matrix.translateM(model,0,chunk.x,0f,chunk.z)
-            draw(chunk.mesh,vp,model)}
+            android.opengl.GLES20.glEnable(android.opengl.GLES20.GL_BLEND);android.opengl.GLES20.glBlendFunc(android.opengl.GLES20.GL_SRC_ALPHA,android.opengl.GLES20.GL_ONE_MINUS_SRC_ALPHA);android.opengl.GLES20.glDepthMask(false);draw(chunk.mesh,vp,model,true);android.opengl.GLES20.glDepthMask(true);android.opengl.GLES20.glDisable(android.opengl.GLES20.GL_BLEND)}
         // Softly bobbing and turning toward travel direction (visual base animation).
         val moving=abs(mx)+abs(my)>.06f;val bob=if(moving)sin(now/95000000.0).toFloat()*.035f else 0f
         val pm=identity();android.opengl.Matrix.translateM(pm,0,playerX,.0f+bob,playerZ);android.opengl.Matrix.rotateM(pm,0,heading*180f/PI.toFloat(),0f,1f,0f)
