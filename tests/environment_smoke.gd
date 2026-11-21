@@ -16,6 +16,14 @@ func _mesh_has_distinct_colors(mesh: Mesh, minimum: int) -> bool:
 	return colors.size() >= minimum
 
 
+func _mesh_has_albedo_texture(mesh: Mesh) -> bool:
+	for surface_index in range(mesh.get_surface_count()):
+		var material := mesh.surface_get_material(surface_index) as StandardMaterial3D
+		if material != null and material.albedo_texture != null:
+			return true
+	return false
+
+
 func _initialize() -> void:
 	call_deferred("_run_test")
 
@@ -35,6 +43,23 @@ func _run_test() -> void:
 	var terrain_material := game.get("terrain_material") as ShaderMaterial
 	if particles == null or terrain_material == null:
 		printerr("ENVIRONMENT_TEST_FAIL: weather or terrain material not initialized")
+		quit(1)
+		return
+	var ground_normal := terrain_material.get_shader_parameter("ground_normal") as Texture2D
+	if ground_normal == null or ground_normal.get_width() < 256:
+		printerr("ENVIRONMENT_TEST_FAIL: detailed ground normal texture missing")
+		quit(1)
+		return
+	var camera := game.get("camera") as Camera3D
+	var player := game.get("player") as CharacterBody3D
+	if camera == null or player == null:
+		printerr("ENVIRONMENT_TEST_FAIL: gameplay camera or player missing")
+		quit(1)
+		return
+	var camera_offset := camera.global_position - player.global_position
+	var camera_elevation := rad_to_deg(asin(camera_offset.y / camera_offset.length()))
+	if camera_offset.length() < 25.0 or camera_elevation < 55.0 or camera_elevation > 65.0:
+		printerr("ENVIRONMENT_TEST_FAIL: camera must be about twice as far and elevated around 60 degrees")
 		quit(1)
 		return
 
@@ -93,6 +118,11 @@ func _run_test() -> void:
 			printerr("ENVIRONMENT_TEST_FAIL: GLB material colors missing for " + asset_name)
 			quit(1)
 			return
+	var grass_mesh := game.call("_load_environment_mesh", "grass_tuft") as Mesh
+	if grass_mesh == null or not _mesh_has_albedo_texture(grass_mesh):
+		printerr("ENVIRONMENT_TEST_FAIL: seasonal grass blade texture missing from imported GLB")
+		quit(1)
+		return
 
 	game.call("_cycle_season")
 	if String(game.get("active_season")) != "autumn":
@@ -109,5 +139,5 @@ func _run_test() -> void:
 		quit(1)
 		return
 
-	print("ENVIRONMENT_TEST_PASS: weather, footprints, hydrology, collision deformation, colored GLB materials across trees, ferns, grass and mushrooms; runtime seasonal rebuild")
+	print("ENVIRONMENT_TEST_PASS: weather, footprints, hydrology, collision deformation, camera elevation/distance, ground normal map, textured grass, colored GLB materials and runtime seasonal rebuild")
 	quit(0)
