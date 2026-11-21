@@ -45,7 +45,7 @@ jobs:
           export/android/java_sdk_path = "$JAVA_HOME"
           export/android/debug_keystore = "$HOME/.android/debug.keystore"
           export/android/debug_keystore_user = "androiddebugkey"
-          export/android/debug_keystore_password = "android"
+          export/android/debug_keystore_pass = "android"
           EOF
           printf "y\ny\ny\ny\ny\ny\ny\ny\ny\ny\n" | "$ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager" --sdk_root="$ANDROID_SDK_ROOT" --licenses
           "$ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager" --sdk_root="$ANDROID_SDK_ROOT" "platform-tools" "platforms;android-34" "build-tools;34.0.0"
@@ -63,7 +63,7 @@ jobs:
         run: |
           set -euxo pipefail
           mkdir -p godot/build
-          godot --headless --verbose --path godot --export-debug "Android" godot/build/wildlands-debug.apk
+          GODOT_ANDROID_KEYSTORE_DEBUG_PATH="$HOME/.android/debug.keystore" GODOT_ANDROID_KEYSTORE_DEBUG_USER="androiddebugkey" GODOT_ANDROID_KEYSTORE_DEBUG_PASSWORD="android" godot --headless --verbose --path godot --export-debug "Android" godot/build/wildlands-debug.apk
           test -s godot/build/wildlands-debug.apk
           file godot/build/wildlands-debug.apk
           unzip -t godot/build/wildlands-debug.apk
