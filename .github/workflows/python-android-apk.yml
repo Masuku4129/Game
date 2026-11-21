@@ -1,0 +1,99 @@
+name: Python Android APK
+
+on:
+  push:
+    branches: [python-panda3d-port]
+    paths:
+      - "python_game/**"
+      - ".github/workflows/python-android-apk.yml"
+      - "assets/**"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: python-android-apk-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test-and-build:
+    name: Test Python runtime and package Android APK
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+          cache-dependency-path: python_game/requirements.txt
+
+      - name: Install Python dependencies
+        working-directory: python_game
+        run: |
+          python -m pip install --upgrade pip setuptools wheel
+          python -m pip install -r requirements.txt pytest
+
+      - name: Run deterministic world tests
+        working-directory: python_game
+        run: pytest -q
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+        with:
+          packages: "platform-tools"
+
+      - name: Install Android SDK and NDK
+        run: |
+          yes | sdkmanager --licenses
+          sdkmanager "platform-tools" "platforms;android-35" "build-tools;35.0.1" "ndk;28.1.13356709"
+          echo "ANDROID_SDK_ROOT=$ANDROID_HOME" >> "$GITHUB_ENV"
+          echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/28.1.13356709" >> "$GITHUB_ENV"
+
+      - name: Build Panda3D Android App Bundle
+        working-directory: python_game
+        env:
+          ANDROID_SDK_ROOT: ${{ env.ANDROID_HOME }}
+          ANDROID_NDK_HOME: ${{ env.ANDROID_HOME }}/ndk/28.1.13356709
+        run: |
+          python setup.py bdist_apps
+          test -s dist/wildlands-0.1.0_android.aab
+
+      - name: Install bundletool
+        run: |
+          curl -fL https://github.com/google/bundletool/releases/download/1.18.2/bundletool-all-1.18.2.jar -o "$RUNNER_TEMP/bundletool.jar"
+
+      - name: Convert AAB to installable universal APK
+        working-directory: python_game
+        run: |
+          mkdir -p build
+          keytool -genkeypair -v -keystore "$RUNNER_TEMP/wildlands-debug.keystore" \
+            -storepass android -alias androiddebugkey -keypass android \
+            -dname "CN=Wildlands Debug,O=Wildlands,C=US" -keyalg RSA -keysize 2048 -validity 10000
+          java -jar "$RUNNER_TEMP/bundletool.jar" build-apks \
+            --bundle=dist/wildlands-0.1.0_android.aab \
+            --output=build/wildlands.apks --mode=universal \
+            --ks="$RUNNER_TEMP/wildlands-debug.keystore" \
+            --ks-key-alias=androiddebugkey --ks-pass=pass:android --key-pass=pass:android
+          unzip -p build/wildlands.apks universal.apk > build/Wildlands-debug.apk
+          test -s build/Wildlands-debug.apk
+          unzip -t build/Wildlands-debug.apk
+          file build/Wildlands-debug.apk
+
+      - name: Upload Android APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: Wildlands-Python-Android-arm64-${{ github.sha }}
+          path: python_game/build/Wildlands-debug.apk
+          if-no-files-found: error
+          retention-days: 14
