@@ -10,17 +10,11 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from panda3d.core import NodePath
 from gltf import load_model
 from world.forest_layout import tree_placements
+from world.terrain import height_at
 
 
 FAMILIES = ("tree_spruce", "tree_pine", "tree_birch")
 SEASONS = ("spring", "summer", "autumn", "winter")
-
-
-def height_at(x: float, y: float) -> float:
-    broad = math.sin(x * 0.035) * 1.7 + math.cos(y * 0.028) * 1.35
-    rolling = math.sin((x + y) * 0.012) * 2.0
-    detail = math.sin(x * 0.11 + y * 0.07) * 0.16
-    return broad + rolling + detail
 
 
 def build_one(asset_root: Path, output: Path, season: str, radius: int) -> int:
