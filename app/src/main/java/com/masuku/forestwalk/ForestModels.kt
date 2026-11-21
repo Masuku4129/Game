@@ -106,9 +106,9 @@ internal object ForestModels {
         return TreeModel(b.snapshot(),components,height)
     }
 
-    data class CharacterRig(val body:ForestMesh,val arm:ForestMesh,val upperLeg:ForestMesh,val lowerLeg:ForestMesh)
+    data class CharacterRig(val body:ForestMesh,val arm:ForestMesh,val tool:ForestMesh,val upperLeg:ForestMesh,val lowerLeg:ForestMesh)
     fun characterRig(seed:Int=1):CharacterRig{
-        val body=ForestMeshBuilder();val arm=ForestMeshBuilder();val upperLeg=ForestMeshBuilder();val lowerLeg=ForestMeshBuilder()
+        val body=ForestMeshBuilder();val arm=ForestMeshBuilder();val tool=ForestMeshBuilder();val upperLeg=ForestMeshBuilder();val lowerLeg=ForestMeshBuilder
         val cloth=0xFF455762.toInt();val leather=0xFF66503B.toInt();val skin=0xFFD4A47C.toInt();val dark=0xFF26323A.toInt()
         // Main torso, coat layers, collar, belt, backpack and head are the stationary core.
         body.ellipsoid(0f,1.00f,0f,.24f,.34f,.15f,cloth,14,9)
@@ -130,16 +130,16 @@ internal object ForestModels {
         arm.ellipsoid(0f,-.13f,0f,.095f,.14f,.095f,cloth,12,8)
         arm.ellipsoid(0f,-.28f,.015f,.075f,.12f,.075f,0xFF59656A.toInt(),11,7)
         arm.ellipsoid(0f,-.39f,.03f,.055f,.07f,.06f,skin,10,6)
-        // Right hand carries a small field hatchet: haft and metal head.
-        arm.taperedCylinder(.13f,-.30f,.09f,.18f,-.49f,.10f,.025f,.018f,0xFF765337.toInt(),8)
-        arm.ellipsoid(.18f,-.50f,.10f,.09f,.04f,.045f,0xFF92999A.toInt(),10,6)
-        arm.ellipsoid(.23f,-.50f,.10f,.04f,.055f,.045f,0xFFB6BEC0.toInt(),9,6)
+        // Hand-carried hatchet, animated with the right arm.
+        tool.taperedCylinder(.13f,-.30f,.09f,.18f,-.49f,.10f,.025f,.018f,0xFF765337.toInt(),8)
+        tool.ellipsoid(.18f,-.50f,.10f,.09f,.04f,.045f,0xFF92999A.toInt(),10,6)
+        tool.ellipsoid(.23f,-.50f,.10f,.04f,.055f,.045f,0xFFB6BEC0.toInt(),9,6)
         // Separate upper and lower legs are rotated around hip and knee during the gait.
         upperLeg.ellipsoid(0f,-.17f,0f,.12f,.20f,.11f,cloth,12,8)
         upperLeg.ellipsoid(0f,-.33f,.015f,.09f,.06f,.09f,0xFF4C5960.toInt(),10,6)
         lowerLeg.ellipsoid(0f,-.18f,.005f,.085f,.20f,.085f,0xFF4C5960.toInt(),12,8)
         lowerLeg.ellipsoid(0f,-.38f,.06f,.095f,.07f,.14f,dark,11,7)
-        return CharacterRig(body.snapshot(),arm.snapshot(),upperLeg.snapshot(),lowerLeg.snapshot())
+        return CharacterRig(body.snapshot(),arm.snapshot(),tool.snapshot(),upperLeg.snapshot(),lowerLeg.snapshot())
     }
     /** Multi-piece humanoid base model (50+ smooth geometry components). */
     fun character(seed:Int=1):ForestMesh {
