@@ -33,7 +33,7 @@ class MainActivity : Activity() {
         val title=TextView(this).apply{text="FOREST WALK";setTextColor(Color.WHITE);textSize=12f;alpha=.7f;setPadding(20,12,20,12)}
         root.addView(title,FrameLayout.LayoutParams(-2,-2,Gravity.TOP or Gravity.LEFT))
         val weatherButton=TextView(this).apply{text="☀";setTextColor(Color.WHITE);textSize=24f;gravity=Gravity.CENTER;setPadding(24,16,24,16);setBackgroundColor(0x55303030.toInt())}
-        weatherButton.setOnClickListener { val mode=game.renderer.nextWeather(); weatherButton.text=when(mode){1->"☔";2->"❄";3->"☁";else->"☀"} }
+        weatherButton.setOnClickListener { val mode=game.renderer.nextWeather(); weatherButton.text=when(mode){1->"☔";2->"❄";3->"☁";4->"🍂";else->"☀"} }
         root.addView(weatherButton,FrameLayout.LayoutParams(-2,-2,Gravity.TOP or Gravity.RIGHT).apply{topMargin=18;rightMargin=24})
         setContentView(root)
     }
@@ -67,7 +67,7 @@ private data class DetailChunk(val x:Float,val z:Float,val mesh:GpuMesh)
 
 class ForestRenderer:GLSurfaceView.Renderer{
     @Volatile var mx=0f;@Volatile var my=0f;@Volatile private var weatherMode=0;private lateinit var weatherFx:ForestWeatherParticles
-    fun nextWeather():Int {weatherMode=(weatherMode+1)%4;return weatherMode}
+    fun nextWeather():Int {weatherMode=(weatherMode+1)%5;return weatherMode}
     private var program=0
     private var aPosition=0;private var aNormal=0;private var aColor=0
     private var uMvp=0;private var uModel=0;private var uPlayer=0;private var uTime=0;private var uWeather=0;private var uFoliage=0;private var uWalk=0
@@ -84,7 +84,7 @@ class ForestRenderer:GLSurfaceView.Renderer{
     private val fShader="""precision mediump float;varying vec3 vWorld;varying vec3 vNormal;varying vec3 vColor;uniform vec3 uPlayer;uniform float uTime;uniform float uWeather;uniform float uFoliage;
         float hash(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453);}
         float noise(vec2 p){vec2 i=floor(p),f=fract(p);f=f*f*(3.0-2.0);return mix(mix(hash(i),hash(i+vec2(1.,0.)),f.x),mix(hash(i+vec2(0.,1.)),hash(i+vec2(1.,1.)),f.x),f.y);}
-        void main(){float n=noise(vWorld.xz*2.8)*.12+noise(vWorld.xz*13.0)*.045;float leafgrain=noise(vWorld.xz*47.0)*.14+noise(vWorld.xz*91.0)*.08;float micro=noise(vWorld.xz*83.0);float fleck=noise(vWorld.xz*151.0);vec3 base=vColor*(.78+n+leafgrain)*mix(.84,1.18,micro)*mix(.94,1.07,fleck);vec3 N=normalize(vNormal);vec3 L=normalize(vec3(-.42,.86,.3));float diffuse=max(dot(N,L),0.0);float ambient=.44;float shade=ambient+diffuse*.72;float wet=step(.5,uWeather)*step(uWeather,1.5);base=mix(base,base*.72+vec3(.035,.045,.05),wet*.55);float snow=step(1.5,uWeather)*step(uWeather,2.5);float snowCover=clamp(snow*(.10+max(N.y,0.0)*.52+clamp(vWorld.y*.09,0.0,.38)),0.0,.78);;base=mix(base,vec3(.78,.82,.85),snowCover);float fog=smoothstep(18.0,42.0,distance(vWorld.xz,uPlayer.xz));float fogStrength=mix(.32,.72,step(2.5,uWeather));base=mix(base,vec3(.48,.54,.57),fog*fogStrength);vec3 viewDir=normalize(vec3(0.0,1.0,0.0));float spec=pow(max(dot(reflect(-L,N),viewDir),0.0),22.0)*wet*.22;float fade=1.0;if(uFoliage>0.5&&vWorld.y>2.3){float d=distance(vWorld.xz,uPlayer.xz);fade=mix(1.0,.18,1.0-smoothstep(.55,3.4,d));}gl_FragColor=vec4(base*shade+spec,fade);}"""
+        void main(){float n=noise(vWorld.xz*2.8)*.12+noise(vWorld.xz*13.0)*.045;float leafgrain=noise(vWorld.xz*47.0)*.14+noise(vWorld.xz*91.0)*.08;float micro=noise(vWorld.xz*83.0);float fleck=noise(vWorld.xz*151.0);vec3 base=vColor*(.78+n+leafgrain)*mix(.84,1.18,micro)*mix(.94,1.07,fleck);vec3 N=normalize(vNormal);vec3 L=normalize(vec3(-.42,.86,.3));float diffuse=max(dot(N,L),0.0);float ambient=.44;float shade=ambient+diffuse*.72;float wet=step(.5,uWeather)*step(uWeather,1.5);base=mix(base,base*.72+vec3(.035,.045,.05),wet*.55);float snow=step(1.5,uWeather)*step(uWeather,2.5);float snowCover=clamp(snow*(.10+max(N.y,0.0)*.52+clamp(vWorld.y*.09,0.0,.38)),0.0,.78);;base=mix(base,vec3(.78,.82,.85),snowCover);float autumn=step(3.5,uWeather)*step(uWeather,4.5)*step(.5,uFoliage);base=mix(base,base*vec3(1.32,.76,.39)+vec3(.055,.018,.005),autumn*.88);float fog=smoothstep(18.0,42.0,distance(vWorld.xz,uPlayer.xz));float fogStrength=mix(.32,.72,step(2.5,uWeather));base=mix(base,vec3(.48,.54,.57),fog*fogStrength);vec3 viewDir=normalize(vec3(0.0,1.0,0.0));float spec=pow(max(dot(reflect(-L,N),viewDir),0.0),22.0)*wet*.22;float fade=1.0;if(uFoliage>0.5&&vWorld.y>2.3){float d=distance(vWorld.xz,uPlayer.xz);fade=mix(1.0,.18,1.0-smoothstep(.55,3.4,d));}gl_FragColor=vec4(base*shade+spec,fade);}"""
     override fun onSurfaceCreated(gl:GL10?,cfg:EGLConfig?){
         android.opengl.GLES20.glClearColor(.48f,.62f,.72f,1f)
         android.opengl.GLES20.glEnable(android.opengl.GLES20.GL_DEPTH_TEST)
