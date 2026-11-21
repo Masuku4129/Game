@@ -340,6 +340,177 @@ func _make_asset_multimesh(mesh: Mesh, count: int) -> MultiMeshInstance3D:
 	return instance
 
 
+func _create_weather_particles() -> void:
+	weather_particles = GPUParticles3D.new()
+	weather_particles.name = "WeatherParticles"
+	weather_particles.amount = 1800
+	weather_particles.lifetime = 2.8
+	weather_particles.emitting = false
+	weather_particles.visibility_aabb = AABB(Vector3(-36, -18, -36), Vector3(72, 36, 72))
+	var process_material := ParticleProcessMaterial.new()
+	process_material.emission_shape = ParticleProcessMaterial.EMISSION_SHAPE_BOX
+	process_material.emission_box_extents = Vector3(28, 10, 28)
+	process_material.direction = Vector3(0, -1, 0)
+	process_material.spread = 4.0
+	process_material.initial_velocity_min = 9.0
+	process_material.initial_velocity_max = 13.0
+	process_material.gravity = Vector3(0, -1.5, 0)
+	weather_particles.process_material = process_material
+	var rain_mesh := QuadMesh.new()
+	rain_mesh.size = Vector2(0.025, 0.34)
+	var drop_material := StandardMaterial3D.new()
+	drop_material.albedo_color = Color(0.62, 0.75, 0.82, 0.72)
+	drop_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	drop_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	rain_mesh.material = drop_material
+	weather_particles.draw_pass_1 = rain_mesh
+	add_child(weather_particles)
+
+
+func _set_weather(mode: String) -> void:
+	weather_mode = mode
+	if weather_particles == null:
+		_create_weather_particles()
+	var process_material := weather_particles.process_material as ParticleProcessMaterial
+	var particle_mesh := QuadMesh.new()
+	var particle_material := StandardMaterial3D.new()
+	particle_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	particle_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	match mode:
+		"rain":
+			weather_particles.amount = 1800
+			weather_particles.lifetime = 2.8
+			process_material.initial_velocity_min = 10.0
+			process_material.initial_velocity_max = 14.0
+			process_material.gravity = Vector3(0, -1.5, 0)
+			particle_mesh.size = Vector2(0.018, 0.30)
+			particle_material.albedo_color = Color(0.62, 0.76, 0.86, 0.72)
+			terrain_material.set_shader_parameter("snow_cover", 0.0)
+			terrain_material.set_shader_parameter("surface_wetness", 0.82)
+			_create_rain_puddles()
+		"snow":
+			weather_particles.amount = 2400
+			weather_particles.lifetime = 7.0
+			process_material.initial_velocity_min = 0.8
+			process_material.initial_velocity_max = 2.0
+			process_material.gravity = Vector3(0, -0.28, 0)
+			particle_mesh.size = Vector2(0.075, 0.075)
+			particle_material.albedo_color = Color(0.92, 0.96, 1.0, 0.92)
+			terrain_material.set_shader_parameter("snow_cover", 0.78)
+			terrain_material.set_shader_parameter("surface_wetness", 0.08)
+			_clear_puddles()
+		_ :
+			weather_particles.emitting = false
+			terrain_material.set_shader_parameter("snow_cover", 0.0)
+			terrain_material.set_shader_parameter("surface_wetness", 0.0)
+			_clear_puddles()
+			return
+	particle_mesh.material = particle_material
+	weather_particles.draw_pass_1 = particle_mesh
+	weather_particles.emitting = true
+
+
+func _cycle_weather() -> void:
+	match weather_mode:
+		"clear": _set_weather("rain")
+		"rain": _set_weather("snow")
+		_: _set_weather("clear")
+	if hud_label != null:
+		hud_label.text = "ПОГОДА: %s\\nКнопка погоды — смена условий" % weather_mode.to_upper()
+
+
+func _create_puddles() -> void:
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 74119
+	for index in range(48):
+		var x := rng.randf_range(-WORLD_EXTENT + 8.0, WORLD_EXTENT - 8.0)
+		var z := rng.randf_range(-WORLD_EXTENT + 8.0, WORLD_EXTENT - 8.0)
+		var center_height := _height_at(x, z)
+		var rim_height := (_height_at(x + 1.8, z) + _height_at(x - 1.8, z) + _height_at(x, z + 1.8) + _height_at(x, z - 1.8)) * 0.25
+		if center_height > rim_height - 0.06:
+			continue
+		var puddle := _build_conforming_puddle(Vector3(x, center_height, z), rng.randf_range(0.65, 1.6), rng.randf_range(0.4, 1.1))
+		add_child(puddle)
+		puddle.visible = false
+		puddle_nodes.append(puddle)
+
+
+func _build_conforming_puddle(center: Vector3, radius_x: float, radius_z: float) -> MeshInstance3D:
+	var tool := SurfaceTool.new()
+	tool.begin(Mesh.PRIMITIVE_TRIANGLES)
+	var segments := 16
+	for i in range(segments):
+		var a0 := TAU * float(i) / segments
+		var a1 := TAU * float(i + 1) / segments
+		var center_point := Vector3(center.x, _height_at(center.x, center.z) + 0.018, center.z)
+		var p1 := Vector3(center.x + cos(a0) * radius_x, 0.0, center.z + sin(a0) * radius_z)
+		var p2 := Vector3(center.x + cos(a1) * radius_x, 0.0, center.z + sin(a1) * radius_z)
+		p1.y = _height_at(p1.x, p1.z) + 0.018
+		p2.y = _height_at(p2.x, p2.z) + 0.018
+		for point in [center_point, p2, p1]:
+			tool.set_uv(Vector2(point.x * 0.5, point.z * 0.5))
+			tool.add_vertex(point)
+	tool.generate_normals()
+	var patch := MeshInstance3D.new()
+	patch.name = "TerrainConformingPuddle"
+	patch.mesh = tool.commit()
+	var material := StandardMaterial3D.new()
+	material.albedo_color = Color(0.12, 0.19, 0.20, 0.82)
+	material.roughness = 0.12
+	material.metallic = 0.08
+	material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	patch.material_override = material
+	return patch
+
+
+func _create_rain_puddles() -> void:
+	for puddle in puddle_nodes:
+		if is_instance_valid(puddle):
+			puddle.visible = true
+
+
+func _clear_puddles() -> void:
+	for puddle in puddle_nodes:
+		if is_instance_valid(puddle):
+			puddle.visible = false
+
+
+func _add_footprint(position: Vector3, direction: Vector3) -> void:
+	var forward := Vector3(direction.x, 0.0, direction.z).normalized()
+	if forward.length_squared() < 0.001:
+		forward = Vector3.FORWARD
+	var right := forward.cross(Vector3.UP).normalized()
+	var center := Vector3(position.x, _height_at(position.x, position.z) + 0.025, position.z) + right * (0.13 if footprint_side == 0 else -0.13)
+	var tool := SurfaceTool.new()
+	tool.begin(Mesh.PRIMITIVE_TRIANGLES)
+	var segments := 10
+	for i in range(segments):
+		var a0 := TAU * float(i) / segments
+		var a1 := TAU * float(i + 1) / segments
+		var p1 := center + right * cos(a0) * 0.105 + forward * sin(a0) * 0.19
+		var p2 := center + right * cos(a1) * 0.105 + forward * sin(a1) * 0.19
+		p1.y = _height_at(p1.x, p1.z) + 0.028
+		p2.y = _height_at(p2.x, p2.z) + 0.028
+		for point in [center, p2, p1]:
+			tool.add_vertex(point)
+	tool.generate_normals()
+	var mark := MeshInstance3D.new()
+	mark.name = "SnowFootprint" if weather_mode == "snow" else "MudFootprint"
+	mark.mesh = tool.commit()
+	var material := StandardMaterial3D.new()
+	material.albedo_color = Color(0.48, 0.53, 0.55, 0.72) if weather_mode == "snow" else Color(0.10, 0.065, 0.035, 0.78)
+	material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	material.roughness = 0.96 if weather_mode == "snow" else 0.82
+	mark.material_override = material
+	add_child(mark)
+	footprint_nodes.append(mark)
+	if footprint_nodes.size() > 100:
+		var oldest := footprint_nodes.pop_front()
+		if is_instance_valid(oldest):
+			oldest.queue_free()
+	footprint_side = 1 - footprint_side
+
+
 func _create_player() -> void:
 	player = CharacterBody3D.new()
 	player.name = "Player"
