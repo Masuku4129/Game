@@ -292,11 +292,13 @@ func _process(delta: float) -> void:
 	elif weather_mode == "rain":
 		wetness_accumulation = minf(1.0, wetness_accumulation + delta * 0.08)
 		terrain_material.set_shader_parameter("surface_wetness", wetness_accumulation)
+		_apply_environment_wetness(wetness_accumulation)
 	else:
 		snow_accumulation = maxf(0.0, snow_accumulation - delta * 0.003)
 		wetness_accumulation = maxf(0.0, wetness_accumulation - delta * 0.012)
 		terrain_material.set_shader_parameter("snow_cover", snow_accumulation)
 		terrain_material.set_shader_parameter("surface_wetness", wetness_accumulation)
+		_apply_environment_wetness(wetness_accumulation)
 	var wind_strength := 0.035 if weather_mode == "clear" else 0.075
 	for batch in wind_batches:
 		var instance := batch["node"] as MultiMeshInstance3D
