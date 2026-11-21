@@ -2,7 +2,7 @@ name: Android APK
 
 on:
   push:
-    branches: [main]
+    branches: [main, python-panda3d-port]
     paths-ignore:
       - "PROJECT_MASTER.md"
       - "docs/**"
