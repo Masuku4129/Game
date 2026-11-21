@@ -91,7 +91,7 @@ func _spawn_forest() -> void:
 
 func _make_shrub(rng: RandomNumberGenerator) -> Node3D:
 	var root := Node3D.new()
-	var base_color := [Color(0.13,0.28,0.12),Color(0.18,0.33,0.15),Color(0.24,0.38,0.18)][rng.randi_range(0,2)]
+	var base_color: Color = [Color(0.13,0.28,0.12),Color(0.18,0.33,0.15),Color(0.24,0.38,0.18)][rng.randi_range(0,2)]
 	for j in range(6):
 		var b := MeshInstance3D.new()
 		var mesh := SphereMesh.new()
