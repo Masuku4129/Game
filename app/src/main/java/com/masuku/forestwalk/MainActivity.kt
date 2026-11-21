@@ -214,7 +214,7 @@ class ForestRenderer:GLSurfaceView.Renderer{
         val b=ForestMeshBuilder()
         val rng=java.util.Random(94721)
         val colors=intArrayOf(0xFF536B3E.toInt(),0xFF5A7044.toInt(),0xFF647847.toInt(),0xFF4B633A.toInt(),0xFF6C7747.toInt(),0xFF746B42.toInt(),0xFF5D6840.toInt(),0xFF7A784C.toInt(),0xFF4D6540.toInt())
-        val cells=64
+        val cells=96
         val step=180f/cells
         fun y(x:Float,z:Float):Float=(sin(x*.105f)*.12f+cos(z*.13f)*.10f+sin((x+z)*.075f)*.085f+cos((x-z)*.048f)*.055f)
         for(ix in 0 until cells)for(iz in 0 until cells){
