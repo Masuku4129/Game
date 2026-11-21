@@ -114,7 +114,7 @@ def ellipsoid(name,loc,scale,mat,bn,seg=20,rings=12):
             b=a+1
             d=(ring+1)*row_width+side
             cc=d+1
-            faces.append((a,d,cc,b))
+            faces.append((a,b,cc,d))
     mesh=bpy.data.meshes.new(name.replace(" ","_")+"_organic_mesh")
     mesh.from_pydata(vertices,[],faces)
     mesh.materials.append(mat)
