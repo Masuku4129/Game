@@ -193,9 +193,9 @@ func _run_test() -> void:
 	if not String(character_visual.get("current_clip")).contains("Walk"):
 		printerr("ENVIRONMENT_TEST_FAIL: controller did not select walk animation")
 		quit(1)
-	character_visual.call("set_motion", 8.0, 0.0)
+	character_visual.call("set_motion", 5.5, 0.0)
 	if not String(character_visual.get("current_clip")).contains("Run"):
-		printerr("ENVIRONMENT_TEST_FAIL: controller did not select run animation")
+		printerr("ENVIRONMENT_TEST_FAIL: controller did not select run animation at the actual player top speed")
 		quit(1)
 	character_visual.call("set_motion", 0.0, 0.0)
 	if not String(character_visual.get("current_clip")).contains("Idle"):
