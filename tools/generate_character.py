@@ -16,8 +16,23 @@ def fabric_mat(name, base, rough=.92, pattern_scale=1.0):
     p.inputs["Base Color"].default_value=(*base,1); p.inputs["Roughness"].default_value=rough
     noise=nodes.new("ShaderNodeTexNoise"); noise.inputs["Scale"].default_value=32*pattern_scale; noise.inputs["Detail"].default_value=3; noise.inputs["Roughness"].default_value=.72
     ramp=nodes.new("ShaderNodeValToRGB"); ramp.color_ramp.elements[0].position=.18; ramp.color_ramp.elements[0].color=(*(c*.78 for c in base),1); ramp.color_ramp.elements[1].position=.82; ramp.color_ramp.elements[1].color=(*(min(1,c*1.18) for c in base),1)
-    links.new(noise.outputs["Fac"],ramp.inputs["Fac"]); links.new(ramp.outputs["Color"],p.inputs["Base Color"])
-    bump=nodes.new("ShaderNodeBump"); bump.inputs["Strength"].default_value=.16; bump.inputs["Distance"].default_value=.018; links.new(noise.outputs["Fac"],bump.inputs["Height"]); links.new(bump.outputs["Normal"],p.inputs["Normal"])
+    links.new(noise.outputs["Fac"],ramp.inputs["Fac"])
+    # Embedded color texture with textile grain and cross-weave detail (GLB-compatible).
+    size=128; pixels=[]
+    seed=sum(ord(ch) for ch in name)+23
+    for y in range(size):
+        v=y/float(size-1)
+        for x in range(size):
+            u=x/float(size-1)
+            weave=0.965+0.025*sin(x*1.65)+0.018*cos(y*1.48)+0.012*sin((x+y)*2.2)
+            mottling=0.92+0.075*sin(x*.19+y*.13+seed)+0.035*cos(x*.31-y*.17)
+            f=weave*mottling
+            pixels.extend((min(1,base[0]*f),min(1,base[1]*f),min(1,base[2]*f),1.0))
+    img=bpy.data.images.new(name.replace(" ","_")+"_Albedo",width=size,height=size,alpha=False)
+    img.pixels=pixels; img.pack()
+    tex=nodes.new("ShaderNodeTexImage"); tex.image=img; tex.interpolation="Linear"
+    links.new(tex.outputs["Color"],p.inputs["Base Color"])
+    bump=nodes.new("ShaderNodeBump"); bump.inputs["Strength"].default_value=.10; bump.inputs["Distance"].default_value=.012; links.new(noise.outputs["Fac"],bump.inputs["Height"]); links.new(bump.outputs["Normal"],p.inputs["Normal"])
     return m
 coat=fabric_mat("Wool | worn umber field coat",(.22,.18,.13),.96)
 shirt=fabric_mat("Linen | muted oatmeal",(.47,.42,.33),.93)
