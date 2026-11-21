@@ -11,6 +11,7 @@ const CAMERA_FOV := 44.0
 
 @export_enum("spring", "summer", "autumn", "winter") var active_season: String = "summer"
 const HUMANOID_RIG = preload("res://scripts/animation/procedural_humanoid.gd")
+const SURFACE_SIMULATION = preload("res://scripts/environment/surface_simulation.gd")
 
 var terrain_noise := FastNoiseLite.new()
 var detail_noise := FastNoiseLite.new()
@@ -28,6 +29,7 @@ var asset_base_materials: Dictionary = {}
 var debug_move_input := Vector2.ZERO
 var debug_move_direction := Vector3.ZERO
 var terrain_material: ShaderMaterial
+var surface_simulation: SurfaceSimulation
 var weather_particles: GPUParticles3D
 var weather_mode := "clear"
 var wind_clock := 0.0
@@ -46,6 +48,8 @@ var last_environment_snow := -1.0
 func _ready() -> void:
 	set_physics_process(true)
 	_setup_noise()
+	surface_simulation = SURFACE_SIMULATION.new()
+	surface_simulation.initialize(WORLD_EXTENT, _height_at)
 	_create_environment()
 	_create_terrain()
 	_create_forest()
@@ -142,20 +146,31 @@ render_mode diffuse_burley, specular_schlick_ggx;
 uniform sampler2D ground_albedo : source_color, repeat_enable;
 uniform float snow_cover = 0.0;
 uniform float surface_wetness = 0.0;
+uniform sampler2D surface_state_texture : filter_linear, repeat_disable;
 varying vec4 terrain_vertex_color;
+varying vec4 local_surface_state;
 void vertex() {
     terrain_vertex_color = COLOR;
+    local_surface_state = textureLod(surface_state_texture, UV2, 0.0);
+    VERTEX.y += local_surface_state.r * 0.42 - local_surface_state.b * 0.10 - local_surface_state.a * 0.035;
 }
 void fragment() {
     vec3 surface_color = texture(ground_albedo, UV * 1.0).rgb;
     vec3 ground = surface_color * terrain_vertex_color.rgb;
-    ground = mix(ground, vec3(0.78, 0.84, 0.88), clamp(snow_cover, 0.0, 1.0));
-    ALBEDO = mix(ground, ground * vec3(0.66, 0.70, 0.72), clamp(surface_wetness, 0.0, 1.0) * 0.48);
-    ROUGHNESS = mix(0.97, 0.22, clamp(surface_wetness, 0.0, 1.0));
+    float snow_amount = clamp(max(snow_cover, local_surface_state.r), 0.0, 1.0);
+    float wet_amount = clamp(max(surface_wetness, local_surface_state.g), 0.0, 1.0);
+    float track_darkening = local_surface_state.b * 0.22;
+    vec3 mud = ground * vec3(0.48, 0.39, 0.29);
+    ground = mix(ground, mud, clamp(wet_amount * 0.72 + local_surface_state.a * 0.18, 0.0, 0.82));
+    ground *= 1.0 - track_darkening;
+    ground = mix(ground, vec3(0.78, 0.84, 0.88), snow_amount);
+    ALBEDO = mix(ground, ground * vec3(0.66, 0.70, 0.72), wet_amount * 0.28);
+    ROUGHNESS = mix(0.97, 0.22, wet_amount * 0.72);
 }
 """
 	terrain_material.shader = terrain_shader
 	terrain_material.set_shader_parameter("ground_albedo", _make_ground_texture())
+	terrain_material.set_shader_parameter("surface_state_texture", surface_simulation.get_texture())
 	terrain.material_override = terrain_material
 	add_child(terrain)
 
@@ -214,6 +229,7 @@ func _add_terrain_triangle(surface: SurfaceTool, a: Vector3, b: Vector3, c: Vect
 		var damp := clampf((0.25 - point.y) * 0.08, 0.0, 0.08)
 		surface.set_color(Color(height_tint * (0.88 - damp), height_tint * 1.02, height_tint * (0.72 - damp)))
 		surface.set_uv(Vector2(point.x * 0.075, point.z * 0.075))
+		surface.set_uv2(Vector2((point.x + WORLD_EXTENT) / (WORLD_EXTENT * 2.0), (point.z + WORLD_EXTENT) / (WORLD_EXTENT * 2.0)))
 		surface.add_vertex(point)
 
 
@@ -293,6 +309,8 @@ func _register_wind_batch(instance: MultiMeshInstance3D, transforms: Array, fami
 
 func _process(delta: float) -> void:
 	wind_clock += delta
+	if surface_simulation != null and player != null:
+		surface_simulation.step(delta, weather_mode, player.global_position, Vector2(player.velocity.x, player.velocity.z).length())
 	wind_update_clock += delta
 	if wind_update_clock < 0.08:
 		return
@@ -725,6 +743,8 @@ func _physics_process(delta: float) -> void:
 		footprint_distance += Vector2(player.velocity.x, player.velocity.z).length() * delta
 		if footprint_distance >= 0.62 and Vector2(player.velocity.x, player.velocity.z).length() > 0.8:
 			_add_footprint(player.global_position, direction)
+			if surface_simulation != null:
+				surface_simulation.stamp_footstep(player.global_position, weather_mode)
 			footprint_distance = 0.0
 	var horizontal_speed := Vector2(player.velocity.x, player.velocity.z).length()
 	var slope_ahead := 0.0
