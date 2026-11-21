@@ -104,6 +104,25 @@ func _run_test() -> void:
 		quit(1)
 		return
 
+	# Guard the intended dense landscape against regressions back to a sparse
+	# handful of trees and isolated props. First four batches are the forest
+	# species; all remaining batches are ground-cover families.
+	var environment_batches := game.get("environment_instances") as Array
+	var forest_instances := 0
+	var total_environment_instances := 0
+	for batch_index in range(environment_batches.size()):
+		var batch := environment_batches[batch_index] as MultiMeshInstance3D
+		if batch == null or batch.multimesh == null:
+			continue
+		var count := batch.multimesh.instance_count
+		total_environment_instances += count
+		if batch_index < 4:
+			forest_instances += count
+	if forest_instances < 1000 or total_environment_instances < 5000:
+		printerr("ENVIRONMENT_TEST_FAIL: forest/ground-cover density regressed: forest=", forest_instances, " total=", total_environment_instances)
+		quit(1)
+		return
+
 	game.call("_set_weather", "snow")
 	if not particles.emitting or float(terrain_material.get_shader_parameter("snow_cover")) < 0.1:
 		printerr("ENVIRONMENT_TEST_FAIL: snowfall did not start or snow cover was not applied")
@@ -198,6 +217,10 @@ func _run_test() -> void:
 	game.call("_cycle_season")
 	if String(game.get("active_season")) != "autumn":
 		printerr("ENVIRONMENT_TEST_FAIL: runtime season switch did not advance to autumn")
+		quit(1)
+		return
+	if String(character_visual.get("last_season")) != "autumn":
+		printerr("ENVIRONMENT_TEST_FAIL: character visual clothing did not receive the active season")
 		quit(1)
 		return
 	if (game.get("environment_instances") as Array).size() < 10:
