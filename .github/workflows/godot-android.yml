@@ -14,12 +14,24 @@ jobs:
       image: barichello/godot-ci:4.4.1
     steps:
       - uses: actions/checkout@v4
-      - name: Import project
+      - name: Install Godot export templates and signing key
+        run: |
+          set -eux
+          mkdir -p "$HOME/.local/share/godot/export_templates/4.4.1.stable"
+          wget -q https://github.com/godotengine/godot/releases/download/4.4.1-stable/Godot_v4.4.1-stable_export_templates.tpz -O /tmp/godot-templates.tpz
+          unzip -o /tmp/godot-templates.tpz -d /tmp/godot-templates
+          cp /tmp/godot-templates/templates/* "$HOME/.local/share/godot/export_templates/4.4.1.stable/"
+          mkdir -p "$HOME/.android"
+          keytool -genkeypair -v -keystore "$HOME/.android/debug.keystore" -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US"
+          echo "JAVA_HOME=$(dirname $(dirname $(readlink -f $(which javac))))" >> "$GITHUB_ENV"
+      - name: Validate Godot project
         run: godot --headless --editor --path godot --quit
       - name: Export Android debug APK
         run: |
-          mkdir -p build
-          godot --headless --path godot --export-debug "Android" build/wildlands-debug.apk
+          set -eux
+          mkdir -p godot/build
+          godot --headless --path godot --export-debug "Android" godot/build/wildlands-debug.apk
+          test -s godot/build/wildlands-debug.apk
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
