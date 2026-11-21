@@ -1,18 +1,39 @@
 extends SceneTree
 
+func _material_appearance_color(material: StandardMaterial3D) -> Color:
+	var color := material.albedo_color
+	# GLB export may bake foliage tint into albedo textures and leave the
+	# material's base-color factor white. Sample the texture so the test checks
+	# the appearance that is actually rendered, not only the factor.
+	if material.albedo_texture != null:
+		var image := material.albedo_texture.get_image()
+		if image != null and image.get_width() > 0 and image.get_height() > 0:
+			var total := Color(0, 0, 0, 0)
+			var samples := 0
+			for y in range(0, image.get_height(), max(1, image.get_height() / 8)):
+				for x in range(0, image.get_width(), max(1, image.get_width() / 8)):
+					total += image.get_pixel(x, y)
+					samples += 1
+			if samples > 0:
+				var average := total / float(samples)
+				color = Color(color.r * average.r, color.g * average.g, color.b * average.b, color.a * average.a)
+	return color
+
+
 func _mesh_has_distinct_colors(mesh: Mesh, minimum: int) -> bool:
 	var colors: Array[Color] = []
 	for surface_index in range(mesh.get_surface_count()):
 		var material := mesh.surface_get_material(surface_index) as StandardMaterial3D
 		if material == null:
 			continue
+		var appearance := _material_appearance_color(material)
 		var unique := true
 		for existing in colors:
-			if existing.is_equal_approx(material.albedo_color):
+			if existing.is_equal_approx(appearance):
 				unique = false
 				break
 		if unique:
-			colors.append(material.albedo_color)
+			colors.append(appearance)
 	return colors.size() >= minimum
 
 
