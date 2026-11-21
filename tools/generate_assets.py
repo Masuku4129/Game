@@ -347,14 +347,38 @@ def grass_tuft():
 def stone_cluster():
     reset(); rng=random.Random(9909)
     for i in range(9):
-        a=rng.uniform(0,math.tau); radius=rng.uniform(0.0,1.0)
-        x=math.cos(a)*radius; y=math.sin(a)*radius; size=rng.uniform(.16,.58)
-        bpy.ops.mesh.primitive_ico_sphere_add(subdivisions=2,radius=1,location=(x,y,size*.48))
-        rock_obj=bpy.context.object; rock_obj.name="fractured_stone"
-        rock_obj.scale=(size*rng.uniform(.8,1.35),size*rng.uniform(.7,1.1),size*rng.uniform(.38,.78))
-        for vertex in rock_obj.data.vertices: vertex.co *= rng.uniform(.78,1.16)
-        rock_obj.data.materials.append(STONE if i%3 else STONE_LIGHT)
-        for face in rock_obj.data.polygons: face.use_smooth=False
+        angle=rng.uniform(0,math.tau); radius=rng.uniform(0.0,1.0)
+        x=math.cos(angle)*radius; y=math.sin(angle)*radius; size=rng.uniform(.22,.64)
+        count=9
+        vertices=[]
+        rings=[(.82,.06), (1.0,.43), (.66,.82)]
+        offsets=[rng.uniform(-.18,.18) for _ in rings]
+        for ring_index,(ring_radius,ring_height) in enumerate(rings):
+            for vertex_index in range(count):
+                a=math.tau*vertex_index/count+offsets[ring_index]
+                radial=ring_radius*rng.uniform(.78,1.18)
+                vertices.append((math.cos(a)*radial*size*rng.uniform(.9,1.12), math.sin(a)*radial*size*rng.uniform(.9,1.12), ring_height*size*rng.uniform(.88,1.12)))
+        top_index=len(vertices)
+        vertices.append((rng.uniform(-.08,.08)*size,rng.uniform(-.08,.08)*size,size*rng.uniform(.92,1.12)))
+        bottom_index=len(vertices)
+        vertices.append((0.0,0.0,.015*size))
+        faces=[]
+        for vertex_index in range(count):
+            nxt=(vertex_index+1)%count
+            faces.append((bottom_index,nxt,vertex_index))
+            for ring_index in range(2):
+                a=ring_index*count+vertex_index; b=ring_index*count+nxt
+                c=(ring_index+1)*count+nxt; d=(ring_index+1)*count+vertex_index
+                faces.extend([(a,b,c),(a,c,d)])
+            faces.append((2*count+vertex_index,2*count+nxt,top_index))
+        mesh=bpy.data.meshes.new("fractured_stone_mesh")
+        mesh.from_pydata(vertices,[],faces); mesh.materials.append(STONE); mesh.materials.append(STONE_LIGHT); mesh.update()
+        rock_obj=bpy.data.objects.new("fractured_stone",mesh); bpy.context.collection.objects.link(rock_obj)
+        rock_obj.location=(x,y,0.0)
+        rock_obj.rotation_euler[2]=rng.uniform(0,math.tau)
+        for face in mesh.polygons:
+            face.use_smooth=False
+            face.material_index=1 if rng.random()<.24 else 0
         if i%2==0: sphere((x-size*.12,y+size*.08,size*.72),(size*.22,size*.16,.025),MOSS,7,5)
     finish("stone_cluster",[])
 
