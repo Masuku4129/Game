@@ -207,8 +207,8 @@ class ForestRenderer:GLSurfaceView.Renderer{
             val c=colors[rng.nextInt(colors.size)]
             val a=floatArrayOf(x0,y(x0,z0),z0);val bb=floatArrayOf(x1,y(x1,z0),z0)
             val cc=floatArrayOf(x1,y(x1,z1),z1);val d=floatArrayOf(x0,y(x0,z1),z1)
-            if((ix+iz)%2==0){b.triangle(a,bb,cc,c);b.triangle(a,cc,d,c)}
-            else{b.triangle(a,bb,d,c);b.triangle(bb,cc,d,c)}
+            if((ix+iz)%2==0){b.triangle(a,cc,bb,c);b.triangle(a,d,cc,c)}
+            else{b.triangle(a,d,bb,c);b.triangle(bb,d,cc,c)}
         }
         return upload(b.snapshot())
     }
