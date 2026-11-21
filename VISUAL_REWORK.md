@@ -1,54 +1,42 @@
 # Forest Walk — Visual & Environment Rework
 
 ## Core target
-- Landscape mobile survival/wilderness exploration.
-- Fixed, close, steep overhead/isometric camera that follows the player without rotating.
-- Original stylized wilderness identity: natural silhouettes, varied forest density, colorful layered foliage, detailed ground and vegetation.
-- Trees must be large relative to the player; foliage fades when it obstructs the player.
-- Smooth player movement and walk cycle without skating.
-- Weather and seasons materially change scenery, ground, visibility, and interaction.
-- Samsung S25 Ultra target: 60 FPS objective, device profiling required before claims.
+- Landscape mobile wilderness exploration.
+- Fixed, close overhead/isometric camera follows player without rotation.
+- Original stylized forest identity: natural silhouettes, varied forest density, layered foliage, richly detailed forest floor.
+- Trees are large relative to player; canopy fades when it obstructs the player.
+- Smooth movement and articulated walking animation without skating.
+- Weather and seasons should materially change scenery, ground, visibility, and interactions.
+- Samsung S25 Ultra target: 60 FPS objective only; device profiling required before claims.
 
-## Required visual/game systems
-- Forest species variety (deciduous/conifer/mixed forms), branching trunks, asymmetrical crowns and pointed leaf shapes.
-- Understory bushes, ferns/grass, wildflowers, stones, roots, fallen logs, ground cover and varied forest floor.
-- Procedural ground with subtle unevenness, distinct soil/leaf/moss/grass surfaces.
-- Player model with readable silhouette, clothes, backpack and field tool; articulated walk animation.
-- Wind sway, dynamic light, atmospheric fog.
-- Weather: clear, rain, fog, snow; rain wetness, mud/puddles, footprints and body impressions; snow accumulation, drifts and footprints.
-- LOD/culling and bounded memory/particle systems.
+## Implemented in current source (CI build evidence; no real-device visual verification)
+- Kotlin native Android app with OpenGL ES 2 renderer.
+- Procedural mesh builder for ellipsoids, tapered cylinders, and triangles; static scenery CPU-batched in chunks.
+- 14 deterministic tree meshes with branching trunks, irregular exposed roots, three silhouette/palette families, pointed leaf blades and cross-plane canopy detail.
+- Dense chunked understory shrub geometry, grass blades, wildflower clusters, and layered rock meshes.
+- 64x64 triangulated ground grid with subtle height variation and multiple earth/green color palettes.
+- Close fixed follow camera, landscape UI, on-screen joystick and player heading updates.
+- Separate body, arm, tool, upper-leg and lower-leg meshes; swinging limbs and knee flexion are animated while moving.
+- Shader lighting, ground grain, foliage wind sway, canopy fade, rain wet tint and procedural puddle patches, snow tint/height response, autumn foliage/leaf-litter tint, fog-depth effect.
+- Clear/rain/snow/fog/autumn selector; bounded rain and snow particle system.
 
-## Current native Android renderer
-Project uses Kotlin + OpenGL ES 2.0 under `app/src/main/java/com/masuku/forestwalk`.
+## Remaining gaps (not complete)
+- Character proportions and organic silhouette still need major artistic refinement; mesh parts are procedural shapes, not a sculpted character model.
+- Tree/ground style must be visually inspected in an actual screenshot/device. No device screenshot exists yet; CI compilation alone cannot prove quality.
+- Terrain is fixed-size and shallow; no terrain collisions, paths, streams, slopes, biomes, or streaming.
+- Weather is primarily visual shader/particle treatment: no persistent wetness state, real mud simulation, deep snow, accumulation/drifts, splashes, footprints, or body impressions.
+- Autumn is a tint mode, not a full seasonal vegetation/model swap; other season-specific models are absent.
+- Foliage fade and transparency ordering remain visually unverified.
+- No real-device FPS, memory, touch, thermal or stability profiling has been performed.
 
-Implemented in source (CI build evidence only; no device visual test):
-- Reusable mesh builder for ellipsoids, tapered cylinders and triangle surfaces; CPU merging of static meshes.
-- Procedural multi-branch trees with exposed roots, branch structure, cross-plane pointed leaf geometry, and three distinct canopy palettes/silhouette families.
-- Batched tree chunks and branch/leaf-built shrubs.
-- Ground detail blades, wildflower clusters and rocks, batched by chunk.
-- Triangulated forest floor with subtle undulation and randomized green/earth color palette; shader puddle patches during rain and leaf-litter coloring during autumn.
-- Close fixed follow-camera, joystick movement and movement-direction turn.
-- Shader lighting, surface grain, foliage wind sway and proximity-based canopy transparency.
-- Clear/rain/snow/fog mode selector; rain/snow particles; wet tint; snow shading varies by height and surface normal; fog depth effect.
-- Separate player body, arm, tool, upper-leg and lower-leg meshes with hip/knee/arm swing animation; clothing, backpack, headwear and tool details.
-
-## Known gaps / must not be described as complete
-- Character animation is still shader-based deformation of a static mesh, not a true articulated rig with gait phases.
-- Terrain is shallow, fixed-size and not streamed; no actual collisions, paths, streams, slopes, or biome generation.
-- Weather remains visual only: shader puddle patches are not persistent geometry; no actual wetness state, mud, rain splash, snow depth, drifts, or footprints/body impressions.
-- Autumn is currently a shader color mode, not a full seasonal model/vegetation swap; other season-specific vegetation changes are not implemented.
-- Trees and ground detail remain procedural geometry; style quality must be visually assessed in a real build/device.
-- Foliage fade and blending are unverified visually; render ordering may need correction.
-- No real-device FPS, memory, touch, thermal or stability profiling has been done.
-
-## Work sequence
-1. Improve visual asset/model silhouettes and materials beyond primitive-looking forms; verify each build visually.
-2. Replace basic character mesh deformation with a true articulated rig and walk animation.
-3. Add terrain collision, procedural biomes and world streaming.
-4. Implement weather/season surface effects and persistent interaction marks (footprints, mud/snow deformation, puddles/drifts).
-5. Optimize LOD, visibility, batching, memory and mobile frame time; test on the S25 Ultra.
+## Next work
+1. Improve character silhouette and natural-looking model detail; move away from primitive-looking parts.
+2. Add proper ground/terrain collision and movement boundaries.
+3. Add procedural biomes and world streaming.
+4. Implement persistent seasonal/weather surface effects and interaction marks (footprints, mud/snow deformation, puddles/drifts).
+5. Optimize visibility, LOD, batching, memory and mobile frame time; verify on Samsung S25 Ultra.
 
 ## Performance guardrails
-- Batch static scenery, avoid hot-loop allocations, cull by distance, keep particle counts bounded.
-- Keep mesh chunks under GLES2 16-bit index limits.
-- 60 FPS is a target, not a verified result. Record frame-time and device evidence before claiming success.
+- Batch static scenery, avoid hot-loop allocations, cull by distance, bound particles.
+- Keep mesh chunks below GLES2 16-bit index limits.
+- 60 FPS is a target, not verified. Capture frame-time and device evidence before claiming success.
