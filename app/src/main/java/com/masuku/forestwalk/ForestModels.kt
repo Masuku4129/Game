@@ -112,7 +112,7 @@ internal object ForestModels {
         val body=ForestMeshBuilder();val arm=ForestMeshBuilder();val tool=ForestMeshBuilder();val upperLeg=ForestMeshBuilder();val lowerLeg=ForestMeshBuilder()
         val cloth=0xFF455762.toInt();val leather=0xFF66503B.toInt();val skin=0xFFD4A47C.toInt();val dark=0xFF26323A.toInt()
         // Main torso, coat layers, collar, belt, backpack and head are the stationary core.
-        body.ellipsoid(0f,1.00f,0f,.24f,.34f,.15f,cloth,14,9)
+        body.taperedCylinder(0f,.68f,0f,0f,1.34f,0f,.25f,.16f,cloth,12)\n        body.ellipsoid(0f,1.00f,0f,.24f,.34f,.15f,cloth,14,9)
         body.ellipsoid(0f,1.23f,0f,.20f,.21f,.14f,0xFF52636A.toInt(),13,8)
         body.ellipsoid(0f,1.45f,.005f,.13f,.14f,.13f,skin,13,8)
         body.ellipsoid(0f,1.58f,-.01f,.16f,.09f,.14f,leather,13,8)
@@ -128,7 +128,7 @@ internal object ForestModels {
         body.ellipsoid(0f,1.68f,-.005f,.13f,.09f,.13f,0xFF514334.toInt(),13,8)
         body.ellipsoid(0f,1.55f,-.055f,.14f,.055f,.14f,0xFF352B24.toInt(),12,7)
         // Upper/lower arms are a compact sleeve-and-hand mesh, mirrored at shoulder pivots.
-        arm.ellipsoid(0f,-.13f,0f,.095f,.14f,.095f,cloth,12,8)
+        arm.taperedCylinder(0f,-.06f,0f,0f,-.30f,.015f,.085f,.065f,cloth,10)\n        arm.ellipsoid(0f,-.13f,0f,.095f,.14f,.095f,cloth,12,8)
         arm.ellipsoid(0f,-.28f,.015f,.075f,.12f,.075f,0xFF59656A.toInt(),11,7)
         arm.ellipsoid(0f,-.39f,.03f,.055f,.07f,.06f,skin,10,6)
         // Hand-carried hatchet, animated with the right arm.
@@ -136,9 +136,9 @@ internal object ForestModels {
         tool.ellipsoid(.18f,-.50f,.10f,.09f,.04f,.045f,0xFF92999A.toInt(),10,6)
         tool.ellipsoid(.23f,-.50f,.10f,.04f,.055f,.045f,0xFFB6BEC0.toInt(),9,6)
         // Separate upper and lower legs are rotated around hip and knee during the gait.
-        upperLeg.ellipsoid(0f,-.17f,0f,.12f,.20f,.11f,cloth,12,8)
+        upperLeg.taperedCylinder(0f,-.03f,0f,0f,-.31f,.01f,.11f,.075f,cloth,10)\n        upperLeg.ellipsoid(0f,-.17f,0f,.12f,.20f,.11f,cloth,12,8)
         upperLeg.ellipsoid(0f,-.33f,.015f,.09f,.06f,.09f,0xFF4C5960.toInt(),10,6)
-        lowerLeg.ellipsoid(0f,-.18f,.005f,.085f,.20f,.085f,0xFF4C5960.toInt(),12,8)
+        lowerLeg.taperedCylinder(0f,-.02f,.005f,0f,-.34f,.015f,.075f,.065f,0xFF4C5960.toInt(),10)\n        lowerLeg.ellipsoid(0f,-.18f,.005f,.085f,.20f,.085f,0xFF4C5960.toInt(),12,8)
         lowerLeg.ellipsoid(0f,-.38f,.06f,.095f,.07f,.14f,dark,11,7)
         return CharacterRig(body.snapshot(),arm.snapshot(),tool.snapshot(),upperLeg.snapshot(),lowerLeg.snapshot())
     }
