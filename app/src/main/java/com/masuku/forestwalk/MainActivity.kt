@@ -212,7 +212,7 @@ class ForestRenderer:GLSurfaceView.Renderer{
         }
         return upload(b.snapshot())
     }
-    private fun makeShrub():ForestMesh{val b=ForestMeshBuilder();for(i in 0..5){val a=i*PI/3;val r=.35f;b.ellipsoid((cos(a)*r).toFloat(),.3f,(sin(a)*r).toFloat(),.42f,.35f,.42f,0xFF386B3C.toInt()+i*0x000201,9,6)};return b.snapshot()}
+    private fun makeShrub():ForestMesh=ForestModels.shrub(418)
     private fun upload(m:ForestMesh):GpuMesh=GpuMesh(m.vertexBuffer,m.indexBuffer,m.indexCount)
     private fun shader(type:Int,src:String):Int{val s=android.opengl.GLES20.glCreateShader(type);android.opengl.GLES20.glShaderSource(s,src);android.opengl.GLES20.glCompileShader(s);val ok=IntArray(1);android.opengl.GLES20.glGetShaderiv(s,android.opengl.GLES20.GL_COMPILE_STATUS,ok,0);if(ok[0]==0)throw RuntimeException(android.opengl.GLES20.glGetShaderInfoLog(s));return s}
     private fun link(v:String,f:String):Int{val p=android.opengl.GLES20.glCreateProgram();android.opengl.GLES20.glAttachShader(p,shader(android.opengl.GLES20.GL_VERTEX_SHADER,v));android.opengl.GLES20.glAttachShader(p,shader(android.opengl.GLES20.GL_FRAGMENT_SHADER,f));android.opengl.GLES20.glLinkProgram(p);val ok=IntArray(1);android.opengl.GLES20.glGetProgramiv(p,android.opengl.GLES20.GL_LINK_STATUS,ok,0);if(ok[0]==0)throw RuntimeException(android.opengl.GLES20.glGetProgramInfoLog(p));return p}
