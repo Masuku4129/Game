@@ -23,6 +23,7 @@ var active_touch := -1
 var hud_label: Label
 var joystick: Control
 var asset_mesh_cache: Dictionary = {}
+var asset_base_materials: Dictionary = {}
 var debug_move_input := Vector2.ZERO
 var debug_move_direction := Vector3.ZERO
 var terrain_material: ShaderMaterial
@@ -327,10 +328,38 @@ func _load_environment_mesh(asset_name: String) -> Mesh:
 		push_error("Seasonal model contains no MeshInstance3D: " + resource_path)
 		model_root.free()
 		return null
-	var mesh := mesh_instance.mesh
+	var mesh := mesh_instance.mesh.duplicate() as ArrayMesh
+	if mesh == null:
+		push_error("Seasonal environment model is not an ArrayMesh: " + resource_path)
+		model_root.free()
+		return null
+	var base_materials: Array[Material] = []
+	for surface_index in range(mesh.get_surface_count()):
+		var source_material := mesh.surface_get_material(surface_index)
+		if source_material != null:
+			base_materials.append(source_material.duplicate() as Material)
+		else:
+			base_materials.append(null)
+	asset_base_materials[cache_key] = base_materials
 	asset_mesh_cache[cache_key] = mesh
 	model_root.free()
 	return mesh
+
+
+func _apply_environment_wetness(amount: float) -> void:
+	for cache_key in asset_mesh_cache.keys():
+		var mesh := asset_mesh_cache[cache_key] as ArrayMesh
+		var originals: Array = asset_base_materials.get(cache_key, [])
+		if mesh == null:
+			continue
+		for surface_index in range(mini(mesh.get_surface_count(), originals.size())):
+			var source := originals[surface_index] as StandardMaterial3D
+			if source == null:
+				continue
+			var wet := source.duplicate() as StandardMaterial3D
+			wet.roughness = lerpf(source.roughness, 0.24, amount)
+			wet.albedo_color = source.albedo_color.lerp(source.albedo_color * Color(0.68, 0.72, 0.76), amount * 0.42)
+			mesh.surface_set_material(surface_index, wet)
 
 
 func _find_mesh_instance(node: Node) -> MeshInstance3D:
