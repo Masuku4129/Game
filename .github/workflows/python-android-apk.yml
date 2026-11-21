@@ -92,6 +92,24 @@ jobs:
           test -s assets/textures/ground_albedo.png
           for season in spring summer autumn winter; do test -s "assets/generated/forest_${season}.bam"; done
 
+      - name: Headless scene startup smoke test
+        working-directory: python_game
+        env:
+          LIBGL_ALWAYS_SOFTWARE: "1"
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y xvfb
+          set +e
+          timeout 25s xvfb-run -a python main.py 2>&1 | tee "$RUNNER_TEMP/wildlands-smoke.log"
+          code=${PIPESTATUS[0]}
+          set -e
+          if [ "$code" -ne 124 ]; then
+            echo "Scene exited unexpectedly with code $code"
+            exit 1
+          fi
+          grep -q "PLAYER_MODEL_LOADED:" "$RUNNER_TEMP/wildlands-smoke.log"
+          echo "HEADLESS_SCENE_STARTUP: PASS (scene remained active for 25 seconds)"
+
       - name: Build Panda3D Android App Bundle
         working-directory: python_game
         env:
