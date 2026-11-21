@@ -68,9 +68,11 @@ jobs:
               seasonal_file = path.stem.endswith(("_spring", "_summer", "_autumn", "_winter"))
               if seasonal_file:
                   for material in materials:
-                      factor = material.get("pbrMetallicRoughness", {}).get("baseColorFactor")
-                      if not isinstance(factor, list) or len(factor) != 4:
-                          raise SystemExit(f"Missing exported base color for {material.get('name')}: {path}")
+                      pbr = material.get("pbrMetallicRoughness", {})
+                      factor = pbr.get("baseColorFactor")
+                      texture = pbr.get("baseColorTexture")
+                      if not texture and (not isinstance(factor, list) or len(factor) != 4):
+                          raise SystemExit(f"Missing exported base color/texture for {material.get('name')}: {path")
               if path.name.startswith("grass_tuft_"):
                   textured = any(
                       material.get("pbrMetallicRoughness", {}).get("baseColorTexture")
