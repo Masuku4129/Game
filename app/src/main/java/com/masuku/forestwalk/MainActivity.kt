@@ -73,8 +73,11 @@ class ForestRenderer: android.opengl.GLSurfaceView.Renderer {
     private var last=System.nanoTime()
     private val objects=ArrayList<Obj>()
     data class Obj(val x:Float,val z:Float,val type:Int,val scale:Float,val seed:Float)
-    private val vShader="""attribute vec3 aPos; uniform mat4 uMVP; void main(){ gl_Position=uMVP*vec4(aPos,1.0); }"""
-    private val fShader="""precision mediump float; uniform vec4 uColor; void main(){ gl_FragColor=uColor; }"""
+    private val vShader="""attribute vec3 aPos; uniform mat4 uMVP; uniform mat4 uModel; varying vec3 vWorld; void main(){ vec4 world=uModel*vec4(aPos,1.0); vWorld=world.xyz; gl_Position=uMVP*vec4(aPos,1.0); }"""
+    private val fShader="""precision mediump float; uniform vec4 uColor; varying vec3 vWorld;
+        float hash(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453);}
+        float noise(vec2 p){vec2 i=floor(p),f=fract(p);f=f*f*(3.0-2.0);return mix(mix(hash(i),hash(i+vec2(1.0,0.0)),f.x),mix(hash(i+vec2(0.0,1.0)),hash(i+vec2(1.0,1.0)),f.x),f.y);}
+        void main(){float coarse=noise(vWorld.xz*0.24);float detail=noise(vWorld.xz*3.8);float fine=noise(vWorld.xz*17.0);float mottled=0.72+coarse*0.35+detail*0.17+fine*0.08;vec3 c=uColor.rgb*mottled;float speckle=smoothstep(0.78,0.96,noise(vWorld.xz*31.0));c+=uColor.rgb*speckle*0.12;gl_FragColor=vec4(c,uColor.a);}"""
     override fun onSurfaceCreated(gl:javax.microedition.khronos.opengles.GL10?, cfg:javax.microedition.khronos.egl.EGLConfig?) {
         android.opengl.GLES20.glClearColor(.48f,.68f,.76f,1f)
         android.opengl.GLES20.glEnable(android.opengl.GLES20.GL_DEPTH_TEST)
@@ -97,7 +100,8 @@ class ForestRenderer: android.opengl.GLSurfaceView.Renderer {
         android.opengl.GLES20.glUseProgram(program)
         val aspect=1.78f
         val proj=perspective(58f,aspect,.1f,100f)
-        val view=lookAt(px,4.8f,pz-7.5f,px,0f,pz+2.4f,0f,1f,0f)
+        // Fixed close overhead camera: steep angle, centered on the walker, never rotates.
+        val view=lookAt(px,13.5f,pz-4.8f,px,0.0f,pz+0.5f,0f,1f,0f)
         val vp=mul(proj,view)
         draw(vp,0f,-.18f,0f,90f,.12f,90f,0xFF496B3B.toInt())
         for(o in objects) {
@@ -134,6 +138,7 @@ class ForestRenderer: android.opengl.GLSurfaceView.Renderer {
         val vb=java.nio.ByteBuffer.allocateDirect(verts.size*4).order(java.nio.ByteOrder.nativeOrder()).asFloatBuffer(); vb.put(verts).position(0)
         val ib=java.nio.ByteBuffer.allocateDirect(idx.size*2).order(java.nio.ByteOrder.nativeOrder()).asShortBuffer(); ib.put(idx).position(0)
         android.opengl.GLES20.glUniformMatrix4fv(android.opengl.GLES20.glGetUniformLocation(program,"uMVP"),1,false,m,0)
+        android.opengl.GLES20.glUniformMatrix4fv(android.opengl.GLES20.glGetUniformLocation(program,"uModel"),1,false,model,0)
         val rr=((color shr 16) and 255)/255f; val gg=((color shr 8) and 255)/255f; val bb=(color and 255)/255f
         android.opengl.GLES20.glUniform4f(col,rr,gg,bb,1f)
         android.opengl.GLES20.glEnableVertexAttribArray(pos); android.opengl.GLES20.glVertexAttribPointer(pos,3,android.opengl.GLES20.GL_FLOAT,false,0,vb)
