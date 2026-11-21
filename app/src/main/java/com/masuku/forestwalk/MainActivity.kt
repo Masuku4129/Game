@@ -86,16 +86,23 @@ class ForestRenderer:GLSurfaceView.Renderer{
         aPosition=android.opengl.GLES20.glGetAttribLocation(program,"aPos");aNormal=android.opengl.GLES20.glGetAttribLocation(program,"aNormal");aColor=android.opengl.GLES20.glGetAttribLocation(program,"aColor")
         uMvp=android.opengl.GLES20.glGetUniformLocation(program,"uMVP");uModel=android.opengl.GLES20.glGetUniformLocation(program,"uModel");uPlayer=android.opengl.GLES20.glGetUniformLocation(program,"uPlayer");uTime=android.opengl.GLES20.glGetUniformLocation(program,"uTime");uWeather=android.opengl.GLES20.glGetUniformLocation(program,"uWeather")
         groundMesh=makeGround();playerMesh=upload(ForestModels.character(123));shrubMesh=makeShrub()
-        // Reuse ten procedural tree silhouettes; seeded variations in crowns and trunk shape.
-        for(i in 0 until 10)treeCache.add(upload(ForestModels.tree(300+i,4.4f+(i%4)*.55f).mesh))
+        val speciesMeshes=ArrayList<ForestMesh>()
+        for(i in 0 until 10)speciesMeshes.add(ForestModels.tree(300+i,4.4f+(i%4)*.55f).mesh)
+        // Static trees are CPU-merged into bounded chunks to reduce hundreds of draw calls.
         val rnd=java.util.Random(87129)
-        for(z in -24..24)for(x in -28..28){
-            val dist=x*x+z*z
-            if(dist<9)continue
-            if(rnd.nextFloat()<.70f){
-                val species=rnd.nextInt(treeCache.size)
-                instances.add(TreeInstance(x*2.15f+(rnd.nextFloat()-.5f)*1.1f,z*2.0f+(rnd.nextFloat()-.5f)*1.2f,.75f+rnd.nextFloat()*.75f,species))
+        val chunkSize=34f
+        for(cz in -2..2)for(cx in -2..2){
+            val batch=ForestMeshBuilder()
+            val count=5+rnd.nextInt(4)
+            repeat(count){
+                val sx=cx*chunkSize+(rnd.nextFloat()-.5f)*chunkSize*.82f
+                val sz=cz*chunkSize+(rnd.nextFloat()-.5f)*chunkSize*.82f
+                val sp=rnd.nextInt(speciesMeshes.size)
+                val sc=.78f+rnd.nextFloat()*.75f
+                val rot=rnd.nextFloat()*6.28318f
+                batch.append(speciesMeshes[sp],sx,0f,sz,sc,rot)
             }
+            treeChunks.add(TreeChunk(cx*chunkSize,cz*chunkSize,upload(batch.snapshot())))
         }
     }
     override fun onSurfaceChanged(gl:GL10?,w:Int,h:Int){width=w.coerceAtLeast(1);height=h.coerceAtLeast(1);android.opengl.GLES20.glViewport(0,0,width,height)}
@@ -112,9 +119,9 @@ class ForestRenderer:GLSurfaceView.Renderer{
         android.opengl.GLES20.glUniform3f(uPlayer,playerX,0f,playerZ)
         android.opengl.GLES20.glUniform1f(uTime,now/1e9f);android.opengl.GLES20.glUniform1f(uWeather,0f)
         draw(groundMesh,vp,identity())
-        for(t in instances){val dx=t.x-playerX;val dz=t.z-playerZ;if(dx*dx+dz*dz>520f)continue
-            val model=identity();android.opengl.Matrix.translateM(model,0,t.x,0f,t.z);android.opengl.Matrix.scaleM(model,0,t.scale,1f,t.scale);android.opengl.Matrix.rotateM(model,0,(t.species*31f)%360f,0f,1f,0f)
-            draw(treeCache[t.species],vp,model)}
+        for(chunk in treeChunks){val dx=chunk.x-playerX;val dz=chunk.z-playerZ;if(dx*dx+dz*dz>1400f)continue
+            val model=identity();android.opengl.Matrix.translateM(model,0,chunk.x,0f,chunk.z)
+            draw(chunk.mesh,vp,model)}
         // Softly bobbing and turning toward travel direction (visual base animation).
         val moving=abs(mx)+abs(my)>.06f;val bob=if(moving)sin(now/95000000.0).toFloat()*.035f else 0f
         val pm=identity();android.opengl.Matrix.translateM(pm,0,playerX,.0f+bob,playerZ);android.opengl.Matrix.rotateM(pm,0,heading*180f/PI.toFloat(),0f,1f,0f)
