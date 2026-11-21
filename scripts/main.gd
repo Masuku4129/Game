@@ -22,6 +22,7 @@ var touch_origin := Vector2.ZERO
 var active_touch := -1
 var hud_label: Label
 var joystick: Control
+var weather_button: Button
 var asset_mesh_cache: Dictionary = {}
 var asset_base_materials: Dictionary = {}
 var debug_move_input := Vector2.ZERO
@@ -437,9 +438,12 @@ func _set_weather(mode: String) -> void:
 			particle_mesh.size = Vector2(0.018, 0.30)
 			particle_material.albedo_color = Color(0.62, 0.76, 0.86, 0.72)
 			snow_accumulation = 0.0
+			snow_accumulation = 0.0
 			terrain_material.set_shader_parameter("snow_cover", 0.0)
+			_apply_environment_snow(0.0)
 			wetness_accumulation = 0.82
 			terrain_material.set_shader_parameter("surface_wetness", 0.82)
+			_apply_environment_wetness(0.82)
 			_create_rain_puddles()
 		"snow":
 			weather_particles.amount = 2400
@@ -451,6 +455,7 @@ func _set_weather(mode: String) -> void:
 			particle_material.albedo_color = Color(0.92, 0.96, 1.0, 0.92)
 			wetness_accumulation = 0.08
 			terrain_material.set_shader_parameter("surface_wetness", 0.08)
+			_apply_environment_wetness(0.08)
 			snow_accumulation = maxf(snow_accumulation, 0.12)
 			terrain_material.set_shader_parameter("snow_cover", snow_accumulation)
 			_clear_puddles()
@@ -472,6 +477,8 @@ func _cycle_weather() -> void:
 		_: _set_weather("clear")
 	if hud_label != null:
 		hud_label.text = "ПОГОДА: %s\\nКнопка погоды — смена условий" % weather_mode.to_upper()
+	if weather_button != null:
+		weather_button.text = "Погода: " + weather_mode
 
 
 func _create_puddles() -> void:
@@ -645,7 +652,7 @@ func _create_hud() -> void:
 	joystick.offset_right = 218.0
 	joystick.offset_bottom = -28.0
 	layer.add_child(joystick)
-	var weather_button := Button.new()
+	weather_button = Button.new()
 	weather_button.text = "Погода: ясно"
 	weather_button.position = Vector2(18.0, 88.0)
 	weather_button.custom_minimum_size = Vector2(190.0, 48.0)
