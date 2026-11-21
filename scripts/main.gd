@@ -563,6 +563,8 @@ func _cycle_season() -> void:
 	asset_base_materials.clear()
 	_create_forest()
 	_create_ground_cover()
+	if player_visual != null:
+		player_visual.call("set_season", active_season)
 	last_environment_wetness = -1.0
 	last_environment_snow = -1.0
 	_apply_environment_wetness(wetness_accumulation)
