@@ -66,7 +66,14 @@ jobs:
                   factor = material.get("pbrMetallicRoughness", {}).get("baseColorFactor")
                   if not isinstance(factor, list) or len(factor) != 4:
                       raise SystemExit(f"Missing exported base color for {material.get('name')}: {path}")
-          print(f"GLB structure and material colors validated for {len(files)} seasonal files")
+              if path.name.startswith("grass_tuft_"):
+                  textured = any(
+                      material.get("pbrMetallicRoughness", {}).get("baseColorTexture")
+                      for material in materials
+                  )
+                  if not textured or not gltf.get("images") or not gltf.get("textures"):
+                      raise SystemExit(f"Grass blade texture was not embedded in GLB: {path}")
+          print(f"GLB structure, colors and grass textures validated for {len(files)} seasonal files")
           PY
           du -h assets/generated/*
       - name: Commit generated models
