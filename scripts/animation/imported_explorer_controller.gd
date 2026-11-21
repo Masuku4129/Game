@@ -48,10 +48,12 @@ func _play_matching(candidates: Array[String]) -> void:
 				if current_clip != clip:
 					animation_player.play(clip, 0.15)
 					current_clip = clip
+					print("EXPLORER_ANIMATION_SELECTED: ", clip)
 				return
 
 func set_motion(horizontal_speed: float, slope: float) -> void:
 	target_speed = horizontal_speed
+	print("EXPLORER_MOTION_REQUEST speed=", horizontal_speed, " current=", current_clip)
 	if target_speed > 6.0:
 		_play_matching(["Run", "run"])
 	elif target_speed > 0.15:
