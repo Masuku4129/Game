@@ -120,7 +120,7 @@ class ForestRenderer:GLSurfaceView.Renderer{
                 val scale=.62f+rnd.nextFloat()*.72f
                 shrubs.append(shrubMesh, sx, 0f, sz, scale, rnd.nextFloat()*6.28318f)
             }
-            repeat(260){
+            repeat(520){
                 val gx=(rnd.nextFloat()-.5f)*chunkSize*.94f
                 val gz=(rnd.nextFloat()-.5f)*chunkSize*.94f
                 val h=.16f+rnd.nextFloat()*.36f
@@ -161,7 +161,7 @@ class ForestRenderer:GLSurfaceView.Renderer{
         android.opengl.GLES20.glUseProgram(program)
         val aspect=width.toFloat()/height.toFloat()
         val view=lookAt(playerX,15.8f+playerY,playerZ+4.1f,playerX,playerY,playerZ,0f,1f,0f)
-        val projection=ortho(-7.8f*aspect,7.8f*aspect,-7.8f,7.8f,.1f,70f)
+        val projection=ortho(-5.4f*aspect,5.4f*aspect,-5.4f,5.4f,.1f,70f)
         val vp=mul(projection,view)
         android.opengl.GLES20.glUniform3f(uPlayer,playerX,playerY,playerZ)
         android.opengl.GLES20.glUniform1f(uTime,now/1e9f);android.opengl.GLES20.glUniform1f(uWeather,weatherMode.toFloat())
