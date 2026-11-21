@@ -100,8 +100,8 @@ def _export_seasonal_variant(root, asset_name, season):
         variant.data.materials[index] = seasonal
         variant_material_names.append((index, source.name))
 
-    # Deciduous species lose their leaves in winter; the branch structure remains.
-    if season == "winter" and asset_name in ("tree_birch", "shrub_mixed"):
+    # Deciduous crowns thin during autumn and become bare in winter.
+    if season in ("autumn", "winter") and asset_name in ("tree_birch", "shrub_mixed"):
         import bmesh
         leaf_slots = {
             index for index, name in variant_material_names
@@ -110,7 +110,11 @@ def _export_seasonal_variant(root, asset_name, season):
         if leaf_slots:
             bm = bmesh.new()
             bm.from_mesh(variant.data)
-            doomed = [face for face in bm.faces if face.material_index in leaf_slots]
+            rng = random.Random(sum(ord(ch) for ch in asset_name + season) + 1703)
+            if season == "winter":
+                doomed = [face for face in bm.faces if face.material_index in leaf_slots]
+            else:
+                doomed = [face for face in bm.faces if face.material_index in leaf_slots and rng.random() < 0.28]
             bmesh.ops.delete(bm, geom=doomed, context="FACES")
             bm.to_mesh(variant.data)
             bm.free()
