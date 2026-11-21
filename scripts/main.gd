@@ -2,7 +2,7 @@ extends Node3D
 
 const WORLD_EXTENT := 90.0
 const GRID_CELLS := 144
-const TREE_COUNT := 420
+const TREE_COUNT := 1050
 const PLAYER_SPEED := 5.5
 const PLAYER_ACCELERATION := 22.0
 const PLAYER_DECELERATION := 28.0
@@ -181,11 +181,11 @@ func _create_forest() -> void:
 
 
 func _create_ground_cover() -> void:
-	_scatter_environment_asset("shrub_mixed", 145, 0.72, 1.18, 12001, 10.0)
-	_scatter_environment_asset("fern_cluster", 210, 0.68, 1.22, 12002, 8.0)
-	_scatter_environment_asset("rock_mossy", 105, 0.55, 1.35, 12003, 7.0)
-	_scatter_environment_asset("stump_mossy", 24, 0.72, 1.18, 12004, 14.0)
-	_scatter_environment_asset("fallen_log", 28, 0.72, 1.24, 12005, 14.0)
+	_scatter_environment_asset("shrub_mixed", 360, 0.72, 1.18, 12001, 10.0)
+	_scatter_environment_asset("fern_cluster", 525, 0.68, 1.22, 12002, 8.0)
+	_scatter_environment_asset("rock_mossy", 260, 0.55, 1.35, 12003, 7.0)
+	_scatter_environment_asset("stump_mossy", 60, 0.72, 1.18, 12004, 14.0)
+	_scatter_environment_asset("fallen_log", 70, 0.72, 1.24, 12005, 14.0)
 
 
 func _scatter_environment_asset(asset_name: String, amount: int, min_scale: float, max_scale: float, seed_value: int, clear_radius: float) -> void:
