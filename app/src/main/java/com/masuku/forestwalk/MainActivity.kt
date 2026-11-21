@@ -65,7 +65,7 @@ class ForestRenderer:GLSurfaceView.Renderer{
     @Volatile var mx=0f;@Volatile var my=0f
     private var program=0
     private var aPosition=0;private var aNormal=0;private var aColor=0
-    private var uMvp=0;private var uModel=0;private var uPlayer=0;private var uTime=0;private var uWeather=0
+    private var uMvp=0;private var uModel=0;private var uPlayer=0;private var uTime=0;private var uWeather=0;private var uFoliage=0
     private var width=1;private var height=1
     private var playerX=0f;private var playerZ=0f;private var heading=0f;private var last=System.nanoTime()
     private val treeCache=ArrayList<GpuMesh>()
@@ -77,14 +77,14 @@ class ForestRenderer:GLSurfaceView.Renderer{
     private val fShader="""precision mediump float;varying vec3 vWorld;varying vec3 vNormal;varying vec3 vColor;uniform vec3 uPlayer;uniform float uTime;uniform float uWeather;
         float hash(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453);}
         float noise(vec2 p){vec2 i=floor(p),f=fract(p);f=f*f*(3.0-2.0);return mix(mix(hash(i),hash(i+vec2(1.,0.)),f.x),mix(hash(i+vec2(0.,1.)),hash(i+vec2(1.,1.)),f.x),f.y);}
-        void main(){float n=noise(vWorld.xz*2.8)*.12+noise(vWorld.xz*13.0)*.045;vec3 base=vColor*(.90+n);vec3 N=normalize(vNormal);vec3 L=normalize(vec3(-.42,.86,.3));float diffuse=max(dot(N,L),0.0);float ambient=.38;float shade=ambient+diffuse*.68;float wet=clamp(uWeather,0.0,1.0);base=mix(base,base*.72+vec3(.035,.045,.05),wet*.55);vec3 viewDir=normalize(vec3(0.0,1.0,0.0));float spec=pow(max(dot(reflect(-L,N),viewDir),0.0),22.0)*wet*.22;gl_FragColor=vec4(base*shade+spec,1.0);}"""
+        void main(){float n=noise(vWorld.xz*2.8)*.12+noise(vWorld.xz*13.0)*.045;vec3 base=vColor*(.90+n);vec3 N=normalize(vNormal);vec3 L=normalize(vec3(-.42,.86,.3));float diffuse=max(dot(N,L),0.0);float ambient=.38;float shade=ambient+diffuse*.68;float wet=clamp(uWeather,0.0,1.0);base=mix(base,base*.72+vec3(.035,.045,.05),wet*.55);vec3 viewDir=normalize(vec3(0.0,1.0,0.0));float spec=pow(max(dot(reflect(-L,N),viewDir),0.0),22.0)*wet*.22;float fade=1.0;if(uFoliage>0.5&&vWorld.y>2.3){float d=distance(vWorld.xz,uPlayer.xz);fade=mix(1.0,.18,1.0-smoothstep(.55,3.4,d));}gl_FragColor=vec4(base*shade+spec,fade);}"""
     override fun onSurfaceCreated(gl:GL10?,cfg:EGLConfig?){
         android.opengl.GLES20.glClearColor(.48f,.62f,.72f,1f)
         android.opengl.GLES20.glEnable(android.opengl.GLES20.GL_DEPTH_TEST)
         android.opengl.GLES20.glDisable(android.opengl.GLES20.GL_CULL_FACE)
         program=link(vShader,fShader)
         aPosition=android.opengl.GLES20.glGetAttribLocation(program,"aPos");aNormal=android.opengl.GLES20.glGetAttribLocation(program,"aNormal");aColor=android.opengl.GLES20.glGetAttribLocation(program,"aColor")
-        uMvp=android.opengl.GLES20.glGetUniformLocation(program,"uMVP");uModel=android.opengl.GLES20.glGetUniformLocation(program,"uModel");uPlayer=android.opengl.GLES20.glGetUniformLocation(program,"uPlayer");uTime=android.opengl.GLES20.glGetUniformLocation(program,"uTime");uWeather=android.opengl.GLES20.glGetUniformLocation(program,"uWeather")
+        uMvp=android.opengl.GLES20.glGetUniformLocation(program,"uMVP");uModel=android.opengl.GLES20.glGetUniformLocation(program,"uModel");uPlayer=android.opengl.GLES20.glGetUniformLocation(program,"uPlayer");uTime=android.opengl.GLES20.glGetUniformLocation(program,"uTime");uWeather=android.opengl.GLES20.glGetUniformLocation(program,"uWeather");uFoliage=android.opengl.GLES20.glGetUniformLocation(program,"uFoliage")
         groundMesh=makeGround();playerMesh=upload(ForestModels.character(123));shrubMesh=makeShrub()
         val speciesMeshes=ArrayList<ForestMesh>()
         for(i in 0 until 10)speciesMeshes.add(ForestModels.tree(300+i,4.4f+(i%4)*.55f).mesh)
@@ -127,7 +127,7 @@ class ForestRenderer:GLSurfaceView.Renderer{
         val pm=identity();android.opengl.Matrix.translateM(pm,0,playerX,.0f+bob,playerZ);android.opengl.Matrix.rotateM(pm,0,heading*180f/PI.toFloat(),0f,1f,0f)
         draw(playerMesh,vp,pm)
     }
-    private fun draw(mesh:GpuMesh,vp:FloatArray,model:FloatArray){
+    private fun draw(mesh:GpuMesh,vp:FloatArray,model:FloatArray,foliage:Boolean=false){\n        android.opengl.GLES20.glUniform1f(uFoliage,if(foliage)1f else 0f)
         val m=mul(vp,model);android.opengl.GLES20.glUniformMatrix4fv(uMvp,1,false,m,0);android.opengl.GLES20.glUniformMatrix4fv(uModel,1,false,model,0)
         val stride=9*4
         mesh.vertices.position(0);android.opengl.GLES20.glEnableVertexAttribArray(aPosition);android.opengl.GLES20.glVertexAttribPointer(aPosition,3,android.opengl.GLES20.GL_FLOAT,false,stride,mesh.vertices)
