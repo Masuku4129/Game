@@ -47,7 +47,7 @@ func _create_ground() -> void:
 	var mesh := PlaneMesh.new()
 	mesh.size = Vector2(220, 220)
 	ground.mesh = mesh
-	ground.rotation_degrees.x = -90
+	ground.rotation_degrees.x = 0
 	ground.position.y = -0.08
 	var mat := StandardMaterial3D.new()
 	mat.albedo_color = Color(0.20, 0.28, 0.18)
