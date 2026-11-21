@@ -612,3 +612,12 @@
 - **Environment pack:** 52 seasonal GLB files passed structure/color/grass-texture validation, covering tree, shrub, fern, grass, rock, stump, log, mushroom and stone-cluster families across seasonal variants.
 - **Android verification:** Godot 4.7.2 imported the assets, passed headless startup, joystick/player-displacement, weather/footprint/puddle/wind and deformable snow/mud/runoff tests; Android debug APK export and artifact upload succeeded. APK artifact: `Game-Android-debug-aeb8ff1b3a59739b8f30cab0f91d1ffe90705257`, 36,956,994 bytes.
 - **Still unverified:** visual quality and sustained frame rate on a physical Android phone. CI success confirms build/runtime smoke tests, not that the explorer already meets the final realism target.
+
+
+## 28. Ground detail, density and locomotion corrections (21.11.2026)
+
+- Forest generation is set to 1,050 procedural placements; ground cover uses approximately 4,285 placements across shrubs, ferns, rocks, grass, stones, stumps, fallen logs and mushrooms. The combined target is above 5,000 MultiMesh instances while retaining batched rendering.
+- Added world-space multi-scale soil detail in the terrain shader (broad mottling, fine grain, micro-grit and sparse flecks) to reduce the flat/blurry appearance without changing terrain collision or surface simulation.
+- Corrected the run-animation threshold: player top speed is 5.5 m/s, so the prior 6.0 m/s threshold made Run unreachable during real gameplay. The new threshold is 4.25 m/s; CI now tests Run at the actual player maximum speed.
+- Expanded environment smoke checks to guard forest/ground-cover density and ensure the imported character receives the active season.
+- **Verification status:** the previous APK and all baseline tests passed. The latest terrain/density/season/run-threshold changes are awaiting the current Android CI run; do not mark these changes verified until that run succeeds.
