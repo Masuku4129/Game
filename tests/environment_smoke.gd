@@ -37,8 +37,12 @@ func _run_test() -> void:
 		return
 
 	game.call("_set_weather", "rain")
-	if not particles.emitting or float(terrain_material.get_shader_parameter("surface_wetness")) < 0.8:
-		printerr("ENVIRONMENT_TEST_FAIL: rain or wet-surface state was not applied")
+	var simulation = game.get("surface_simulation")
+	for index in range(50):
+		simulation.step(0.16, "rain", Vector3.ZERO, 0.0)
+	var rain_state: Dictionary = simulation.sample_surface(Vector3.ZERO)
+	if not particles.emitting or float(rain_state["moisture"]) < 0.45:
+		printerr("ENVIRONMENT_TEST_FAIL: rain did not saturate the local soil state")
 		quit(1)
 		return
 
@@ -49,7 +53,6 @@ func _run_test() -> void:
 		quit(1)
 		return
 
-	var simulation = game.get("surface_simulation")
 	for index in range(50):
 		simulation.step(0.16, "rain", Vector3.ZERO, 0.0)
 	game.call("_update_puddle_hydrology")
