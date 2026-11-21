@@ -319,14 +319,18 @@ func _physics_process(delta: float) -> void:
 	var stick: Vector2 = joystick.get_value() if joystick != null else Vector2.ZERO
 	var move_input := (keyboard + stick).limit_length(1.0)
 	debug_move_input = move_input
-	direction.x = move_input.x
-	direction.z = move_input.y
-	direction = direction.limit_length(1.0)
 
-	if direction.length_squared() > 0.001:
-		direction = camera.global_basis.x * direction.x + camera.global_basis.z * direction.y
+	if move_input.length_squared() > 0.001:
+		# Map both joystick axes through the active camera basis. Do not read
+		# direction.y here: the input's vertical axis is move_input.y.
+		var camera_right := camera.global_basis.x
+		var camera_forward := camera.global_basis.z
+		direction = camera_right * move_input.x + camera_forward * move_input.y
 		direction.y = 0.0
-		direction = direction.normalized()
+		if direction.length_squared() > 0.001:
+			direction = direction.normalized()
+		else:
+			push_warning("Camera-relative movement direction collapsed to zero.")
 	debug_move_direction = direction
 
 	var horizontal_velocity := Vector2(player.velocity.x, player.velocity.z)
