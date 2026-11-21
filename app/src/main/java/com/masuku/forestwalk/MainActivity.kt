@@ -154,15 +154,16 @@ class ForestRenderer:GLSurfaceView.Renderer{
     override fun onSurfaceChanged(gl:GL10?,w:Int,h:Int){width=w.coerceAtLeast(1);height=h.coerceAtLeast(1);android.opengl.GLES20.glViewport(0,0,width,height)}
     override fun onDrawFrame(gl:GL10?){
         val now=System.nanoTime();val dt=((now-last)/1e9).toFloat().coerceIn(0f,.05f);last=now
-        playerX+=mx*3.5f*dt;playerZ-=my*3.5f*dt
+        playerX=(playerX+mx*3.5f*dt).coerceIn(-84f,84f);playerZ=(playerZ-my*3.5f*dt).coerceIn(-84f,84f)
+        val playerY=terrainHeight(playerX,playerZ)
         if(abs(mx)+abs(my)>.06f)heading=atan2(mx,-my)
         android.opengl.GLES20.glClear(android.opengl.GLES20.GL_COLOR_BUFFER_BIT or android.opengl.GLES20.GL_DEPTH_BUFFER_BIT)
         android.opengl.GLES20.glUseProgram(program)
         val aspect=width.toFloat()/height.toFloat()
-        val view=lookAt(playerX,15.8f,playerZ+4.1f,playerX,0f,playerZ,0f,1f,0f)
+        val view=lookAt(playerX,15.8f+playerY,playerZ+4.1f,playerX,playerY,playerZ,0f,1f,0f)
         val projection=ortho(-7.8f*aspect,7.8f*aspect,-7.8f,7.8f,.1f,70f)
         val vp=mul(projection,view)
-        android.opengl.GLES20.glUniform3f(uPlayer,playerX,0f,playerZ)
+        android.opengl.GLES20.glUniform3f(uPlayer,playerX,playerY,playerZ)
         android.opengl.GLES20.glUniform1f(uTime,now/1e9f);android.opengl.GLES20.glUniform1f(uWeather,weatherMode.toFloat())
         android.opengl.GLES20.glClearColor(if(weatherMode==1).24f else if(weatherMode==2).66f else if(weatherMode==3).58f else .48f,if(weatherMode==1).30f else if(weatherMode==2).72f else if(weatherMode==3).65f else .62f,if(weatherMode==1).36f else if(weatherMode==2).79f else if(weatherMode==3).69f else .72f,1f)
         draw(groundMesh,vp,identity(),false,0f,true)
@@ -184,7 +185,7 @@ class ForestRenderer:GLSurfaceView.Renderer{
         val phase=now/1e9*8.5
         val swing=if(moving)sin(phase).toFloat()*.42f else 0f
         val bob=if(moving)abs(sin(phase)).toFloat()*.035f else 0f
-        val pm=identity();android.opengl.Matrix.translateM(pm,0,playerX,bob,playerZ);android.opengl.Matrix.rotateM(pm,0,heading*180f/PI.toFloat(),0f,1f,0f)
+        val pm=identity();android.opengl.Matrix.translateM(pm,0,playerX,playerY+bob,playerZ);android.opengl.Matrix.rotateM(pm,0,heading*180f/PI.toFloat(),0f,1f,0f)
         draw(playerBody,vp,pm)
         for(sideIndex in 0..1){
             val side=if(sideIndex==0)-1f else 1f
@@ -208,6 +209,7 @@ class ForestRenderer:GLSurfaceView.Renderer{
         mesh.vertices.position(6);android.opengl.GLES20.glEnableVertexAttribArray(aColor);android.opengl.GLES20.glVertexAttribPointer(aColor,3,android.opengl.GLES20.GL_FLOAT,false,stride,mesh.vertices)
         android.opengl.GLES20.glDrawElements(android.opengl.GLES20.GL_TRIANGLES,mesh.count,android.opengl.GLES20.GL_UNSIGNED_SHORT,mesh.indices)
     }
+    private fun terrainHeight(x:Float,z:Float):Float=(sin(x*.105f)*.12f+cos(z*.13f)*.10f+sin((x+z)*.075f)*.085f+cos((x-z)*.048f)*.055f)
     private fun makeGround():GpuMesh{
         val b=ForestMeshBuilder()
         val rng=java.util.Random(94721)
