@@ -349,6 +349,13 @@ for material_name, objects in mesh_groups.items():
     bpy.ops.object.select_all(action="DESELECT")
     for obj in objects:
         obj.select_set(True)
+    # Apply per-part bevel/normal modifiers before joining; retain the shared
+    # armature modifier on the merged mesh so every bone group still deforms.
+    for obj in objects:
+        bpy.context.view_layer.objects.active=obj
+        for modifier in list(obj.modifiers):
+            if modifier.type!="ARMATURE":
+                bpy.ops.object.modifier_apply(modifier=modifier.name)
     bpy.context.view_layer.objects.active=objects[0]
     bpy.ops.object.join()
     merged=bpy.context.object
