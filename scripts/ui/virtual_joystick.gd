@@ -12,6 +12,7 @@ var _knob_offset := Vector2.ZERO
 
 
 func _ready() -> void:
+	set_process_input(true)
 	custom_minimum_size = Vector2(190.0, 190.0)
 	size = custom_minimum_size
 	mouse_filter = Control.MOUSE_FILTER_STOP
