@@ -81,7 +81,7 @@ class ForestRenderer:GLSurfaceView.Renderer{
     override fun onSurfaceCreated(gl:GL10?,cfg:EGLConfig?){
         android.opengl.GLES20.glClearColor(.48f,.62f,.72f,1f)
         android.opengl.GLES20.glEnable(android.opengl.GLES20.GL_DEPTH_TEST)
-        android.opengl.GLES20.glEnable(android.opengl.GLES20.GL_CULL_FACE)
+        android.opengl.GLES20.glDisable(android.opengl.GLES20.GL_CULL_FACE)
         program=link(vShader,fShader)
         aPosition=android.opengl.GLES20.glGetAttribLocation(program,"aPos");aNormal=android.opengl.GLES20.glGetAttribLocation(program,"aNormal");aColor=android.opengl.GLES20.glGetAttribLocation(program,"aColor")
         uMvp=android.opengl.GLES20.glGetUniformLocation(program,"uMVP");uModel=android.opengl.GLES20.glGetUniformLocation(program,"uModel");uPlayer=android.opengl.GLES20.glGetUniformLocation(program,"uPlayer");uTime=android.opengl.GLES20.glGetUniformLocation(program,"uTime");uWeather=android.opengl.GLES20.glGetUniformLocation(program,"uWeather")
