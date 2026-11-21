@@ -84,7 +84,54 @@ def assign_rigid(obj,bn):
     vg=obj.vertex_groups.new(name=bn); vg.add(list(range(len(obj.data.vertices))),1.0,"REPLACE")
     obj.modifiers.new("Explorer skin","ARMATURE").object=rig
 def ellipsoid(name,loc,scale,mat,bn,seg=20,rings=12):
-    bpy.ops.mesh.primitive_uv_sphere_add(segments=seg,ring_count=rings,radius=1,location=loc); o=bpy.context.object; o.name=name; o.scale=scale; o.data.materials.append(mat); smooth(o); assign_rigid(o,bn); return o
+    # Build a dense, subtly tapered organic surface instead of Blender's
+    # coarse UV-sphere primitive. The UV seam is explicit so packed fabric,
+    # skin and leather albedo textures remain stable in the exported GLB.
+    segments=max(32,seg*2)
+    ring_count=max(24,rings*2)
+    vertices=[]
+    faces=[]
+    for ring in range(ring_count+1):
+        v=ring/float(ring_count)
+        phi=pi*v
+        axial=cos(phi)
+        radial=sin(phi)
+        for side in range(segments+1):
+            u=side/float(segments)
+            theta=2.0*pi*u
+            # Small anatomical taper and asymmetry break the perfect ball
+            # silhouette while retaining smooth, predictable bone weighting.
+            contour=radial**0.94
+            lobe=1.0+0.018*sin(theta*3.0+0.45)*radial*radial
+            x=scale[0]*contour*cos(theta)*lobe*(1.0+0.035*axial)
+            y=scale[1]*contour*sin(theta)*(1.0-0.025*axial)
+            z=scale[2]*axial+scale[2]*0.012*radial*cos(theta+0.35)
+            vertices.append((x,y,z))
+    row_width=segments+1
+    for ring in range(ring_count):
+        for side in range(segments):
+            a=ring*row_width+side
+            b=a+1
+            d=(ring+1)*row_width+side
+            cc=d+1
+            faces.append((a,d,cc,b))
+    mesh=bpy.data.meshes.new(name.replace(" ","_")+"_organic_mesh")
+    mesh.from_pydata(vertices,[],faces)
+    mesh.materials.append(mat)
+    mesh.update()
+    uv_layer=mesh.uv_layers.new(name="UVMap")
+    for polygon in mesh.polygons:
+        polygon.use_smooth=True
+        for loop_index in polygon.loop_indices:
+            vertex_index=mesh.loops[loop_index].vertex_index
+            row=vertex_index//row_width
+            side=vertex_index%row_width
+            uv_layer.data[loop_index].uv=(side/float(segments),1.0-row/float(ring_count))
+    o=bpy.data.objects.new(name,mesh)
+    bpy.context.collection.objects.link(o)
+    o.location=loc
+    assign_rigid(o,bn)
+    return o
 def tapered(name,loc,r1,r2,depth,mat,bn,verts=16,axis="Z"):
     bpy.ops.mesh.primitive_cone_add(vertices=verts,radius1=r1,radius2=r2,depth=depth,location=loc); o=bpy.context.object; o.name=name; o.data.materials.append(mat); smooth(o)
     if axis=="Y": o.rotation_euler[0]=pi/2
