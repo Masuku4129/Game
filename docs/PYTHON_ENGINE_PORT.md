@@ -40,5 +40,5 @@ The current Godot project remains intact while the Python runtime is proven. Pyt
 - Added a GitHub Actions workflow that tests terrain sampling, downloads the official Panda3D 1.11.0 Android ARM64 wheel, converts included GLBs to BAM during packaging, builds an AAB and converts it to a signed universal APK.
 - Local pure-Python checks: 6 passed (terrain determinism/continuity and camera-relative movement/heading).
 - The Android workflow has not yet been confirmed successful. No APK from the Python port is available yet.
-- The current scene does not yet include the final mobile joystick, camera-follow movement, full weather/surface simulation or all seasonal runtime transitions.
+- The current scene includes a first-pass single-finger joystick and camera-follow movement. Simultaneous multitouch, full weather/surface simulation and seasonal runtime transitions remain to be ported.
 - Physical-device rendering and performance remain unverified.
