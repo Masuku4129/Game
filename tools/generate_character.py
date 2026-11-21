@@ -43,6 +43,15 @@ skin=fabric_mat("Skin | natural warm",(.44,.29,.21),.72)
 hair=fabric_mat("Hair | dark chestnut",(.065,.038,.025),.88)
 scarf=fabric_mat("Woven scarf | olive",(.24,.21,.12),.93)
 brass=bpy.data.materials.new("Brass hardware"); brass.diffuse_color=(.48,.32,.13,1); brass.use_nodes=True; brass.node_tree.nodes["Principled BSDF"].inputs["Base Color"].default_value=(.48,.32,.13,1); brass.node_tree.nodes["Principled BSDF"].inputs["Metallic"].default_value=.55
+brass_image=bpy.data.images.new("BrassHardware_Albedo",width=64,height=64,alpha=False)
+brass_pixels=[]
+for y in range(64):
+    for x in range(64):
+        grain=0.94+0.045*sin(x*.21+y*.17)
+        brass_pixels.extend((.48*grain,.32*grain,.13*grain,1.0))
+brass_image.pixels=brass_pixels; brass_image.pack()
+brass_texture=brass.node_tree.nodes.new("ShaderNodeTexImage"); brass_texture.image=brass_image
+brass.node_tree.links.new(brass_texture.outputs["Color"],brass.node_tree.nodes["Principled BSDF"].inputs["Base Color"])
 
 # Skeleton
 arm=bpy.data.armatures.new("ExplorerSkeleton"); rig=bpy.data.objects.new("ExplorerRig",arm); bpy.context.collection.objects.link(rig); bpy.context.view_layer.objects.active=rig; rig.select_set(True)
