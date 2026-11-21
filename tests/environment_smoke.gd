@@ -49,5 +49,18 @@ func _run_test() -> void:
 		quit(1)
 		return
 
+	var simulation = game.get("surface_simulation")
+	for index in range(50):
+		simulation.step(0.16, "rain", Vector3.ZERO, 0.0)
+	game.call("_update_puddle_hydrology")
+	var active_puddles := 0
+	for puddle in puddles:
+		if puddle.visible:
+			active_puddles += 1
+	if active_puddles == 0:
+		printerr("ENVIRONMENT_TEST_FAIL: rain saturation did not activate terrain puddles")
+		quit(1)
+		return
+
 	print("ENVIRONMENT_TEST_PASS: snow, rain, footprints, terrain-conforming puddles and wind batches")
 	quit(0)
