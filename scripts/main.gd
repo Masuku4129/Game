@@ -11,7 +11,7 @@ const CAMERA_OFFSET := Vector3(10.2, 25.0, 10.2)
 const CAMERA_FOV := 44.0
 
 @export_enum("spring", "summer", "autumn", "winter") var active_season: String = "summer"
-const HUMANOID_RIG = preload("res://scripts/animation/procedural_humanoid.gd")
+const HUMANOID_RIG = preload("res://scripts/animation/imported_explorer_controller.gd")
 const SURFACE_SIMULATION = preload("res://scripts/environment/surface_simulation.gd")
 
 var terrain_noise := FastNoiseLite.new()
@@ -766,7 +766,7 @@ func _create_player() -> void:
 	player.add_child(collision)
 
 	player_visual = Node3D.new()
-	player_visual.name = "ProceduralHumanoid"
+	player_visual.name = "RiggedExplorer"
 	player_visual.set_script(HUMANOID_RIG)
 	player.add_child(player_visual)
 	add_child(player)
