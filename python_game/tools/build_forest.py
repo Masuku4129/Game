@@ -6,6 +6,7 @@ from pathlib import Path
 
 from panda3d.core import NodePath
 from gltf import load_model
+from world.forest_layout import tree_placements
 
 
 FAMILIES = ("tree_spruce", "tree_pine", "tree_birch")
@@ -31,18 +32,13 @@ def build_one(asset_root: Path, output: Path, season: str, radius: int) -> int:
 
     forest = NodePath(f"forest-{season}")
     count = 0
-    for row in range(-radius, radius + 1):
-        for column in range(-radius, radius + 1):
-            if abs(row) < 2 and abs(column) < 2:
-                continue
-            x = column * 5.2 + math.sin(row * 2.3 + column) * 1.25
-            y = row * 5.0 + math.cos(column * 1.7 - row) * 1.15
-            family = FAMILIES[(row * 7 + column * 11) % len(FAMILIES)]
-            instance = prototypes[family].instanceTo(forest)
-            instance.setPos(x, y, height_at(x, y))
-            instance.setH((row * 31 + column * 17) % 360)
-            instance.setScale(0.82 + ((row * 13 + column * 5) % 7) * 0.075)
-            count += 1
+    for x, y, species, heading, scale in tree_placements(radius):
+        family = FAMILIES[species]
+        instance = prototypes[family].instanceTo(forest)
+        instance.setPos(x, y, height_at(x, y))
+        instance.setH(heading)
+        instance.setScale(scale)
+        count += 1
 
     forest.flattenStrong()
     output.parent.mkdir(parents=True, exist_ok=True)
