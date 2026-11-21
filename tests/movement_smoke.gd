@@ -47,10 +47,12 @@ func _run_test() -> void:
 
 	for frame in range(90):
 		await physics_frame
+		if frame % 15 == 0:
+			print("MOVEMENT_TRACE frame=", frame, " position=", player.global_position, " velocity=", player.velocity, " floor=", player.is_on_floor(), " collisions=", player.get_slide_collision_count())
 
 	var end_position := Vector2(player.global_position.x, player.global_position.z)
 	var distance := start_position.distance_to(end_position)
-	if distance < 0.5:
+	if distance < 2.0:
 		printerr("MOVEMENT_TEST_FAIL: joystick input registered but player did not move; distance=", distance, " velocity=", player.velocity)
 		quit(1)
 		return
