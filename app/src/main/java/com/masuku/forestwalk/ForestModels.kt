@@ -26,7 +26,8 @@ internal object ForestModels {
             val leafLength=size*(.48f+r.nextFloat()*.52f)
             val leafWidth=leafLength*(.13f+r.nextFloat()*.08f)
             val color=baseColor-(r.nextInt(28)*0x00010101)
-            leafBlade(b,bx,by,bz,leafLength,leafWidth,a,color)\n            leafBlade(b,bx,by,bz,leafLength*.88f,leafWidth*.82f,a+PI/2.0,color-0x00030303)
+            leafBlade(b,bx,by,bz,leafLength,leafWidth,a,color)
+            leafBlade(b,bx,by,bz,leafLength*.88f,leafWidth*.82f,a+PI/2.0,color-0x00030303)
         }
     }
     fun shrub(seed:Int=1):ForestMesh{
