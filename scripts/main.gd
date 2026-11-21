@@ -293,6 +293,7 @@ func _create_ground_cover() -> void:
 	_scatter_environment_asset("stone_cluster", 420, 0.55, 1.35, 12007, 7.0)
 	_scatter_environment_asset("stump_mossy", 60, 0.72, 1.18, 12004, 14.0)
 	_scatter_environment_asset("fallen_log", 70, 0.72, 1.24, 12005, 14.0)
+	_scatter_environment_asset("mushroom_cluster", 190, 0.68, 1.24, 12008, 5.5)
 
 
 func _scatter_environment_asset(asset_name: String, amount: int, min_scale: float, max_scale: float, seed_value: int, clear_radius: float) -> void:
