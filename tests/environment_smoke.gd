@@ -148,17 +148,16 @@ func _run_test() -> void:
 		printerr("ENVIRONMENT_TEST_FAIL: imported explorer skeleton is incomplete")
 		quit(1)
 	character_visual.call("set_motion", 2.0, 0.0)
-	await process_frame
+	# Assert the controller selection synchronously: the scene physics loop may
+	# legitimately overwrite this synthetic request on the next frame.
 	if not String(character_visual.get("current_clip")).contains("Walk"):
 		printerr("ENVIRONMENT_TEST_FAIL: controller did not select walk animation")
 		quit(1)
 	character_visual.call("set_motion", 8.0, 0.0)
-	await process_frame
 	if not String(character_visual.get("current_clip")).contains("Run"):
 		printerr("ENVIRONMENT_TEST_FAIL: controller did not select run animation")
 		quit(1)
 	character_visual.call("set_motion", 0.0, 0.0)
-	await process_frame
 	if not String(character_visual.get("current_clip")).contains("Idle"):
 		printerr("ENVIRONMENT_TEST_FAIL: controller did not return to idle animation")
 		quit(1)
