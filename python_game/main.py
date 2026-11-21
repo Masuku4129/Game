@@ -11,7 +11,7 @@ from panda3d.core import (
     AmbientLight, DirectionalLight, Fog, Geom, GeomNode, GeomTriangles,
     GeomVertexData, GeomVertexFormat, GeomVertexWriter, NodePath,
     PNMImage, Texture, TransparencyAttrib, Vec3, Vec4, WindowProperties,
-    globalClock,
+    ClockObject,
 )
 
 from world.movement import camera_relative_direction, heading_for_direction
@@ -251,7 +251,7 @@ class WildlandsApp(ShowBase):
         self.current_animation = clip
 
     def _update(self, task):
-        dt = min(globalClock.getDt(), 0.05)
+        dt = min(ClockObject.getGlobalClock().getDt(), 0.05)
         input_x = self.joystick.value_x
         input_y = self.joystick.value_y
         camera_heading = math.radians(self.camera.getH())
