@@ -6,6 +6,7 @@ on:
     branches: [main]
     paths:
       - "tools/generate_assets.py"
+      - "tools/generate_character.py"
       - ".github/workflows/generate-assets.yml"
 
 permissions:
@@ -25,6 +26,8 @@ jobs:
       - name: Generate GLB models
         run: |
           blender --background --python tools/generate_assets.py -- --output assets/generated
+          blender --background --python tools/generate_character.py
+          test -s assets/character/field_explorer.glb
           families="tree_spruce tree_pine tree_birch shrub_mixed fern_cluster rock_mossy grass_tuft stone_cluster stump_mossy fallen_log mushroom_cluster"
           seasons="spring summer autumn winter"
           seasonal_count=0
@@ -77,12 +80,13 @@ jobs:
                       raise SystemExit(f"Grass blade texture was not embedded in GLB: {path}")
           print(f"GLB structure, colors and grass textures validated for {len(files)} seasonal files")
           PY
-          du -h assets/generated/*
+          python3 -c 'import json,struct,pathlib; p=pathlib.Path("assets/character/field_explorer.glb"); d=p.read_bytes(); m,v,t=struct.unpack_from("<4sII",d); n,k=struct.unpack_from("<I4s",d,12); g=json.loads(d[20:20+n]); assert m==b"glTF" and v==2 and t==len(d); assert g.get("skins") and g.get("animations") and any("Walk" in a.get("name","") for a in g["animations"]) and any("Run" in a.get("name","") for a in g["animations"]); print("Character GLB rig/Walk/Run validation PASS")'
+          du -h assets/generated/* assets/character/field_explorer.glb
       - name: Commit generated models
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add assets/generated/*.glb
+          git add assets/generated/*.glb assets/character/field_explorer.glb
           if ! git diff --cached --quiet; then
             git commit -m "Generate procedural 3D environment asset pack"
             for attempt in 1 2 3; do
@@ -102,5 +106,6 @@ jobs:
         with:
           name: game-3d-assets-${{ github.sha }}
           path: assets/generated/*.glb
+            assets/character/field_explorer.glb
           if-no-files-found: error
           retention-days: 30
