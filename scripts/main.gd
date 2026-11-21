@@ -279,6 +279,7 @@ func _create_camera() -> void:
 	camera.far = 180.0
 	camera.position = player.position + CAMERA_OFFSET
 	add_child(camera)
+	camera.make_current()
 	camera.look_at(player.global_position + Vector3.UP * 0.7, Vector3.UP)
 
 
