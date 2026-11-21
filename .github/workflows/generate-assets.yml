@@ -76,7 +76,7 @@ jobs:
                       factor = pbr.get("baseColorFactor")
                       texture = pbr.get("baseColorTexture")
                       if not texture and (not isinstance(factor, list) or len(factor) != 4):
-                          raise SystemExit(f"Missing exported base color/texture for {material.get('name')}: {path")
+                          raise SystemExit(f"Missing exported base color/texture for {material.get('name')}: {path}")
               if path.name.startswith("grass_tuft_"):
                   textured = any(
                       material.get("pbrMetallicRoughness", {}).get("baseColorTexture")
