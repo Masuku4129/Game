@@ -21,7 +21,7 @@
 - Clear/rain/snow/fog/autumn selector; bounded rain and snow particle system.
 
 ## Remaining gaps (not complete)
-- Character proportions and silhouette have been refined with tapered coat/arm/leg meshes, but still need major artistic refinement; meshes remain procedural rather than sculpted.
+- Character proportions and silhouette have been refined with tapered coat/arm/leg meshes and a muted forest-olive clothing palette, but still need major artistic refinement; meshes remain procedural rather than sculpted.
 - Tree/ground style must be visually inspected in an actual screenshot/device. No device screenshot exists yet; CI compilation alone cannot prove quality.
 - Terrain is fixed-size and shallow; no terrain collisions, paths, streams, slopes, biomes, or streaming.
 - Weather is primarily visual shader/particle treatment: no persistent wetness state, real mud simulation, deep snow, accumulation/drifts, splashes, footprints, or body impressions.
