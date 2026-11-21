@@ -95,6 +95,15 @@ func _create_terrain() -> void:
 	terrain.material_override = material
 	add_child(terrain)
 
+	var terrain_body := StaticBody3D.new()
+	terrain_body.name = "TerrainCollision"
+	var terrain_collision := CollisionShape3D.new()
+	var terrain_shape := ConcavePolygonShape3D.new()
+	terrain_shape.set_faces(terrain_mesh.get_faces())
+	terrain_collision.shape = terrain_shape
+	terrain_body.add_child(terrain_collision)
+	add_child(terrain_body)
+
 
 func _add_terrain_triangle(surface: SurfaceTool, a: Vector3, b: Vector3, c: Vector3) -> void:
 	for point in [a, b, c]:
