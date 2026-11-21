@@ -3,6 +3,7 @@ extends Node3D
 const WORLD_EXTENT := 90.0
 const GRID_CELLS := 144
 const TREE_COUNT := 1050
+const WIND_NEAR_RADIUS_SQUARED := 42.0 * 42.0
 const PLAYER_SPEED := 5.5
 const PLAYER_ACCELERATION := 22.0
 const PLAYER_DECELERATION := 28.0
@@ -38,6 +39,7 @@ var weather_particles: GPUParticles3D
 var weather_mode := "clear"
 var wind_clock := 0.0
 var wind_update_clock := 0.0
+var wind_update_interval := 0.20
 var puddle_update_clock := 0.0
 var wind_batches: Array[Dictionary] = []
 var footprint_nodes: Array[MeshInstance3D] = []
@@ -345,20 +347,21 @@ func _process(delta: float) -> void:
 		if weather_mode == "rain":
 			_update_puddle_hydrology()
 	wind_update_clock += delta
-	if wind_update_clock < 0.08:
+	if wind_update_clock < wind_update_interval:
 		return
+	var wind_delta := wind_update_clock
 	wind_update_clock = 0.0
 	if weather_mode == "snow":
-		snow_accumulation = minf(0.88, snow_accumulation + delta * 0.025)
+		snow_accumulation = minf(0.88, snow_accumulation + wind_delta * 0.025)
 		terrain_material.set_shader_parameter("snow_cover", snow_accumulation)
 		_apply_environment_snow(snow_accumulation)
 	elif weather_mode == "rain":
-		wetness_accumulation = minf(1.0, wetness_accumulation + delta * 0.08)
+		wetness_accumulation = minf(1.0, wetness_accumulation + wind_delta * 0.08)
 		terrain_material.set_shader_parameter("surface_wetness", wetness_accumulation)
 		_apply_environment_wetness(wetness_accumulation)
 	else:
-		snow_accumulation = maxf(0.0, snow_accumulation - delta * 0.003)
-		wetness_accumulation = maxf(0.0, wetness_accumulation - delta * 0.012)
+		snow_accumulation = maxf(0.0, snow_accumulation - wind_delta * 0.003)
+		wetness_accumulation = maxf(0.0, wetness_accumulation - wind_delta * 0.012)
 		terrain_material.set_shader_parameter("snow_cover", snow_accumulation)
 		terrain_material.set_shader_parameter("surface_wetness", wetness_accumulation)
 		_apply_environment_wetness(wetness_accumulation)
@@ -376,6 +379,8 @@ func _process(delta: float) -> void:
 		var family: String = batch["family"]
 		for index in range(bases.size()):
 			var base: Transform3D = bases[index]
+			if player != null and base.origin.distance_squared_to(player.global_position) > WIND_NEAR_RADIUS_SQUARED:
+				continue
 			var phase := wind_clock * 1.4 + base.origin.x * 0.13 + base.origin.z * 0.11
 			var sway := sin(phase) * wind_strength
 			var axis := Vector3.RIGHT
@@ -458,7 +463,7 @@ func _make_asset_multimesh(mesh: Mesh, count: int) -> MultiMeshInstance3D:
 func _create_weather_particles() -> void:
 	weather_particles = GPUParticles3D.new()
 	weather_particles.name = "WeatherParticles"
-	weather_particles.amount = 1800
+	weather_particles.amount = 720
 	weather_particles.lifetime = 2.8
 	weather_particles.emitting = false
 	weather_particles.visibility_aabb = AABB(Vector3(-36, -18, -36), Vector3(72, 36, 72))
