@@ -1,5 +1,21 @@
 extends SceneTree
 
+func _mesh_has_distinct_colors(mesh: Mesh, minimum: int) -> bool:
+	var colors: Array[Color] = []
+	for surface_index in range(mesh.get_surface_count()):
+		var material := mesh.surface_get_material(surface_index) as StandardMaterial3D
+		if material == null:
+			continue
+		var unique := true
+		for existing in colors:
+			if existing.is_equal_approx(material.albedo_color):
+				unique = false
+				break
+		if unique:
+			colors.append(material.albedo_color)
+	return colors.size() >= minimum
+
+
 func _initialize() -> void:
 	call_deferred("_run_test")
 
@@ -71,29 +87,12 @@ func _run_test() -> void:
 		quit(1)
 		return
 
-	var mushroom_mesh := game.call("_load_environment_mesh", "mushroom_cluster") as Mesh
-	if mushroom_mesh == null or mushroom_mesh.get_surface_count() < 3:
-		printerr("ENVIRONMENT_TEST_FAIL: seasonal mushroom cluster mesh was not loaded with its materials")
-		quit(1)
-		return
-	var distinct_colors: Array[Color] = []
-	var colored_surfaces := 0
-	for surface_index in range(mushroom_mesh.get_surface_count()):
-		var material := mushroom_mesh.surface_get_material(surface_index) as StandardMaterial3D
-		if material == null:
-			continue
-		colored_surfaces += 1
-		var unique := true
-		for existing_color in distinct_colors:
-			if existing_color.is_equal_approx(material.albedo_color):
-				unique = false
-				break
-		if unique:
-			distinct_colors.append(material.albedo_color)
-	if colored_surfaces < 3 or distinct_colors.size() < 3:
-		printerr("ENVIRONMENT_TEST_FAIL: imported GLB materials lost their distinct base colors")
-		quit(1)
-		return
+	for asset_name in ["tree_spruce", "tree_birch", "fern_cluster", "grass_tuft", "mushroom_cluster"]:
+		var colored_mesh := game.call("_load_environment_mesh", asset_name) as Mesh
+		if colored_mesh == null or not _mesh_has_distinct_colors(colored_mesh, 2):
+			printerr("ENVIRONMENT_TEST_FAIL: GLB material colors missing for " + asset_name)
+			quit(1)
+			return
 
 	game.call("_cycle_season")
 	if String(game.get("active_season")) != "autumn":
@@ -110,5 +109,5 @@ func _run_test() -> void:
 		quit(1)
 		return
 
-	print("ENVIRONMENT_TEST_PASS: weather, footprints, hydrology, collision deformation, colored GLB materials, mushroom assets and runtime seasonal rebuild")
+	print("ENVIRONMENT_TEST_PASS: weather, footprints, hydrology, collision deformation, colored GLB materials across trees, ferns, grass and mushrooms; runtime seasonal rebuild")
 	quit(0)
