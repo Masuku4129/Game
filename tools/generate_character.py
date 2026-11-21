@@ -143,11 +143,96 @@ def box(name,loc,scale,mat,bn,bevel=.04):
         o.modifiers.new("Weighted corner normals","WEIGHTED_NORMAL")
     assign_rigid(o,bn); return o
 
-# Body torso volume, shirt, coat shell and layered details.
-ellipsoid("Linen shirt torso",(0,0,1.25),(.245,.145,.31),shirt,"spine",24,16)
-ellipsoid("Coat body",(0,0,1.25),(.29,.19,.34),coat,"spine",24,16)
-ellipsoid("Chest coat shaping",(0,-.006,1.39),(.31,.195,.20),coat,"chest",24,16)
-ellipsoid("Hip coat skirt",(0,.015,1.02),(.31,.205,.19),coat,"pelvis",24,16)
+def weighted_torso(name, material, radius_scale=1.0, front_open=False):
+    # Continuous lofted torso with blended pelvis/spine/chest weights. This
+    # replaces the stack of overlapping sphere primitives that made the
+    # explorer look like a mannequin assembled from separate balls.
+    profile=[
+        (0.88,0.145,0.115),
+        (0.94,0.215,0.145),
+        (1.02,0.265,0.172),
+        (1.12,0.270,0.176),
+        (1.24,0.265,0.172),
+        (1.34,0.285,0.180),
+        (1.42,0.255,0.158),
+        (1.49,0.145,0.115),
+    ]
+    rings=36
+    sides=48
+    vertices=[]
+    faces=[]
+    for ring in range(rings+1):
+        v=ring/float(rings)
+        z=profile[0][0]+(profile[-1][0]-profile[0][0])*v
+        segment=0
+        while segment < len(profile)-2 and z > profile[segment+1][0]:
+            segment+=1
+        p0=profile[max(0,segment-1)]
+        p1=profile[segment]
+        p2=profile[segment+1]
+        p3=profile[min(len(profile)-1,segment+2)]
+        span=p2[0]-p1[0]
+        t=(z-p1[0])/span if span else 0.0
+        def catmull(a,b,c,d,t):
+            return 0.5*((2*b)+(-a+c)*t+(2*a-5*b+4*c-d)*t*t+(-a+3*b-3*c+d)*t*t*t)
+        rx=max(0.025,catmull(p0[1],p1[1],p2[1],p3[1],t))*radius_scale
+        ry=max(0.025,catmull(p0[2],p1[2],p2[2],p3[2],t))*radius_scale
+        for side in range(sides+1):
+            u=side/float(sides)
+            theta=2.0*pi*u
+            x=rx*cos(theta)*(1.0+0.012*sin(theta*3.0+z*4.0))
+            y=ry*sin(theta)*(1.0+0.010*cos(theta*2.0-z*3.0))
+            vertices.append((x,y,z))
+    row_width=sides+1
+    for ring in range(rings):
+        z_mid=profile[0][0]+(profile[-1][0]-profile[0][0])*(ring+0.5)/float(rings)
+        for side in range(sides):
+            theta=2.0*pi*(side+0.5)/float(sides)
+            front_delta=abs((theta+pi/2.0+pi)%(2.0*pi)-pi)
+            if front_open and 1.08 < z_mid < 1.43 and front_delta < 0.18:
+                continue
+            a=ring*row_width+side
+            b=a+1
+            d=(ring+1)*row_width+side
+            cc=d+1
+            faces.append((a,d,cc,b))
+    mesh=bpy.data.meshes.new(name.replace(" ","_")+"_loft_mesh")
+    mesh.from_pydata(vertices,[],faces)
+    mesh.materials.append(material)
+    mesh.update()
+    uv_layer=mesh.uv_layers.new(name="TorsoUV")
+    for polygon in mesh.polygons:
+        polygon.use_smooth=True
+        for loop_index in polygon.loop_indices:
+            vertex_index=mesh.loops[loop_index].vertex_index
+            row=vertex_index//row_width
+            side=vertex_index%row_width
+            uv_layer.data[loop_index].uv=(side/float(sides),row/float(rings))
+    obj=bpy.data.objects.new(name,mesh)
+    bpy.context.collection.objects.link(obj)
+    for group_name in ("pelvis","spine","chest"):
+        obj.vertex_groups.new(name=group_name)
+    for index,vertex in enumerate(mesh.vertices):
+        z=vertex.co.z
+        pelvis=max(0.0,min(1.0,(1.16-z)/0.14))
+        chest=max(0.0,min(1.0,(z-1.28)/0.14))
+        spine=max(0.0,1.0-pelvis-chest)
+        total=pelvis+spine+chest
+        if total <= 0.0:
+            spine=1.0
+            total=1.0
+        if pelvis>0.0: obj.vertex_groups["pelvis"].add([index],pelvis/total,"REPLACE")
+        if spine>0.0: obj.vertex_groups["spine"].add([index],spine/total,"REPLACE")
+        if chest>0.0: obj.vertex_groups["chest"].add([index],chest/total,"REPLACE")
+    obj.parent=rig
+    obj.matrix_parent_inverse=rig.matrix_world.inverted()
+    obj.modifiers.new("Explorer torso skin","ARMATURE").object=rig
+    return obj
+
+# Continuous, smoothly weighted torso. The outer coat has a narrow front
+# opening so the linen underlayer and existing lapels remain visible.
+weighted_torso("Linen shirt torso",shirt,0.92,False)
+weighted_torso("Continuous field coat shell",coat,1.0,True)
 # two coat front panels, collar/lapels, stitching and buttons
 for s in [-1,1]:
     ellipsoid("Coat lapel",(s*.105,-.176,1.39),(.105,.035,.17),shirt,"chest",18,12)
