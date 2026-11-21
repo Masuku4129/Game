@@ -25,7 +25,7 @@ jobs:
       - name: Generate GLB models
         run: |
           blender --background --python tools/generate_assets.py -- --output assets/generated
-          test "$(find assets/generated -maxdepth 1 -name '*.glb' | wc -l)" -eq 8
+          test "$(find assets/generated -maxdepth 1 -name '*.glb' | wc -l)" -eq 32
           du -h assets/generated/*
       - name: Commit generated models
         run: |
