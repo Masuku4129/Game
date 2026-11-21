@@ -126,7 +126,8 @@ class ForestRenderer:GLSurfaceView.Renderer{
         val pm=identity();android.opengl.Matrix.translateM(pm,0,playerX,.0f+bob,playerZ);android.opengl.Matrix.rotateM(pm,0,heading*180f/PI.toFloat(),0f,1f,0f)
         draw(playerMesh,vp,pm,false,if(moving)1f else 0f)
     }
-    private fun draw(mesh:GpuMesh,vp:FloatArray,model:FloatArray,foliage:Boolean=false,walking:Float=0f){\n        android.opengl.GLES20.glUniform1f(uFoliage,if(foliage)1f else 0f);android.opengl.GLES20.glUniform1f(uWalk,walking)
+    private fun draw(mesh:GpuMesh,vp:FloatArray,model:FloatArray,foliage:Boolean=false,walking:Float=0f){
+        android.opengl.GLES20.glUniform1f(uFoliage,if(foliage)1f else 0f);android.opengl.GLES20.glUniform1f(uWalk,walking)
         val m=mul(vp,model);android.opengl.GLES20.glUniformMatrix4fv(uMvp,1,false,m,0);android.opengl.GLES20.glUniformMatrix4fv(uModel,1,false,model,0)
         val stride=9*4
         mesh.vertices.position(0);android.opengl.GLES20.glEnableVertexAttribArray(aPosition);android.opengl.GLES20.glVertexAttribPointer(aPosition,3,android.opengl.GLES20.GL_FLOAT,false,stride,mesh.vertices)
