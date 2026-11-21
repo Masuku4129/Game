@@ -48,6 +48,10 @@ def _seasonal_material(source, season):
     material.name = source.name + " | " + season
     palette = {
         "spring": {
+            "Mushroom | russet cap": (.56, .24, .13),
+            "Mushroom | ochre cap": (.64, .43, .20),
+            "Mushroom | pale cap": (.75, .69, .53),
+            "Mushroom | ivory stem": (.78, .73, .61),
             "Spruce | deep needles": (.055, .19, .12),
             "Pine | muted needles": (.16, .29, .16),
             "Broadleaf | forest green": (.27, .43, .16),
@@ -59,6 +63,10 @@ def _seasonal_material(source, season):
             "Grass | seed heads": (.47, .38, .18),
         },
         "summer": {
+            "Mushroom | russet cap": (.48, .16, .075),
+            "Mushroom | ochre cap": (.55, .34, .13),
+            "Mushroom | pale cap": (.68, .61, .43),
+            "Mushroom | ivory stem": (.72, .67, .53),
             "Spruce | deep needles": (.035, .12, .075),
             "Pine | muted needles": (.10, .22, .12),
             "Broadleaf | forest green": (.17, .28, .105),
@@ -70,6 +78,10 @@ def _seasonal_material(source, season):
             "Grass | seed heads": (.42, .34, .17),
         },
         "autumn": {
+            "Mushroom | russet cap": (.58, .23, .10),
+            "Mushroom | ochre cap": (.68, .39, .12),
+            "Mushroom | pale cap": (.62, .52, .36),
+            "Mushroom | ivory stem": (.66, .59, .46),
             "Spruce | deep needles": (.045, .13, .085),
             "Pine | muted needles": (.13, .20, .10),
             "Broadleaf | forest green": (.66, .25, .075),
@@ -81,6 +93,10 @@ def _seasonal_material(source, season):
             "Grass | seed heads": (.62, .45, .20),
         },
         "winter": {
+            "Mushroom | russet cap": (.43, .35, .29),
+            "Mushroom | ochre cap": (.49, .44, .34),
+            "Mushroom | pale cap": (.58, .59, .55),
+            "Mushroom | ivory stem": (.61, .62, .59),
             "Spruce | deep needles": (.18, .25, .22),
             "Pine | muted needles": (.23, .29, .24),
             "Broadleaf | forest green": (.28, .30, .27),
@@ -158,7 +174,7 @@ def _export_seasonal_variant(root, asset_name, season):
             eligible = (
                 original_name.startswith("Spruce |") or
                 original_name.startswith("Pine |") or
-                (asset_name in ("rock_mossy", "stone_cluster", "stump_mossy", "fallen_log", "fern_cluster")
+                (asset_name in ("rock_mossy", "stone_cluster", "stump_mossy", "fallen_log", "fern_cluster", "mushroom_cluster")
                  and polygon.normal.z > 0.48 and not original_name.startswith("Bark"))
             )
             if eligible and rng.random() < (0.28 if asset_name.startswith("tree_") else 0.20):
