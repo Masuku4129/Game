@@ -14,7 +14,7 @@
 ├── scenes/
 │   └── main.tscn                 # корневая игровая сцена
 ├── scripts/
-│   └── main.gd                   # временный bootstrap: среда, terrain, forest, player, camera
+│   ├── main.gd                   # bootstrap: среда, terrain, forest, player, camera\n│   └── animation/\n│       └── procedural_humanoid.gd # первый процедурный articulated gait prototype
 ├── project.godot                 # настройки Godot
 ├── export_presets.cfg            # Android arm64 export preset; no secrets
 ├── PROJECT_MASTER.md             # главный документ требований
@@ -47,3 +47,10 @@
 5. Состояние поверхности хранится отдельно от базовой геометрии.
 6. Не добавлять неработающие заглушки вместо реализации.
 7. Обновлять эту карту и PROJECT_MASTER.md вместе с существенными архитектурными изменениями.
+
+
+## Animation pipeline (текущий эксперимент)
+
+- `scripts/animation/procedural_humanoid.gd` — временный процедурный mesh-rig персонажа, подключённый к Player через метод `set_motion(horizontal_speed, slope)`.
+- Следующая целевая структура (создавать по мере появления реальных файлов): `animation/source/`, `animation/processed/`, `animation/retarget/`, `animation/tests/`, `animation/blender/`.
+- Не считать текущий mesh rig заменой полноценному Skeleton3D, mocap или foot IK.

@@ -5,10 +5,12 @@ const GRID_CELLS := 72
 const TREE_COUNT := 260
 const PLAYER_SPEED := 7.0
 const CAMERA_OFFSET := Vector3(34.0, 34.0, 34.0)
+const HUMANOID_RIG = preload("res://scripts/animation/procedural_humanoid.gd")
 
 var terrain_noise := FastNoiseLite.new()
 var player: CharacterBody3D
 var camera: Camera3D
+var player_visual: Node3D
 var touch_vector := Vector2.ZERO
 var touch_origin := Vector2.ZERO
 var active_touch := -1
@@ -176,16 +178,10 @@ func _create_player() -> void:
 	collision.shape = capsule
 	player.add_child(collision)
 
-	var visual := MeshInstance3D.new()
-	var capsule_mesh := CapsuleMesh.new()
-	capsule_mesh.radius = 0.42
-	capsule_mesh.height = 1.8
-	visual.mesh = capsule_mesh
-	var player_material := StandardMaterial3D.new()
-	player_material.albedo_color = Color(0.45, 0.34, 0.22)
-	player_material.roughness = 0.9
-	visual.material_override = player_material
-	player.add_child(visual)
+	player_visual = Node3D.new()
+	player_visual.name = "ProceduralHumanoid"
+	player_visual.set_script(HUMANOID_RIG)
+	player.add_child(player_visual)
 	add_child(player)
 
 
@@ -235,6 +231,12 @@ func _physics_process(delta: float) -> void:
 	else:
 		player.velocity.y = -0.1
 	player.move_and_slide()
+	var horizontal_speed := Vector2(player.velocity.x, player.velocity.z).length()
+	var slope_ahead := 0.0
+	if direction.length_squared() > 0.001:
+		var ahead := player.position + direction * 1.0
+		slope_ahead = _height_at(ahead.x, ahead.z) - _height_at(player.position.x, player.position.z)
+	player_visual.call("set_motion", horizontal_speed, slope_ahead)
 
 	camera.position = player.position + CAMERA_OFFSET
 	camera.look_at(player.position, Vector3.UP)
@@ -250,5 +252,5 @@ func _input(event: InputEvent) -> void:
 			active_touch = -1
 			touch_vector = Vector2.ZERO
 	elif event is InputEventScreenDrag and event.index == active_touch:
-		var delta := (event.position - touch_origin) / 90.0
-		touch_vector = Vector2(clampf(delta.x, -1.0, 1.0), clampf(delta.y, -1.0, 1.0))
+		var drag_delta: Vector2 = (event.position - touch_origin) / 90.0
+		touch_vector = Vector2(clampf(drag_delta.x, -1.0, 1.0), clampf(drag_delta.y, -1.0, 1.0))
