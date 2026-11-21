@@ -26,6 +26,13 @@ internal class ForestMeshBuilder {
         vertexCount++
     }
 
+    fun triangleUp(a:FloatArray,b:FloatArray,c:FloatArray,color:Int) {
+        val ux=b[0]-a[0];val uy=b[1]-a[1];val uz=b[2]-a[2]
+        val vx=c[0]-a[0];val vy=c[1]-a[1];val vz=c[2]-a[2]
+        val ny=uz*vx-ux*vz
+        if(ny>=0f) triangle(a,b,c,color) else triangle(a,c,b,color)
+    }
+
     fun triangle(a:FloatArray,b:FloatArray,c:FloatArray,color:Int) {
         val ux=b[0]-a[0]; val uy=b[1]-a[1]; val uz=b[2]-a[2]
         val vx=c[0]-a[0]; val vy=c[1]-a[1]; val vz=c[2]-a[2]
