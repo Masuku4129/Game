@@ -17,6 +17,7 @@ var touch_vector := Vector2.ZERO
 var touch_origin := Vector2.ZERO
 var active_touch := -1
 var hud_label: Label
+var joystick: Control
 
 
 func _ready() -> void:
@@ -254,18 +255,32 @@ func _create_hud() -> void:
 	margin.add_theme_constant_override("margin_top", 8)
 	margin.add_theme_constant_override("margin_bottom", 8)
 	hud_label = Label.new()
-	hud_label.text = "WILDERNESS  •  FIELD TEST\nDrag left side to move"
+	hud_label.text = "FIELD TEST\nUse the joystick to walk"
 	margin.add_child(hud_label)
 	panel.add_child(margin)
 	layer.add_child(panel)
+	joystick = Control.new()
+	joystick.set_script(load("res://scripts/ui/virtual_joystick.gd"))
+	joystick.name = "MovementJoystick"
+	joystick.anchor_left = 0.0
+	joystick.anchor_top = 1.0
+	joystick.anchor_right = 0.0
+	joystick.anchor_bottom = 1.0
+	joystick.offset_left = 28.0
+	joystick.offset_top = -218.0
+	joystick.offset_right = 218.0
+	joystick.offset_bottom = -28.0
+	layer.add_child(joystick)
 	add_child(layer)
 
 
 func _physics_process(delta: float) -> void:
 	var direction := Vector3.ZERO
 	var keyboard := Input.get_vector("ui_left", "ui_right", "ui_up", "ui_down")
-	direction.x = keyboard.x + touch_vector.x
-	direction.z = keyboard.y + touch_vector.y
+	var stick: Vector2 = joystick.get_value() if joystick != null else Vector2.ZERO
+	var move_input := (keyboard + stick).limit_length(1.0)
+	direction.x = move_input.x
+	direction.z = move_input.y
 	direction = direction.limit_length(1.0)
 
 	if direction.length_squared() > 0.001:
@@ -291,16 +306,3 @@ func _physics_process(delta: float) -> void:
 	camera.global_position = camera.global_position.lerp(target_position, 1.0 - exp(-delta * 5.5))
 	camera.look_at(player.global_position + Vector3.UP * 0.7, Vector3.UP)
 
-
-func _input(event: InputEvent) -> void:
-	if event is InputEventScreenTouch:
-		if event.pressed and active_touch == -1 and event.position.x < get_viewport().get_visible_rect().size.x * 0.55:
-			active_touch = event.index
-			touch_origin = event.position
-			touch_vector = Vector2.ZERO
-		elif not event.pressed and event.index == active_touch:
-			active_touch = -1
-			touch_vector = Vector2.ZERO
-	elif event is InputEventScreenDrag and event.index == active_touch:
-		var drag_delta: Vector2 = (event.position - touch_origin) / 90.0
-		touch_vector = Vector2(clampf(drag_delta.x, -1.0, 1.0), clampf(drag_delta.y, -1.0, 1.0))
