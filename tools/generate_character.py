@@ -195,7 +195,9 @@ def weighted_torso(name, material, radius_scale=1.0, front_open=False):
             b=a+1
             d=(ring+1)*row_width+side
             cc=d+1
-            faces.append((a,d,cc,b))
+            # Outward-facing winding: tangent around the circumference crossed
+            # with the upward ring tangent points away from the torso surface.
+            faces.append((a,b,cc,d))
     mesh=bpy.data.meshes.new(name.replace(" ","_")+"_loft_mesh")
     mesh.from_pydata(vertices,[],faces)
     mesh.materials.append(material)
