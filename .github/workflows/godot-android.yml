@@ -25,7 +25,7 @@ jobs:
       - name: Install Godot and Android export templates
         shell: bash
         run: |
-          set -euxo pipefail
+          set -eux
           wget -q https://github.com/godotengine/godot/releases/download/4.4.1-stable/Godot_v4.4.1-stable_linux.x86_64.zip -O /tmp/godot.zip
           unzip -o /tmp/godot.zip -d /tmp/godot
           sudo install -m 0755 /tmp/godot/Godot_v4.4.1-stable_linux.x86_64 /usr/local/bin/godot
