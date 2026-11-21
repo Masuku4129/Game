@@ -1,8 +1,6 @@
 from __future__ import annotations
 
 import math
-from pathlib import Path
-
 from world.terrain import height_at
 
 from direct.showbase.ShowBase import ShowBase
@@ -12,7 +10,6 @@ from panda3d.core import (
     Vec3, Vec4, WindowProperties,
 )
 
-ROOT = Path(__file__).resolve().parent
 SEASON = "summer"
 
 
@@ -96,10 +93,8 @@ class WildlandsApp(ShowBase):
         self.taskMgr.add(self._update, "game-update")
 
     def _load_seasonal_model(self, family: str) -> NodePath | None:
-        model_path = ROOT / "assets" / "generated" / f"{family}_{SEASON}.glb"
-        if not model_path.is_file():
-            return None
-        model = self.loader.loadModel(str(model_path))
+        model_path = f"assets/generated/{family}_{SEASON}.glb"
+        model = self.loader.loadModel(model_path)
         if model.isEmpty():
             return None
         model.flattenStrong()
@@ -111,8 +106,6 @@ class WildlandsApp(ShowBase):
         for family in families:
             prototype = self._load_seasonal_model(family)
             if prototype is not None:
-                prototype.reparentTo(self.render)
-                prototype.hide()
                 prototypes[family] = prototype
 
         if not prototypes:
@@ -138,15 +131,13 @@ class WildlandsApp(ShowBase):
                 instance.setScale(scale)
 
     def _load_player_model(self) -> None:
-        model_path = ROOT / "assets" / "character" / "field_explorer.glb"
-        if model_path.is_file():
-            model = self.loader.loadModel(str(model_path))
-            if not model.isEmpty():
-                model.reparentTo(self.render)
-                model.setPos(0, 0, height_at(0, 0))
-                model.setScale(1.0)
-                self.player_model = model
-                return
+        model = self.loader.loadModel("assets/character/field_explorer.glb")
+        if not model.isEmpty():
+            model.reparentTo(self.render)
+            model.setPos(0, 0, height_at(0, 0))
+            model.setScale(1.0)
+            self.player_model = model
+            return
         print("ASSET_NOTICE: explorer GLB not found; no substitute primitive spawned")
 
     def _update(self, task):
