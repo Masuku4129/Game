@@ -202,7 +202,7 @@ def _export_seasonal_variant(root, asset_name, season):
 
     # Snow rests on upper-facing foliage and ground objects in winter.
     if season == "winter":
-        snow = mat("Seasonal snow | " + asset_name, (.82, .88, .91), .78, True)
+        snow = mat("Seasonal snow | " + asset_name, (.82, .88, .91), .78, False)
         snow_index = len(variant.data.materials)
         variant.data.materials.append(snow)
         rng = random.Random(sum(ord(ch) for ch in asset_name) + 9901)
