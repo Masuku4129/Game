@@ -15,7 +15,7 @@ from panda3d.core import (
     ClockObject, loadPrcFileData,
 )
 
-from world.movement import camera_relative_direction, heading_for_direction
+from world.reference_core import WildlandsBrowserCore
 from world.terrain import height_at
 
 SEASON = "summer"
@@ -128,165 +128,49 @@ class VirtualJoystick:
         )
 
     def _update(self, task):
-        if self.active:
-            pointer = self._pointer()
-            if pointer is not None:
-                self._set_from_pointer(*pointer)
-        return task.cont
-
-
-def build_terrain(parent: NodePath, ground_texture: Texture, extent: float = 90.0, cells: int = 96) -> NodePath:
-    fmt = GeomVertexFormat.getV3n3c4t2()
-    data = GeomVertexData("terrain", fmt, Geom.UHStatic)
-    data.setNumRows((cells + 1) ** 2)
-    vertex = GeomVertexWriter(data, "vertex")
-    normal = GeomVertexWriter(data, "normal")
-    color = GeomVertexWriter(data, "color")
-    texcoord = GeomVertexWriter(data, "texcoord")
-    step = (extent * 2.0) / cells
-
-    for row in range(cells + 1):
-        y = -extent + row * step
-        for column in range(cells + 1):
-            x = -extent + column * step
-            z = height_at(x, y)
-            dx = height_at(x + 0.25, y) - height_at(x - 0.25, y)
-            dy = height_at(x, y + 0.25) - height_at(x, y - 0.25)
-            n = Vec3(-dx, -dy, 0.5).normalized()
-            vertex.addData3(x, y, z)
-            normal.addData3(n)
-            shade = 0.82 + 0.08 * math.sin(x * 0.08) * math.cos(y * 0.06)
-            color.addData4(shade, shade, shade, 1.0)
-            texcoord.addData2(x * 0.16, y * 0.16)
-
-    triangles = GeomTriangles(Geom.UHStatic)
-    row_width = cells + 1
-    for row in range(cells):
-        for column in range(cells):
-            a = row * row_width + column
-            b, c, d = a + 1, a + row_width, a + row_width + 1
-            triangles.addVertices(a, b, c)
-            triangles.addVertices(b, d, c)
-    geom = Geom(data)
-    geom.addPrimitive(triangles)
-    node = GeomNode("terrain")
-    node.addGeom(geom)
-    terrain = parent.attachNewNode(node)
-    terrain.setTwoSided(True)
-    terrain.setColor(1, 1, 1, 1)
-    terrain.setTexture(ground_texture, 1)
-    return terrain
-
-
-class WildlandsApp(ShowBase):
-    def __init__(self) -> None:
-        super().__init__()
-        simplepbr.init()
-        props = WindowProperties()
-        props.setTitle("Wildlands")
-        props.setSize(1280, 720)
-        headless = os.environ.get("WILDLANDS_HEADLESS") == "1"
-        props.setFullscreen(not headless)
-        if not headless:
-            self.win.requestProperties(props)
-        self.disableMouse()
-        self.setBackgroundColor(0.47, 0.61, 0.68, 1)
-
-        ambient = AmbientLight("ambient")
-        ambient.setColor(Vec4(0.58, 0.62, 0.56, 1))
-        self.render.setLight(self.render.attachNewNode(ambient))
-        sun = DirectionalLight("sun")
-        sun.setColor(Vec4(1.0, 0.92, 0.78, 1))
-        sun_np = self.render.attachNewNode(sun)
-        sun_np.setHpr(-35, -55, 0)
-        self.render.setLight(sun_np)
-        fog = Fog("forest-atmosphere")
-        fog.setColor(0.47, 0.61, 0.68)
-        fog.setExpDensity(0.0022)
-        self.render.setFog(fog)
-
-        ground_texture = self.loader.loadTexture("assets/textures/ground_albedo.png")
-        if ground_texture is None:
-            raise RuntimeError("Required generated ground texture could not be loaded")
-        build_terrain(self.render, ground_texture)
-        self._build_forest()
-        self._load_player_model()
-        self.player_velocity = Vec3(0, 0, 0)
-        self.joystick = VirtualJoystick(self)
-        self.camera.setPos(CAMERA_OFFSET)
-        self.camera.lookAt(0, 0, height_at(0, 0) + 0.8)
-        self.taskMgr.add(self._update, "game-update")
-
-    def _build_forest(self) -> None:
-        forest = self.loader.loadModel(f"assets/generated/forest_{SEASON}.bam")
-        if forest.isEmpty():
-            raise RuntimeError(f"Required baked forest scene is missing for season: {SEASON}")
-        forest.reparentTo(self.render)
-
-    def _load_player_model(self) -> None:
-        model = self.loader.loadModel("assets/character/field_explorer.glb")
-        if model.isEmpty():
-            raise RuntimeError("Required authored explorer GLB could not be loaded")
-        actor = Actor(model)
-        actor.reparentTo(self.render)
-        actor.setBlend(animBlend=True, frameBlend=True)
-        actor.setPos(0, 0, height_at(0, 0))
-        actor.setScale(1.0)
-        self.player_model = actor
-        clips = actor.getAnimNames()
-        self.animation_clips = {
-            "idle": next((clip for clip in clips if "idle" in clip.lower()), None),
-            "walk": next((clip for clip in clips if "walk" in clip.lower()), None),
-            "run": next((clip for clip in clips if "run" in clip.lower()), None),
-        }
-        self.current_animation = None
-        self._set_animation("idle")
-        print(f"PLAYER_MODEL_LOADED: clips={clips}")
-
-    def _set_animation(self, state: str) -> None:
-        clip = self.animation_clips.get(state)
-        if clip is None or clip == self.current_animation:
-            return
-        if self.current_animation is not None:
-            self.player_model.stop(self.current_animation)
-        self.player_model.loop(clip)
-        self.player_model.setPlayRate(1.0, clip)
-        self.current_animation = clip
-
-    def _update(self, task):
         dt = min(ClockObject.getGlobalClock().getDt(), 0.05)
-        input_x = self.joystick.value_x
-        input_y = self.joystick.value_y
-        camera_heading = math.radians(self.camera.getH())
-        direction_x, direction_y = camera_relative_direction(
-            input_x, input_y, camera_heading
-        )
-        moving = math.hypot(direction_x, direction_y) > 0.01
-        target_speed = PLAYER_SPEED if moving else 0.0
-        target_x = direction_x * target_speed
-        target_y = direction_y * target_speed
-        rate = PLAYER_ACCELERATION if moving else PLAYER_DECELERATION
-        blend = 1.0 - math.exp(-rate * dt)
-        self.player_velocity.x += (target_x - self.player_velocity.x) * blend
-        self.player_velocity.y += (target_y - self.player_velocity.y) * blend
-
+        self.simulation_time += dt
         position = self.player_model.getPos(self.render)
-        position.x += self.player_velocity.x * dt
-        position.y += self.player_velocity.y * dt
-        position.z = height_at(position.x, position.y)
+        ground_height, terrain_slope, _moisture, _canopy, _biome, snow_factor, mud_factor = (
+            self.simulation.world_sample(position.x, position.y)
+        )
+        state = self.simulation.step(
+            dt,
+            self.simulation_time,
+            self.joystick.value_x,
+            self.joystick.value_y,
+            position.x,
+            position.y,
+            position.z,
+            self.player_velocity.x,
+            self.player_velocity.y,
+            self.simulation_heading,
+            self.simulation_heading_velocity,
+            ground_height,
+            terrain_slope,
+            snow_factor,
+            mud_factor,
+            100000.0,
+        )
+        (
+            world_x, world_y, world_height, velocity_x, velocity_y,
+            self.simulation_heading, self.simulation_heading_velocity,
+            speed, snow_depth, mud_depth, cloud, rain, snow, fog_density,
+            storm, wind, wind_x, wind_y, wetness, snow_cover, puddles,
+            walk_phase, step_event, foot_x, foot_y, season_index,
+            leaf_fall, canopy_snow, elapsed,
+        ) = state
+        position.set(world_x, world_y, world_height)
         self.player_model.setPos(self.render, position)
+        self.player_velocity.set(velocity_x, velocity_y, 0.0)
 
-        speed = math.hypot(self.player_velocity.x, self.player_velocity.y)
         if speed > 0.12:
-            heading = heading_for_direction(
-                self.player_velocity.x, self.player_velocity.y
-            )
-            self.player_model.setH(heading + MODEL_FORWARD_OFFSET)
-            state = "run" if speed > PLAYER_SPEED * 0.72 else "walk"
-            self._set_animation(state)
-            clip = self.animation_clips.get(state)
+            self.player_model.setH(-math.degrees(self.simulation_heading) + MODEL_FORWARD_OFFSET)
+            state_name = "run" if speed > PLAYER_SPEED * 0.72 else "walk"
+            self._set_animation(state_name)
+            clip = self.animation_clips.get(state_name)
             if clip is not None:
-                nominal_speed = PLAYER_SPEED if state == "run" else PLAYER_SPEED * 0.48
+                nominal_speed = PLAYER_SPEED if state_name == "run" else PLAYER_SPEED * 0.48
                 self.player_model.setPlayRate(max(0.65, min(1.35, speed / nominal_speed)), clip)
         else:
             self._set_animation("idle")
