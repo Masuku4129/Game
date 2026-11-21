@@ -52,6 +52,9 @@ jobs:
           test -x "$ANDROID_SDK_ROOT/platform-tools/adb"
           test -x "$ANDROID_SDK_ROOT/build-tools/34.0.0/apksigner"
 
+      - name: Configure Android debug signing in export preset
+        run: sed -i "s|keystore/debug=\"\"|keystore/debug=\"$HOME/.android/debug.keystore\"|" godot/export_presets.cfg
+
       - name: Validate Godot project
         run: godot --headless --editor --path godot --quit
 
