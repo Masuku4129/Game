@@ -4,7 +4,6 @@ import argparse
 import math
 from pathlib import Path
 
-from direct.showbase.Loader import Loader
 from panda3d.core import NodePath
 from gltf import load_model
 
