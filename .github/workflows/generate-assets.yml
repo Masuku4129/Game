@@ -1,0 +1,36 @@
+name: Generate 3D asset pack
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "tools/generate_assets.py"
+      - ".github/workflows/generate-assets.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  generate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+      - name: Install Blender
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y blender
+          blender --version
+      - name: Generate GLB models
+        run: |
+          blender --background --python tools/generate_assets.py -- --output assets/generated
+          test "$(find assets/generated -maxdepth 1 -name '*.glb' | wc -l)" -eq 8
+          du -h assets/generated/*
+      - name: Upload 3D asset pack
+        uses: actions/upload-artifact@v4
+        with:
+          name: game-3d-assets-${{ github.sha }}
+          path: assets/generated/*.glb
+          if-no-files-found: error
+          retention-days: 30
