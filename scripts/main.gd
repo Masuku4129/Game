@@ -190,8 +190,8 @@ func _create_camera() -> void:
 	camera.projection = Camera3D.PROJECTION_ORTHOGONAL
 	camera.size = 48.0
 	camera.position = player.position + CAMERA_OFFSET
-	camera.look_at(player.position, Vector3.UP)
 	add_child(camera)
+	camera.look_at(player.global_position, Vector3.UP)
 
 
 func _create_hud() -> void:
