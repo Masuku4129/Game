@@ -65,6 +65,14 @@ jobs:
       - name: Stage authored GLB assets
         run: cp -R assets python_game/assets
 
+      - name: Bake ground texture and seasonal forest scenes
+        working-directory: python_game
+        run: |
+          python tools/generate_ground_texture.py --output assets/textures/ground_albedo.png --size 512
+          python tools/build_forest.py --assets assets/generated --output assets/generated --radius 11
+          test -s assets/textures/ground_albedo.png
+          for season in spring summer autumn winter; do test -s "assets/generated/forest_${season}.bam"; done
+
       - name: Build Panda3D Android App Bundle
         working-directory: python_game
         env:
