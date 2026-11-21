@@ -71,7 +71,17 @@ jobs:
           git add assets/generated/*.glb
           if ! git diff --cached --quiet; then
             git commit -m "Generate procedural 3D environment asset pack"
-            git push
+            for attempt in 1 2 3; do
+              git fetch origin main
+              git rebase origin/main
+              if git push origin HEAD:main; then
+                exit 0
+              fi
+              echo "Push race detected; retrying after rebasing (attempt $attempt)"
+              sleep 2
+            done
+            echo "::error::Could not push generated assets after three rebased attempts"
+            exit 1
           fi
       - name: Upload 3D asset pack
         uses: actions/upload-artifact@v4
