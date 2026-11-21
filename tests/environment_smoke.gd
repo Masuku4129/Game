@@ -24,13 +24,17 @@ func _mesh_has_albedo_texture(mesh: Mesh) -> bool:
 	return false
 
 
-func _has_node_type(node: Node, type_name: String) -> bool:
+func _find_node_type(node: Node, type_name: String) -> Node:
 	if node.get_class() == type_name:
-		return true
+		return node
 	for child in node.get_children():
-		if _has_node_type(child, type_name):
-			return true
-	return false
+		var found := _find_node_type(child, type_name)
+		if found != null:
+			return found
+	return null
+
+func _has_node_type(node: Node, type_name: String) -> bool:
+	return _find_node_type(node, type_name) != null
 
 
 func _initialize() -> void:
@@ -122,8 +126,14 @@ func _run_test() -> void:
 		return
 
 	var character_visual := game.get("player_visual") as Node3D
-	if character_visual == null or not _has_node_type(character_visual, "Skeleton3D") or not _has_node_type(character_visual, "AnimationPlayer"):
+	var explorer_anim := _find_node_type(character_visual, "AnimationPlayer") as AnimationPlayer if character_visual != null else null
+	if character_visual == null or not _has_node_type(character_visual, "Skeleton3D") or explorer_anim == null:
 		printerr("ENVIRONMENT_TEST_FAIL: rigged explorer skeleton or animation player missing")
+		quit(1)
+		return
+	var clips := explorer_anim.get_animation_list()
+	if not clips.any(func(clip): return String(clip).contains("Walk")) or not clips.any(func(clip): return String(clip).contains("Run")):
+		printerr("ENVIRONMENT_TEST_FAIL: imported explorer walk/run animation clips unavailable: ", clips)
 		quit(1)
 		return
 	for asset_name in ["tree_spruce", "tree_birch", "fern_cluster", "grass_tuft", "mushroom_cluster"]:
