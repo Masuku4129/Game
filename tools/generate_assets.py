@@ -14,7 +14,7 @@ os.makedirs(OUT, exist_ok=True)
 def reset():
     bpy.ops.object.select_all(action="SELECT")
     bpy.ops.object.delete(use_global=False)
-    for datablocks in (bpy.data.meshes, bpy.data.curves, bpy.data.materials):
+    for datablocks in (bpy.data.meshes, bpy.data.curves):
         for block in list(datablocks):
             if block.users == 0: datablocks.remove(block)
 
@@ -50,7 +50,7 @@ def finish(name, mats):
     root=bpy.context.object
     root.name=name
     # Center at ground, preserve dimensions and smooth only curved surfaces.
-    bpy.ops.object.origin_set(type="ORIGIN_GEOMETRY", center="BOUNDS")
+    bpy.context.scene.cursor.location=(0,0,0)\n    bpy.ops.object.origin_set(type="ORIGIN_CURSOR")
     bpy.ops.object.select_all(action="DESELECT"); root.select_set(True)
     bpy.context.view_layer.objects.active=root
     bpy.ops.export_scene.gltf(filepath=os.path.join(OUT,name+".glb"), export_format="GLB", use_selection=True, export_apply=True)
@@ -74,7 +74,7 @@ def curve_tube(points, radius, material, name="twig"):
     s=c.splines.new("POLY"); s.points.add(len(points)-1)
     for p,co in zip(s.points,points): p.co=(*co,1)
     o=bpy.data.objects.new(name,c); bpy.context.collection.objects.link(o); o.data.materials.append(material)
-    bpy.context.view_layer.objects.active=o; o.select_set(True); bpy.ops.object.convert(target="MESH"); return bpy.context.object
+    bpy.ops.object.select_all(action="DESELECT")\n    bpy.context.view_layer.objects.active=o; o.select_set(True); bpy.ops.object.convert(target="MESH"); return bpy.context.object
 
 def spruce():
     reset(); rng=random.Random(1101)
