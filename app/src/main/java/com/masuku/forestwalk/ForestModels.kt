@@ -7,42 +7,60 @@ internal object ForestModels {
     data class TreeModel(val mesh:ForestMesh,val components:Int,val height:Float)
 
     /** A tree has 30+ separate smooth geometry components, with deterministic seed variation. */
-    fun tree(seed:Int,height:Float=5.0f):TreeModel {
+    fun tree(seed:Int,height:Float=6.2f):TreeModel {
         val b=ForestMeshBuilder()
         val rnd=java.util.Random(seed.toLong())
         val trunk=0xFF58412C.toInt()
-        val leafPalette=intArrayOf(0xFF28563A.toInt(),0xFF346644.toInt(),0xFF3E7449.toInt(),0xFF477C4A.toInt(),0xFF244C34.toInt())
-        val taper=0.12f+height*.035f
-        b.taperedCylinder(0f,0f,0f,0f,height,0f,taper,taper*.28f,trunk,12)
-        var count=1
-        // Eight major limbs, each with several foliage lobes.
-        for(i in 0 until 8) {
-            val a=i*PI/4.0+rnd.nextDouble()*.18
-            val startY=height*(.30f+(i%3)*.10f)
-            val reach=height*(.24f+rnd.nextFloat()*.13f)
-            val endX=(cos(a)*reach).toFloat()
-            val endZ=(sin(a)*reach).toFloat()
-            b.taperedCylinder(0f,startY,0f,endX,startY+height*.12f,endZ,taper*.48f,taper*.16f,trunk,7)
-            count++
-            // 3 clusters per branch = 24; additional crown lobes ensure >=25 components total.
-            for(k in 0..2) {
-                val spread=.55f+(rnd.nextFloat()*.45f)
-                val cx=endX*spread+(rnd.nextFloat()-.5f)*height*.10f
-                val cz=endZ*spread+(rnd.nextFloat()-.5f)*height*.10f
-                val cy=startY+height*.13f+k*height*.055f+(rnd.nextFloat()-.5f)*height*.08f
-                val radius=height*(.14f+rnd.nextFloat()*.045f)
-                b.ellipsoid(cx,cy,cz,radius*1.05f,radius*.88f,radius,rnd.nextInt(leafPalette.size).let{leafPalette[it]},10,7)
-                count++
+        val palette=intArrayOf(0xFF294F32.toInt(),0xFF32633A.toInt(),0xFF3B7042.toInt(),0xFF477B48.toInt(),0xFF22472E.toInt(),0xFF507E45.toInt())
+        val taper=0.15f+height*.025f
+        val leanX=(rnd.nextFloat()-.5f)*height*.045f
+        val leanZ=(rnd.nextFloat()-.5f)*height*.045f
+        b.taperedCylinder(0f,0f,0f,leanX,height,leanZ,taper,taper*.20f,trunk,14)
+        var components=1
+        // Root flares spread irregularly around the base, partially exposed above forest floor.
+        for(i in 0 until 7){
+            val a=i*PI*2.0/7.0+rnd.nextDouble()*.25
+            val reach=height*(.17f+rnd.nextFloat()*.12f)
+            b.taperedCylinder(0f,.06f,0f,(cos(a)*reach).toFloat(),.13f,(sin(a)*reach).toFloat(),taper*.65f,.035f,trunk,7)
+            components++
+        }
+        // Branches spiral irregularly up the trunk; foliage clumps are elongated and leaf-like rather than round balls.
+        val branchCount=11+rnd.nextInt(4)
+        for(i in 0 until branchCount){
+            val a=i*2.399963+rnd.nextDouble()*.28
+            val startY=height*(.24f+(i.toFloat()/(branchCount))* .56f)
+            val reach=height*(.20f+rnd.nextFloat()*.18f)*(1f-(startY/height)*.22f)
+            val ex=(cos(a)*reach).toFloat()+leanX*(startY/height)
+            val ez=(sin(a)*reach).toFloat()+leanZ*(startY/height)
+            val ey=startY+height*(.08f+rnd.nextFloat()*.10f)
+            b.taperedCylinder(leanX*(startY/height),startY,leanZ*(startY/height),ex,ey,ez,taper*.38f,taper*.12f,trunk,8)
+            components++
+            for(k in 0..3){
+                val f=.55f+rnd.nextFloat()*.6f
+                val cx=ex*f+(rnd.nextFloat()-.5f)*height*.09f
+                val cz=ez*f+(rnd.nextFloat()-.5f)*height*.09f
+                val cy=ey+(rnd.nextFloat()-.5f)*height*.12f
+                val rx=height*(.10f+rnd.nextFloat()*.06f)
+                val ry=height*(.055f+rnd.nextFloat()*.035f)
+                val rz=height*(.08f+rnd.nextFloat()*.05f)
+                b.ellipsoid(cx,cy,cz,rx,ry,rz,palette[rnd.nextInt(palette.size)],11,7)
+                components++
             }
         }
-        // Crown center and four peripheral crown masses.
-        for(i in 0..4) {
-            val a=i*PI*2.0/5.0
-            val radius=height*(.17f+rnd.nextFloat()*.03f)
-            b.ellipsoid((cos(a)*height*.12f).toFloat(),height*(.72f+i*.025f),(sin(a)*height*.12f).toFloat(),radius,radius*.95f,radius,leafPalette[rnd.nextInt(leafPalette.size)],10,7)
-            count++
+        // Loose asymmetric crown with overlapping canopy lobes and gaps for a natural silhouette.
+        for(i in 0 until 12){
+            val a=i*PI*2.0/12.0+rnd.nextDouble()*.4
+            val r=height*(.12f+rnd.nextFloat()*.23f)
+            val cx=(cos(a)*r).toFloat()+leanX*.65f
+            val cz=(sin(a)*r).toFloat()+leanZ*.65f
+            val cy=height*(.68f+rnd.nextFloat()*.25f)
+            val rx=height*(.12f+rnd.nextFloat()*.06f)
+            val ry=height*(.075f+rnd.nextFloat()*.055f)
+            val rz=height*(.12f+rnd.nextFloat()*.07f)
+            b.ellipsoid(cx,cy,cz,rx,ry,rz,palette[rnd.nextInt(palette.size)],12,8)
+            components++
         }
-        return TreeModel(b.snapshot(),count,height)
+        return TreeModel(b.snapshot(),components,height)
     }
 
     /** Multi-piece humanoid base model (50+ smooth geometry components). */
