@@ -39,6 +39,113 @@ MOSS=mat("Moss | damp green",(.16,.23,.085),1,True)
 STONE=mat("Stone | weathered grey",(.28,.30,.28),.94,True)
 WOOD=mat("Cut wood | warm heartwood",(.42,.25,.12),.92,True)
 
+def _seasonal_material(source, season):
+    material = source.copy()
+    material.name = source.name + " | " + season
+    palette = {
+        "spring": {
+            "Spruce | deep needles": (.055, .19, .12),
+            "Pine | muted needles": (.16, .29, .16),
+            "Broadleaf | forest green": (.27, .43, .16),
+            "Leaves | young green": (.43, .57, .20),
+            "Fern | rich green": (.19, .39, .14),
+            "Moss | damp green": (.22, .34, .12),
+        },
+        "summer": {
+            "Spruce | deep needles": (.035, .12, .075),
+            "Pine | muted needles": (.10, .22, .12),
+            "Broadleaf | forest green": (.17, .28, .105),
+            "Leaves | young green": (.27, .37, .13),
+            "Fern | rich green": (.10, .27, .105),
+            "Moss | damp green": (.16, .23, .085),
+        },
+        "autumn": {
+            "Spruce | deep needles": (.045, .13, .085),
+            "Pine | muted needles": (.13, .20, .10),
+            "Broadleaf | forest green": (.66, .25, .075),
+            "Leaves | young green": (.82, .48, .10),
+            "Fern | rich green": (.48, .30, .10),
+            "Moss | damp green": (.25, .20, .085),
+        },
+        "winter": {
+            "Spruce | deep needles": (.18, .25, .22),
+            "Pine | muted needles": (.23, .29, .24),
+            "Broadleaf | forest green": (.28, .30, .27),
+            "Leaves | young green": (.30, .31, .28),
+            "Fern | rich green": (.30, .25, .16),
+            "Moss | damp green": (.48, .52, .49),
+            "Stone | weathered grey": (.48, .52, .54),
+        },
+    }
+    color = palette[season].get(source.name)
+    if color is not None:
+        material.diffuse_color = (*color, 1)
+        if material.use_nodes:
+            shader = material.node_tree.nodes.get("Principled BSDF")
+            if shader:
+                shader.inputs["Base Color"].default_value = (*color, 1)
+    return material
+
+
+def _export_seasonal_variant(root, asset_name, season):
+    variant = root.copy()
+    variant.data = root.data.copy()
+    variant.name = asset_name + "_" + season
+    bpy.context.collection.objects.link(variant)
+    variant_material_names = []
+    for index, source in enumerate(list(variant.data.materials)):
+        if source is None:
+            continue
+        seasonal = _seasonal_material(source, season)
+        variant.data.materials[index] = seasonal
+        variant_material_names.append((index, source.name))
+
+    # Deciduous species lose their leaves in winter; the branch structure remains.
+    if season == "winter" and asset_name in ("tree_birch", "shrub_mixed"):
+        import bmesh
+        leaf_slots = {
+            index for index, name in variant_material_names
+            if name in ("Broadleaf | forest green", "Leaves | young green")
+        }
+        if leaf_slots:
+            bm = bmesh.new()
+            bm.from_mesh(variant.data)
+            doomed = [face for face in bm.faces if face.material_index in leaf_slots]
+            bmesh.ops.delete(bm, geom=doomed, context="FACES")
+            bm.to_mesh(variant.data)
+            bm.free()
+            variant.data.update()
+
+    # Snow rests on upper-facing foliage and ground objects in winter.
+    if season == "winter":
+        snow = mat("Seasonal snow | " + asset_name, (.82, .88, .91), .78, True)
+        snow_index = len(variant.data.materials)
+        variant.data.materials.append(snow)
+        rng = random.Random(sum(ord(ch) for ch in asset_name) + 9901)
+        for polygon in variant.data.polygons:
+            original_index = polygon.material_index
+            original_name = next((name for idx, name in variant_material_names if idx == original_index), "")
+            eligible = (
+                original_name.startswith("Spruce |") or
+                original_name.startswith("Pine |") or
+                (asset_name in ("rock_mossy", "stump_mossy", "fallen_log", "fern_cluster")
+                 and polygon.normal.z > 0.48 and not original_name.startswith("Bark"))
+            )
+            if eligible and rng.random() < (0.28 if asset_name.startswith("tree_") else 0.20):
+                polygon.material_index = snow_index
+
+    bpy.ops.object.select_all(action="DESELECT")
+    variant.select_set(True)
+    bpy.context.view_layer.objects.active = variant
+    bpy.ops.export_scene.gltf(
+        filepath=os.path.join(OUT, variant.name + ".glb"),
+        export_format="GLB",
+        use_selection=True,
+        export_apply=True,
+    )
+    print("EXPORTED_SEASON", variant.name, tuple(variant.dimensions))
+
+
 def finish(name, mats):
     bpy.ops.object.select_all(action="SELECT")
     objs=[o for o in bpy.context.scene.objects if o.type=="MESH"]
@@ -49,13 +156,12 @@ def finish(name, mats):
     if len(objs)>1: bpy.ops.object.join()
     root=bpy.context.object
     root.name=name
-    # Center at ground, preserve dimensions and smooth only curved surfaces.
     bpy.context.scene.cursor.location=(0,0,0)
     bpy.ops.object.origin_set(type="ORIGIN_CURSOR")
-    bpy.ops.object.select_all(action="DESELECT"); root.select_set(True)
-    bpy.context.view_layer.objects.active=root
-    bpy.ops.export_scene.gltf(filepath=os.path.join(OUT,name+".glb"), export_format="GLB", use_selection=True, export_apply=True)
-    print("EXPORTED",name,root.dimensions[:])
+    for season in ("spring", "summer", "autumn", "winter"):
+        _export_seasonal_variant(root, name, season)
+    bpy.ops.object.select_all(action="DESELECT")
+    bpy.data.objects.remove(root, do_unlink=True)
 
 def cone_between(a,b,r1,r2,material,verts=8):
     d=Vector(b)-Vector(a); mid=(Vector(a)+Vector(b))/2
