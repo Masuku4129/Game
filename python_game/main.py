@@ -305,4 +305,7 @@ class WildlandsApp(ShowBase):
 if __name__ == "__main__":
     if os.environ.get("WILDLANDS_HEADLESS") == "1":
         loadPrcFileData("wildlands-headless", "window-type offscreen\naudio-library-name null\nwin-size 1280 720\nsync-video false")
-    WildlandsApp().run()
+    app = WildlandsApp()
+    if os.environ.get("WILDLANDS_HEADLESS") == "1":
+        app.taskMgr.doMethodLater(8.0, lambda task: (app.userExit(), task.done)[1], "headless-smoke-exit")
+    app.run()
