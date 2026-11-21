@@ -76,6 +76,12 @@ func _height_at(x: float, z: float) -> float:
 	var drainage := absf(terrain_noise.get_noise_2d(x * 0.31 + 90.0, z * 0.31)) * 1.25
 	return broad + ridge * 2.1 + detail - drainage
 
+func _terrain_normal_at(x: float, z: float) -> Vector3:
+	var sample := 0.35
+	var slope_x := (_height_at(x + sample, z) - _height_at(x - sample, z)) / (sample * 2.0)
+	var slope_z := (_height_at(x, z + sample) - _height_at(x, z - sample)) / (sample * 2.0)
+	return Vector3(-slope_x, 1.0, -slope_z).normalized()
+
 
 func _create_environment() -> void:
 	var world := WorldEnvironment.new()
@@ -225,7 +231,8 @@ func _create_forest() -> void:
 		var scale := rng.randf_range(0.82, 1.28)
 		var yaw := rng.randf_range(0.0, TAU)
 		var ground := _height_at(x, z)
-		var basis := Basis(Vector3.UP, yaw).scaled(Vector3(scale, scale, scale))
+		var alignment := Quaternion(Vector3.UP, _terrain_normal_at(x, z))
+		var basis := (Basis(alignment) * Basis(Vector3.UP, yaw)).scaled(Vector3(scale, scale, scale))
 		transforms[species].append(Transform3D(basis, Vector3(x, ground, z)))
 		counts[species] += 1
 
@@ -267,7 +274,8 @@ func _scatter_environment_asset(asset_name: String, amount: int, min_scale: floa
 			continue
 		var scale := rng.randf_range(min_scale, max_scale)
 		var yaw := rng.randf_range(0.0, TAU)
-		var basis := Basis(Vector3.UP, yaw).scaled(Vector3(scale, scale, scale))
+		var alignment := Quaternion(Vector3.UP, _terrain_normal_at(x, z))
+		var basis := (Basis(alignment) * Basis(Vector3.UP, yaw)).scaled(Vector3(scale, scale, scale))
 		transforms.append(Transform3D(basis, Vector3(x, _height_at(x, z), z)))
 	if transforms.is_empty():
 		return
