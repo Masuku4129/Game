@@ -77,7 +77,7 @@ class ForestRenderer:GLSurfaceView.Renderer{
     private val shrubChunks=ArrayList<DetailChunk>()
     private val groundDetailChunks=ArrayList<DetailChunk>()
     private val rockChunks=ArrayList<DetailChunk>()
-    private lateinit var playerRig:ForestModels.CharacterRig
+    private lateinit var playerBody:GpuMesh;private lateinit var playerArm:GpuMesh;private lateinit var playerTool:GpuMesh;private lateinit var playerUpperLeg:GpuMesh;private lateinit var playerLowerLeg:GpuMesh
     private lateinit var groundMesh:GpuMesh
     private lateinit var shrubMesh:ForestMesh
     private val vShader="""attribute vec3 aPos;attribute vec3 aNormal;attribute vec3 aColor;uniform mat4 uMVP;uniform mat4 uModel;uniform float uTime;uniform float uWalk;uniform float uFoliage;varying vec3 vWorld;varying vec3 vNormal;varying vec3 vColor;void main(){vec4 w=uModel*vec4(aPos,1.0);vWorld=w.xyz;vNormal=mat3(uModel)*aNormal;vColor=aColor;vec3 p=aPos;if(p.y<0.72){p.z+=sin(uTime*8.5+sign(p.x)*3.14159)*uWalk*.16;p.y+=abs(sin(uTime*8.5))*uWalk*.035;}else if(p.y>0.72&&p.y<1.25){p.z+=sin(uTime*8.5+sign(p.x)*3.14159+3.14159)*uWalk*.12;}if(uFoliage>0.5&&p.y>2.1){float wind=sin(uTime*1.35+p.z*.8+p.x*.45)*.045*(p.y/6.0);p.x+=wind;p.z+=cos(uTime*1.1+p.x*.6)*.018*(p.y/6.0);}gl_Position=uMVP*vec4(p,1.0);}"""
@@ -92,7 +92,7 @@ class ForestRenderer:GLSurfaceView.Renderer{
         program=link(vShader,fShader)
         aPosition=android.opengl.GLES20.glGetAttribLocation(program,"aPos");aNormal=android.opengl.GLES20.glGetAttribLocation(program,"aNormal");aColor=android.opengl.GLES20.glGetAttribLocation(program,"aColor")
         uMvp=android.opengl.GLES20.glGetUniformLocation(program,"uMVP");uModel=android.opengl.GLES20.glGetUniformLocation(program,"uModel");uPlayer=android.opengl.GLES20.glGetUniformLocation(program,"uPlayer");uTime=android.opengl.GLES20.glGetUniformLocation(program,"uTime");uWeather=android.opengl.GLES20.glGetUniformLocation(program,"uWeather");uFoliage=android.opengl.GLES20.glGetUniformLocation(program,"uFoliage");uWalk=android.opengl.GLES20.glGetUniformLocation(program,"uWalk");uGround=android.opengl.GLES20.glGetUniformLocation(program,"uGround")
-        groundMesh=makeGround();playerRig=ForestModels.characterRig(123);shrubMesh=makeShrub();weatherFx=ForestWeatherParticles();weatherFx.init()
+        groundMesh=makeGround();val rig=ForestModels.characterRig(123);playerBody=upload(rig.body);playerArm=upload(rig.arm);playerTool=upload(rig.tool);playerUpperLeg=upload(rig.upperLeg);playerLowerLeg=upload(rig.lowerLeg);shrubMesh=makeShrub();weatherFx=ForestWeatherParticles();weatherFx.init()
         val speciesMeshes=ArrayList<ForestMesh>()
         for(i in 0 until 14)speciesMeshes.add(ForestModels.tree(300+i,5.6f+(i%5)*.65f).mesh)
         // Static trees are CPU-merged into bounded chunks to reduce hundreds of draw calls.
@@ -185,16 +185,16 @@ class ForestRenderer:GLSurfaceView.Renderer{
         val swing=if(moving)sin(phase).toFloat()*.42f else 0f
         val bob=if(moving)abs(sin(phase)).toFloat()*.035f else 0f
         val pm=identity();android.opengl.Matrix.translateM(pm,0,playerX,bob,playerZ);android.opengl.Matrix.rotateM(pm,0,heading*180f/PI.toFloat(),0f,1f,0f)
-        draw(upload(playerRig.body),vp,pm)
+        draw(playerBody,vp,pm)
         for(side in listOf(-1f,1f)){
             val armPivot=identity();android.opengl.Matrix.translateM(armPivot,0,side*.23f,1.18f,0f);android.opengl.Matrix.rotateM(armPivot,0,-swing*55f,1f,0f,0f)
-            val armModel=mul(pm,armPivot);draw(upload(playerRig.arm),vp,armModel)
-            if(side>0f)draw(upload(playerRig.tool),vp,armModel)
+            val armModel=mul(pm,armPivot);draw(playerArm,vp,armModel)
+            if(side>0f)draw(playerTool,vp,armModel)
             val hip=identity();android.opengl.Matrix.translateM(hip,0,side*.13f,.62f,0f);android.opengl.Matrix.rotateM(hip,0,(if(side<0f)swing else -swing)*57.3f,1f,0f,0f)
-            val upperModel=mul(pm,hip);draw(upload(playerRig.upperLeg),vp,upperModel)
+            val upperModel=mul(pm,hip);draw(playerUpperLeg,vp,upperModel)
             val kneeAngle=if(side<0f)max(0f,-sin(phase).toFloat())*.5f else max(0f,sin(phase).toFloat())*.5f
             val knee=identity();android.opengl.Matrix.translateM(knee,0,0f,-.32f,0f);android.opengl.Matrix.rotateM(knee,0,kneeAngle*45f,1f,0f,0f)
-            draw(upload(playerRig.lowerLeg),vp,mul(upperModel,knee))
+            draw(playerLowerLeg,vp,mul(upperModel,knee))
         }
         weatherFx.render(vp,playerX,playerZ,dt,weatherMode)
     }
