@@ -118,9 +118,21 @@ func _create_terrain() -> void:
 	var terrain_body := StaticBody3D.new()
 	terrain_body.name = "TerrainCollision"
 	var terrain_collision := CollisionShape3D.new()
-	var terrain_shape := ConcavePolygonShape3D.new()
-	terrain_shape.set_faces(terrain_mesh.get_faces())
+	var terrain_shape := HeightMapShape3D.new()
+	terrain_shape.map_width = GRID_CELLS + 1
+	terrain_shape.map_depth = GRID_CELLS + 1
+	var height_data := PackedFloat32Array()
+	height_data.resize((GRID_CELLS + 1) * (GRID_CELLS + 1))
+	for z in range(GRID_CELLS + 1):
+		for x in range(GRID_CELLS + 1):
+			var sample_x := -WORLD_EXTENT + float(x) * step
+			var sample_z := -WORLD_EXTENT + float(z) * step
+			height_data[z * (GRID_CELLS + 1) + x] = _height_at(sample_x, sample_z) / step
+	terrain_shape.map_data = height_data
 	terrain_collision.shape = terrain_shape
+	# HeightMapShape3D uses one local unit per sample; uniform scaling matches
+	# the visual terrain grid while preserving the correct world-space heights.
+	terrain_collision.scale = Vector3.ONE * step
 	terrain_body.add_child(terrain_collision)
 	add_child(terrain_body)
 
