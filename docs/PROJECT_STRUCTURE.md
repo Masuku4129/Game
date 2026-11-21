@@ -14,7 +14,11 @@
 ├── scenes/
 │   └── main.tscn                 # корневая игровая сцена
 ├── scripts/
-│   ├── main.gd                   # bootstrap: среда, terrain, forest, player, camera\n│   └── animation/\n│       └── procedural_humanoid.gd # первый процедурный articulated gait prototype
+│   ├── main.gd                   # bootstrap: среда, terrain, forest, player, camera
+│   ├── animation/
+│   │   └── procedural_humanoid.gd # первый процедурный articulated gait prototype
+│   └── environment/
+│       └── surface_simulation.gd # локальная сетка снега, влажности, уплотнения и стока
 ├── project.godot                 # настройки Godot
 ├── export_presets.cfg            # Android arm64 export preset; no secrets
 ├── PROJECT_MASTER.md             # главный документ требований
