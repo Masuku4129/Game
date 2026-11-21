@@ -331,8 +331,45 @@ for frame in [1,10,19,28,37]:
       "upper_arm_L":(sin(ph+pi)*.48,0,-.08),"upper_arm_R":(sin(ph)*.48,0,.08),
       "spine":(sin(ph)*.045,0,sin(ph)*.04),"chest":(sin(ph)*.04,0,sin(ph)*.055)})
 run=bpy.data.actions[-1]; run.name="Explorer_Run"
-# Export rig, skinned mesh objects, and three actions as glTF animations
+# Merge static visual parts by shared material to reduce mobile draw calls.
+# Keep named seasonal parts and the two torso shells separate because the
+# Godot visual adapter toggles/tints them independently.
 bpy.ops.object.mode_set(mode="OBJECT")
+preserve_names={"Neck scarf","Scarf tail","Winter fur collar","Continuous field coat shell","Linen shirt torso"}
+mesh_groups={}
+for obj in list(bpy.context.scene.objects):
+    if obj.type!="MESH" or obj==rig or obj.name in preserve_names:
+        continue
+    material_key=obj.data.materials[0].name if len(obj.data.materials) else "__unmaterialed__"
+    mesh_groups.setdefault(material_key,[]).append(obj)
+merged_count=0
+for material_name, objects in mesh_groups.items():
+    if len(objects)<2:
+        continue
+    bpy.ops.object.select_all(action="DESELECT")
+    for obj in objects:
+        obj.select_set(True)
+    bpy.context.view_layer.objects.active=objects[0]
+    bpy.ops.object.join()
+    merged=bpy.context.object
+    merged.name="Explorer_"+material_name.replace(" ","_").replace("|","").strip("_")
+    # Deduplicate identical material slots after joining.
+    unique_materials=[]
+    material_remap={}
+    for index, source_material in enumerate(list(merged.data.materials)):
+        if source_material not in unique_materials:
+            unique_materials.append(source_material)
+        material_remap[index]=unique_materials.index(source_material)
+    for polygon in merged.data.polygons:
+        polygon.material_index=material_remap.get(polygon.material_index,0)
+    merged.data.materials.clear()
+    for source_material in unique_materials:
+        merged.data.materials.append(source_material)
+    merged.parent=rig
+    merged.matrix_parent_inverse=rig.matrix_world.inverted()
+    merged_count+=1
+print("CHARACTER_MATERIAL_BATCHES_MERGED",merged_count)
+# Export rig, skinned mesh objects, and three actions as glTF animations.
 bpy.ops.object.select_all(action="DESELECT")
 rig.select_set(True)
 for obj in list(bpy.context.scene.objects):
