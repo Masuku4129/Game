@@ -284,6 +284,7 @@ func _create_forest() -> void:
 		for index in range(counts[species]):
 			multi.multimesh.set_instance_transform(index, transforms[species][index])
 		add_child(multi)
+		environment_instances.append(multi)
 		_register_wind_batch(multi, transforms[species], families[species])
 
 
@@ -557,6 +558,10 @@ func _cycle_season() -> void:
 	asset_base_materials.clear()
 	_create_forest()
 	_create_ground_cover()
+	last_environment_wetness = -1.0
+	last_environment_snow = -1.0
+	_apply_environment_wetness(wetness_accumulation)
+	_apply_environment_snow(snow_accumulation)
 	if season_button != null:
 		season_button.text = "Сезон: " + _season_label(active_season)
 
