@@ -14,7 +14,7 @@ The uploaded `Wildlands.apk` contains a WebView-style HTML application, `assets/
 - Panda3D 1.11.0, whose official Android packaging support uses `build_apps`.
 - Android target: arm64-v8a.
 - Android output: signed universal APK derived from the Panda3D AAB using Google's bundletool.
-- GitHub Actions remains the sole automated Android build pipeline.
+- GitHub Actions remains the sole automated Android build pipeline; the workflow is also registered on `main` so this draft PR can receive CI checks.
 
 ## Migration boundary
 
