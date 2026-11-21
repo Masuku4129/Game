@@ -100,7 +100,7 @@ class ForestRenderer:GLSurfaceView.Renderer{
         val chunkSize=34f
         for(cz in -2..2)for(cx in -2..2){
             val batch=ForestMeshBuilder()
-            val count=9+rnd.nextInt(3
+            val count=9+rnd.nextInt(3)
             repeat(count){
                 val sx=cx*chunkSize+(rnd.nextFloat()-.5f)*chunkSize*.82f
                 val sz=cz*chunkSize+(rnd.nextFloat()-.5f)*chunkSize*.82f
