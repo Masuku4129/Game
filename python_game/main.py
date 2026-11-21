@@ -9,7 +9,7 @@ from direct.showbase.ShowBase import ShowBase
 from panda3d.core import (
     AmbientLight, DirectionalLight, Fog, Geom, GeomNode, GeomTriangles,
     GeomVertexData, GeomVertexFormat, GeomVertexWriter, NodePath,
-    PNMImage, Texture, TransparencyAttrib, Vec3, Vec4, WindowProperties,
+    PNMImage, Texture, TextureStage, TransparencyAttrib, Vec3, Vec4, WindowProperties,
     globalClock,
 )
 
@@ -20,7 +20,7 @@ SEASON = "summer"
 PLAYER_SPEED = 5.2
 PLAYER_ACCELERATION = 18.0
 PLAYER_DECELERATION = 24.0
-CAMERA_OFFSET = Vec3(10.5, -25.0, 19.0)
+CAMERA_OFFSET = Vec3(5.5, -13.0, 24.0)
 MODEL_FORWARD_OFFSET = 0.0
 
 
@@ -132,13 +132,59 @@ class VirtualJoystick:
         return task.cont
 
 
+def _noise2d(x: float, y: float) -> float:
+    def lattice(ix: int, iy: int) -> float:
+        value = math.sin(ix * 127.1 + iy * 311.7) * 43758.5453
+        return value - math.floor(value)
+
+    ix, iy = math.floor(x), math.floor(y)
+    fx, fy = x - ix, y - iy
+    fx = fx * fx * (3.0 - 2.0 * fx)
+    fy = fy * fy * (3.0 - 2.0 * fy)
+    a = lattice(ix, iy) * (1.0 - fx) + lattice(ix + 1, iy) * fx
+    b = lattice(ix, iy + 1) * (1.0 - fx) + lattice(ix + 1, iy + 1) * fx
+    return a * (1.0 - fy) + b * fy
+
+
+def _make_ground_texture() -> Texture:
+    size = 256
+    image = PNMImage(size, size, 3)
+    for py in range(size):
+        for px in range(size):
+            x, y = px / size, py / size
+            broad = _noise2d(x * 5.5, y * 5.5)
+            moss = _noise2d(x * 9.0 + 17.0, y * 9.0 - 11.0)
+            grain = _noise2d(x * 43.0, y * 43.0)
+            grit = _noise2d(x * 117.0 + 4.0, y * 117.0 - 7.0)
+            damp = max(0.0, min(1.0, 0.42 + (broad - 0.5) * 0.55))
+            moss_mix = max(0.0, min(0.52, (moss - 0.48) * 1.35))
+            fine = (grain - 0.5) * 0.065 + (grit - 0.5) * 0.035
+            soil = (0.25 + damp * 0.15 + fine, 0.17 + damp * 0.10 + fine, 0.105 + damp * 0.055 + fine * 0.7)
+            green = (0.105 + damp * 0.08 + fine, 0.15 + damp * 0.12 + fine, 0.065 + damp * 0.035 + fine * 0.5)
+            image.setXel(
+                px,
+                py,
+                soil[0] * (1.0 - moss_mix) + green[0] * moss_mix,
+                soil[1] * (1.0 - moss_mix) + green[1] * moss_mix,
+                soil[2] * (1.0 - moss_mix) + green[2] * moss_mix,
+            )
+    texture = Texture("wildlands-ground-albedo")
+    texture.load(image)
+    texture.setWrapU(Texture.WMRepeat)
+    texture.setWrapV(Texture.WMRepeat)
+    texture.setMinfilter(Texture.FTLinearMipmapLinear)
+    texture.setMagfilter(Texture.FTLinear)
+    return texture
+
+
 def build_terrain(parent: NodePath, extent: float = 90.0, cells: int = 96) -> NodePath:
-    fmt = GeomVertexFormat.getV3n3c4()
+    fmt = GeomVertexFormat.getV3n3c4t2()
     data = GeomVertexData("terrain", fmt, Geom.UHStatic)
     data.setNumRows((cells + 1) ** 2)
     vertex = GeomVertexWriter(data, "vertex")
     normal = GeomVertexWriter(data, "normal")
     color = GeomVertexWriter(data, "color")
+    texcoord = GeomVertexWriter(data, "texcoord")
     step = (extent * 2.0) / cells
 
     for row in range(cells + 1):
@@ -152,7 +198,8 @@ def build_terrain(parent: NodePath, extent: float = 90.0, cells: int = 96) -> No
             vertex.addData3(x, y, z)
             normal.addData3(n)
             shade = 0.82 + 0.08 * math.sin(x * 0.08) * math.cos(y * 0.06)
-            color.addData4(0.22 * shade, 0.28 * shade, 0.16 * shade, 1.0)
+            color.addData4(shade, shade, shade, 1.0)
+            texcoord.addData2(x * 0.16, y * 0.16)
 
     triangles = GeomTriangles(Geom.UHStatic)
     row_width = cells + 1
@@ -169,6 +216,7 @@ def build_terrain(parent: NodePath, extent: float = 90.0, cells: int = 96) -> No
     terrain = parent.attachNewNode(node)
     terrain.setTwoSided(True)
     terrain.setColor(1, 1, 1, 1)
+    terrain.setTexture(_make_ground_texture(), 1)
     return terrain
 
 
@@ -217,26 +265,28 @@ class WildlandsApp(ShowBase):
         for family in families:
             prototype = self._load_seasonal_model(family)
             if prototype is not None:
+                prototype.flattenStrong()
                 prototypes[family] = prototype
 
         if not prototypes:
-            print("ASSET_NOTICE: no seasonal tree GLBs found; forest instances skipped")
-            return
+            raise RuntimeError("Required seasonal forest GLB models could not be loaded")
 
-        for row in range(-8, 9):
-            for column in range(-8, 9):
+        forest_root = self.render.attachNewNode("ForestInstances")
+        for row in range(-11, 12):
+            for column in range(-11, 12):
                 if abs(row) < 2 and abs(column) < 2:
                     continue
-                x = column * 7.4 + math.sin(row * 2.3 + column) * 1.7
-                y = row * 7.1 + math.cos(column * 1.7 - row) * 1.4
+                x = column * 5.2 + math.sin(row * 2.3 + column) * 1.25
+                y = row * 5.0 + math.cos(column * 1.7 - row) * 1.15
                 species = (row * 7 + column * 11) % len(families)
                 family = families[species]
                 prototype = prototypes.get(family) or next(iter(prototypes.values()))
-                instance = prototype.instanceTo(self.render)
+                instance = prototype.instanceTo(forest_root)
                 instance.setPos(x, y, height_at(x, y))
                 instance.setH((row * 31 + column * 17) % 360)
                 scale = 0.82 + ((row * 13 + column * 5) % 7) * 0.075
                 instance.setScale(scale)
+        forest_root.flattenStrong()
 
     def _load_player_model(self) -> None:
         model = self.loader.loadModel("assets/character/field_explorer.glb")
