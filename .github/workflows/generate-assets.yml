@@ -82,7 +82,7 @@ jobs:
                       raise SystemExit(f"Grass blade texture was not embedded in GLB: {path}")
           print(f"GLB structure, colors and grass textures validated for {len(files)} seasonal files")
           PY
-          python3 -c 'import json,struct,pathlib; p=pathlib.Path("assets/character/field_explorer.glb"); d=p.read_bytes(); m,v,t=struct.unpack_from("<4sII",d); n,k=struct.unpack_from("<I4s",d,12); g=json.loads(d[20:20+n]); assert m==b"glTF" and v==2 and t==len(d); assert g.get("skins") and g.get("animations") and any("Walk" in a.get("name","") for a in g["animations"]) and any("Run" in a.get("name","") for a in g["animations"]); print("Character GLB rig/Walk/Run validation PASS")'
+          python3 -c 'import json,struct,pathlib; p=pathlib.Path("assets/character/field_explorer.glb"); d=p.read_bytes(); m,v,t=struct.unpack_from("<4sII",d); n,k=struct.unpack_from("<I4s",d,12); g=json.loads(d[20:20+n]); assert m==b"glTF" and v==2 and t==len(d); assert g.get("skins") and g.get("animations") and any("Walk" in a.get("name","") for a in g["animations"]) and any("Run" in a.get("name","") for a in g["animations"]); assert len(g.get("images",[]))>=5 and all(m.get("pbrMetallicRoughness",{}).get("baseColorTexture") for m in g.get("materials",[])); print("Character GLB rig, Walk/Run and embedded texture validation PASS")'
           du -h assets/generated/* assets/character/field_explorer.glb
       - name: Commit generated models
         run: |
