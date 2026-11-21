@@ -19,6 +19,18 @@ func _ready()->void:
 	trunk.position.y=1.45
 	trunk.material_override=trunkmat
 	add_child(trunk)
+	# Branches create a fuller silhouette beneath the layered canopy.
+	for branch_i in range(16):
+		var branch := MeshInstance3D.new()
+		var branch_mesh := CylinderMesh.new()
+		branch_mesh.top_radius = 0.035
+		branch_mesh.bottom_radius = 0.075
+		branch_mesh.height = rng.randf_range(0.65, 1.15)
+		branch.mesh = branch_mesh
+		branch.position = Vector3(rng.randf_range(-0.45,0.45),rng.randf_range(1.3,2.6),rng.randf_range(-0.45,0.45))
+		branch.rotation_degrees = Vector3(rng.randf_range(-55,55),rng.randf_range(0,360),rng.randf_range(-55,55))
+		branch.material_override = trunkmat
+		add_child(branch)
 	# Layered overlapping canopy blobs blend into a single organic mass.
 	for i in range(12):
 		var crown:=MeshInstance3D.new()
