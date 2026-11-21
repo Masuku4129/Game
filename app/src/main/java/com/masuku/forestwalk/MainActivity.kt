@@ -83,7 +83,7 @@ class ForestRenderer:GLSurfaceView.Renderer{
     private val fShader="""precision mediump float;varying vec3 vWorld;varying vec3 vNormal;varying vec3 vColor;uniform vec3 uPlayer;uniform float uTime;uniform float uWeather;uniform float uFoliage;
         float hash(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453);}
         float noise(vec2 p){vec2 i=floor(p),f=fract(p);f=f*f*(3.0-2.0);return mix(mix(hash(i),hash(i+vec2(1.,0.)),f.x),mix(hash(i+vec2(0.,1.)),hash(i+vec2(1.,1.)),f.x),f.y);}
-        void main(){float n=noise(vWorld.xz*2.8)*.12+noise(vWorld.xz*13.0)*.045;float leafgrain=noise(vWorld.xz*47.0)*.14+noise(vWorld.xz*91.0)*.08;vec3 base=vColor*(.80+n+leafgrain);vec3 N=normalize(vNormal);vec3 L=normalize(vec3(-.42,.86,.3));float diffuse=max(dot(N,L),0.0);float ambient=.44;float shade=ambient+diffuse*.72;float wet=clamp(uWeather,0.0,1.0);base=mix(base,base*.72+vec3(.035,.045,.05),wet*.55);vec3 viewDir=normalize(vec3(0.0,1.0,0.0));float spec=pow(max(dot(reflect(-L,N),viewDir),0.0),22.0)*wet*.22;float fade=1.0;if(uFoliage>0.5&&vWorld.y>2.3){float d=distance(vWorld.xz,uPlayer.xz);fade=mix(1.0,.18,1.0-smoothstep(.55,3.4,d));}gl_FragColor=vec4(base*shade+spec,fade);}"""
+        void main(){float n=noise(vWorld.xz*2.8)*.12+noise(vWorld.xz*13.0)*.045;float leafgrain=noise(vWorld.xz*47.0)*.14+noise(vWorld.xz*91.0)*.08;float micro=noise(vWorld.xz*83.0);float fleck=noise(vWorld.xz*151.0);vec3 base=vColor*(.78+n+leafgrain)*mix(.84,1.18,micro)*mix(.94,1.07,fleck);vec3 N=normalize(vNormal);vec3 L=normalize(vec3(-.42,.86,.3));float diffuse=max(dot(N,L),0.0);float ambient=.44;float shade=ambient+diffuse*.72;float wet=clamp(uWeather,0.0,1.0);base=mix(base,base*.72+vec3(.035,.045,.05),wet*.55);vec3 viewDir=normalize(vec3(0.0,1.0,0.0));float spec=pow(max(dot(reflect(-L,N),viewDir),0.0),22.0)*wet*.22;float fade=1.0;if(uFoliage>0.5&&vWorld.y>2.3){float d=distance(vWorld.xz,uPlayer.xz);fade=mix(1.0,.18,1.0-smoothstep(.55,3.4,d));}gl_FragColor=vec4(base*shade+spec,fade);}"""
     override fun onSurfaceCreated(gl:GL10?,cfg:EGLConfig?){
         android.opengl.GLES20.glClearColor(.48f,.62f,.72f,1f)
         android.opengl.GLES20.glEnable(android.opengl.GLES20.GL_DEPTH_TEST)
@@ -140,8 +140,8 @@ class ForestRenderer:GLSurfaceView.Renderer{
         android.opengl.GLES20.glClear(android.opengl.GLES20.GL_COLOR_BUFFER_BIT or android.opengl.GLES20.GL_DEPTH_BUFFER_BIT)
         android.opengl.GLES20.glUseProgram(program)
         val aspect=width.toFloat()/height.toFloat()
-        val view=lookAt(playerX,22f,playerZ+6f,playerX,0f,playerZ,0f,1f,0f)
-        val projection=ortho(-11f*aspect,11f*aspect,-11f,11f,.1f,70f)
+        val view=lookAt(playerX,17.5f,playerZ+4.5f,playerX,0f,playerZ,0f,1f,0f)
+        val projection=ortho(-8.5f*aspect,8.5f*aspect,-8.5f,8.5f,.1f,70f)
         val vp=mul(projection,view)
         android.opengl.GLES20.glUniform3f(uPlayer,playerX,0f,playerZ)
         android.opengl.GLES20.glUniform1f(uTime,now/1e9f);android.opengl.GLES20.glUniform1f(uWeather,if(weatherMode==1)1f else 0f)
