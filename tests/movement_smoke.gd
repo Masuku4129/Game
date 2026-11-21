@@ -29,14 +29,14 @@ func _run_test() -> void:
 	press.index = 0
 	press.position = center
 	press.pressed = true
-	Input.parse_input_event(press)
+	joystick._input(press)
 	await process_frame
 
 	var drag := InputEventScreenDrag.new()
 	drag.index = 0
 	drag.position = center + Vector2(0.0, -60.0)
 	drag.relative = Vector2(0.0, -60.0)
-	Input.parse_input_event(drag)
+	joystick._input(drag)
 	await process_frame
 
 	var joystick_value: Vector2 = joystick.get_value()
@@ -59,6 +59,6 @@ func _run_test() -> void:
 	release.index = 0
 	release.position = drag.position
 	release.pressed = false
-	Input.parse_input_event(release)
+	joystick._input(release)
 	print("MOVEMENT_TEST_PASS: joystick=", joystick_value, " displacement=", distance)
 	quit(0)
