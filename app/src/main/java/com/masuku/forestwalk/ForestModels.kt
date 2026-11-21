@@ -75,7 +75,7 @@ internal object ForestModels {
             val a=i*2.399963+rnd.nextDouble()*.28
             val startY=height*(.24f+(i.toFloat()/(branchCount))* .56f)
             val speciesReach=if(species==1) 1.22f else if(species==2) .86f else 1f
-            val reach=height*(.20f+rnd.nextFloat()*.18f)*speciesReach*(1f-(startY/height)*(if(species==1).62f else .22f))
+            val reach=height*(.20f+rnd.nextFloat()*.18f)*speciesReach*(1f-(startY/height)*(if(species==1) .62f else .22f))
             val ex=(cos(a)*reach).toFloat()+leanX*(startY/height)
             val ez=(sin(a)*reach).toFloat()+leanZ*(startY/height)
             val ey=startY+height*(.08f+rnd.nextFloat()*.10f)
