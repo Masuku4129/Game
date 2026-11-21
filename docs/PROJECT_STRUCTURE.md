@@ -16,7 +16,7 @@
 ├── scripts/
 │   ├── main.gd                   # bootstrap: среда, terrain, forest, player, camera
 │   ├── animation/
-│   │   └── procedural_humanoid.gd # первый процедурный articulated gait prototype
+│   │   └── imported_explorer_controller.gd # GLB Skeleton3D + Idle/Walk/Run visual adapter
 │   └── environment/
 │       └── surface_simulation.gd # локальная сетка снега, влажности, уплотнения и стока
 ├── project.godot                 # настройки Godot
@@ -53,11 +53,12 @@
 7. Обновлять эту карту и PROJECT_MASTER.md вместе с существенными архитектурными изменениями.
 
 
-## Библиотека природных моделей\n- 11 семейств GLB: ель, сосна, берёза, кустарник, папоротник, замшелый камень, трава, каменная группа, пень, валежник и грибные группы.\n- Для каждого семейства CI генерирует четыре сезонных варианта; грибные группы имеют отдельные сезонные палитры и зимнее снежное покрытие.\n- Грибные группы добавлены в лесной покров и проверяются environment smoke test.\n\n## Animation pipeline (текущий эксперимент)
+## Библиотека природных моделей\n- 11 семейств GLB: ель, сосна, берёза, кустарник, папоротник, замшелый камень, трава, каменная группа, пень, валежник и грибные группы.\n- Для каждого семейства CI генерирует четыре сезонных варианта; грибные группы имеют отдельные сезонные палитры и зимнее снежное покрытие.\n- Грибные группы добавлены в лесной покров и проверяются environment smoke test.\n\n## Animation pipeline (Godot)
 
-- `scripts/animation/procedural_humanoid.gd` — временный процедурный mesh-rig персонажа, подключённый к Player через метод `set_motion(horizontal_speed, slope)`.
-- Следующая целевая структура (создавать по мере появления реальных файлов): `animation/source/`, `animation/processed/`, `animation/retarget/`, `animation/tests/`, `animation/blender/`.
-- Не считать текущий mesh rig заменой полноценному Skeleton3D, mocap или foot IK.
+- `scripts/animation/imported_explorer_controller.gd` — адаптер импортируемого GLB-персонажа: загружает модель, находит AnimationPlayer, выбирает Idle/Walk/Run и применяет сезонные визуальные варианты.
+- `assets/character/field_explorer.glb` — rigged-ресурс персонажа; анатомию, skinning, текстуры и качество анимаций необходимо улучшать без изменения игрового контроллера и механик.
+- `scripts/animation/procedural_humanoid.gd` — прежний процедурный прототип, не целевое визуальное решение.
+- Новые модели подключаются как визуальные узлы/ресурсы к существующему Player. Не менять движение, столкновения, взаимодействия и игровые состояния ради подгонки модели.
 
 
 ## Визуальный проход 2 — landscape и читаемость сцены
