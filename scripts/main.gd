@@ -647,6 +647,8 @@ func _physics_process(delta: float) -> void:
 
 	if weather_particles != null:
 		weather_particles.global_position = player.global_position + Vector3(0, 9, 0)
+	if weather_particles != null:
+		weather_particles.global_position = player.global_position + Vector3(0, 9, 0)
 	var target_position := player.global_position + CAMERA_OFFSET
 	camera.global_position = camera.global_position.lerp(target_position, 1.0 - exp(-delta * 5.5))
 	camera.look_at(player.global_position + Vector3.UP * 0.7, Vector3.UP)
