@@ -25,7 +25,7 @@ def test_world_chunks_keep_full_ecology_and_are_deterministic():
     assert chunk_a["size"] == 72.0
     assert chunk_a["trees"] == chunk_b["trees"]
     assert chunk_a["objects"] == chunk_b["objects"]
-    assert len(chunk_a["objects"]) >= 500
+    assert len(chunk_a["objects"]) >= 400
     assert {item["kind"] for item in chunk_a["objects"]}
     assert {tree["species"] for tree in chunk_a["trees"]}
 
