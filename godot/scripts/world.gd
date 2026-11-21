@@ -54,6 +54,15 @@ func _create_ground() -> void:
 	mat.roughness = 1.0
 	ground.material_override = mat
 	add_child(ground)
+	var floor_body := StaticBody3D.new()
+	floor_body.name = "GroundCollision"
+	var floor_shape := CollisionShape3D.new()
+	var floor_box := BoxShape3D.new()
+	floor_box.size = Vector3(220, 0.2, 220)
+	floor_shape.shape = floor_box
+	floor_shape.position.y = -0.18
+	floor_body.add_child(floor_shape)
+	add_child(floor_body)
 	# A subtle patchwork of broad, overlapping natural color layers avoids hard tile seams.
 	for i in range(48):
 		var patch := MeshInstance3D.new()
@@ -112,7 +121,7 @@ func _create_player() -> void:
 	player.set_script(PLAYER_SCRIPT)
 	player.name="Player"
 	add_child(player)
-	player.position=Vector3(0,0.15,0)
+	player.position=Vector3(0,0.0,0)
 
 func _create_ui() -> void:
 	var layer := CanvasLayer.new()
