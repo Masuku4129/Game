@@ -6,8 +6,10 @@ const TREE_COUNT := 420
 const PLAYER_SPEED := 5.5
 const PLAYER_ACCELERATION := 22.0
 const PLAYER_DECELERATION := 28.0
-const CAMERA_OFFSET := Vector3(11.5, 12.5, 11.5)
-const CAMERA_FOV := 48.0
+const CAMERA_OFFSET := Vector3(7.0, 7.8, 7.0)
+const CAMERA_FOV := 44.0
+
+@export_enum("spring", "summer", "autumn", "winter") var active_season: String = "summer"
 const HUMANOID_RIG = preload("res://scripts/animation/procedural_humanoid.gd")
 
 var terrain_noise := FastNoiseLite.new()
@@ -20,6 +22,7 @@ var touch_origin := Vector2.ZERO
 var active_touch := -1
 var hud_label: Label
 var joystick: Control
+var asset_mesh_cache: Dictionary = {}
 
 
 func _ready() -> void:
@@ -27,6 +30,7 @@ func _ready() -> void:
 	_create_environment()
 	_create_terrain()
 	_create_forest()
+	_create_ground_cover()
 	_create_player()
 	_create_camera()
 	_create_hud()
@@ -141,78 +145,96 @@ func _create_forest() -> void:
 		if Vector2(x, z).length() < 13.0:
 			continue
 		var species := rng.rand_weighted(PackedFloat32Array([0.38, 0.25, 0.22, 0.15]))
-		var scale := rng.randf_range(0.82, 1.42)
+		var scale := rng.randf_range(0.82, 1.28)
 		var yaw := rng.randf_range(0.0, TAU)
 		var ground := _height_at(x, z)
 		var basis := Basis(Vector3.UP, yaw).scaled(Vector3(scale, scale, scale))
 		transforms[species].append(Transform3D(basis, Vector3(x, ground, z)))
 		counts[species] += 1
 
-	for species in range(4):
+	var families := ["tree_spruce", "tree_pine", "tree_birch", "shrub_mixed"]
+	for species in range(families.size()):
 		if counts[species] == 0:
 			continue
-		var trunk_mesh := CylinderMesh.new()
-		trunk_mesh.top_radius = 0.13 if species != 2 else 0.10
-		trunk_mesh.bottom_radius = 0.22 if species != 2 else 0.16
-		trunk_mesh.height = 4.2 if species != 2 else 4.8
-		trunk_mesh.radial_segments = 8
-		var trunk_material := StandardMaterial3D.new()
-		trunk_material.albedo_color = Color(0.24, 0.17, 0.11) if species != 2 else Color(0.72, 0.68, 0.52)
-		trunk_material.roughness = 1.0
-		var trunks := _make_multimesh(trunk_mesh, trunk_material, counts[species])
-		var crown_mesh: Mesh
-		var crown_material := StandardMaterial3D.new()
-		crown_material.roughness = 0.96
-		match species:
-			0:
-				crown_mesh = _make_cone_mesh(1.45, 5.0, 9)
-				crown_material.albedo_color = Color(0.10, 0.23, 0.15)
-			1:
-				crown_mesh = _make_cone_mesh(1.85, 3.8, 7)
-				crown_material.albedo_color = Color(0.17, 0.29, 0.17)
-			2:
-				crown_mesh = _make_broadleaf_mesh()
-				crown_material.albedo_color = Color(0.29, 0.38, 0.19)
-			_:
-				crown_mesh = _make_cone_mesh(1.55, 4.4, 8)
-				crown_material.albedo_color = Color(0.24, 0.34, 0.20)
-		var crowns := _make_multimesh(crown_mesh, crown_material, counts[species])
+		var mesh := _load_environment_mesh(families[species])
+		if mesh == null:
+			continue
+		var multi := _make_asset_multimesh(mesh, counts[species])
 		for index in range(counts[species]):
-			var base: Transform3D = transforms[species][index]
-			var trunk_offset := 2.1 if species != 2 else 2.4
-			var crown_offset := 4.3 if species != 2 else 5.0
-			trunks.multimesh.set_instance_transform(index, Transform3D(base.basis, base.origin + Vector3.UP * trunk_offset * base.basis.get_scale().y))
-			crowns.multimesh.set_instance_transform(index, Transform3D(base.basis, base.origin + Vector3.UP * crown_offset * base.basis.get_scale().y))
-		add_child(trunks)
-		add_child(crowns)
+			multi.multimesh.set_instance_transform(index, transforms[species][index])
+		add_child(multi)
 
 
-func _make_cone_mesh(radius: float, height: float, segments: int) -> Mesh:
-	var cone := CylinderMesh.new()
-	cone.top_radius = 0.03
-	cone.bottom_radius = radius
-	cone.height = height
-	cone.radial_segments = segments
-	return cone
+func _create_ground_cover() -> void:
+	_scatter_environment_asset("shrub_mixed", 145, 0.72, 1.18, 12001, 10.0)
+	_scatter_environment_asset("fern_cluster", 210, 0.68, 1.22, 12002, 8.0)
+	_scatter_environment_asset("rock_mossy", 105, 0.55, 1.35, 12003, 7.0)
+	_scatter_environment_asset("stump_mossy", 24, 0.72, 1.18, 12004, 14.0)
+	_scatter_environment_asset("fallen_log", 28, 0.72, 1.24, 12005, 14.0)
 
 
-func _make_broadleaf_mesh() -> Mesh:
-	var crown := SphereMesh.new()
-	crown.radius = 1.65
-	crown.height = 3.5
-	crown.radial_segments = 12
-	crown.rings = 8
-	return crown
+func _scatter_environment_asset(asset_name: String, amount: int, min_scale: float, max_scale: float, seed_value: int, clear_radius: float) -> void:
+	var mesh := _load_environment_mesh(asset_name)
+	if mesh == null:
+		return
+	var rng := RandomNumberGenerator.new()
+	rng.seed = seed_value
+	var transforms: Array[Transform3D] = []
+	for index in range(amount):
+		var x := rng.randf_range(-WORLD_EXTENT + 3.0, WORLD_EXTENT - 3.0)
+		var z := rng.randf_range(-WORLD_EXTENT + 3.0, WORLD_EXTENT - 3.0)
+		if Vector2(x, z).length() < clear_radius:
+			continue
+		var scale := rng.randf_range(min_scale, max_scale)
+		var yaw := rng.randf_range(0.0, TAU)
+		var basis := Basis(Vector3.UP, yaw).scaled(Vector3(scale, scale, scale))
+		transforms.append(Transform3D(basis, Vector3(x, _height_at(x, z), z)))
+	if transforms.is_empty():
+		return
+	var multi := _make_asset_multimesh(mesh, transforms.size())
+	for index in range(transforms.size()):
+		multi.multimesh.set_instance_transform(index, transforms[index])
+	add_child(multi)
 
 
-func _make_multimesh(mesh: Mesh, material: Material, count: int) -> MultiMeshInstance3D:
+func _load_environment_mesh(asset_name: String) -> Mesh:
+	var cache_key := asset_name + "_" + active_season
+	if asset_mesh_cache.has(cache_key):
+		return asset_mesh_cache[cache_key] as Mesh
+	var resource_path := "res://assets/generated/%s_%s.glb" % [asset_name, active_season]
+	var packed_scene := load(resource_path) as PackedScene
+	if packed_scene == null:
+		push_error("Missing seasonal environment model: " + resource_path)
+		return null
+	var model_root := packed_scene.instantiate()
+	var mesh_instance := _find_mesh_instance(model_root)
+	if mesh_instance == null or mesh_instance.mesh == null:
+		push_error("Seasonal model contains no MeshInstance3D: " + resource_path)
+		model_root.free()
+		return null
+	var mesh := mesh_instance.mesh
+	asset_mesh_cache[cache_key] = mesh
+	model_root.free()
+	return mesh
+
+
+func _find_mesh_instance(node: Node) -> MeshInstance3D:
+	if node is MeshInstance3D and (node as MeshInstance3D).mesh != null:
+		return node as MeshInstance3D
+	for child in node.get_children():
+		var found := _find_mesh_instance(child)
+		if found != null:
+			return found
+	return null
+
+
+func _make_asset_multimesh(mesh: Mesh, count: int) -> MultiMeshInstance3D:
 	var multi := MultiMesh.new()
 	multi.transform_format = MultiMesh.TRANSFORM_3D
 	multi.mesh = mesh
 	multi.instance_count = count
 	var instance := MultiMeshInstance3D.new()
 	instance.multimesh = multi
-	instance.material_override = material
 	return instance
 
 
