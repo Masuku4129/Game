@@ -1,17 +1,135 @@
 from __future__ import annotations
 
 import math
-from world.terrain import height_at
 
-from direct.showbase.ShowBase import ShowBase
 from direct.actor.Actor import Actor
+from direct.gui.DirectGui import DirectFrame
+from direct.gui import DirectGuiGlobals as DGG
+from direct.showbase.ShowBase import ShowBase
 from panda3d.core import (
     AmbientLight, DirectionalLight, Fog, Geom, GeomNode, GeomTriangles,
     GeomVertexData, GeomVertexFormat, GeomVertexWriter, NodePath,
-    Vec3, Vec4, WindowProperties,
+    PNMImage, Texture, TransparencyAttrib, Vec3, Vec4, WindowProperties,
+    globalClock,
 )
 
+from world.movement import camera_relative_direction, heading_for_direction
+from world.terrain import height_at
+
 SEASON = "summer"
+PLAYER_SPEED = 5.2
+PLAYER_ACCELERATION = 18.0
+PLAYER_DECELERATION = 24.0
+CAMERA_OFFSET = Vec3(10.5, -25.0, 19.0)
+MODEL_FORWARD_OFFSET = 0.0
+
+
+def _circle_texture(name: str, edge_alpha: float, fill_alpha: float) -> Texture:
+    image = PNMImage(128, 128, 4)
+    for y in range(128):
+        for x in range(128):
+            dx = (x + 0.5 - 64.0) / 64.0
+            dy = (y + 0.5 - 64.0) / 64.0
+            distance = math.sqrt(dx * dx + dy * dy)
+            if distance > 1.0:
+                alpha = 0.0
+            elif distance > 0.88:
+                alpha = edge_alpha
+            else:
+                alpha = fill_alpha
+            image.setXelA(x, y, 0.92, 0.96, 1.0, alpha)
+    texture = Texture(name)
+    texture.load(image)
+    return texture
+
+
+class VirtualJoystick:
+    """Single-pointer touch joystick; Android touch is delivered as mouse1."""
+
+    def __init__(self, app: ShowBase) -> None:
+        self.app = app
+        self.center_x = -0.68
+        self.center_y = -0.68
+        self.radius = 0.23
+        self.value_x = 0.0
+        self.value_y = 0.0
+        self.active = False
+        self.base_texture = _circle_texture("joystick-base", 0.72, 0.14)
+        self.knob_texture = _circle_texture("joystick-knob", 0.92, 0.55)
+
+        self.base = DirectFrame(
+            parent=app.aspect2d,
+            frameTexture=self.base_texture,
+            frameColor=(1, 1, 1, 0.64),
+            frameSize=(-self.radius, self.radius, -self.radius, self.radius),
+            relief=DGG.FLAT,
+            sortOrder=50,
+        )
+        self.base.setPos(self.center_x, 0, self.center_y)
+        knob_radius = self.radius * 0.40
+        self.knob = DirectFrame(
+            parent=app.aspect2d,
+            frameTexture=self.knob_texture,
+            frameColor=(1, 1, 1, 0.82),
+            frameSize=(-knob_radius, knob_radius, -knob_radius, knob_radius),
+            relief=DGG.FLAT,
+            sortOrder=51,
+        )
+        self.knob.setPos(self.center_x, 0, self.center_y)
+        self.base.setTransparency(TransparencyAttrib.MAlpha)
+        self.knob.setTransparency(TransparencyAttrib.MAlpha)
+
+        app.accept("mouse1", self._on_down)
+        app.accept("mouse1-up", self._on_up)
+        app.taskMgr.add(self._update, "virtual-joystick-update")
+
+    def _pointer(self) -> tuple[float, float] | None:
+        watcher = self.app.mouseWatcherNode
+        if not watcher.hasMouse():
+            return None
+        return watcher.getMouseX(), watcher.getMouseY()
+
+    def _on_down(self) -> None:
+        pointer = self._pointer()
+        if pointer is None:
+            return
+        x, y = pointer
+        if math.hypot(x - self.center_x, y - self.center_y) > self.radius * 1.45:
+            return
+        self.active = True
+        self._set_from_pointer(x, y)
+
+    def _on_up(self) -> None:
+        self.active = False
+        self.value_x = 0.0
+        self.value_y = 0.0
+        self.knob.setPos(self.center_x, 0, self.center_y)
+
+    def _set_from_pointer(self, x: float, y: float) -> None:
+        dx = (x - self.center_x) / self.radius
+        dy = (y - self.center_y) / self.radius
+        length = math.hypot(dx, dy)
+        if length > 1.0:
+            dx /= length
+            dy /= length
+        deadzone = 0.075
+        if math.hypot(dx, dy) < deadzone:
+            dx = dy = 0.0
+        self.value_x = dx
+        self.value_y = dy
+        knob_range = self.radius * 0.55
+        self.knob.setPos(
+            self.center_x + dx * knob_range,
+            0,
+            self.center_y + dy * knob_range,
+        )
+
+    def _update(self, task):
+        if self.active:
+            pointer = self._pointer()
+            if pointer is not None:
+                self._set_from_pointer(*pointer)
+        return task.cont
 
 
 def build_terrain(parent: NodePath, extent: float = 90.0, cells: int = 96) -> NodePath:
@@ -60,6 +178,7 @@ class WildlandsApp(ShowBase):
         props = WindowProperties()
         props.setTitle("Wildlands")
         props.setSize(1280, 720)
+        props.setFullscreen(True)
         self.win.requestProperties(props)
         self.disableMouse()
         self.setBackgroundColor(0.47, 0.61, 0.68, 1)
@@ -80,17 +199,16 @@ class WildlandsApp(ShowBase):
         build_terrain(self.render)
         self._build_forest()
         self._load_player_model()
-
-        self.camera.setPos(10.5, -25.0, 19.0)
-        self.camera.lookAt(0, 0, 0)
+        self.player_velocity = Vec3(0, 0, 0)
+        self.joystick = VirtualJoystick(self)
+        self.camera.setPos(CAMERA_OFFSET)
+        self.camera.lookAt(0, 0, height_at(0, 0) + 0.8)
         self.taskMgr.add(self._update, "game-update")
 
     def _load_seasonal_model(self, family: str) -> NodePath | None:
-        model_path = f"assets/generated/{family}_{SEASON}.glb"
-        model = self.loader.loadModel(model_path)
+        model = self.loader.loadModel(f"assets/generated/{family}_{SEASON}.glb")
         if model.isEmpty():
             return None
-        model.flattenStrong()
         return model
 
     def _build_forest(self) -> None:
@@ -113,11 +231,8 @@ class WildlandsApp(ShowBase):
                 y = row * 7.1 + math.cos(column * 1.7 - row) * 1.4
                 species = (row * 7 + column * 11) % len(families)
                 family = families[species]
-                prototype = prototypes.get(family)
-                if prototype is None:
-                    prototype = next(iter(prototypes.values()))
+                prototype = prototypes.get(family) or next(iter(prototypes.values()))
                 instance = prototype.instanceTo(self.render)
-                instance.show()
                 instance.setPos(x, y, height_at(x, y))
                 instance.setH((row * 31 + column * 17) % 360)
                 scale = 0.82 + ((row * 13 + column * 5) % 7) * 0.075
@@ -125,21 +240,73 @@ class WildlandsApp(ShowBase):
 
     def _load_player_model(self) -> None:
         model = self.loader.loadModel("assets/character/field_explorer.glb")
-        if not model.isEmpty():
-            actor = Actor(model)
-            actor.reparentTo(self.render)
-            actor.setPos(0, 0, height_at(0, 0))
-            actor.setScale(1.0)
-            clips = actor.getAnimNames()
-            walk_clip = next((clip for clip in clips if "walk" in clip.lower()), None)
-            if walk_clip is not None:
-                actor.loop(walk_clip)
-            self.player_model = actor
-            print(f"PLAYER_MODEL_LOADED: clips={clips}")
+        if model.isEmpty():
+            raise RuntimeError("Required authored explorer GLB could not be loaded")
+        actor = Actor(model)
+        actor.reparentTo(self.render)
+        actor.setPos(0, 0, height_at(0, 0))
+        actor.setScale(1.0)
+        self.player_model = actor
+        clips = actor.getAnimNames()
+        self.animation_clips = {
+            "idle": next((clip for clip in clips if "idle" in clip.lower()), None),
+            "walk": next((clip for clip in clips if "walk" in clip.lower()), None),
+            "run": next((clip for clip in clips if "run" in clip.lower()), None),
+        }
+        self.current_animation = None
+        self._set_animation("idle")
+        print(f"PLAYER_MODEL_LOADED: clips={clips}")
+
+    def _set_animation(self, state: str) -> None:
+        clip = self.animation_clips.get(state)
+        if clip is None or clip == self.current_animation:
             return
-        print("ASSET_NOTICE: explorer GLB not found; no substitute primitive spawned")
+        if self.current_animation is not None:
+            self.player_model.stop(self.current_animation)
+        self.player_model.loop(clip)
+        self.current_animation = clip
 
     def _update(self, task):
+        dt = min(globalClock.getDt(), 0.05)
+        input_x = self.joystick.value_x
+        input_y = self.joystick.value_y
+        camera_heading = math.radians(self.camera.getH())
+        direction_x, direction_y = camera_relative_direction(
+            input_x, input_y, camera_heading
+        )
+        moving = math.hypot(direction_x, direction_y) > 0.01
+        target_speed = PLAYER_SPEED if moving else 0.0
+        target_x = direction_x * target_speed
+        target_y = direction_y * target_speed
+        rate = PLAYER_ACCELERATION if moving else PLAYER_DECELERATION
+        blend = 1.0 - math.exp(-rate * dt)
+        self.player_velocity.x += (target_x - self.player_velocity.x) * blend
+        self.player_velocity.y += (target_y - self.player_velocity.y) * blend
+
+        position = self.player_model.getPos(self.render)
+        position.x += self.player_velocity.x * dt
+        position.y += self.player_velocity.y * dt
+        position.z = height_at(position.x, position.y)
+        self.player_model.setPos(self.render, position)
+
+        speed = math.hypot(self.player_velocity.x, self.player_velocity.y)
+        if speed > 0.12:
+            heading = heading_for_direction(
+                self.player_velocity.x, self.player_velocity.y
+            )
+            self.player_model.setH(heading + MODEL_FORWARD_OFFSET)
+            self._set_animation("run" if speed > PLAYER_SPEED * 0.72 else "walk")
+        else:
+            self._set_animation("idle")
+
+        target_camera = position + CAMERA_OFFSET
+        camera_blend = 1.0 - math.exp(-5.0 * dt)
+        current_camera = self.camera.getPos(self.render)
+        self.camera.setPos(
+            self.render,
+            current_camera + (target_camera - current_camera) * camera_blend,
+        )
+        self.camera.lookAt(position + Vec3(0, 0, 0.8))
         return task.cont
 
 
