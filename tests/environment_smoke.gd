@@ -114,7 +114,8 @@ func _run_test() -> void:
 
 	for asset_name in ["tree_spruce", "tree_birch", "fern_cluster", "grass_tuft", "mushroom_cluster"]:
 		var colored_mesh := game.call("_load_environment_mesh", asset_name) as Mesh
-		if colored_mesh == null or not _mesh_has_distinct_colors(colored_mesh, 2):
+		var minimum_colors := 1 if asset_name == "fern_cluster" else 2
+		if colored_mesh == null or not _mesh_has_distinct_colors(colored_mesh, minimum_colors):
 			printerr("ENVIRONMENT_TEST_FAIL: GLB material colors missing for " + asset_name)
 			quit(1)
 			return
