@@ -34,9 +34,11 @@ The current Godot project remains intact while the Python runtime is proven. Pyt
 
 - Isolated port branch: `python-panda3d-port`.
 - Added a Panda3D Python scene bootstrap and deterministic terrain height-field module.
+- Added a single-finger on-screen joystick, camera-relative movement math, smoothed acceleration/deceleration, travel-facing rotation and idle/walk/run animation-state selection.
+- Set the camera elevation to approximately 60 degrees, increased the forest placement grid to roughly 500 tree instances and added a procedural tiled soil/moss albedo texture.
 - The scene loads existing seasonal spruce, pine and birch GLBs, and the existing rigged explorer GLB; no substitute primitive is spawned when the authored character model is absent.
 - Added a GitHub Actions workflow that tests terrain sampling, downloads the official Panda3D 1.11.0 Android ARM64 wheel, converts included GLBs to BAM during packaging, builds an AAB and converts it to a signed universal APK.
-- Local deterministic terrain checks: 2 passed.
+- Local pure-Python checks: 6 passed (terrain determinism/continuity and camera-relative movement/heading).
 - The Android workflow has not yet been confirmed successful. No APK from the Python port is available yet.
 - The current scene does not yet include the final mobile joystick, camera-follow movement, full weather/surface simulation or all seasonal runtime transitions.
 - Physical-device rendering and performance remain unverified.
