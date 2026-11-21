@@ -32,6 +32,9 @@ class MainActivity : Activity() {
         root.addView(pad,params)
         val title=TextView(this).apply{text="FOREST WALK";setTextColor(Color.WHITE);textSize=12f;alpha=.7f;setPadding(20,12,20,12)}
         root.addView(title,FrameLayout.LayoutParams(-2,-2,Gravity.TOP or Gravity.LEFT))
+        val weatherButton=TextView(this).apply{text="☀";setTextColor(Color.WHITE);textSize=24f;gravity=Gravity.CENTER;setPadding(24,16,24,16);setBackgroundColor(0x55303030.toInt())}
+        weatherButton.setOnClickListener { val mode=game.renderer.nextWeather(); weatherButton.text=when(mode){1->"☔";2->"❄";else->"☀"} }
+        root.addView(weatherButton,FrameLayout.LayoutParams(-2,-2,Gravity.TOP or Gravity.RIGHT).apply{topMargin=18;rightMargin=24})
         setContentView(root)
     }
     override fun onPause(){super.onPause();game.onPause()}
@@ -63,7 +66,8 @@ private data class TreeChunk(val x:Float,val z:Float,val mesh:GpuMesh)
 private data class DetailChunk(val x:Float,val z:Float,val mesh:GpuMesh)
 
 class ForestRenderer:GLSurfaceView.Renderer{
-    @Volatile var mx=0f;@Volatile var my=0f
+    @Volatile var mx=0f;@Volatile var my=0f;@Volatile private var weatherMode=0;private lateinit var weatherFx:ForestWeatherParticles
+    fun nextWeather():Int {weatherMode=(weatherMode+1)%3;return weatherMode}
     private var program=0
     private var aPosition=0;private var aNormal=0;private var aColor=0
     private var uMvp=0;private var uModel=0;private var uPlayer=0;private var uTime=0;private var uWeather=0;private var uFoliage=0;private var uWalk=0
@@ -87,7 +91,7 @@ class ForestRenderer:GLSurfaceView.Renderer{
         program=link(vShader,fShader)
         aPosition=android.opengl.GLES20.glGetAttribLocation(program,"aPos");aNormal=android.opengl.GLES20.glGetAttribLocation(program,"aNormal");aColor=android.opengl.GLES20.glGetAttribLocation(program,"aColor")
         uMvp=android.opengl.GLES20.glGetUniformLocation(program,"uMVP");uModel=android.opengl.GLES20.glGetUniformLocation(program,"uModel");uPlayer=android.opengl.GLES20.glGetUniformLocation(program,"uPlayer");uTime=android.opengl.GLES20.glGetUniformLocation(program,"uTime");uWeather=android.opengl.GLES20.glGetUniformLocation(program,"uWeather");uFoliage=android.opengl.GLES20.glGetUniformLocation(program,"uFoliage");uWalk=android.opengl.GLES20.glGetUniformLocation(program,"uWalk")
-        groundMesh=makeGround();playerMesh=upload(ForestModels.character(123));shrubMesh=makeShrub()
+        groundMesh=makeGround();playerMesh=upload(ForestModels.character(123));shrubMesh=makeShrub();weatherFx=ForestWeatherParticles();weatherFx.init()
         val speciesMeshes=ArrayList<ForestMesh>()
         for(i in 0 until 14)speciesMeshes.add(ForestModels.tree(300+i,5.6f+(i%5)*.65f).mesh)
         // Static trees are CPU-merged into bounded chunks to reduce hundreds of draw calls.
@@ -140,7 +144,8 @@ class ForestRenderer:GLSurfaceView.Renderer{
         val projection=ortho(-11f*aspect,11f*aspect,-11f,11f,.1f,70f)
         val vp=mul(projection,view)
         android.opengl.GLES20.glUniform3f(uPlayer,playerX,0f,playerZ)
-        android.opengl.GLES20.glUniform1f(uTime,now/1e9f);android.opengl.GLES20.glUniform1f(uWeather,0f)
+        android.opengl.GLES20.glUniform1f(uTime,now/1e9f);android.opengl.GLES20.glUniform1f(uWeather,if(weatherMode==1)1f else 0f)
+        android.opengl.GLES20.glClearColor(if(weatherMode==1).24f else if(weatherMode==2).66f else .48f,if(weatherMode==1).30f else if(weatherMode==2).72f else .62f,if(weatherMode==1).36f else if(weatherMode==2).79f else .72f,1f)
         draw(groundMesh,vp,identity())
         for(chunk in treeChunks){val dx=chunk.x-playerX;val dz=chunk.z-playerZ;if(dx*dx+dz*dz>1400f)continue
             val model=identity();android.opengl.Matrix.translateM(model,0,chunk.x,0f,chunk.z)
@@ -156,6 +161,7 @@ class ForestRenderer:GLSurfaceView.Renderer{
         val moving=abs(mx)+abs(my)>.06f;val bob=if(moving)sin(now/95000000.0).toFloat()*.035f else 0f
         val pm=identity();android.opengl.Matrix.translateM(pm,0,playerX,.0f+bob,playerZ);android.opengl.Matrix.rotateM(pm,0,heading*180f/PI.toFloat(),0f,1f,0f)
         draw(playerMesh,vp,pm,false,if(moving)1f else 0f)
+        weatherFx.render(vp,playerX,playerZ,dt,weatherMode)
     }
     private fun draw(mesh:GpuMesh,vp:FloatArray,model:FloatArray,foliage:Boolean=false,walking:Float=0f){
         android.opengl.GLES20.glUniform1f(uFoliage,if(foliage)1f else 0f);android.opengl.GLES20.glUniform1f(uWalk,walking)
