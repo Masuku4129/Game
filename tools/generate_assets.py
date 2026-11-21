@@ -359,6 +359,6 @@ def stone_cluster():
     finish("stone_cluster",[])
 
 
-undefinedfor build in (spruce,pine,birch,shrub,fern,rock,grass_tuft,stone_cluster,stump,fallen_log):
+for build in (spruce,pine,birch,shrub,fern,rock,grass_tuft,stone_cluster,stump,fallen_log):
     build()
 print("ASSET_BATCH_COMPLETE", OUT)
