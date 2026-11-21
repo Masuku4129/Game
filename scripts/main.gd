@@ -312,7 +312,11 @@ func _process(delta: float) -> void:
 		terrain_material.set_shader_parameter("surface_wetness", wetness_accumulation)
 		_apply_environment_wetness(wetness_accumulation)
 		_apply_environment_snow(snow_accumulation)
-	var wind_strength := 0.035 if weather_mode == "clear" else 0.075
+	var wind_strength := 0.035
+	if weather_mode == "rain":
+		wind_strength = 0.11
+	elif weather_mode == "snow":
+		wind_strength = 0.085
 	for batch in wind_batches:
 		var instance := batch["node"] as MultiMeshInstance3D
 		if not is_instance_valid(instance):
@@ -443,6 +447,8 @@ func _set_weather(mode: String) -> void:
 			process_material.initial_velocity_min = 10.0
 			process_material.initial_velocity_max = 14.0
 			process_material.gravity = Vector3(0, -1.5, 0)
+			process_material.direction = Vector3(0.16, -1.0, 0.08)
+			process_material.spread = 8.0
 			particle_mesh.size = Vector2(0.018, 0.30)
 			particle_material.albedo_color = Color(0.62, 0.76, 0.86, 0.72)
 			snow_accumulation = 0.0
@@ -459,6 +465,8 @@ func _set_weather(mode: String) -> void:
 			process_material.initial_velocity_min = 0.8
 			process_material.initial_velocity_max = 2.0
 			process_material.gravity = Vector3(0, -0.28, 0)
+			process_material.direction = Vector3(0.24, -1.0, 0.16)
+			process_material.spread = 18.0
 			particle_mesh.size = Vector2(0.075, 0.075)
 			particle_material.albedo_color = Color(0.92, 0.96, 1.0, 0.92)
 			wetness_accumulation = 0.08
