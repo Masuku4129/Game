@@ -160,14 +160,47 @@ uniform float surface_wetness = 0.0;
 uniform sampler2D surface_state_texture : filter_linear, repeat_disable;
 varying vec4 terrain_vertex_color;
 varying vec4 local_surface_state;
+varying vec3 terrain_world_position;
+
+float hash21(vec2 p) {
+    p = fract(p * vec2(123.34, 456.21));
+    p += dot(p, p + 45.32);
+    return fract(p.x * p.y);
+}
+
+float value_noise(vec2 p) {
+    vec2 cell = floor(p);
+    vec2 local = fract(p);
+    local = local * local * (3.0 - 2.0 * local);
+    float a = hash21(cell);
+    float b = hash21(cell + vec2(1.0, 0.0));
+    float c = hash21(cell + vec2(0.0, 1.0));
+    float d = hash21(cell + vec2(1.0, 1.0));
+    return mix(mix(a, b, local.x), mix(c, d, local.x), local.y);
+}
+
 void vertex() {
     terrain_vertex_color = COLOR;
     local_surface_state = textureLod(surface_state_texture, UV2, 0.0);
     VERTEX.y += local_surface_state.r * 0.42 - local_surface_state.b * 0.10 - local_surface_state.a * 0.035;
+    terrain_world_position = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;
 }
 void fragment() {
-    vec3 surface_color = texture(ground_albedo, UV * 1.0).rgb;
+    vec2 ground_coordinates = terrain_world_position.xz;
+    vec3 surface_color = texture(ground_albedo, UV * 1.45).rgb;
     vec3 ground = surface_color * terrain_vertex_color.rgb;
+
+    // Multi-scale soil grain: broad mottling, fine grit and sparse darker
+    // mineral/organic flecks. World-space sampling avoids stretching with UVs.
+    float broad_grain = value_noise(ground_coordinates * 0.72);
+    float fine_grain = value_noise(ground_coordinates * 5.8);
+    float micro_grain = value_noise(ground_coordinates * 23.0);
+    float flecks = smoothstep(0.76, 0.94, value_noise(ground_coordinates * 11.5));
+    float mottling = (broad_grain - 0.5) * 0.075 + (fine_grain - 0.5) * 0.052;
+    float grit = (micro_grain - 0.5) * 0.035;
+    ground *= 1.0 + mottling + grit;
+    ground = mix(ground, ground * vec3(0.58, 0.52, 0.43), flecks * 0.16);
+
     float snow_amount = clamp(local_surface_state.r, 0.0, 1.0);
     float wet_amount = clamp(local_surface_state.g, 0.0, 1.0);
     float track_darkening = local_surface_state.b * 0.22;
@@ -176,8 +209,8 @@ void fragment() {
     ground *= 1.0 - track_darkening;
     ground = mix(ground, vec3(0.78, 0.84, 0.88), snow_amount);
     ALBEDO = mix(ground, ground * vec3(0.66, 0.70, 0.72), wet_amount * 0.28);
-    NORMAL_MAP = texture(ground_normal, UV).rgb;
-    NORMAL_MAP_DEPTH = 0.30;
+    NORMAL_MAP = texture(ground_normal, UV * 1.45).rgb;
+    NORMAL_MAP_DEPTH = 0.38;
     ROUGHNESS = mix(0.97, 0.22, wet_amount * 0.72);
 }
 """
