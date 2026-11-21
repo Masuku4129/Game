@@ -270,6 +270,7 @@ func _create_player() -> void:
 	player_visual.set_script(HUMANOID_RIG)
 	player.add_child(player_visual)
 	add_child(player)
+	player_visual.call("set_season", active_season)
 
 
 func _create_camera() -> void:
