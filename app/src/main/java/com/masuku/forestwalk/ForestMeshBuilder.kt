@@ -84,6 +84,29 @@ internal class ForestMeshBuilder {
         }
     }
 
+    /** Append a mesh into this accumulator with a uniform scale, yaw, and translation. */
+    fun append(mesh:ForestMesh,tx:Float,ty:Float,tz:Float,scale:Float=1f,yaw:Float=0f) {
+        val base=vertexCount
+        val src=mesh.vertexBuffer.duplicate(); src.position(0)
+        val c=cos(yaw); val sn=sin(yaw)
+        repeat(mesh.vertexCount) {
+            val x=src.get(); val y=src.get(); val z=src.get()
+            val nx=src.get(); val ny=src.get(); val nz=src.get()
+            val r=src.get(); val g=src.get(); val b=src.get()
+            val px=(x*c-z*sn)*scale+tx; val pz=(x*sn+z*c)*scale+tz
+            val qnx=nx*c-nz*sn; val qnz=nx*sn+nz*c
+            vertices.add(px);vertices.add(y*scale+ty);vertices.add(pz)
+            vertices.add(qnx);vertices.add(ny);vertices.add(qnz)
+            vertices.add(r);vertices.add(g);vertices.add(b)
+            vertexCount++
+        }
+        val ix=mesh.indexBuffer.duplicate(); ix.position(0)
+        repeat(mesh.indexCount) {
+            val local=ix.get().toInt() and 0xffff
+            indices.add((base+local).toShort())
+        }
+    }
+
     fun snapshot(): ForestMesh {
         val v=ByteBuffer.allocateDirect(vertices.size*4).order(ByteOrder.nativeOrder()).asFloatBuffer()
         for(f in vertices) v.put(f)
