@@ -94,14 +94,14 @@ class ForestRenderer: android.opengl.GLSurfaceView.Renderer {
     override fun onDrawFrame(gl:javax.microedition.khronos.opengles.GL10?) {
         val now=System.nanoTime(); val dt=((now-last)/1e9).toFloat().coerceAtMost(.05f); last=now
         val speed=3.1f
-        px += mx*speed*dt; pz += my*speed*dt
+        px += mx*speed*dt; pz -= my*speed*dt
         if(abs(mx)+abs(my)>.08f) angle=atan2(mx,my)
         android.opengl.GLES20.glClear(android.opengl.GLES20.GL_COLOR_BUFFER_BIT or android.opengl.GLES20.GL_DEPTH_BUFFER_BIT)
         android.opengl.GLES20.glUseProgram(program)
         val aspect=1.78f
         val proj=perspective(58f,aspect,.1f,100f)
         // Fixed close overhead camera: steep angle, centered on the walker, never rotates.
-        val view=lookAt(px,13.5f,pz-4.8f,px,0.0f,pz+0.5f,0f,1f,0f)
+        val view=lookAt(px,13.5f,pz+4.8f,px,0.0f,pz-0.5f,0f,1f,0f)
         val vp=mul(proj,view)
         draw(vp,0f,-.18f,0f,90f,.12f,90f,0xFF496B3B.toInt())
         for(o in objects) {
