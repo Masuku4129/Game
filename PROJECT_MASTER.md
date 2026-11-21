@@ -593,3 +593,13 @@
 - Оптимизация через LOD, разумные материалы и бюджет костей/полигонов без возврата к примитивному силуэту.
 
 Критерий приёмки: в игровом ракурсе персонаж должен однозначно читаться как живой человек в детализированной одежде, а не как процедурный манекен. Скриншот/рендер модели сам по себе не подтверждает интеграцию: обязательны запуск сцены и проверка анимации в игре. Реальную производительность и визуальное качество на Android подтверждать только после теста на устройстве.
+
+
+## 27. Rigged field-explorer character work (21.11.2026)
+
+- Added Blender headless generator `tools/generate_character.py` for a separate 19th-century male field-explorer GLB: layered coat/shirt/trousers, boots, leather pack/straps, scarf, face features, hair/beard and hardware.
+- Added packed GLB-compatible textile albedo images for clothing, skin, leather, hair and metal materials; Blender procedural node-only shaders are not relied upon as the sole color source.
+- Added `scripts/animation/imported_explorer_controller.gd` to load the GLB, select Idle/Walk/Run animation clips according to player speed, blend transitions, loop locomotion clips and apply season tints.
+- Player visual now points to the imported character controller instead of the old primitive procedural rig. Environment smoke test checks Skeleton3D, AnimationPlayer and Walk/Run clips.
+- Asset workflow now generates and validates the character GLB in addition to seasonal environmental models; stale asset/APK runs are serialized/cancelled to avoid duplicate work.
+- **Verification status:** Blender export was observed to complete in a CI job; full GLB validation, generation commit, Godot import, animation tests, APK export and device visual/performance testing remain pending. This first rig uses rigid per-part bone weights rather than full smooth deformation; it is an initial integration pass and must be improved after checking in-game appearance.
