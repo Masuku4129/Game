@@ -36,11 +36,11 @@ The current Godot project remains intact while the Python runtime is proven. Pyt
 - Added a Panda3D Python scene bootstrap and deterministic terrain height-field module.
 - Added a single-finger on-screen joystick, camera-relative movement math, smoothed acceleration/deceleration, travel-facing rotation and idle/walk/run animation-state selection.
 - Set the camera elevation to approximately 60 degrees and added a procedural tiled soil/moss albedo texture generated in CI rather than at app startup.
-- Added CI-time baking of four seasonal forest scenes into flattened BAM assets (about 500 mixed spruce/pine/birch instances per season) to avoid rebuilding the forest on the phone.
+- Added CI-time baking of four seasonal forest scenes into flattened BAM assets (520 mixed spruce/pine/birch instances per season) to avoid rebuilding the forest on the phone.
 - Enabled the simple PBR pipeline for imported GLB materials.
 - The scene loads existing seasonal spruce, pine and birch GLBs, and the existing rigged explorer GLB; no substitute primitive is spawned when the authored character model is absent.
 - Added a GitHub Actions workflow that tests terrain and movement, downloads the official Panda3D 1.11.0 Android ARM64 wheel, bakes ground/forest assets, converts the character GLB to BAM during packaging, builds an AAB and converts it to a signed universal APK.
-- Local pure-Python checks: 6 passed (terrain determinism/continuity and camera-relative movement/heading).
+- Local pure-Python checks: 10 passed (terrain determinism/continuity, camera-relative movement/heading, forest density/layout and seasonal asset presence).
 - The Android workflow has not yet been confirmed successful. No APK from the Python port is available yet.
 - The current scene includes a first-pass single-finger joystick and camera-follow movement. Simultaneous multitouch, full weather/surface simulation and seasonal runtime transitions remain to be ported.
 - Physical-device rendering and performance remain unverified.
