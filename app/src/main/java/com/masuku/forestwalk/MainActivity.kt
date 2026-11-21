@@ -136,7 +136,7 @@ class ForestRenderer:GLSurfaceView.Renderer{
     override fun onDrawFrame(gl:GL10?){
         val now=System.nanoTime();val dt=((now-last)/1e9).toFloat().coerceIn(0f,.05f);last=now
         playerX+=mx*3.5f*dt;playerZ-=my*3.5f*dt
-        if(abs(mx)+abs(my)>.06f)heading=atan2(mx,my)
+        if(abs(mx)+abs(my)>.06f)heading=atan2(mx,my)+PI.toFloat()
         android.opengl.GLES20.glClear(android.opengl.GLES20.GL_COLOR_BUFFER_BIT or android.opengl.GLES20.GL_DEPTH_BUFFER_BIT)
         android.opengl.GLES20.glUseProgram(program)
         val aspect=width.toFloat()/height.toFloat()
