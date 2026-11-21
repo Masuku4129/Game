@@ -119,7 +119,7 @@ func _route_surface_water(dt: float, weather: String) -> void:
 			var lowest := index
 			var lowest_height := elevation[index] + moisture[index] * 0.025
 			for offset in [-RESOLUTION, 1, RESOLUTION, -1]:
-				var candidate := index + offset
+				var candidate: int = index + int(offset)
 				var candidate_height := elevation[candidate] + moisture[candidate] * 0.025
 				if candidate_height < lowest_height:
 					lowest_height = candidate_height
