@@ -71,6 +71,9 @@ func set_season(season: String) -> void:
 	}
 	var coat_color: Color = palette.get(season, palette["summer"])
 	_apply_seasonal_coat(model_root, coat_color)
+	_toggle_named_node(model_root, "Neck scarf", season != "summer")
+	_toggle_named_node(model_root, "Scarf tail", season in ["autumn", "winter"])
+	_toggle_named_node(model_root, "Winter fur collar", season == "winter")
 	# Winter scarf is already part of the layered model; shift toward wool-like muted tones.
 	if season == "winter":
 		_apply_named_material_tint(model_root, "Scarf", Color(0.32, 0.34, 0.30))
@@ -105,3 +108,9 @@ func _apply_named_material_tint(node: Node, label: String, tint: Color) -> void:
 					mesh_node.set_surface_override_material(surface, copy)
 	for child in node.get_children():
 		_apply_named_material_tint(child, label, tint)
+
+func _toggle_named_node(node: Node, label: String, state: bool) -> void:
+	if String(node.name).contains(label):
+		node.visible = state
+	for child in node.get_children():
+		_toggle_named_node(child, label, state)
