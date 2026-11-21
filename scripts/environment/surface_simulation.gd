@@ -13,6 +13,7 @@ var moisture := PackedFloat32Array()
 var compaction := PackedFloat32Array()
 var runoff := PackedFloat32Array()
 var elevation := PackedFloat32Array()
+var base_elevation := PackedFloat32Array()
 var next_moisture := PackedFloat32Array()
 var state_image: Image
 var state_texture: ImageTexture
@@ -27,11 +28,13 @@ func initialize(extent: float, height_sampler: Callable) -> void:
 	compaction.resize(CELL_COUNT)
 	runoff.resize(CELL_COUNT)
 	elevation.resize(CELL_COUNT)
+	base_elevation.resize(CELL_COUNT)
 	next_moisture.resize(CELL_COUNT)
 	for z in range(RESOLUTION):
 		for x in range(RESOLUTION):
 			var index := _index(x, z)
 			elevation[index] = float(height_sampler.call(_world_x(x), _world_z(z)))
+			base_elevation[index] = elevation[index]
 	state_image = Image.create(RESOLUTION, RESOLUTION, false, Image.FORMAT_RGBA8)
 	_write_texture()
 	state_texture = ImageTexture.create_from_image(state_image)
@@ -39,6 +42,12 @@ func initialize(extent: float, height_sampler: Callable) -> void:
 
 func get_texture() -> Texture2D:
 	return state_texture
+
+
+func get_height_offset(world_x: float, world_z: float) -> float:
+	var cell := _cell_at(world_x, world_z)
+	var index := _index(cell.x, cell.y)
+	return elevation[index] - base_elevation[index] + snow[index] * 0.42 - compaction[index] * 0.10 - runoff[index] * 0.035
 
 
 func step(delta: float, weather: String, player_position: Vector3, player_speed: float) -> void:
