@@ -65,6 +65,12 @@ jobs:
           godot --headless --path . --quit-after 3 2>&1 | tee "$RUNNER_TEMP/godot-smoke.log"
           ! grep -E "SCRIPT ERROR|Parse Error|ERROR:" "$RUNNER_TEMP/godot-smoke.log"
 
+      - name: Test touch joystick and player displacement
+        run: |
+          set -o pipefail
+          godot --headless --path . --script tests/movement_smoke.gd 2>&1 | tee "$RUNNER_TEMP/movement-test.log"
+          grep -F "MOVEMENT_TEST_PASS" "$RUNNER_TEMP/movement-test.log"
+
       - name: Export Android APK
         run: |
           mkdir -p build
