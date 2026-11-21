@@ -21,11 +21,17 @@ func _run_test() -> void:
 		printerr("SURFACE_TEST_FAIL: snowfall did not accumulate in the surface grid")
 		quit(1)
 		return
+	var height_before_step: float = simulation.get_height_offset(0.0, 0.0)
 
 	simulation.stamp_footstep(Vector3.ZERO, "snow")
 	var compacted: Dictionary = simulation.sample_surface(Vector3.ZERO)
+	var height_after_step: float = simulation.get_height_offset(0.0, 0.0)
 	if float(compacted["compaction"]) < 0.25 or float(compacted["snow"]) >= float(snowy["snow"]):
 		printerr("SURFACE_TEST_FAIL: footstep did not compact and displace snow")
+		quit(1)
+		return
+	if height_after_step >= height_before_step:
+		printerr("SURFACE_TEST_FAIL: compacted footprint did not lower collision height")
 		quit(1)
 		return
 
@@ -53,5 +59,5 @@ func _run_test() -> void:
 		quit(1)
 		return
 
-	print("SURFACE_TEST_PASS: snow accumulation, foot compaction, soil saturation, downhill runoff and terrain texture")
+	print("SURFACE_TEST_PASS: snow accumulation, foot compaction, collision height displacement, soil saturation, downhill runoff and terrain texture")
 	quit(0)
