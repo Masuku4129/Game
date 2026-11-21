@@ -226,6 +226,7 @@ class WildlandsApp(ShowBase):
             raise RuntimeError("Required authored explorer GLB could not be loaded")
         actor = Actor(model)
         actor.reparentTo(self.render)
+        actor.setBlend(animBlend=True, frameBlend=True)
         actor.setPos(0, 0, height_at(0, 0))
         actor.setScale(1.0)
         self.player_model = actor
@@ -246,6 +247,7 @@ class WildlandsApp(ShowBase):
         if self.current_animation is not None:
             self.player_model.stop(self.current_animation)
         self.player_model.loop(clip)
+        self.player_model.setPlayRate(1.0, clip)
         self.current_animation = clip
 
     def _update(self, task):
@@ -277,7 +279,12 @@ class WildlandsApp(ShowBase):
                 self.player_velocity.x, self.player_velocity.y
             )
             self.player_model.setH(heading + MODEL_FORWARD_OFFSET)
-            self._set_animation("run" if speed > PLAYER_SPEED * 0.72 else "walk")
+            state = "run" if speed > PLAYER_SPEED * 0.72 else "walk"
+            self._set_animation(state)
+            clip = self.animation_clips.get(state)
+            if clip is not None:
+                nominal_speed = PLAYER_SPEED if state == "run" else PLAYER_SPEED * 0.48
+                self.player_model.setPlayRate(max(0.65, min(1.35, speed / nominal_speed)), clip)
         else:
             self._set_animation("idle")
 
