@@ -29,7 +29,9 @@ var asset_base_materials: Dictionary = {}
 var debug_move_input := Vector2.ZERO
 var debug_move_direction := Vector3.ZERO
 var terrain_material: ShaderMaterial
+var terrain_shape: HeightMapShape3D
 var surface_simulation: SurfaceSimulation
+var terrain_collision_update_clock := 0.0
 var weather_particles: GPUParticles3D
 var weather_mode := "clear"
 var wind_clock := 0.0
@@ -178,7 +180,7 @@ void fragment() {
 	var terrain_body := StaticBody3D.new()
 	terrain_body.name = "TerrainCollision"
 	var terrain_collision := CollisionShape3D.new()
-	var terrain_shape := HeightMapShape3D.new()
+	terrain_shape = HeightMapShape3D.new()
 	terrain_shape.map_width = GRID_CELLS + 1
 	terrain_shape.map_depth = GRID_CELLS + 1
 	var height_data := PackedFloat32Array()
@@ -195,6 +197,22 @@ void fragment() {
 	terrain_collision.scale = Vector3.ONE * step
 	terrain_body.add_child(terrain_collision)
 	add_child(terrain_body)
+
+
+func _update_terrain_collision() -> void:
+	if terrain_shape == null or surface_simulation == null:
+		return
+	var step := WORLD_EXTENT * 2.0 / float(GRID_CELLS)
+	var width := GRID_CELLS + 1
+	var height_data := PackedFloat32Array()
+	height_data.resize(width * width)
+	for z in range(width):
+		for x in range(width):
+			var world_x := -WORLD_EXTENT + float(x) * step
+			var world_z := -WORLD_EXTENT + float(z) * step
+			var displaced_height := _height_at(world_x, world_z) + surface_simulation.get_height_offset(world_x, world_z)
+			height_data[z * width + x] = displaced_height / step
+	terrain_shape.map_data = height_data
 
 
 func _make_ground_texture() -> Texture2D:
@@ -312,6 +330,10 @@ func _process(delta: float) -> void:
 	wind_clock += delta
 	if surface_simulation != null and player != null:
 		surface_simulation.step(delta, weather_mode, player.global_position, Vector2(player.velocity.x, player.velocity.z).length())
+		terrain_collision_update_clock += delta
+		if terrain_collision_update_clock >= 1.0:
+			terrain_collision_update_clock = 0.0
+			_update_terrain_collision()
 	puddle_update_clock += delta
 	if puddle_update_clock >= 0.4:
 		puddle_update_clock = 0.0
