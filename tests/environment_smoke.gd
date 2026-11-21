@@ -77,5 +77,20 @@ func _run_test() -> void:
 		quit(1)
 		return
 
-	print("ENVIRONMENT_TEST_PASS: snow, rain, footprints, terrain-conforming puddles, collision deformation and wind batches")
+	game.call("_cycle_season")
+	if String(game.get("active_season")) != "autumn":
+		printerr("ENVIRONMENT_TEST_FAIL: runtime season switch did not advance to autumn")
+		quit(1)
+		return
+	if (game.get("environment_instances") as Array).size() < 10:
+		printerr("ENVIRONMENT_TEST_FAIL: seasonal switch did not rebuild forest and ground-cover instances")
+		quit(1)
+		return
+	var autumn_mushrooms := game.call("_load_environment_mesh", "mushroom_cluster") as Mesh
+	if autumn_mushrooms == null:
+		printerr("ENVIRONMENT_TEST_FAIL: autumn mushroom model was not loaded")
+		quit(1)
+		return
+
+	print("ENVIRONMENT_TEST_PASS: weather, footprints, hydrology, collision deformation, mushroom assets and runtime seasonal rebuild")
 	quit(0)
