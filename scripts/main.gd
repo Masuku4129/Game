@@ -34,6 +34,7 @@ var weather_particles: GPUParticles3D
 var weather_mode := "clear"
 var wind_clock := 0.0
 var wind_update_clock := 0.0
+var puddle_update_clock := 0.0
 var wind_batches: Array[Dictionary] = []
 var footprint_nodes: Array[MeshInstance3D] = []
 var footprint_distance := 0.0
@@ -311,6 +312,11 @@ func _process(delta: float) -> void:
 	wind_clock += delta
 	if surface_simulation != null and player != null:
 		surface_simulation.step(delta, weather_mode, player.global_position, Vector2(player.velocity.x, player.velocity.z).length())
+	puddle_update_clock += delta
+	if puddle_update_clock >= 0.4:
+		puddle_update_clock = 0.0
+		if weather_mode == "rain":
+			_update_puddle_hydrology()
 	wind_update_clock += delta
 	if wind_update_clock < 0.08:
 		return
@@ -525,6 +531,7 @@ func _create_puddles() -> void:
 		if center_height > rim_height - 0.06:
 			continue
 		var puddle := _build_conforming_puddle(Vector3(x, center_height, z), rng.randf_range(0.65, 1.6), rng.randf_range(0.4, 1.1))
+		puddle.set_meta("surface_sample_position", Vector3(x, center_height, z))
 		add_child(puddle)
 		puddle.visible = false
 		puddle_nodes.append(puddle)
@@ -554,11 +561,12 @@ func _build_conforming_puddle(center: Vector3, radius_x: float, radius_z: float)
 shader_type spatial;
 render_mode cull_disabled, diffuse_burley, specular_schlick_ggx;
 uniform vec3 water_tint = vec3(0.045, 0.085, 0.09);
+uniform float water_depth = 0.0;
 void fragment() {
     float ripple_a = sin(UV.x * 9.0 + UV.y * 7.0 + TIME * 1.8);
     float ripple_b = sin(UV.y * 13.0 - UV.x * 5.0 + TIME * 1.2);
-    ALBEDO = water_tint + vec3(0.018) * (ripple_a + ripple_b);
-    ROUGHNESS = 0.12 + abs(ripple_a) * 0.035;
+    ALBEDO = water_tint * mix(0.68, 1.0, water_depth) + vec3(0.018) * (ripple_a + ripple_b) * water_depth;
+    ROUGHNESS = mix(0.36, 0.12, water_depth) + abs(ripple_a) * 0.035 * water_depth;
     METALLIC = 0.08;
     SPECULAR = 0.85;
     NORMAL = normalize(vec3(ripple_a * 0.055, 1.0, ripple_b * 0.055));
@@ -571,9 +579,22 @@ void fragment() {
 
 
 func _create_rain_puddles() -> void:
+	_update_puddle_hydrology()
+
+
+func _update_puddle_hydrology() -> void:
+	if surface_simulation == null:
+		return
 	for puddle in puddle_nodes:
-		if is_instance_valid(puddle):
-			puddle.visible = true
+		if not is_instance_valid(puddle):
+			continue
+		var sample_position: Vector3 = puddle.get_meta("surface_sample_position", Vector3.ZERO)
+		var state: Dictionary = surface_simulation.sample_surface(sample_position)
+		var water_level := clampf(float(state["moisture"]) * 0.52 + float(state["runoff"]) * 1.8, 0.0, 1.0)
+		puddle.visible = weather_mode == "rain" and water_level > 0.18
+		var water_material := puddle.material_override as ShaderMaterial
+		if water_material != null:
+			water_material.set_shader_parameter("water_depth", water_level)
 
 
 func _clear_puddles() -> void:
