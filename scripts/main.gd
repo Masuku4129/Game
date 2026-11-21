@@ -81,11 +81,14 @@ func _setup_noise() -> void:
 
 
 func _height_at(x: float, z: float) -> float:
-	var broad := terrain_noise.get_noise_2d(x, z) * 5.8
-	var ridge := terrain_noise.get_noise_2d(x * 0.52 + 300.0, z * 0.52 - 120.0)
-	var detail := detail_noise.get_noise_2d(x, z) * 0.72
-	var drainage := absf(terrain_noise.get_noise_2d(x * 0.31 + 90.0, z * 0.31)) * 1.25
-	return broad + ridge * 2.1 + detail - drainage
+	var warp_x := detail_noise.get_noise_2d(x * 0.42 + 170.0, z * 0.42 - 80.0) * 3.2
+	var warp_z := detail_noise.get_noise_2d(x * 0.42 - 240.0, z * 0.42 + 110.0) * 3.2
+	var broad := terrain_noise.get_noise_2d(x + warp_x, z + warp_z) * 7.0
+	var rolling := terrain_noise.get_noise_2d(x * 0.46 + 300.0, z * 0.46 - 120.0) * 2.4
+	var valley_field := terrain_noise.get_noise_2d(x * 0.19 + 90.0, z * 0.19 - 60.0)
+	var drainage := pow(absf(valley_field), 1.7) * 0.72
+	var detail := detail_noise.get_noise_2d(x * 1.35, z * 1.35) * 0.38
+	return broad + rolling - drainage + detail
 
 func _terrain_normal_at(x: float, z: float) -> Vector3:
 	var sample := 0.35
@@ -151,6 +154,7 @@ func _create_terrain() -> void:
 shader_type spatial;
 render_mode diffuse_burley, specular_schlick_ggx;
 uniform sampler2D ground_albedo : source_color, repeat_enable;
+uniform sampler2D ground_normal : hint_normal, repeat_enable;
 uniform float snow_cover = 0.0;
 uniform float surface_wetness = 0.0;
 uniform sampler2D surface_state_texture : filter_linear, repeat_disable;
@@ -172,11 +176,14 @@ void fragment() {
     ground *= 1.0 - track_darkening;
     ground = mix(ground, vec3(0.78, 0.84, 0.88), snow_amount);
     ALBEDO = mix(ground, ground * vec3(0.66, 0.70, 0.72), wet_amount * 0.28);
+    NORMAL_MAP = texture(ground_normal, UV).rgb;
+    NORMAL_MAP_DEPTH = 0.30;
     ROUGHNESS = mix(0.97, 0.22, wet_amount * 0.72);
 }
 """
 	terrain_material.shader = terrain_shader
 	terrain_material.set_shader_parameter("ground_albedo", _make_ground_texture())
+	terrain_material.set_shader_parameter("ground_normal", _make_ground_normal_texture())
 	terrain_material.set_shader_parameter("surface_state_texture", surface_simulation.get_texture())
 	terrain.material_override = terrain_material
 	add_child(terrain)
@@ -228,29 +235,52 @@ func _make_ground_texture() -> Texture2D:
 	var grain_noise := FastNoiseLite.new()
 	grain_noise.seed = 61022
 	grain_noise.frequency = 0.31
-	grain_noise.fractal_octaves = 2
+	grain_noise.fractal_octaves = 3
+	var pebble_noise := FastNoiseLite.new()
+	pebble_noise.seed = 61023
+	pebble_noise.frequency = 0.74
+	pebble_noise.fractal_octaves = 2
 	for y in range(512):
 		for x in range(512):
-			var u := float(x) / 512.0
-			var v := float(y) / 512.0
 			var broad := broad_noise.get_noise_2d(float(x), float(y))
 			var grain := grain_noise.get_noise_2d(float(x) * 1.7, float(y) * 1.7)
+			var pebble := pebble_noise.get_noise_2d(float(x) * 1.2, float(y) * 1.2)
 			var grit := detail_noise.get_noise_2d(float(x) * 0.73, float(y) * 0.73)
-			var damp := clampf(0.46 + broad * 0.17 + grit * 0.12, 0.16, 0.78)
-			var value := grain * 0.035
-			var moss_mix := clampf((broad + grit * 0.35 + 0.22) * 0.5, 0.0, 0.34)
-			var soil := Color(0.20 + damp * 0.18 + value, 0.145 + damp * 0.13 + value, 0.095 + damp * 0.075 + value)
-			var moss := Color(0.105 + damp * 0.10, 0.145 + damp * 0.13, 0.075 + damp * 0.06)
-			image.set_pixel(x, y, soil.lerp(moss, moss_mix))
+			var damp := clampf(0.48 + broad * 0.16 + grit * 0.10, 0.18, 0.78)
+			var fine := grain * 0.055 + pebble * 0.025
+			var moss_mix := clampf((broad + grit * 0.32 + 0.18) * 0.5, 0.0, 0.42)
+			var soil := Color(0.19 + damp * 0.19 + fine, 0.125 + damp * 0.14 + fine * 0.82, 0.075 + damp * 0.085 + fine * 0.55)
+			var moss := Color(0.085 + damp * 0.105 + fine * 0.5, 0.125 + damp * 0.15 + fine * 0.8, 0.055 + damp * 0.07 + fine * 0.35)
+			var fleck := clampf((pebble - 0.42) * 0.18, 0.0, 0.055)
+			image.set_pixel(x, y, soil.lerp(moss, moss_mix) + Color(fleck, fleck * 0.92, fleck * 0.78, 0.0))
 	return ImageTexture.create_from_image(image)
 
 
+func _make_ground_normal_texture() -> Texture2D:
+	var image := Image.create(512, 512, false, Image.FORMAT_RGBA8)
+	var broad_noise := FastNoiseLite.new()
+	broad_noise.seed = 61031
+	broad_noise.frequency = 0.045
+	broad_noise.fractal_octaves = 3
+	var fine_noise := FastNoiseLite.new()
+	fine_noise.seed = 61032
+	fine_noise.frequency = 0.34
+	fine_noise.fractal_octaves = 2
+	for y in range(512):
+		for x in range(512):
+			var left := broad_noise.get_noise_2d(float(x - 1), float(y)) * 0.75 + fine_noise.get_noise_2d(float(x - 1), float(y)) * 0.16
+			var right := broad_noise.get_noise_2d(float(x + 1), float(y)) * 0.75 + fine_noise.get_noise_2d(float(x + 1), float(y)) * 0.16
+			var up := broad_noise.get_noise_2d(float(x), float(y - 1)) * 0.75 + fine_noise.get_noise_2d(float(x), float(y - 1)) * 0.16
+			var down := broad_noise.get_noise_2d(float(x), float(y + 1)) * 0.75 + fine_noise.get_noise_2d(float(x), float(y + 1)) * 0.16
+			var normal := Vector3((left - right) * 1.8, (up - down) * 1.8, 1.0).normalized()
+			image.set_pixel(x, y, Color(normal.x * 0.5 + 0.5, normal.y * 0.5 + 0.5, normal.z * 0.5 + 0.5, 1.0))
+	return ImageTexture.create_from_image(image)
+
 func _add_terrain_triangle(surface: SurfaceTool, a: Vector3, b: Vector3, c: Vector3) -> void:
 	for point in [a, b, c]:
-		var variation := detail_noise.get_noise_2d(point.x * 1.7, point.z * 1.7)
-		var height_tint := clampf(0.38 + point.y * 0.009 + variation * 0.09, 0.20, 0.58)
-		var damp := clampf((0.25 - point.y) * 0.08, 0.0, 0.08)
-		surface.set_color(Color(height_tint * (0.88 - damp), height_tint * 1.02, height_tint * (0.72 - damp)))
+		var variation := detail_noise.get_noise_2d(point.x * 0.62, point.z * 0.62)
+		var damp := clampf((0.25 - point.y) * 0.035, 0.0, 0.045)
+		surface.set_color(Color(0.88 + variation * 0.07 - damp, 0.91 + variation * 0.06 - damp, 0.82 + variation * 0.08 - damp))
 		surface.set_uv(Vector2(point.x * 0.075, point.z * 0.075))
 		surface.set_uv2(Vector2((point.x + WORLD_EXTENT) / (WORLD_EXTENT * 2.0), (point.z + WORLD_EXTENT) / (WORLD_EXTENT * 2.0)))
 		surface.add_vertex(point)
