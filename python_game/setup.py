@@ -13,7 +13,7 @@ setup(
     version="0.1.0",
     options={
         "build_apps": {
-            "application_id": "org.kira.wildlands",
+            "application_id": "com.wildlands.survival",
             "android_version_code": 1,
             "android_min_sdk_version": 24,
             "android_target_sdk_version": 36,
