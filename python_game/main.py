@@ -3,6 +3,8 @@ from __future__ import annotations
 import math
 from pathlib import Path
 
+from world.terrain import height_at
+
 from direct.showbase.ShowBase import ShowBase
 from panda3d.core import (
     AmbientLight, DirectionalLight, Fog, Geom, GeomNode, GeomTriangles,
