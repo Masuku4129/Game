@@ -1,19 +1,24 @@
 from __future__ import annotations
 
 import math
+from pathlib import Path
+
 from direct.showbase.ShowBase import ShowBase
 from panda3d.core import (
     AmbientLight, DirectionalLight, Fog, Geom, GeomNode, GeomTriangles,
     GeomVertexData, GeomVertexFormat, GeomVertexWriter, NodePath,
-    Point3, Vec3, Vec4, WindowProperties,
+    Vec3, Vec4, WindowProperties,
 )
 
+ROOT = Path(__file__).resolve().parent
+SEASON = "summer"
 
-def height_at(x: float, z: float) -> float:
-    """Deterministic low-frequency terrain function; stable for a given world seed."""
-    broad = math.sin(x * 0.035) * 1.7 + math.cos(z * 0.028) * 1.35
-    rolling = math.sin((x + z) * 0.012) * 2.0
-    detail = math.sin(x * 0.11 + z * 0.07) * 0.16
+
+def height_at(x: float, y: float) -> float:
+    """Deterministic, continuous height field in Panda3D's Z-up coordinates."""
+    broad = math.sin(x * 0.035) * 1.7 + math.cos(y * 0.028) * 1.35
+    rolling = math.sin((x + y) * 0.012) * 2.0
+    detail = math.sin(x * 0.11 + y * 0.07) * 0.16
     return broad + rolling + detail
 
 
@@ -26,25 +31,25 @@ def build_terrain(parent: NodePath, extent: float = 90.0, cells: int = 96) -> No
     color = GeomVertexWriter(data, "color")
     step = (extent * 2.0) / cells
 
-    for z_index in range(cells + 1):
-        z = -extent + z_index * step
-        for x_index in range(cells + 1):
-            x = -extent + x_index * step
-            y = height_at(x, z)
-            dx = height_at(x + 0.25, z) - height_at(x - 0.25, z)
-            dz = height_at(x, z + 0.25) - height_at(x, z - 0.25)
-            n = Vec3(-dx, -dz, 0.5).normalized()
+    for row in range(cells + 1):
+        y = -extent + row * step
+        for column in range(cells + 1):
+            x = -extent + column * step
+            z = height_at(x, y)
+            dx = height_at(x + 0.25, y) - height_at(x - 0.25, y)
+            dy = height_at(x, y + 0.25) - height_at(x, y - 0.25)
+            n = Vec3(-dx, -dy, 0.5).normalized()
             vertex.addData3(x, y, z)
             normal.addData3(n)
-            shade = 0.82 + 0.08 * math.sin(x * 0.08) * math.cos(z * 0.06)
+            shade = 0.82 + 0.08 * math.sin(x * 0.08) * math.cos(y * 0.06)
             color.addData4(0.22 * shade, 0.28 * shade, 0.16 * shade, 1.0)
 
     triangles = GeomTriangles(Geom.UHStatic)
-    row = cells + 1
-    for z_index in range(cells):
-        for x_index in range(cells):
-            a = z_index * row + x_index
-            b, c, d = a + 1, a + row, a + row + 1
+    row_width = cells + 1
+    for row in range(cells):
+        for column in range(cells):
+            a = row * row_width + column
+            b, c, d = a + 1, a + row_width, a + row_width + 1
             triangles.addVertices(a, b, c)
             triangles.addVertices(b, d, c)
     geom = Geom(data)
@@ -57,32 +62,12 @@ def build_terrain(parent: NodePath, extent: float = 90.0, cells: int = 96) -> No
     return terrain
 
 
-def make_tree(parent: NodePath, x: float, y: float, z: float, scale: float, species: int) -> NodePath:
-    tree = parent.attachNewNode(f"tree-{species}")
-    trunk = tree.attachNewNode("trunk")
-    trunk.setPos(0, 0, 0)
-    trunk.setScale(0.16 * scale, 0.16 * scale, 1.35 * scale)
-    trunk.setColor(0.28, 0.17, 0.09, 1)
-    crown = tree.attachNewNode("crown")
-    crown.setPos(0, 0, 1.65 * scale)
-    crown.setScale(0.9 * scale, 0.9 * scale, 1.15 * scale)
-    palette = (
-        (0.12, 0.28, 0.12, 1),
-        (0.22, 0.38, 0.18, 1),
-        (0.30, 0.40, 0.19, 1),
-    )
-    crown.setColor(*palette[species % len(palette)])
-    tree.setPos(x, y, z)
-    return tree
-
-
 class WildlandsApp(ShowBase):
     def __init__(self) -> None:
         super().__init__()
         props = WindowProperties()
-        props.setTitle("Wildlands — Python prototype")
+        props.setTitle("Wildlands")
         props.setSize(1280, 720)
-        props.setFullscreen(False)
         self.win.requestProperties(props)
         self.disableMouse()
         self.setBackgroundColor(0.47, 0.61, 0.68, 1)
@@ -102,28 +87,65 @@ class WildlandsApp(ShowBase):
 
         build_terrain(self.render)
         self._build_forest()
-        self.player = self.render.attachNewNode("player-root")
-        self.player.setPos(0, 0, height_at(0, 0) + 0.9)
-        self.player_visual = self.loader.loadModel("models/box")
-        self.player_visual.reparentTo(self.player)
-        self.player_visual.setScale(0.32, 0.32, 0.9)
-        self.player_visual.setColor(0.22, 0.38, 0.31, 1)
-        self.player_visual.setZ(0.1)
+        self._load_player_model()
 
         self.camera.setPos(10.5, -25.0, 19.0)
         self.camera.lookAt(0, 0, 0)
         self.taskMgr.add(self._update, "game-update")
 
+    def _load_seasonal_model(self, family: str) -> NodePath | None:
+        model_path = ROOT / "assets" / "generated" / f"{family}_{SEASON}.glb"
+        if not model_path.is_file():
+            return None
+        model = self.loader.loadModel(str(model_path))
+        if model.isEmpty():
+            return None
+        model.flattenStrong()
+        return model
+
     def _build_forest(self) -> None:
+        families = ("tree_spruce", "tree_pine", "tree_birch")
+        prototypes: dict[str, NodePath] = {}
+        for family in families:
+            prototype = self._load_seasonal_model(family)
+            if prototype is not None:
+                prototype.reparentTo(self.render)
+                prototype.hide()
+                prototypes[family] = prototype
+
+        if not prototypes:
+            print("ASSET_NOTICE: no seasonal tree GLBs found; forest instances skipped")
+            return
+
         for row in range(-8, 9):
-            for col in range(-8, 9):
-                if abs(row) < 2 and abs(col) < 2:
+            for column in range(-8, 9):
+                if abs(row) < 2 and abs(column) < 2:
                     continue
-                x = col * 7.4 + math.sin(row * 2.3 + col) * 1.7
-                y = row * 7.1 + math.cos(col * 1.7 - row) * 1.4
-                species = (row * 7 + col * 11) % 3
-                scale = 0.78 + ((row * 13 + col * 5) % 7) * 0.075
-                make_tree(self.render, x, y, height_at(x, y), scale, species)
+                x = column * 7.4 + math.sin(row * 2.3 + column) * 1.7
+                y = row * 7.1 + math.cos(column * 1.7 - row) * 1.4
+                species = (row * 7 + column * 11) % len(families)
+                family = families[species]
+                prototype = prototypes.get(family)
+                if prototype is None:
+                    prototype = next(iter(prototypes.values()))
+                instance = prototype.instanceTo(self.render)
+                instance.show()
+                instance.setPos(x, y, height_at(x, y))
+                instance.setH((row * 31 + column * 17) % 360)
+                scale = 0.82 + ((row * 13 + column * 5) % 7) * 0.075
+                instance.setScale(scale)
+
+    def _load_player_model(self) -> None:
+        model_path = ROOT / "assets" / "character" / "field_explorer.glb"
+        if model_path.is_file():
+            model = self.loader.loadModel(str(model_path))
+            if not model.isEmpty():
+                model.reparentTo(self.render)
+                model.setPos(0, 0, height_at(0, 0))
+                model.setScale(1.0)
+                self.player_model = model
+                return
+        print("ASSET_NOTICE: explorer GLB not found; no substitute primitive spawned")
 
     def _update(self, task):
         return task.cont
