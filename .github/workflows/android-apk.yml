@@ -71,6 +71,12 @@ jobs:
           godot --headless --path . --script tests/movement_smoke.gd 2>&1 | tee "$RUNNER_TEMP/movement-test.log"
           grep -F "MOVEMENT_TEST_PASS" "$RUNNER_TEMP/movement-test.log"
 
+      - name: Test weather, footprints, puddles and wind
+        run: |
+          set -o pipefail
+          godot --headless --path . --script tests/environment_smoke.gd 2>&1 | tee "$RUNNER_TEMP/environment-test.log"
+          grep -F "ENVIRONMENT_TEST_PASS" "$RUNNER_TEMP/environment-test.log"
+
       - name: Export Android APK
         run: |
           mkdir -p build
