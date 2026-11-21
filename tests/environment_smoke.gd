@@ -37,6 +37,13 @@ func _has_node_type(node: Node, type_name: String) -> bool:
 	return _find_node_type(node, type_name) != null
 
 
+func _has_animation_clip(clips: PackedStringArray, fragment: String) -> bool:
+	for clip in clips:
+		if String(clip).contains(fragment):
+			return true
+	return false
+
+
 func _initialize() -> void:
 	call_deferred("_run_test")
 
@@ -132,7 +139,7 @@ func _run_test() -> void:
 		quit(1)
 		return
 	var clips := explorer_anim.get_animation_list()
-	if not clips.any(func(clip): return String(clip).contains("Walk")) or not clips.any(func(clip): return String(clip).contains("Run")):
+	if not _has_animation_clip(clips, "Walk") or not _has_animation_clip(clips, "Run"):
 		printerr("ENVIRONMENT_TEST_FAIL: imported explorer walk/run animation clips unavailable: ", clips)
 		quit(1)
 		return
