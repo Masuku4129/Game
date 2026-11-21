@@ -25,10 +25,44 @@ jobs:
       - name: Generate GLB models
         run: |
           blender --background --python tools/generate_assets.py -- --output assets/generated
-          count=$(find assets/generated -maxdepth 1 -type f -name '*.glb' | wc -l)
-          echo "Generated GLB count: $count"
-          find assets/generated -maxdepth 1 -type f -name '*.glb' -printf '%f %s bytes\\n' | sort
-          test "$count" -eq 32
+          families="tree_spruce tree_pine tree_birch shrub_mixed fern_cluster rock_mossy stump_mossy fallen_log"
+          seasons="spring summer autumn winter"
+          seasonal_count=0
+          for family in $families; do
+            for season in $seasons; do
+              file="assets/generated/${family}_${season}.glb"
+              if [ ! -s "$file" ]; then
+                echo "::error::Missing or empty seasonal asset: $file"
+                exit 1
+              fi
+              seasonal_count=$((seasonal_count + 1))
+            done
+          done
+          total_count=$(find assets/generated -maxdepth 1 -type f -name '*.glb' | wc -l)
+          echo "Validated seasonal variants: $seasonal_count"
+          echo "Total GLB files including legacy base models: $total_count"
+          find assets/generated -maxdepth 1 -type f -name '*.glb' -printf '%f %s bytes\n' | sort
+          test "$seasonal_count" -eq 32
+          python3 - <<'PY'
+          import json, pathlib, struct
+          files = sorted(pathlib.Path("assets/generated").glob("*_*.glb"))
+          for path in files:
+              data = path.read_bytes()
+              if len(data) < 20:
+                  raise SystemExit(f"Invalid/truncated GLB: {path}")
+              magic, version, declared_length = struct.unpack_from("<4sII", data, 0)
+              if magic != b"glTF" or version != 2 or declared_length != len(data):
+                  raise SystemExit(f"Invalid GLB header/length: {path}")
+              chunk_length, chunk_type = struct.unpack_from("<I4s", data, 12)
+              if chunk_type != b"JSON" or 20 + chunk_length > len(data):
+                  raise SystemExit(f"Missing GLB JSON chunk: {path}")
+              gltf = json.loads(data[20:20 + chunk_length].decode("utf-8"))
+              if not gltf.get("meshes") or not any(m.get("primitives") for m in gltf["meshes"]):
+                  raise SystemExit(f"No mesh primitives: {path}")
+              if not gltf.get("materials"):
+                  raise SystemExit(f"No materials: {path}")
+          print(f"GLB structural validation passed for {len(files)} seasonal files")
+          PY
           du -h assets/generated/*
       - name: Commit generated models
         run: |
