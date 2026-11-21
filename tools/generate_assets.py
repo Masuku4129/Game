@@ -366,6 +366,49 @@ def grass_tuft():
     finish("grass_tuft",[])
 
 
+
+def mushroom_cluster():
+    reset()
+    rng = random.Random(10101)
+    cap_red = mat("Mushroom | russet cap", (0.48, 0.16, 0.075), 0.84, True)
+    cap_ochre = mat("Mushroom | ochre cap", (0.55, 0.34, 0.13), 0.9, True)
+    cap_pale = mat("Mushroom | pale cap", (0.68, 0.61, 0.43), 0.92, True)
+    stem_mat = mat("Mushroom | ivory stem", (0.72, 0.67, 0.53), 0.96, True)
+    gill_mat = mat("Mushroom | gills", (0.42, 0.34, 0.27), 0.98)
+    ring_mat = mat("Mushroom | veil ring", (0.82, 0.77, 0.64), 0.9)
+    moss_mat = MOSS
+    for index in range(9):
+        angle = rng.uniform(0.0, math.tau)
+        radius = rng.uniform(0.0, 0.72)
+        x = math.cos(angle) * radius
+        y = math.sin(angle) * radius
+        height = rng.uniform(0.24, 0.82)
+        cap_radius = height * rng.uniform(0.28, 0.39)
+        stem_radius = cap_radius * rng.uniform(0.17, 0.23)
+        stem_top = height * 0.79
+        cone_between((x, y, 0.025), (x, y, stem_top), stem_radius * 0.72, stem_radius, stem_mat, 9)
+        # A distinct cap silhouette with a shallow underside and softly domed crown.
+        cap_material = (cap_red, cap_ochre, cap_pale)[index % 3]
+        sphere((x, y, height), (cap_radius, cap_radius * rng.uniform(0.88, 1.12), cap_radius * 0.48), cap_material, 16, 10)
+        # Radial gills are visible from low camera angles beneath the cap.
+        for gill in range(11):
+            a = math.tau * gill / 11.0
+            start = (x + math.cos(a) * stem_radius * 0.35, y + math.sin(a) * stem_radius * 0.35, height - cap_radius * 0.12)
+            end = (x + math.cos(a) * cap_radius * 0.82, y + math.sin(a) * cap_radius * 0.82, height - cap_radius * 0.18)
+            curve_tube([start, end], max(0.003, cap_radius * 0.018), gill_mat, "mushroom_gill")
+        if index % 3 == 0:
+            sphere((x, y, stem_top * 0.76), (stem_radius * 1.45, stem_radius * 1.45, 0.018), ring_mat, 9, 5)
+        if index % 2 == 0:
+            for spot in range(5):
+                a = math.tau * spot / 5.0 + index
+                spot_x = x + math.cos(a) * cap_radius * 0.48
+                spot_y = y + math.sin(a) * cap_radius * 0.48
+                sphere((spot_x, spot_y, height + cap_radius * 0.30), (cap_radius * 0.075, cap_radius * 0.065, 0.012), ring_mat, 7, 4)
+    for index in range(7):
+        a = math.tau * index / 7.0
+        sphere((math.cos(a) * 0.62, math.sin(a) * 0.62, 0.035), (0.20, 0.13, 0.045), moss_mat, 8, 5)
+    finish("mushroom_cluster", [])
+
 def stone_cluster():
     reset(); rng=random.Random(9909)
     for i in range(9):
@@ -405,6 +448,6 @@ def stone_cluster():
     finish("stone_cluster",[])
 
 
-for build in (spruce,pine,birch,shrub,fern,rock,grass_tuft,stone_cluster,stump,fallen_log):
+for build in (spruce,pine,birch,shrub,fern,rock,grass_tuft,stone_cluster,stump,fallen_log,mushroom_cluster):
     build()
 print("ASSET_BATCH_COMPLETE", OUT)
