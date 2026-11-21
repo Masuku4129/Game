@@ -273,6 +273,7 @@ func _create_player() -> void:
 
 func _create_camera() -> void:
 	camera = Camera3D.new()
+	camera.name = "GameplayCamera"
 	camera.projection = Camera3D.PROJECTION_PERSPECTIVE
 	camera.fov = CAMERA_FOV
 	camera.near = 0.08
