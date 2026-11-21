@@ -6,6 +6,29 @@ import kotlin.math.*
 internal object ForestModels {
     data class TreeModel(val mesh:ForestMesh,val components:Int,val height:Float)
 
+    private fun leafBlade(b:ForestMeshBuilder,x:Float,y:Float,z:Float,length:Float,width:Float,yaw:Double,color:Int){
+        val dx=cos(yaw).toFloat();val dz=sin(yaw).toFloat()
+        val sx=-dz;val sz=dx
+        val tipX=x+dx*length*.72f;val tipY=y+length*.34f;val tipZ=z+dz*length*.72f
+        val midX=x+dx*length*.40f;val midY=y+length*.18f;val midZ=z+dz*length*.40f
+        val left=floatArrayOf(midX+sx*width,midY,midZ+sz*width)
+        val right=floatArrayOf(midX-sx*width,midY,midZ-sz*width)
+        val base=floatArrayOf(x,y,z);val tip=floatArrayOf(tipX,tipY,tipZ)
+        b.triangle(base,left,tip,color);b.triangle(base,tip,right,color)
+    }
+    private fun leafCluster(b:ForestMeshBuilder,x:Float,y:Float,z:Float,size:Float,yaw:Double,baseColor:Int,seed:Int){
+        val r=java.util.Random(seed.toLong())
+        repeat(7){
+            val a=yaw+r.nextDouble()*PI*2.0
+            val offset=size*(.05f+r.nextFloat()*.45f)
+            val bx=x+(cos(a)*offset).toFloat();val bz=z+(sin(a)*offset).toFloat()
+            val by=y+(r.nextFloat()-.5f)*size*.28f
+            val leafLength=size*(.48f+r.nextFloat()*.52f)
+            val leafWidth=leafLength*(.13f+r.nextFloat()*.08f)
+            val color=baseColor-(r.nextInt(28)*0x00010101)
+            leafBlade(b,bx,by,bz,leafLength,leafWidth,a,color)
+        }
+    }
     /** A tree has 30+ separate smooth geometry components, with deterministic seed variation. */
     fun tree(seed:Int,height:Float=6.2f):TreeModel {
         val b=ForestMeshBuilder()
@@ -40,10 +63,8 @@ internal object ForestModels {
                 val cx=ex*f+(rnd.nextFloat()-.5f)*height*.09f
                 val cz=ez*f+(rnd.nextFloat()-.5f)*height*.09f
                 val cy=ey+(rnd.nextFloat()-.5f)*height*.12f
-                val rx=height*(.10f+rnd.nextFloat()*.06f)
-                val ry=height*(.055f+rnd.nextFloat()*.035f)
-                val rz=height*(.08f+rnd.nextFloat()*.05f)
-                b.ellipsoid(cx,cy,cz,rx,ry,rz,palette[rnd.nextInt(palette.size)],11,7)
+                val leafSize=height*(.19f+rnd.nextFloat()*.09f)
+                leafCluster(b,cx,cy,cz,leafSize,a,palette[rnd.nextInt(palette.size)],seed+i*17+k)
                 components++
             }
         }
@@ -54,10 +75,8 @@ internal object ForestModels {
             val cx=(cos(a)*r).toFloat()+leanX*.65f
             val cz=(sin(a)*r).toFloat()+leanZ*.65f
             val cy=height*(.68f+rnd.nextFloat()*.25f)
-            val rx=height*(.12f+rnd.nextFloat()*.06f)
-            val ry=height*(.075f+rnd.nextFloat()*.055f)
-            val rz=height*(.12f+rnd.nextFloat()*.07f)
-            b.ellipsoid(cx,cy,cz,rx,ry,rz,palette[rnd.nextInt(palette.size)],12,8)
+            val leafSize=height*(.24f+rnd.nextFloat()*.12f)
+            leafCluster(b,cx,cy,cz,leafSize,a,palette[rnd.nextInt(palette.size)],seed+i*31)
             components++
         }
         return TreeModel(b.snapshot(),components,height)
