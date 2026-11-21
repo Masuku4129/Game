@@ -25,6 +25,16 @@ var joystick: Control
 var asset_mesh_cache: Dictionary = {}
 var debug_move_input := Vector2.ZERO
 var debug_move_direction := Vector3.ZERO
+var terrain_material: ShaderMaterial
+var weather_particles: GPUParticles3D
+var weather_mode := "clear"
+var wind_clock := 0.0
+var wind_update_clock := 0.0
+var wind_batches: Array[Dictionary] = []
+var footprint_nodes: Array[MeshInstance3D] = []
+var footprint_distance := 0.0
+var footprint_side := 0
+var puddle_nodes: Array[MeshInstance3D] = []
 
 
 func _ready() -> void:
@@ -34,6 +44,7 @@ func _ready() -> void:
 	_create_terrain()
 	_create_forest()
 	_create_ground_cover()
+	_create_puddles()
 	_create_player()
 	_create_camera()
 	_create_hud()
@@ -111,25 +122,29 @@ func _create_terrain() -> void:
 	var terrain_mesh := surface.commit()
 	var terrain := MeshInstance3D.new()
 	terrain.mesh = terrain_mesh
-	var material := ShaderMaterial.new()
+	terrain_material = ShaderMaterial.new()
 	var terrain_shader := Shader.new()
 	terrain_shader.code = """
 shader_type spatial;
 render_mode diffuse_burley, specular_schlick_ggx;
 uniform sampler2D ground_albedo : source_color, repeat_enable;
+uniform float snow_cover = 0.0;
+uniform float surface_wetness = 0.0;
 varying vec4 terrain_vertex_color;
 void vertex() {
     terrain_vertex_color = COLOR;
 }
 void fragment() {
     vec3 surface_color = texture(ground_albedo, UV * 1.0).rgb;
-    ALBEDO = surface_color * terrain_vertex_color.rgb;
-    ROUGHNESS = 0.97;
+    vec3 ground = surface_color * terrain_vertex_color.rgb;
+    ground = mix(ground, vec3(0.78, 0.84, 0.88), clamp(snow_cover, 0.0, 1.0));
+    ALBEDO = mix(ground, ground * vec3(0.66, 0.70, 0.72), clamp(surface_wetness, 0.0, 1.0) * 0.48);
+    ROUGHNESS = mix(0.97, 0.22, clamp(surface_wetness, 0.0, 1.0));
 }
 """
-	material.shader = terrain_shader
-	material.set_shader_parameter("ground_albedo", _make_ground_texture())
-	terrain.material_override = material
+	terrain_material.shader = terrain_shader
+	terrain_material.set_shader_parameter("ground_albedo", _make_ground_texture())
+	terrain.material_override = terrain_material
 	add_child(terrain)
 
 	var terrain_body := StaticBody3D.new()
@@ -219,12 +234,15 @@ func _create_forest() -> void:
 		for index in range(counts[species]):
 			multi.multimesh.set_instance_transform(index, transforms[species][index])
 		add_child(multi)
+		_register_wind_batch(multi, transforms[species], families[species])
 
 
 func _create_ground_cover() -> void:
 	_scatter_environment_asset("shrub_mixed", 360, 0.72, 1.18, 12001, 10.0)
 	_scatter_environment_asset("fern_cluster", 525, 0.68, 1.22, 12002, 8.0)
 	_scatter_environment_asset("rock_mossy", 260, 0.55, 1.35, 12003, 7.0)
+	_scatter_environment_asset("grass_tuft", 2400, 0.72, 1.35, 12006, 6.0)
+	_scatter_environment_asset("stone_cluster", 420, 0.55, 1.35, 12007, 7.0)
 	_scatter_environment_asset("stump_mossy", 60, 0.72, 1.18, 12004, 14.0)
 	_scatter_environment_asset("fallen_log", 70, 0.72, 1.24, 12005, 14.0)
 
@@ -251,6 +269,34 @@ func _scatter_environment_asset(asset_name: String, amount: int, min_scale: floa
 	for index in range(transforms.size()):
 		multi.multimesh.set_instance_transform(index, transforms[index])
 	add_child(multi)
+	if asset_name in ["shrub_mixed", "fern_cluster", "grass_tuft", "tree_spruce", "tree_pine", "tree_birch"]:
+		_register_wind_batch(multi, transforms, asset_name)
+
+
+func _register_wind_batch(instance: MultiMeshInstance3D, transforms: Array, family: String) -> void:
+	wind_batches.append({"node": instance, "base": transforms.duplicate(), "family": family})
+
+
+func _process(delta: float) -> void:
+	wind_clock += delta
+	wind_update_clock += delta
+	if wind_update_clock < 0.08:
+		return
+	wind_update_clock = 0.0
+	var wind_strength := 0.035 if weather_mode == "clear" else 0.075
+	for batch in wind_batches:
+		var instance := batch["node"] as MultiMeshInstance3D
+		if not is_instance_valid(instance):
+			continue
+		var bases: Array = batch["base"]
+		var family: String = batch["family"]
+		for index in range(bases.size()):
+			var base: Transform3D = bases[index]
+			var phase := wind_clock * 1.4 + base.origin.x * 0.13 + base.origin.z * 0.11
+			var sway := sin(phase) * wind_strength
+			var axis := Vector3.RIGHT if family in ["grass_tuft", "fern_cluster"] else Vector3.FORWARD
+			var rotated := base.basis.rotated(axis, sway * (1.8 if family == "grass_tuft" else 1.0))
+			instance.multimesh.set_instance_transform(index, Transform3D(rotated, base.origin))
 
 
 func _load_environment_mesh(asset_name: String) -> Mesh:
