@@ -54,6 +54,9 @@ def _seasonal_material(source, season):
             "Leaves | young green": (.43, .57, .20),
             "Fern | rich green": (.19, .39, .14),
             "Moss | damp green": (.22, .34, .12),
+            "Grass | deep blades": (.12, .24, .08),
+            "Grass | sunlit blades": (.34, .47, .16),
+            "Grass | seed heads": (.47, .38, .18),
         },
         "summer": {
             "Spruce | deep needles": (.035, .12, .075),
@@ -62,6 +65,9 @@ def _seasonal_material(source, season):
             "Leaves | young green": (.27, .37, .13),
             "Fern | rich green": (.10, .27, .105),
             "Moss | damp green": (.16, .23, .085),
+            "Grass | deep blades": (.075, .17, .065),
+            "Grass | sunlit blades": (.22, .31, .095),
+            "Grass | seed heads": (.42, .34, .17),
         },
         "autumn": {
             "Spruce | deep needles": (.045, .13, .085),
@@ -70,6 +76,9 @@ def _seasonal_material(source, season):
             "Leaves | young green": (.82, .48, .10),
             "Fern | rich green": (.48, .30, .10),
             "Moss | damp green": (.25, .20, .085),
+            "Grass | deep blades": (.40, .29, .10),
+            "Grass | sunlit blades": (.68, .47, .14),
+            "Grass | seed heads": (.62, .45, .20),
         },
         "winter": {
             "Spruce | deep needles": (.18, .25, .22),
@@ -78,6 +87,10 @@ def _seasonal_material(source, season):
             "Leaves | young green": (.30, .31, .28),
             "Fern | rich green": (.30, .25, .16),
             "Moss | damp green": (.48, .52, .49),
+            "Grass | deep blades": (.29, .32, .29),
+            "Grass | sunlit blades": (.43, .45, .41),
+            "Grass | seed heads": (.55, .53, .45),
+            "Stone | pale fractured faces": (.53, .56, .57),
             "Stone | weathered grey": (.48, .52, .54),
         },
     }
@@ -124,6 +137,15 @@ def _export_seasonal_variant(root, asset_name, season):
             bm.free()
             variant.data.update()
 
+    # Grass bends down under autumn decay and winter snow cover.
+    if asset_name == "grass_tuft":
+        if season in ("autumn", "winter"):
+            factor = 0.82 if season == "autumn" else 0.56
+            for vertex in variant.data.vertices:
+                vertex.co.z *= factor
+                if season == "winter":
+                    vertex.co.x += vertex.co.z * 0.16
+
     # Snow rests on upper-facing foliage and ground objects in winter.
     if season == "winter":
         snow = mat("Seasonal snow | " + asset_name, (.82, .88, .91), .78, True)
@@ -136,7 +158,7 @@ def _export_seasonal_variant(root, asset_name, season):
             eligible = (
                 original_name.startswith("Spruce |") or
                 original_name.startswith("Pine |") or
-                (asset_name in ("rock_mossy", "stump_mossy", "fallen_log", "fern_cluster")
+                (asset_name in ("rock_mossy", "stone_cluster", "stump_mossy", "fallen_log", "fern_cluster")
                  and polygon.normal.z > 0.48 and not original_name.startswith("Bark"))
             )
             if eligible and rng.random() < (0.28 if asset_name.startswith("tree_") else 0.20):
