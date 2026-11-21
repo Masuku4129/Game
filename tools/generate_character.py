@@ -122,6 +122,9 @@ for s in [-1,1]:
     ellipsoid("Cheek",(s*.061,-.089,1.625),(.043,.034,.042),skin,"head",14,10)
 # hair cap and side locks; short beard/moustache adds historical rugged silhouette
 ellipsoid("Hair cap",(0,.005,1.785),(.128,.12,.07),hair,"head",22,12)
+# Period-appropriate soft wool cap with stitched leather rim.
+ellipsoid("Field cap crown",(0,.006,1.835),(.135,.125,.058),coat,"head",20,12)
+ellipsoid("Field cap brim",(0,-.085,1.817),(.14,.052,.025),leather,"head",18,10)
 for s in [-1,1]:
     ellipsoid("Sideburn",(s*.105,-.018,1.68),(.027,.043,.075),hair,"head",14,10)
     ellipsoid("Mustache",(s*.04,-.132,1.626),(.04,.019,.018),hair,"head",14,8)
@@ -159,7 +162,8 @@ for s in [-1,1]:
     ellipsoid("Pack buckle",(s*.19,-.125,1.25),(.026,.012,.035),brass,"chest",10,8)
 # Seasonal outer garments and scarf geometry: winter collar/scarf variants exported as named mesh pieces.
 ellipsoid("Neck scarf",(0,-.12,1.51),(.16,.045,.08),scarf,"chest",18,12)
-ellipsoid("Scarf tail",(s*.12,-.12,1.43),(.045,.035,.12),scarf,"chest",16,10)
+ellipsoid("Scarf tail",(0.12,-.12,1.43),(.045,.035,.12),scarf,"chest",16,10)
+ellipsoid("Winter fur collar",(0,-.145,1.47),(.20,.05,.075),shirt,"chest",18,12)
 # Animation helpers
 def key_pose(frame, pose):
     for name,rot in pose.items():
