@@ -48,7 +48,7 @@ internal class ForestMeshBuilder {
             for(s in 0..segments) {
                 val theta=2.0*PI*s/segments
                 val sx=(ring*cos(theta)).toFloat(); val sz=(ring*sin(theta)).toFloat()
-                val nx=sx/rx.coerceAtLeast(1e-4f); val ny=sy/ry.coerceAtLeast(1e-4f); val nz=sz/rz.coerceAtLeast(1e-4f
+                val nx=sx/rx.coerceAtLeast(1e-4f); val ny=sy/ry.coerceAtLeast(1e-4f); val nz=sz/rz.coerceAtLeast(1e-4f)
                 val nl=sqrt(nx*nx+ny*ny+nz*nz).coerceAtLeast(1e-6f)
                 vertex(cx+sx*rx,cy+sy*ry,cz+sz*rz,nx/nl,ny/nl,nz/nl,color)
             }
