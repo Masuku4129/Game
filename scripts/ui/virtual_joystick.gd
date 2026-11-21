@@ -10,38 +10,46 @@ var value := Vector2.ZERO
 var _touch_index := -1
 var _knob_offset := Vector2.ZERO
 
+
 func _ready() -> void:
 	custom_minimum_size = Vector2(190.0, 190.0)
 	size = custom_minimum_size
 	mouse_filter = Control.MOUSE_FILTER_STOP
 	queue_redraw()
 
-func _gui_input(event: InputEvent) -> void:
+
+func _input(event: InputEvent) -> void:
 	var center := size * 0.5
 	if event is InputEventScreenTouch:
-		if event.pressed and _touch_index == -1 and event.position.distance_to(center) <= radius * 1.55:
-			_touch_index = event.index
-			_update_from_position(event.position)
-			accept_event()
-		elif not event.pressed and event.index == _touch_index:
+		var touch := make_input_local(event) as InputEventScreenTouch
+		if touch.pressed and _touch_index == -1 and touch.position.distance_to(center) <= radius * 1.55:
+			_touch_index = touch.index
+			_update_from_position(touch.position)
+			get_viewport().set_input_as_handled()
+		elif not touch.pressed and touch.index == _touch_index:
 			_touch_index = -1
 			_set_value(Vector2.ZERO)
-			accept_event()
-	elif event is InputEventScreenDrag and event.index == _touch_index:
-		_update_from_position(event.position)
-		accept_event()
+			get_viewport().set_input_as_handled()
+	elif event is InputEventScreenDrag:
+		var drag := make_input_local(event) as InputEventScreenDrag
+		if drag.index == _touch_index:
+			_update_from_position(drag.position)
+			get_viewport().set_input_as_handled()
 	elif event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT:
-		if event.pressed and event.position.distance_to(center) <= radius * 1.55:
+		var mouse_button := make_input_local(event) as InputEventMouseButton
+		if mouse_button.pressed and _touch_index == -1 and mouse_button.position.distance_to(center) <= radius * 1.55:
 			_touch_index = -2
-			_update_from_position(event.position)
-			accept_event()
-		elif not event.pressed and _touch_index == -2:
+			_update_from_position(mouse_button.position)
+			get_viewport().set_input_as_handled()
+		elif not mouse_button.pressed and _touch_index == -2:
 			_touch_index = -1
 			_set_value(Vector2.ZERO)
-			accept_event()
+			get_viewport().set_input_as_handled()
 	elif event is InputEventMouseMotion and _touch_index == -2:
-		_update_from_position(event.position)
-		accept_event()
+		var mouse_motion := make_input_local(event) as InputEventMouseMotion
+		_update_from_position(mouse_motion.position)
+		get_viewport().set_input_as_handled()
+
 
 func _update_from_position(point: Vector2) -> void:
 	var offset := point - size * 0.5
@@ -54,6 +62,7 @@ func _update_from_position(point: Vector2) -> void:
 		next_value = offset.normalized() * ((strength - deadzone) / (1.0 - deadzone))
 	_set_value(next_value)
 
+
 func _set_value(next_value: Vector2) -> void:
 	value = next_value
 	if value == Vector2.ZERO:
@@ -61,8 +70,10 @@ func _set_value(next_value: Vector2) -> void:
 	value_changed.emit(value)
 	queue_redraw()
 
+
 func get_value() -> Vector2:
 	return value
+
 
 func _draw() -> void:
 	var center := size * 0.5
