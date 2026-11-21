@@ -38,6 +38,10 @@ FERN=mat("Fern | rich green",(.10,.27,.105),.88,True)
 MOSS=mat("Moss | damp green",(.16,.23,.085),1,True)
 STONE=mat("Stone | weathered grey",(.28,.30,.28),.94,True)
 WOOD=mat("Cut wood | warm heartwood",(.42,.25,.12),.92,True)
+GRASS_DARK=mat("Grass | deep blades",(.075,.17,.065),.92,True)
+GRASS_LIGHT=mat("Grass | sunlit blades",(.22,.31,.095),.9,True)
+GRASS_SEED=mat("Grass | seed heads",(.42,.34,.17),.94,True)
+STONE_LIGHT=mat("Stone | pale fractured faces",(.39,.39,.35),.96,True)
 
 def _seasonal_material(source, season):
     material = source.copy()
@@ -324,6 +328,37 @@ def fallen_log():
         cone_between((x,y,z),(x+.22,y+.35,z+.34),.09,.025,BARK,7)
     finish("fallen_log",[])
 
-for build in (spruce,pine,birch,shrub,fern,rock,stump,fallen_log):
+def grass_tuft():
+    reset(); rng=random.Random(8808)
+    for clump in range(5):
+        cx=rng.uniform(-.22,.22); cy=rng.uniform(-.22,.22)
+        for blade in range(11):
+            a=rng.uniform(0,math.tau); lean=rng.uniform(.16,.62)
+            height=rng.uniform(.42,1.05); width=rng.uniform(.035,.075)
+            leaf((cx,cy,.025),(math.cos(a)*lean,math.sin(a)*lean,height),1.0,width,GRASS_LIGHT if blade%5==0 else GRASS_DARK,"grass_blade")
+        if clump == 2:
+            for spike in range(3):
+                a=math.tau*spike/3
+                curve_tube([(cx,cy,.12),(cx+math.cos(a)*.08,cy+math.sin(a)*.08,.65),(cx+math.cos(a)*.16,cy+math.sin(a)*.16,.92)],.012,GRASS_SEED,"grass_seed_stem")
+                sphere((cx+math.cos(a)*.16,cy+math.sin(a)*.16,.94),(.035,.035,.12),GRASS_SEED,7,5)
+    finish("grass_tuft",[])
+
+
+def stone_cluster():
+    reset(); rng=random.Random(9909)
+    for i in range(9):
+        a=rng.uniform(0,math.tau); radius=rng.uniform(0.0,1.0)
+        x=math.cos(a)*radius; y=math.sin(a)*radius; size=rng.uniform(.16,.58)
+        bpy.ops.mesh.primitive_ico_sphere_add(subdivisions=2,radius=1,location=(x,y,size*.48))
+        rock_obj=bpy.context.object; rock_obj.name="fractured_stone"
+        rock_obj.scale=(size*rng.uniform(.8,1.35),size*rng.uniform(.7,1.1),size*rng.uniform(.38,.78))
+        for vertex in rock_obj.data.vertices: vertex.co *= rng.uniform(.78,1.16)
+        rock_obj.data.materials.append(STONE if i%3 else STONE_LIGHT)
+        for face in rock_obj.data.polygons: face.use_smooth=False
+        if i%2==0: sphere((x-size*.12,y+size*.08,size*.72),(size*.22,size*.16,.025),MOSS,7,5)
+    finish("stone_cluster",[])
+
+
+undefinedfor build in (spruce,pine,birch,shrub,fern,rock,grass_tuft,stone_cluster,stump,fallen_log):
     build()
 print("ASSET_BATCH_COMPLETE", OUT)
