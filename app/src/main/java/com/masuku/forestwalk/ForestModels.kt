@@ -109,7 +109,7 @@ internal object ForestModels {
 
     data class CharacterRig(val body:ForestMesh,val arm:ForestMesh,val tool:ForestMesh,val upperLeg:ForestMesh,val lowerLeg:ForestMesh)
     fun characterRig(seed:Int=1):CharacterRig{
-        val body=ForestMeshBuilder();val arm=ForestMeshBuilder();val tool=ForestMeshBuilder();val upperLeg=ForestMeshBuilder();val lowerLeg=ForestMeshBuilder
+        val body=ForestMeshBuilder();val arm=ForestMeshBuilder();val tool=ForestMeshBuilder();val upperLeg=ForestMeshBuilder();val lowerLeg=ForestMeshBuilder()
         val cloth=0xFF455762.toInt();val leather=0xFF66503B.toInt();val skin=0xFFD4A47C.toInt();val dark=0xFF26323A.toInt()
         // Main torso, coat layers, collar, belt, backpack and head are the stationary core.
         body.ellipsoid(0f,1.00f,0f,.24f,.34f,.15f,cloth,14,9)
