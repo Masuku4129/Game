@@ -53,7 +53,9 @@ func _play_matching(candidates: Array[String]) -> void:
 
 func set_motion(horizontal_speed: float, slope: float) -> void:
 	target_speed = horizontal_speed
-	if target_speed > 6.0:
+	# PLAYER_SPEED is 5.5 m/s; keep the run threshold reachable during
+	# normal full-stick movement rather than requiring an impossible speed.
+	if target_speed > 4.25:
 		_play_matching(["Run", "run"])
 	elif target_speed > 0.15:
 		_play_matching(["Walk", "walk"])
