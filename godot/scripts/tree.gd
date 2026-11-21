@@ -7,9 +7,11 @@ func _ready()->void:
 	var trunkmat:=StandardMaterial3D.new()
 	trunkmat.albedo_color=Color(0.27,0.18,0.11)
 	trunkmat.roughness=1.0
-	var leafmat:=StandardMaterial3D.new()
-	leafmat.albedo_color=[Color(0.12,0.28,0.10),Color(0.17,0.35,0.13),Color(0.22,0.40,0.16),Color(0.26,0.43,0.20)][rng.randi_range(0,3)]
-	leafmat.roughness=0.92
+	var foliage_shader := Shader.new()
+	foliage_shader.code = "shader_type spatial;\nrender_mode diffuse_burley, specular_schlick_ggx;\nuniform vec4 base_tint : source_color = vec4(0.18,0.35,0.13,1.0);\nvarying vec3 wpos;\nfloat hash(vec3 p){return fract(sin(dot(p,vec3(17.13,91.7,47.2)))*43758.54);}\nfloat noise(vec3 p){vec3 i=floor(p),f=fract(p);f=f*f*(3.0-2.0);return mix(mix(mix(hash(i),hash(i+vec3(1,0,0)),f.x),mix(hash(i+vec3(0,1,0)),hash(i+vec3(1,1,0)),f.x),f.y),mix(mix(hash(i+vec3(0,0,1)),hash(i+vec3(1,0,1)),f.x),mix(hash(i+vec3(0,1,1)),hash(i+vec3(1,1,1)),f.x),f.y),f.z);}\nvoid vertex(){wpos=(MODEL_MATRIX*vec4(VERTEX,1.0)).xyz;}\nvoid fragment(){float n=noise(wpos*5.0)*0.55+noise(wpos*15.0)*0.25+noise(wpos*1.5)*0.2;vec3 c=base_tint.rgb*(0.68+n*0.62);c=mix(c,c*vec3(0.72,1.1,0.7),smoothstep(0.58,0.92,n)*0.25);ALBEDO=c;ROUGHNESS=0.95;}\n"
+	var leafmat := ShaderMaterial.new()
+	leafmat.shader = foliage_shader
+	leafmat.set_shader_parameter("base_tint", [Color(0.12,0.28,0.10),Color(0.17,0.35,0.13),Color(0.22,0.40,0.16),Color(0.26,0.43,0.20)][rng.randi_range(0,3)])
 	var trunk:=MeshInstance3D.new()
 	var tm:=CylinderMesh.new()
 	tm.top_radius=0.13
