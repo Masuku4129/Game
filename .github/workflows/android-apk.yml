@@ -45,16 +45,32 @@ jobs:
           yes | sdkmanager --licenses
           sdkmanager "platform-tools" "platforms;android-35" "build-tools;35.0.1" "ndk;28.1.13356709" "cmake;3.10.2.4988404"
 
-      - name: Download Godot 4.7.2
+      - name: Restore Godot 4.7.2 toolchain cache
+        id: godot-cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/godot-4.7.2/godot
+            ~/.local/share/godot/export_templates/4.7.2.stable
+          key: ${{ runner.os }}-godot-4.7.2-stable-linux-x64-v1
+
+      - name: Install Godot 4.7.2 when cache is empty
+        if: steps.godot-cache.outputs.cache-hit != 'true'
         run: |
-          mkdir -p "$RUNNER_TEMP/godot" "$HOME/.local/share/godot/export_templates/4.7.2.stable"
+          mkdir -p "$HOME/.cache/godot-4.7.2" "$HOME/.local/share/godot/export_templates/4.7.2.stable" "$RUNNER_TEMP/godot"
           curl -fL "https://github.com/godotengine/godot-builds/releases/download/4.7.2-stable/Godot_v4.7.2-stable_linux.x86_64.zip" -o "$RUNNER_TEMP/godot/godot.zip"
           unzip -q "$RUNNER_TEMP/godot/godot.zip" -d "$RUNNER_TEMP/godot"
-          sudo install "$RUNNER_TEMP/godot/Godot_v4.7.2-stable_linux.x86_64" /usr/local/bin/godot
+          install "$RUNNER_TEMP/godot/Godot_v4.7.2-stable_linux.x86_64" "$HOME/.cache/godot-4.7.2/godot"
           curl -fL "https://github.com/godotengine/godot-builds/releases/download/4.7.2-stable/Godot_v4.7.2-stable_export_templates.tpz" -o "$RUNNER_TEMP/godot/templates.tpz"
           mkdir -p "$RUNNER_TEMP/godot/templates"
           unzip -q "$RUNNER_TEMP/godot/templates.tpz" -d "$RUNNER_TEMP/godot/templates"
           cp "$RUNNER_TEMP/godot/templates/templates/"* "$HOME/.local/share/godot/export_templates/4.7.2.stable/"
+
+      - name: Activate cached Godot
+        run: |
+          test -x "$HOME/.cache/godot-4.7.2/godot"
+          test -n "$(find "$HOME/.local/share/godot/export_templates/4.7.2.stable" -maxdepth 1 -type f -print -quit)"
+          sudo ln -sf "$HOME/.cache/godot-4.7.2/godot" /usr/local/bin/godot
 
       - name: Import project and validate scripts
         run: |
