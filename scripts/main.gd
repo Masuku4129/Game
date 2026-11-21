@@ -4,6 +4,8 @@ const WORLD_EXTENT := 90.0
 const GRID_CELLS := 144
 const TREE_COUNT := 420
 const PLAYER_SPEED := 5.5
+const PLAYER_ACCELERATION := 22.0
+const PLAYER_DECELERATION := 28.0
 const CAMERA_OFFSET := Vector3(11.5, 12.5, 11.5)
 const CAMERA_FOV := 48.0
 const HUMANOID_RIG = preload("res://scripts/animation/procedural_humanoid.gd")
@@ -255,7 +257,7 @@ func _create_hud() -> void:
 	margin.add_theme_constant_override("margin_top", 8)
 	margin.add_theme_constant_override("margin_bottom", 8)
 	hud_label = Label.new()
-	hud_label.text = "FIELD TEST\nUse the joystick to walk"
+	hud_label.text = "ПОЛЕВОЕ ИСПЫТАНИЕ\nЛевый джойстик — ходьба"
 	margin.add_child(hud_label)
 	panel.add_child(margin)
 	layer.add_child(panel)
@@ -288,8 +290,12 @@ func _physics_process(delta: float) -> void:
 		direction.y = 0.0
 		direction = direction.normalized()
 
-	player.velocity.x = direction.x * PLAYER_SPEED
-	player.velocity.z = direction.z * PLAYER_SPEED
+	var horizontal_velocity := Vector2(player.velocity.x, player.velocity.z)
+	var target_velocity := Vector2(direction.x, direction.z) * PLAYER_SPEED
+	var response := PLAYER_ACCELERATION if direction.length_squared() > 0.001 else PLAYER_DECELERATION
+	horizontal_velocity = horizontal_velocity.move_toward(target_velocity, response * delta)
+	player.velocity.x = horizontal_velocity.x
+	player.velocity.z = horizontal_velocity.y
 	if not player.is_on_floor():
 		player.velocity.y -= 24.0 * delta
 	else:
@@ -301,6 +307,10 @@ func _physics_process(delta: float) -> void:
 		var ahead := player.position + direction * 1.0
 		slope_ahead = _height_at(ahead.x, ahead.z) - _height_at(player.position.x, player.position.z)
 	player_visual.call("set_motion", horizontal_speed, slope_ahead)
+	if direction.length_squared() > 0.001:
+		# The humanoid rig faces local -Z. Rotate smoothly toward travel direction.
+		var target_yaw := atan2(-direction.x, -direction.z)
+		player_visual.rotation.y = lerp_angle(player_visual.rotation.y, target_yaw, 1.0 - exp(-delta * 12.0))
 
 	var target_position := player.global_position + CAMERA_OFFSET
 	camera.global_position = camera.global_position.lerp(target_position, 1.0 - exp(-delta * 5.5))
