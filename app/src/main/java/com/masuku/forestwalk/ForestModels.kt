@@ -93,11 +93,11 @@ internal object ForestModels {
         // Loose asymmetric crown with overlapping canopy lobes and gaps for a natural silhouette.
         for(i in 0 until 12){
             val a=i*PI*2.0/12.0+rnd.nextDouble()*.4
-            val r=height*(if(species==1).08f else if(species==2).18f else .12f+rnd.nextFloat()*.23f)
+            val r=height*(if(species==1) .08f else if(species==2) .18f else .12f+rnd.nextFloat()*.23f)
             val cx=(cos(a)*r).toFloat()+leanX*.65f
             val cz=(sin(a)*r).toFloat()+leanZ*.65f
             val cy=height*(.68f+rnd.nextFloat()*.25f)
-            val leafSize=height*(if(species==1).19f+rnd.nextFloat()*.08f else if(species==2).27f+rnd.nextFloat()*.13f else .24f+rnd.nextFloat()*.12f)
+            val leafSize=height*(if(species==1) .19f+rnd.nextFloat()*.08f else if(species==2) .27f+rnd.nextFloat()*.13f else .24f+rnd.nextFloat()*.12f)
             leafCluster(b,cx,cy,cz,leafSize,a,palette[rnd.nextInt(palette.size)],seed+i*31)
             components++
         }
