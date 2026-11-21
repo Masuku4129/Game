@@ -7,7 +7,7 @@ const WIND_NEAR_RADIUS_SQUARED := 42.0 * 42.0
 const PLAYER_SPEED := 5.5
 const PLAYER_ACCELERATION := 22.0
 const PLAYER_DECELERATION := 28.0
-const CAMERA_OFFSET := Vector3(7.0, 7.8, 7.0)
+const CAMERA_OFFSET := Vector3(10.2, 25.0, 10.2)
 const CAMERA_FOV := 44.0
 
 @export_enum("spring", "summer", "autumn", "winter") var active_season: String = "summer"
@@ -749,7 +749,7 @@ func _create_camera() -> void:
 	camera.projection = Camera3D.PROJECTION_PERSPECTIVE
 	camera.fov = CAMERA_FOV
 	camera.near = 0.08
-	camera.far = 132.0
+	camera.far = 190.0
 	camera.position = player.position + CAMERA_OFFSET
 	add_child(camera)
 	camera.make_current()
