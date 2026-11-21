@@ -130,6 +130,22 @@ def _export_seasonal_variant(root, asset_name, season):
         if source is None:
             continue
         seasonal = _seasonal_material(source, season)
+        # Procedural Noise/Ramp nodes are not exported as GLB material colors.
+        # Preserve each intended tint as a constant Principled BSDF base factor.
+        if seasonal.use_nodes:
+            shader = seasonal.node_tree.nodes.get("Principled BSDF")
+            if shader:
+                base_color = shader.inputs.get("Base Color")
+                if base_color:
+                    for link in list(base_color.links):
+                        seasonal.node_tree.links.remove(link)
+                    base_color.default_value = seasonal.diffuse_color
+                roughness = shader.inputs.get("Roughness")
+                if roughness:
+                    roughness.default_value = seasonal.roughness
+                metallic = shader.inputs.get("Metallic")
+                if metallic:
+                    metallic.default_value = 0.0
         variant.data.materials[index] = seasonal
         variant_material_names.append((index, source.name))
 
@@ -267,30 +283,30 @@ def leaf(loc, direction, length, width, material, name="leaf"):
 def spruce():
     reset(); rng=random.Random(1101)
     cone_between((0,0,0),(0,0,7.2),.32,.035,BARK,12)
-    for level in range(13):
+    for level in range(10):
         z=.75+level*.47; radius=2.05*(1-z/8.1)**.78+.12
-        for j in range(7):
-            a=2*math.pi*j/7+level*.37; length=radius*rng.uniform(.72,1.05)
+        for j in range(6):
+            a=2*math.pi*j/6+level*.37; length=radius*rng.uniform(.72,1.05)
             end=(math.cos(a)*length,z*0+math.sin(a)*length,z-.18)
             mid=(math.cos(a)*length*.55,math.sin(a)*length*.55,z+.12)
             curve_tube([(0,0,z+.18),mid,end],rng.uniform(.035,.065),BARK)
             # layered needle sprays along every bough
-            for k in range(4):
-                t=.25+k*.17; p=Vector(mid).lerp(Vector(end),t)
+            for k in range(2):
+                t=.28+k*.34; p=Vector(mid).lerp(Vector(end),t)
                 leaf((p.x,p.y,p.z), (math.cos(a)*.65, math.sin(a)*.65, -.35), .52, .16, NEEDLE_DARK if (j+k)%3 else NEEDLE, "spruce_needle_spray")
     finish("tree_spruce",[])
 
 def pine():
     reset(); rng=random.Random(2202)
     cone_between((0,0,0),(0,0,6.8),.28,.045,BARK,10)
-    for level in range(8):
+    for level in range(7):
         z=2.0+level*.48; radius=2.1*(1-level/10)
-        for j in range(5):
-            a=2*math.pi*j/5+level*.52; length=radius*rng.uniform(.7,1.0)
+        for j in range(4):
+            a=2*math.pi*j/4+level*.52; length=radius*rng.uniform(.7,1.0)
             end=(math.cos(a)*length,math.sin(a)*length,z+.15)
             curve_tube([(0,0,z), (end[0]*.52,end[1]*.52,z+.2),end],.045,BARK)
-            for k in range(3):
-                p=Vector(end)*(.45+k*.17); p.z=z+.25+k*.06
+            for k in range(2):
+                p=Vector(end)*(.48+k*.30); p.z=z+.25+k*.06
                 leaf(p, (math.cos(a)*.45, math.sin(a)*.45, .08), .72, .19, NEEDLE, "pine_needle_cluster")
     finish("tree_pine",[])
 
@@ -302,12 +318,12 @@ def birch():
         z=rng.uniform(.35,6.2); a=rng.uniform(0,math.tau); r=.18*(1-z/9)
         o=sphere((math.cos(a)*r,math.sin(a)*r,z),(rng.uniform(.07,.16),.035,rng.uniform(.018,.045)),BIRCH_DARK,8,5)
         o.rotation_euler[2]=a
-    for i in range(9):
-        z=rng.uniform(3.5,6.1); a=math.tau*i/9+rng.uniform(-.2,.2); length=rng.uniform(1.0,1.8)
+    for i in range(7):
+        z=rng.uniform(3.5,6.1); a=math.tau*i/7+rng.uniform(-.2,.2); length=rng.uniform(1.0,1.8)
         end=(math.cos(a)*length,math.sin(a)*length,z+rng.uniform(.2,.9))
         curve_tube([(0,0,z-.3),(end[0]*.55,end[1]*.55,z+.15),end],.045,BIRCH_DARK)
-        for k in range(3):
-            leaf((end[0]*(.65+k*.1),end[1]*(.65+k*.1),end[2]+k*.13), (math.cos(a),math.sin(a),.24), .62, .22, LEAF_LIGHT, "birch_leaf")
+        for k in range(2):
+            leaf((end[0]*(.68+k*.14),end[1]*(.65+k*.1),end[2]+k*.13), (math.cos(a),math.sin(a),.24), .62, .22, LEAF_LIGHT, "birch_leaf")
     finish("tree_birch",[])
 
 def shrub():
@@ -321,15 +337,15 @@ def shrub():
 
 def fern():
     reset(); rng=random.Random(5505)
-    for frond in range(9):
-        a=math.tau*frond/9; length=rng.uniform(1.0,1.55); height=rng.uniform(.45,.8)
+    for frond in range(7):
+        a=math.tau*frond/7; length=rng.uniform(1.0,1.55); height=rng.uniform(.45,.8)
         pts=[]
         for j in range(7):
             t=j/6; rad=length*t; z=.08+height*math.sin(t*math.pi*.78)
             pts.append((math.cos(a)*rad,math.sin(a)*rad,z))
         curve_tube(pts,.018,FERN)
-        for j in range(1,7):
-            t=j/7; p=Vector(pts[j]); size=.24*(1-t*.55)
+        for j in range(1,5):
+            t=j/5; p=Vector(pts[j]); size=.24*(1-t*.55)
             for side in (-1,1):
                 q=p+Vector((-math.sin(a)*size*side,math.cos(a)*size*side,-.035))
                 leaf(q, (-math.sin(a)*side, math.cos(a)*side, -.18), size*2.2, size*.48, FERN, "fern_pinna")
@@ -368,13 +384,13 @@ def fallen_log():
 
 def grass_tuft():
     reset(); rng=random.Random(8808)
-    for clump in range(5):
+    for clump in range(3):
         cx=rng.uniform(-.22,.22); cy=rng.uniform(-.22,.22)
-        for blade in range(11):
+        for blade in range(8):
             a=rng.uniform(0,math.tau); lean=rng.uniform(.16,.62)
             height=rng.uniform(.42,1.05); width=rng.uniform(.035,.075)
             leaf((cx,cy,.025),(math.cos(a)*lean,math.sin(a)*lean,height),1.0,width,GRASS_LIGHT if blade%5==0 else GRASS_DARK,"grass_blade")
-        if clump == 2:
+        if clump == 1:
             for spike in range(3):
                 a=math.tau*spike/3
                 curve_tube([(cx,cy,.12),(cx+math.cos(a)*.08,cy+math.sin(a)*.08,.65),(cx+math.cos(a)*.16,cy+math.sin(a)*.16,.92)],.012,GRASS_SEED,"grass_seed_stem")
