@@ -36,12 +36,12 @@ internal class ForestWeatherParticles {
             var k=0
             for(p in rain){p.y-=p.speed*dt;p.x+=.7f*dt;if(p.y<0){p.y=16f+rng.nextFloat()*8f;p.x=rng.nextFloat()*30f-15f;p.z=rng.nextFloat()*30f-15f}
                 rainBuffer.put(k++,px+p.x);rainBuffer.put(k++,p.y);rainBuffer.put(k++,pz+p.z
-                );rainBuffer.put(k++,px+p.x+.025f);rainBuffer.put(k++,p.y+.45f);rainBuffer.put(k++,pz+p.z}
+                );rainBuffer.put(k++,px+p.x+.025f);rainBuffer.put(k++,p.y+.45f);rainBuffer.put(k++,pz+p.z)}
             rainBuffer.position(0);GLES20.glUniform4f(colorUniform,.63f,.72f,.82f,.65f);GLES20.glEnableVertexAttribArray(posAttr);GLES20.glVertexAttribPointer(posAttr,3,GLES20.GL_FLOAT,false,0,rainBuffer);GLES20.glDrawArrays(GLES20.GL_LINES,0,480)
         }else{
             var k=0
             for(p in snow){p.y-=p.speed*dt;p.x+=sin(p.phase+p.y)*.3f*dt;p.z+=cos(p.phase+p.y)*.2f*dt;if(p.y<0){p.y=17f+rng.nextFloat()*7f;p.x=rng.nextFloat()*30f-15f;p.z=rng.nextFloat()*30f-15f}
-                snowBuffer.put(k++,px+p.x);snowBuffer.put(k++,p.y);snowBuffer.put(k++,pz+p.z}
+                snowBuffer.put(k++,px+p.x);snowBuffer.put(k++,p.y);snowBuffer.put(k++,pz+p.z)}
             snowBuffer.position(0);GLES20.glUniform4f(colorUniform,.94f,.96f,1f,.92f);GLES20.glEnableVertexAttribArray(posAttr);GLES20.glVertexAttribPointer(posAttr,3,GLES20.GL_FLOAT,false,0,snowBuffer);GLES20.glDrawArrays(GLES20.GL_POINTS,0,160)
         }
         GLES20.glDisableVertexAttribArray(posAttr);GLES20.glDisable(GLES20.GL_BLEND)
