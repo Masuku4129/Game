@@ -23,20 +23,20 @@ Project uses Kotlin + OpenGL ES 2.0 under `app/src/main/java/com/masuku/forestwa
 
 Implemented in source (CI build evidence only; no device visual test):
 - Reusable mesh builder for ellipsoids, tapered cylinders and triangle surfaces; CPU merging of static meshes.
-- Procedural multi-branch trees with exposed roots, branch structure and pointed leaf clusters, deterministic species/size variations.
-- Batched tree chunks and understory shrubs.
+- Procedural multi-branch trees with exposed roots, branch structure, cross-plane pointed leaf geometry, and three distinct canopy palettes/silhouette families.
+- Batched tree chunks and branch/leaf-built shrubs.
 - Ground detail blades, wildflower clusters and rocks, batched by chunk.
-- Triangulated forest floor with subtle undulation and randomized green/earth color palette.
+- Triangulated forest floor with subtle undulation and randomized green/earth color palette; shader puddle patches during rain and leaf-litter coloring during autumn.
 - Close fixed follow-camera, joystick movement and movement-direction turn.
 - Shader lighting, surface grain, foliage wind sway and proximity-based canopy transparency.
 - Clear/rain/snow/fog mode selector; rain/snow particles; wet tint; snow shading varies by height and surface normal; fog depth effect.
-- Basic player gait/bob and clothing/backpack/headwear/tool mesh details.
+- Separate player body, arm, tool, upper-leg and lower-leg meshes with hip/knee/arm swing animation; clothing, backpack, headwear and tool details.
 
 ## Known gaps / must not be described as complete
 - Character animation is still shader-based deformation of a static mesh, not a true articulated rig with gait phases.
 - Terrain is shallow, fixed-size and not streamed; no actual collisions, paths, streams, slopes, or biome generation.
-- Weather is visual only: no persistent wetness, puddles, mud, rain splash, snow depth, drifts, or footprints/body impressions.
-- Seasons beyond weather states and seasonal vegetation swaps are not implemented.
+- Weather remains visual only: shader puddle patches are not persistent geometry; no actual wetness state, mud, rain splash, snow depth, drifts, or footprints/body impressions.
+- Autumn is currently a shader color mode, not a full seasonal model/vegetation swap; other season-specific vegetation changes are not implemented.
 - Trees and ground detail remain procedural geometry; style quality must be visually assessed in a real build/device.
 - Foliage fade and blending are unverified visually; render ordering may need correction.
 - No real-device FPS, memory, touch, thermal or stability profiling has been done.
