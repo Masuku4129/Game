@@ -12,140 +12,129 @@ import android.graphics.Color
 import android.view.Gravity
 import android.widget.TextView
 import kotlin.math.*
+import java.nio.ByteBuffer
+import java.nio.ByteOrder
+import java.nio.FloatBuffer
+import java.nio.ShortBuffer
+import javax.microedition.khronos.opengles.GL10
+import javax.microedition.khronos.egl.EGLConfig
 
 class MainActivity : Activity() {
     private lateinit var game: ForestView
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        window.decorView.systemUiVisibility = (View.SYSTEM_UI_FLAG_FULLSCREEN or View.SYSTEM_UI_FLAG_HIDE_NAVIGATION or View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY or View.SYSTEM_UI_FLAG_LAYOUT_STABLE or View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION or View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN)
-        val root = FrameLayout(this)
-        game = ForestView(this)
+        window.decorView.systemUiVisibility = (View.SYSTEM_UI_FLAG_FULLSCREEN or View.SYSTEM_UI_FLAG_HIDE_NAVIGATION or View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY)
+        val root=FrameLayout(this)
+        game=ForestView(this)
         root.addView(game)
-        val pad = Joystick(this) { x, y -> game.moveX = x; game.moveY = y }
-        val p = FrameLayout.LayoutParams(260,260, Gravity.BOTTOM or Gravity.LEFT)
-        p.leftMargin = 34; p.bottomMargin = 28
-        root.addView(pad,p)
-        val hint = TextView(this).apply { text="FOREST WALK"; setTextColor(Color.WHITE); textSize=13f; alpha=.72f; setPadding(24,16,24,16) }
-        root.addView(hint, FrameLayout.LayoutParams(-2,-2,Gravity.TOP or Gravity.LEFT))
+        val pad=Joystick(this){x,y->game.moveX=x;game.moveY=y}
+        val params=FrameLayout.LayoutParams(250,250,Gravity.BOTTOM or Gravity.LEFT).apply{leftMargin=30;bottomMargin=26}
+        root.addView(pad,params)
+        val title=TextView(this).apply{text="FOREST WALK";setTextColor(Color.WHITE);textSize=12f;alpha=.7f;setPadding(20,12,20,12)}
+        root.addView(title,FrameLayout.LayoutParams(-2,-2,Gravity.TOP or Gravity.LEFT))
         setContentView(root)
     }
-    override fun onPause(){ super.onPause(); game.onPause() }
-    override fun onResume(){ super.onResume(); game.onResume() }
+    override fun onPause(){super.onPause();game.onPause()}
+    override fun onResume(){super.onResume();game.onResume()}
 }
 
-class Joystick(ctx: android.content.Context, val changed:(Float,Float)->Unit): View(ctx) {
-    private val p=Paint(3)
-    private var dx=0f; private var dy=0f
-    override fun onDraw(c:Canvas) {
-        val r=min(width,height)*.43f; val cx=width/2f; val cy=height/2f
-        p.color=0x55333333; c.drawCircle(cx,cy,r,p)
-        p.color=0x88FFFFFF.toInt(); c.drawCircle(cx,cy,r*.48f,p)
-        p.color=0xCCFFFFFF.toInt(); c.drawCircle(cx+dx*r*.58f,cy+dy*r*.58f,r*.24f,p)
-    }
-    override fun onTouchEvent(e:MotionEvent):Boolean {
-        val r=min(width,height)*.43f; val cx=width/2f; val cy=height/2f
-        if(e.action==MotionEvent.ACTION_UP || e.action==MotionEvent.ACTION_CANCEL){dx=0f;dy=0f;changed(0f,0f)}
-        else { dx=((e.x-cx)/r).coerceIn(-1f,1f); dy=((e.y-cy)/r).coerceIn(-1f,1f); val l=sqrt(dx*dx+dy*dy); if(l>1){dx/=l;dy/=l}; changed(dx,-dy) }
-        invalidate(); return true
-    }
+class Joystick(ctx:android.content.Context,val changed:(Float,Float)->Unit):View(ctx){
+    private val paint=Paint(3)
+    private var dx=0f;private var dy=0f
+    override fun onDraw(c:Canvas){val r=min(width,height)*.43f;val cx=width/2f;val cy=height/2f
+        paint.color=0x55333333;c.drawCircle(cx,cy,r,paint)
+        paint.color=0x88FFFFFF.toInt();c.drawCircle(cx,cy,r*.48f,paint)
+        paint.color=0xCCFFFFFF.toInt();c.drawCircle(cx+dx*r*.58f,cy+dy*r*.58f,r*.24f,paint)}
+    override fun onTouchEvent(e:MotionEvent):Boolean{val r=min(width,height)*.43f;val cx=width/2f;val cy=height/2f
+        if(e.action==MotionEvent.ACTION_UP||e.action==MotionEvent.ACTION_CANCEL){dx=0f;dy=0f;changed(0f,0f)}
+        else{dx=((e.x-cx)/r).coerceIn(-1f,1f);dy=((e.y-cy)/r).coerceIn(-1f,1f);val l=sqrt(dx*dx+dy*dy);if(l>1){dx/=l;dy/=l};changed(dx,-dy)}
+        invalidate();return true}
 }
 
-class ForestView(ctx:android.content.Context): GLSurfaceView(ctx) {
-    val renderer3d=ForestRenderer()
-    var moveX:Float
-        get() = renderer3d.mx
-        set(v) { renderer3d.mx=v }
-    var moveY:Float
-        get() = renderer3d.my
-        set(v) { renderer3d.my=v }
-    init { setEGLContextClientVersion(2); setRenderer(renderer3d); renderMode=RENDERMODE_CONTINUOUSLY }
+class ForestView(ctx:android.content.Context):GLSurfaceView(ctx){
+    val renderer=ForestRenderer()
+    var moveX:Float get()=renderer.mx;set(v){renderer.mx=v}
+    var moveY:Float get()=renderer.my;set(v){renderer.my=v}
+    init{setEGLContextClientVersion(2);setRenderer(renderer);renderMode=RENDERMODE_CONTINUOUSLY}
 }
 
-class ForestRenderer: android.opengl.GLSurfaceView.Renderer {
-    @Volatile var mx=0f
-    @Volatile var my=0f
+private data class GpuMesh(val vertices:FloatBuffer,val indices:ShortBuffer,val count:Int)
+private data class TreeInstance(val x:Float,val z:Float,val scale:Float,val species:Int)
+
+class ForestRenderer:GLSurfaceView.Renderer{
+    @Volatile var mx=0f;@Volatile var my=0f
     private var program=0
-    private var pos=0
-    private var col=0
-    private var angle=0f
-    private var px=0f
-    private var pz=0f
-    private var last=System.nanoTime()
-    private val objects=ArrayList<Obj>()
-    data class Obj(val x:Float,val z:Float,val type:Int,val scale:Float,val seed:Float)
-    private val vShader="""attribute vec3 aPos; uniform mat4 uMVP; uniform mat4 uModel; varying vec3 vWorld; void main(){ vec4 world=uModel*vec4(aPos,1.0); vWorld=world.xyz; gl_Position=uMVP*vec4(aPos,1.0); }"""
-    private val fShader="""precision mediump float; uniform vec4 uColor; varying vec3 vWorld;
+    private var aPosition=0;private var aNormal=0;private var aColor=0
+    private var uMvp=0;private var uModel=0;private var uPlayer=0;private var uTime=0;private var uWeather=0
+    private var width=1;private var height=1
+    private var playerX=0f;private var playerZ=0f;private var heading=0f;private var last=System.nanoTime()
+    private val treeCache=ArrayList<GpuMesh>()
+    private val instances=ArrayList<TreeInstance>()
+    private lateinit var playerMesh:GpuMesh
+    private lateinit var groundMesh:GpuMesh
+    private lateinit var shrubMesh:GpuMesh
+    private val vShader="""attribute vec3 aPos;attribute vec3 aNormal;attribute vec3 aColor;uniform mat4 uMVP;uniform mat4 uModel;varying vec3 vWorld;varying vec3 vNormal;varying vec3 vColor;void main(){vec4 w=uModel*vec4(aPos,1.0);vWorld=w.xyz;vNormal=mat3(uModel)*aNormal;vColor=aColor;gl_Position=uMVP*vec4(aPos,1.0);}"""
+    private val fShader="""precision mediump float;varying vec3 vWorld;varying vec3 vNormal;varying vec3 vColor;uniform vec3 uPlayer;uniform float uTime;uniform float uWeather;
         float hash(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453);}
-        float noise(vec2 p){vec2 i=floor(p),f=fract(p);f=f*f*(3.0-2.0);return mix(mix(hash(i),hash(i+vec2(1.0,0.0)),f.x),mix(hash(i+vec2(0.0,1.0)),hash(i+vec2(1.0,1.0)),f.x),f.y);}
-        void main(){float coarse=noise(vWorld.xz*0.24);float detail=noise(vWorld.xz*3.8);float fine=noise(vWorld.xz*17.0);float mottled=0.72+coarse*0.35+detail*0.17+fine*0.08;vec3 c=uColor.rgb*mottled;float speckle=smoothstep(0.78,0.96,noise(vWorld.xz*31.0));c+=uColor.rgb*speckle*0.12;gl_FragColor=vec4(c,uColor.a);}"""
-    override fun onSurfaceCreated(gl:javax.microedition.khronos.opengles.GL10?, cfg:javax.microedition.khronos.egl.EGLConfig?) {
-        android.opengl.GLES20.glClearColor(.48f,.68f,.76f,1f)
+        float noise(vec2 p){vec2 i=floor(p),f=fract(p);f=f*f*(3.0-2.0);return mix(mix(hash(i),hash(i+vec2(1.,0.)),f.x),mix(hash(i+vec2(0.,1.)),hash(i+vec2(1.,1.)),f.x),f.y);}
+        void main(){float n=noise(vWorld.xz*2.8)*.12+noise(vWorld.xz*13.0)*.045;vec3 base=vColor*(.90+n);vec3 N=normalize(vNormal);vec3 L=normalize(vec3(-.42,.86,.3));float diffuse=max(dot(N,L),0.0);float ambient=.38;float shade=ambient+diffuse*.68;float wet=clamp(uWeather,0.0,1.0);base=mix(base,base*.72+vec3(.035,.045,.05),wet*.55);vec3 viewDir=normalize(vec3(0.0,1.0,0.0));float spec=pow(max(dot(reflect(-L,N),viewDir),0.0),22.0)*wet*.22;gl_FragColor=vec4(base*shade+spec,1.0);}"""
+    override fun onSurfaceCreated(gl:GL10?,cfg:EGLConfig?){
+        android.opengl.GLES20.glClearColor(.48f,.62f,.72f,1f)
         android.opengl.GLES20.glEnable(android.opengl.GLES20.GL_DEPTH_TEST)
-        program=link(vShader,fShader); pos=android.opengl.GLES20.glGetAttribLocation(program,"aPos"); col=android.opengl.GLES20.glGetUniformLocation(program,"uColor")
-        for(z in -12..22) for(x in -16..16) {
-            val h=((x*17+z*31+4000)%13)
-            if(h%3!=0 && (x*x+z*z)>5) objects.add(Obj(x*1.65f,z*1.8f, if(h%5==0) 1 else 0, .78f+(h%4)*.13f,h.toFloat()))
-        }
-        for(i in 0..90) { val x=sin(i*12.31)*25; val z=cos(i*7.17)*28; objects.add(Obj(x.toFloat(),z.toFloat(),2,.55f+(i%4)*.15f,i.toFloat())) }
-    }
-    private fun shader(type:Int,src:String):Int { val s=android.opengl.GLES20.glCreateShader(type); android.opengl.GLES20.glShaderSource(s,src); android.opengl.GLES20.glCompileShader(s); return s }
-    private fun link(v:String,f:String):Int { val p=android.opengl.GLES20.glCreateProgram(); android.opengl.GLES20.glAttachShader(p,shader(android.opengl.GLES20.GL_VERTEX_SHADER,v)); android.opengl.GLES20.glAttachShader(p,shader(android.opengl.GLES20.GL_FRAGMENT_SHADER,f)); android.opengl.GLES20.glLinkProgram(p); return p }
-    override fun onSurfaceChanged(gl:javax.microedition.khronos.opengles.GL10?,w:Int,h:Int) { android.opengl.GLES20.glViewport(0,0,w,h) }
-    override fun onDrawFrame(gl:javax.microedition.khronos.opengles.GL10?) {
-        val now=System.nanoTime(); val dt=((now-last)/1e9).toFloat().coerceAtMost(.05f); last=now
-        val speed=3.1f
-        px += mx*speed*dt; pz -= my*speed*dt
-        if(abs(mx)+abs(my)>.08f) angle=atan2(mx,my)
-        android.opengl.GLES20.glClear(android.opengl.GLES20.GL_COLOR_BUFFER_BIT or android.opengl.GLES20.GL_DEPTH_BUFFER_BIT)
-        android.opengl.GLES20.glUseProgram(program)
-        val aspect=1.78f
-        val proj=perspective(58f,aspect,.1f,100f)
-        // Fixed close overhead camera: steep angle, centered on the walker, never rotates.
-        val view=lookAt(px,13.5f,pz+4.8f,px,0.0f,pz-0.5f,0f,1f,0f)
-        val vp=mul(proj,view)
-        draw(vp,0f,-.18f,0f,90f,.12f,90f,0xFF496B3B.toInt())
-        for(o in objects) {
-            val dx=o.x-px; val dz=o.z-pz
-            if(dx*dx+dz*dz>850) continue
-            if(o.type==0) {
-                draw(vp,o.x,.85f*o.scale,o.z,.28f*o.scale,1.7f*o.scale,.28f*o.scale,0xFF65472F.toInt())
-                draw(vp,o.x,2.15f*o.scale,o.z,1.08f*o.scale,1.35f*o.scale,1.08f*o.scale,if(o.seed.toInt()%2==0) 0xFF285B32.toInt() else 0xFF356D3B.toInt())
-                draw(vp,o.x+.22f,2.8f*o.scale,o.z-.12f,.72f*o.scale,.85f*o.scale,.72f*o.scale,0xFF477F43.toInt())
-            } else if(o.type==1) {
-                draw(vp,o.x,.48f*o.scale,o.z,.68f*o.scale,.55f*o.scale,.62f*o.scale,0xFF315D32.toInt())
-                draw(vp,o.x-.3f,.58f*o.scale,o.z+.12f,.42f*o.scale,.42f*o.scale,.4f*o.scale,0xFF477B3B.toInt())
-            } else {
-                draw(vp,o.x,.17f,o.z,.23f*o.scale,.28f*o.scale,.23f*o.scale,0xFF5C783B.toInt())
+        android.opengl.GLES20.glEnable(android.opengl.GLES20.GL_CULL_FACE)
+        program=link(vShader,fShader)
+        aPosition=android.opengl.GLES20.glGetAttribLocation(program,"aPos");aNormal=android.opengl.GLES20.glGetAttribLocation(program,"aNormal");aColor=android.opengl.GLES20.glGetAttribLocation(program,"aColor")
+        uMvp=android.opengl.GLES20.glGetUniformLocation(program,"uMVP");uModel=android.opengl.GLES20.glGetUniformLocation(program,"uModel");uPlayer=android.opengl.GLES20.glGetUniformLocation(program,"uPlayer");uTime=android.opengl.GLES20.glGetUniformLocation(program,"uTime");uWeather=android.opengl.GLES20.glGetUniformLocation(program,"uWeather")
+        groundMesh=makeGround();playerMesh=upload(ForestModels.character(123));shrubMesh=makeShrub()
+        // Reuse ten procedural tree silhouettes; seeded variations in crowns and trunk shape.
+        for(i in 0 until 10)treeCache.add(upload(ForestModels.tree(300+i,4.4f+(i%4)*.55f).mesh))
+        val rnd=java.util.Random(87129)
+        for(z in -24..24)for(x in -28..28){
+            val dist=x*x+z*z
+            if(dist<9)continue
+            if(rnd.nextFloat()<.70f){
+                val species=rnd.nextInt(treeCache.size)
+                instances.add(TreeInstance(x*2.15f+(rnd.nextFloat()-.5f)*1.1f,z*2.0f+(rnd.nextFloat()-.5f)*1.2f,.75f+rnd.nextFloat()*.75f,species))
             }
         }
-        // stylized articulated human silhouette
-        val bob=if(abs(mx)+abs(my)>.08f) sin(now/85000000.0).toFloat()*.055f else 0f
-        val fx=px; val fz=pz
-        draw(vp,fx,.9f+bob,fz,.25f,.48f,.19f,0xFF354D61.toInt())
-        draw(vp,fx,1.48f+bob,fz,.20f,.20f,.19f,0xFFD5A477.toInt())
-        draw(vp,fx,1.68f+bob,fz,.24f,.09f,.22f,0xFF59422D.toInt())
-        val swing=if(abs(mx)+abs(my)>.08f) sin(now/90000000.0).toFloat()*.22f else 0f
-        draw(vp,fx-.14f,.36f+bob,fz+swing,.09f,.36f,.10f,0xFF293849.toInt())
-        draw(vp,fx+.14f,.36f-bob,fz-swing,.09f,.36f,.10f,0xFF293849.toInt())
-        draw(vp,fx-.31f,.91f+bob,fz-swing,.08f,.34f,.09f,0xFFD5A477.toInt())
-        draw(vp,fx+.31f,.91f+bob,fz+swing,.08f,.34f,.09f,0xFFD5A477.toInt())
     }
-    private fun draw(vp:FloatArray,x:Float,y:Float,z:Float,sx:Float,sy:Float,sz:Float,color:Int) {
-        val model=identity(); model[0]=sx; model[5]=sy; model[10]=sz; model[12]=x; model[13]=y; model[14]=z
-        val m=mul(vp,model)
-        val verts=floatArrayOf(-1f,-1f,-1f,1f,-1f,-1f,1f,1f,-1f,-1f,1f,-1f,-1f,-1f,1f,1f,-1f,1f,1f,1f,1f,-1f,1f,1f)
-        val idx=shortArrayOf(0,1,2,0,2,3,4,6,5,4,7,6,0,4,5,0,5,1,3,2,6,3,6,7,1,5,6,1,6,2,0,3,7,0,7,4)
-        val vb=java.nio.ByteBuffer.allocateDirect(verts.size*4).order(java.nio.ByteOrder.nativeOrder()).asFloatBuffer(); vb.put(verts).position(0)
-        val ib=java.nio.ByteBuffer.allocateDirect(idx.size*2).order(java.nio.ByteOrder.nativeOrder()).asShortBuffer(); ib.put(idx).position(0)
-        android.opengl.GLES20.glUniformMatrix4fv(android.opengl.GLES20.glGetUniformLocation(program,"uMVP"),1,false,m,0)
-        android.opengl.GLES20.glUniformMatrix4fv(android.opengl.GLES20.glGetUniformLocation(program,"uModel"),1,false,model,0)
-        val rr=((color shr 16) and 255)/255f; val gg=((color shr 8) and 255)/255f; val bb=(color and 255)/255f
-        android.opengl.GLES20.glUniform4f(col,rr,gg,bb,1f)
-        android.opengl.GLES20.glEnableVertexAttribArray(pos); android.opengl.GLES20.glVertexAttribPointer(pos,3,android.opengl.GLES20.GL_FLOAT,false,0,vb)
-        android.opengl.GLES20.glDrawElements(android.opengl.GLES20.GL_TRIANGLES,idx.size,android.opengl.GLES20.GL_UNSIGNED_SHORT,ib)
+    override fun onSurfaceChanged(gl:GL10?,w:Int,h:Int){width=w.coerceAtLeast(1);height=h.coerceAtLeast(1);android.opengl.GLES20.glViewport(0,0,width,height)}
+    override fun onDrawFrame(gl:GL10?){
+        val now=System.nanoTime();val dt=((now-last)/1e9).toFloat().coerceIn(0f,.05f);last=now
+        playerX+=mx*3.5f*dt;playerZ-=my*3.5f*dt
+        if(abs(mx)+abs(my)>.06f)heading=atan2(mx,my)
+        android.opengl.GLES20.glClear(android.opengl.GLES20.GL_COLOR_BUFFER_BIT or android.opengl.GLES20.GL_DEPTH_BUFFER_BIT)
+        android.opengl.GLES20.glUseProgram(program)
+        val aspect=width.toFloat()/height.toFloat()
+        val view=lookAt(playerX,22f,playerZ+6f,playerX,0f,playerZ,0f,1f,0f)
+        val projection=ortho(-11f*aspect,11f*aspect,-11f,11f,.1f,70f)
+        val vp=mul(projection,view)
+        android.opengl.GLES20.glUniform3f(uPlayer,playerX,0f,playerZ)
+        android.opengl.GLES20.glUniform1f(uTime,now/1e9f);android.opengl.GLES20.glUniform1f(uWeather,0f)
+        draw(groundMesh,vp,identity())
+        for(t in instances){val dx=t.x-playerX;val dz=t.z-playerZ;if(dx*dx+dz*dz>520f)continue
+            val model=identity();android.opengl.Matrix.translateM(model,0,t.x,0f,t.z);android.opengl.Matrix.scaleM(model,0,t.scale,1f,t.scale);android.opengl.Matrix.rotateM(model,0,(t.species*31f)%360f,0f,1f,0f)
+            draw(treeCache[t.species],vp,model)}
+        // Softly bobbing and turning toward travel direction (visual base animation).
+        val moving=abs(mx)+abs(my)>.06f;val bob=if(moving)sin(now/95000000.0).toFloat()*.035f else 0f
+        val pm=identity();android.opengl.Matrix.translateM(pm,0,playerX,.0f+bob,playerZ);android.opengl.Matrix.rotateM(pm,0,heading*180f/PI.toFloat(),0f,1f,0f)
+        draw(playerMesh,vp,pm)
     }
-    private fun identity()=FloatArray(16).also { android.opengl.Matrix.setIdentityM(it,0) }
-    private fun perspective(f:Float,a:Float,n:Float,fa:Float):FloatArray { val m=FloatArray(16); android.opengl.Matrix.perspectiveM(m,0,f,a,n,fa); return m }
-    private fun lookAt(ex:Float,ey:Float,ez:Float,cx:Float,cy:Float,cz:Float,ux:Float,uy:Float,uz:Float):FloatArray { val m=FloatArray(16); android.opengl.Matrix.setLookAtM(m,0,ex,ey,ez,cx,cy,cz,ux,uy,uz); return m }
-    private fun mul(a:FloatArray,b:FloatArray):FloatArray { val o=FloatArray(16); android.opengl.Matrix.multiplyMM(o,0,a,0,b,0); return o }
+    private fun draw(mesh:GpuMesh,vp:FloatArray,model:FloatArray){
+        val m=mul(vp,model);android.opengl.GLES20.glUniformMatrix4fv(uMvp,1,false,m,0);android.opengl.GLES20.glUniformMatrix4fv(uModel,1,false,model,0)
+        val stride=9*4
+        mesh.vertices.position(0);android.opengl.GLES20.glEnableVertexAttribArray(aPosition);android.opengl.GLES20.glVertexAttribPointer(aPosition,3,android.opengl.GLES20.GL_FLOAT,false,stride,mesh.vertices)
+        mesh.vertices.position(3);android.opengl.GLES20.glEnableVertexAttribArray(aNormal);android.opengl.GLES20.glVertexAttribPointer(aNormal,3,android.opengl.GLES20.GL_FLOAT,false,stride,mesh.vertices)
+        mesh.vertices.position(6);android.opengl.GLES20.glEnableVertexAttribArray(aColor);android.opengl.GLES20.glVertexAttribPointer(aColor,3,android.opengl.GLES20.GL_FLOAT,false,stride,mesh.vertices)
+        android.opengl.GLES20.glDrawElements(android.opengl.GLES20.GL_TRIANGLES,mesh.count,android.opengl.GLES20.GL_UNSIGNED_SHORT,mesh.indices)
+    }
+    private fun makeGround():GpuMesh{val b=ForestMeshBuilder();val c=0xFF546C42.toInt();b.triangle(floatArrayOf(-90f,0f,-90f),floatArrayOf(90f,0f,90f),floatArrayOf(90f,0f,-90f),c);b.triangle(floatArrayOf(-90f,0f,-90f),floatArrayOf(-90f,0f,90f),floatArrayOf(90f,0f,90f),c);return upload(b.snapshot())}
+    private fun makeShrub():GpuMesh{val b=ForestMeshBuilder();for(i in 0..5){val a=i*PI/3;val r=.35f;b.ellipsoid((cos(a)*r).toFloat(),.3f,(sin(a)*r).toFloat(),.42f,.35f,.42f,0xFF386B3C.toInt()+i*0x000201,9,6)};return upload(b.snapshot())}
+    private fun upload(m:ForestMesh):GpuMesh=GpuMesh(m.vertexBuffer,m.indexBuffer,m.indexCount)
+    private fun shader(type:Int,src:String):Int{val s=android.opengl.GLES20.glCreateShader(type);android.opengl.GLES20.glShaderSource(s,src);android.opengl.GLES20.glCompileShader(s);val ok=IntArray(1);android.opengl.GLES20.glGetShaderiv(s,android.opengl.GLES20.GL_COMPILE_STATUS,ok,0);if(ok[0]==0)throw RuntimeException(android.opengl.GLES20.glGetShaderInfoLog(s));return s}
+    private fun link(v:String,f:String):Int{val p=android.opengl.GLES20.glCreateProgram();android.opengl.GLES20.glAttachShader(p,shader(android.opengl.GLES20.GL_VERTEX_SHADER,v));android.opengl.GLES20.glAttachShader(p,shader(android.opengl.GLES20.GL_FRAGMENT_SHADER,f));android.opengl.GLES20.glLinkProgram(p);val ok=IntArray(1);android.opengl.GLES20.glGetProgramiv(p,android.opengl.GLES20.GL_LINK_STATUS,ok,0);if(ok[0]==0)throw RuntimeException(android.opengl.GLES20.glGetProgramInfoLog(p));return p}
+    private fun identity()=FloatArray(16).also{android.opengl.Matrix.setIdentityM(it,0)}
+    private fun ortho(l:Float,r:Float,b:Float,t:Float,n:Float,f:Float):FloatArray{val m=FloatArray(16);android.opengl.Matrix.orthoM(m,0,l,r,b,t,n,f);return m}
+    private fun lookAt(ex:Float,ey:Float,ez:Float,cx:Float,cy:Float,cz:Float,ux:Float,uy:Float,uz):FloatArray{val m=FloatArray(16);android.opengl.Matrix.setLookAtM(m,0,ex,ey,ez,cx,cy,cz,ux,uy,uz);return m}
+    private fun mul(a:FloatArray,b:FloatArray):FloatArray{val o=FloatArray(16);android.opengl.Matrix.multiplyMM(o,0,a,0,b,0);return o}
 }
