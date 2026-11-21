@@ -52,13 +52,13 @@ class Joystick(ctx: android.content.Context, val changed:(Float,Float)->Unit): V
 
 class ForestView(ctx:android.content.Context): GLSurfaceView(ctx) {
     val renderer3d=ForestRenderer()
-    @Volatile var moveX=0f
-    @Volatile var moveY=0f
+    var moveX:Float
+        get() = renderer3d.mx
+        set(v) { renderer3d.mx=v }
+    var moveY:Float
+        get() = renderer3d.my
+        set(v) { renderer3d.my=v }
     init { setEGLContextClientVersion(2); setRenderer(renderer3d); renderMode=RENDERMODE_CONTINUOUSLY }
-    override fun onDrawFrameDummy() {}
-    override fun onTouchEvent(e:MotionEvent)=super.onTouchEvent(e)
-    override fun onResume(){super.onResume()}
-    override fun onPause(){super.onPause()}
 }
 
 class ForestRenderer: android.opengl.GLSurfaceView.Renderer {
@@ -99,7 +99,7 @@ class ForestRenderer: android.opengl.GLSurfaceView.Renderer {
         val proj=perspective(58f,aspect,.1f,100f)
         val view=lookAt(px,4.8f,pz-7.5f,px,0f,pz+2.4f,0f,1f,0f)
         val vp=mul(proj,view)
-        draw(vp,0f,-.18f,0f,90f,.12f,.12f,.12f,0xFF496B3B.toInt())
+        draw(vp,0f,-.18f,0f,90f,.12f,90f,0xFF496B3B.toInt())
         for(o in objects) {
             val dx=o.x-px; val dz=o.z-pz
             if(dx*dx+dz*dz>850) continue
