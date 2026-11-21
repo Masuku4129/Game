@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import math
+import os
 
 from direct.actor.Actor import Actor
 from direct.gui.DirectGui import DirectFrame
@@ -11,7 +12,7 @@ from panda3d.core import (
     AmbientLight, DirectionalLight, Fog, Geom, GeomNode, GeomTriangles,
     GeomVertexData, GeomVertexFormat, GeomVertexWriter, NodePath,
     PNMImage, Texture, TransparencyAttrib, Vec3, Vec4, WindowProperties,
-    ClockObject,
+    ClockObject, loadPrcFileData,
 )
 
 from world.movement import camera_relative_direction, heading_for_direction
@@ -184,8 +185,10 @@ class WildlandsApp(ShowBase):
         props = WindowProperties()
         props.setTitle("Wildlands")
         props.setSize(1280, 720)
-        props.setFullscreen(True)
-        self.win.requestProperties(props)
+        headless = os.environ.get("WILDLANDS_HEADLESS") == "1"
+        props.setFullscreen(not headless)
+        if not headless:
+            self.win.requestProperties(props)
         self.disableMouse()
         self.setBackgroundColor(0.47, 0.61, 0.68, 1)
 
@@ -300,4 +303,6 @@ class WildlandsApp(ShowBase):
 
 
 if __name__ == "__main__":
+    if os.environ.get("WILDLANDS_HEADLESS") == "1":
+        loadPrcFileData("wildlands-headless", "window-type offscreen\naudio-library-name null\nwin-size 1280 720\nsync-video false")
     WildlandsApp().run()
