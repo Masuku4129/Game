@@ -18,8 +18,19 @@ func _run_test() -> void:
 
 	var player := game.get_node_or_null("Player") as CharacterBody3D
 	var joystick := game.find_child("MovementJoystick", true, false) as Control
-	if player == null or joystick == null:
-		printerr("MOVEMENT_TEST_FAIL: player or joystick node missing")
+	var camera := game.get_node_or_null("Camera3D") as Camera3D
+	var terrain := game.get_node_or_null("TerrainCollision") as StaticBody3D
+	if player == null or joystick == null or camera == null or terrain == null:
+		printerr("MOVEMENT_TEST_FAIL: player, joystick, camera, or terrain collision node missing")
+		quit(1)
+		return
+
+	if not camera.is_inside_tree() or not camera.current:
+		printerr("MOVEMENT_TEST_FAIL: camera is not active inside the scene tree")
+		quit(1)
+		return
+	if terrain.get_child_count() == 0 or not terrain.get_child(0) is CollisionShape3D:
+		printerr("MOVEMENT_TEST_FAIL: terrain collision shape missing")
 		quit(1)
 		return
 
