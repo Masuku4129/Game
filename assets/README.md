@@ -8,7 +8,7 @@ blender --background --python tools/generate_assets.py -- --output assets/genera
 ```
 
 ## CI
-GitHub Actions workflow **Generate 3D asset pack** installs Blender on an Ubuntu runner, generates eight GLB models, verifies the expected file count, and publishes a downloadable artifact.
+GitHub Actions workflow **Generate 3D asset pack** installs Blender on an Ubuntu runner, generates 32 GLB models (eight asset types × four seasonal variants), verifies the expected file count, and publishes a downloadable artifact.
 
 ## First batch
 - spruce, pine, birch
