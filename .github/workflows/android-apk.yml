@@ -56,13 +56,14 @@ jobs:
         run: |
           godot --version
           set -o pipefail
-godot --headless --editor --path . --quit 2>&1 | tee "$RUNNER_TEMP/godot-import.log"
-! grep -E "SCRIPT ERROR|Parse Error|ERROR:" "$RUNNER_TEMP/godot-import.log"
+          godot --headless --editor --path . --quit 2>&1 | tee "$RUNNER_TEMP/godot-import.log"
+          ! grep -E "SCRIPT ERROR|Parse Error|ERROR:" "$RUNNER_TEMP/godot-import.log"
 
       - name: Run headless startup smoke test
-        run: set -o pipefail
-godot --headless --path . --quit-after 3 2>&1 | tee "$RUNNER_TEMP/godot-smoke.log"
-! grep -E "SCRIPT ERROR|Parse Error|ERROR:" "$RUNNER_TEMP/godot-smoke.log"
+        run: |
+          set -o pipefail
+          godot --headless --path . --quit-after 3 2>&1 | tee "$RUNNER_TEMP/godot-smoke.log"
+          ! grep -E "SCRIPT ERROR|Parse Error|ERROR:" "$RUNNER_TEMP/godot-smoke.log"
 
       - name: Export Android APK
         run: |
