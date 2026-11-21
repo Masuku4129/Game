@@ -39,6 +39,7 @@ var puddle_nodes: Array[MeshInstance3D] = []
 var snow_accumulation := 0.0
 var wetness_accumulation := 0.0
 var last_environment_wetness := -1.0
+var last_environment_snow := -1.0
 
 
 func _ready() -> void:
@@ -290,6 +291,7 @@ func _process(delta: float) -> void:
 	if weather_mode == "snow":
 		snow_accumulation = minf(0.88, snow_accumulation + delta * 0.025)
 		terrain_material.set_shader_parameter("snow_cover", snow_accumulation)
+		_apply_environment_snow(snow_accumulation)
 	elif weather_mode == "rain":
 		wetness_accumulation = minf(1.0, wetness_accumulation + delta * 0.08)
 		terrain_material.set_shader_parameter("surface_wetness", wetness_accumulation)
@@ -300,6 +302,7 @@ func _process(delta: float) -> void:
 		terrain_material.set_shader_parameter("snow_cover", snow_accumulation)
 		terrain_material.set_shader_parameter("surface_wetness", wetness_accumulation)
 		_apply_environment_wetness(wetness_accumulation)
+		_apply_environment_snow(snow_accumulation)
 	var wind_strength := 0.035 if weather_mode == "clear" else 0.075
 	for batch in wind_batches:
 		var instance := batch["node"] as MultiMeshInstance3D
@@ -561,6 +564,25 @@ func _add_footprint(position: Vector3, direction: Vector3) -> void:
 		if is_instance_valid(oldest):
 			oldest.queue_free()
 	footprint_side = 1 - footprint_side
+
+
+func _apply_environment_snow(amount: float) -> void:
+	if absf(amount - last_environment_snow) < 0.12:
+		return
+	last_environment_snow = amount
+	for cache_key in asset_mesh_cache.keys():
+		var mesh := asset_mesh_cache[cache_key] as ArrayMesh
+		var originals: Array = asset_base_materials.get(cache_key, [])
+		if mesh == null:
+			continue
+		for surface_index in range(mini(mesh.get_surface_count(), originals.size())):
+			var source := originals[surface_index] as StandardMaterial3D
+			if source == null:
+				continue
+			var frosted := source.duplicate() as StandardMaterial3D
+			frosted.albedo_color = source.albedo_color.lerp(Color(0.78, 0.84, 0.88), amount * 0.22)
+			frosted.roughness = lerpf(source.roughness, 0.94, amount * 0.65)
+			mesh.surface_set_material(surface_index, frosted)
 
 
 func _create_player() -> void:
