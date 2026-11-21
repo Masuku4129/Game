@@ -1,0 +1,67 @@
+from __future__ import annotations
+
+import argparse
+import math
+from pathlib import Path
+
+from direct.showbase.Loader import Loader
+from panda3d.core import NodePath
+from gltf import load_model
+
+
+FAMILIES = ("tree_spruce", "tree_pine", "tree_birch")
+SEASONS = ("spring", "summer", "autumn", "winter")
+
+
+def height_at(x: float, y: float) -> float:
+    broad = math.sin(x * 0.035) * 1.7 + math.cos(y * 0.028) * 1.35
+    rolling = math.sin((x + y) * 0.012) * 2.0
+    detail = math.sin(x * 0.11 + y * 0.07) * 0.16
+    return broad + rolling + detail
+
+
+def build_one(asset_root: Path, output: Path, season: str, radius: int) -> int:
+    prototypes: dict[str, NodePath] = {}
+    for family in FAMILIES:
+        path = asset_root / f"{family}_{season}.glb"
+        if not path.is_file():
+            raise FileNotFoundError(f"Missing required seasonal model: {path}")
+        prototype = NodePath(load_model(str(path)))
+        prototype.flattenStrong()
+        prototypes[family] = prototype
+
+    forest = NodePath(f"forest-{season}")
+    count = 0
+    for row in range(-radius, radius + 1):
+        for column in range(-radius, radius + 1):
+            if abs(row) < 2 and abs(column) < 2:
+                continue
+            x = column * 5.2 + math.sin(row * 2.3 + column) * 1.25
+            y = row * 5.0 + math.cos(column * 1.7 - row) * 1.15
+            family = FAMILIES[(row * 7 + column * 11) % len(FAMILIES)]
+            instance = prototypes[family].instanceTo(forest)
+            instance.setPos(x, y, height_at(x, y))
+            instance.setH((row * 31 + column * 17) % 360)
+            instance.setScale(0.82 + ((row * 13 + column * 5) % 7) * 0.075)
+            count += 1
+
+    forest.flattenStrong()
+    output.parent.mkdir(parents=True, exist_ok=True)
+    if not forest.writeBamFile(str(output)):
+        raise RuntimeError(f"Could not write baked forest scene: {output}")
+    return count
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--assets", type=Path, required=True)
+    parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument("--radius", type=int, default=11)
+    args = parser.parse_args()
+    for season in SEASONS:
+        count = build_one(args.assets, args.output / f"forest_{season}.bam", season, args.radius)
+        print(f"FOREST_BAKED: season={season} instances={count}")
+
+
+if __name__ == "__main__":
+    main()
