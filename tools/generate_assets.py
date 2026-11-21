@@ -188,6 +188,40 @@ def curve_tube(points, radius, material, name="twig"):
     bpy.ops.object.select_all(action="DESELECT")
     bpy.context.view_layer.objects.active=o; o.select_set(True); bpy.ops.object.convert(target="MESH"); return bpy.context.object
 
+def leaf(loc, direction, length, width, material, name="leaf"):
+    axis = Vector(direction).normalized()
+    if axis.length < 0.001:
+        axis = Vector((0, 0, 1))
+    reference = Vector((0, 0, 1)) if abs(axis.z) < 0.92 else Vector((0, 1, 0))
+    side = axis.cross(reference).normalized()
+    normal = axis.cross(side).normalized()
+    vertices = []
+    # A gently cupped, pointed leaf with a raised central vein.
+    profile = [(0.0, 0.10), (0.22, 0.72), (0.52, 1.0), (0.78, 0.66), (1.0, 0.0)]
+    for t, spread in profile:
+        center = Vector(loc) + axis * (length * t) + normal * (math.sin(t * math.pi) * length * 0.075)
+        half = width * spread
+        vertices.extend([
+            center - side * half - normal * 0.012,
+            center + normal * 0.025,
+            center + side * half - normal * 0.012,
+        ])
+    faces = []
+    for row in range(len(profile) - 1):
+        a = row * 3
+        b = (row + 1) * 3
+        faces.extend([(a, b, b + 1, a + 1), (a + 1, b + 1, b + 2, a + 2)])
+    mesh = bpy.data.meshes.new(name + "_mesh")
+    mesh.from_pydata(vertices, [], faces)
+    mesh.materials.append(material)
+    mesh.update()
+    obj = bpy.data.objects.new(name, mesh)
+    bpy.context.collection.objects.link(obj)
+    for poly in mesh.polygons:
+        poly.use_smooth = True
+    return obj
+
+
 def spruce():
     reset(); rng=random.Random(1101)
     cone_between((0,0,0),(0,0,7.2),.32,.035,BARK,12)
@@ -201,7 +235,7 @@ def spruce():
             # layered needle sprays along every bough
             for k in range(4):
                 t=.25+k*.17; p=Vector(mid).lerp(Vector(end),t)
-                sphere((p.x,p.y,p.z),(.22,.22,.14),NEEDLE_DARK if (j+k)%3 else NEEDLE,8,5)
+                leaf((p.x,p.y,p.z), (math.cos(a)*.65, math.sin(a)*.65, -.35), .52, .16, NEEDLE_DARK if (j+k)%3 else NEEDLE, "spruce_needle_spray")
     finish("tree_spruce",[])
 
 def pine():
@@ -215,7 +249,7 @@ def pine():
             curve_tube([(0,0,z), (end[0]*.52,end[1]*.52,z+.2),end],.045,BARK)
             for k in range(3):
                 p=Vector(end)*(.45+k*.17); p.z=z+.25+k*.06
-                sphere(p,(.34,.17,.13),NEEDLE,9,6)
+                leaf(p, (math.cos(a)*.45, math.sin(a)*.45, .08), .72, .19, NEEDLE, "pine_needle_cluster")
     finish("tree_pine",[])
 
 def birch():
@@ -231,7 +265,7 @@ def birch():
         end=(math.cos(a)*length,math.sin(a)*length,z+rng.uniform(.2,.9))
         curve_tube([(0,0,z-.3),(end[0]*.55,end[1]*.55,z+.15),end],.045,BIRCH_DARK)
         for k in range(3):
-            sphere((end[0]*(.65+k*.1),end[1]*(.65+k*.1),end[2]+k*.13),(.34,.3,.28),LEAF_LIGHT,10,7)
+            leaf((end[0]*(.65+k*.1),end[1]*(.65+k*.1),end[2]+k*.13), (math.cos(a),math.sin(a),.24), .62, .22, LEAF_LIGHT, "birch_leaf")
     finish("tree_birch",[])
 
 def shrub():
@@ -240,7 +274,7 @@ def shrub():
         a=rng.uniform(0,math.tau); r=rng.uniform(0,.9); z=rng.uniform(.25,.9)
         loc=(math.cos(a)*r,math.sin(a)*r,z)
         curve_tube([(0,0,.08), (loc[0]*.6,loc[1]*.6,z*.65),loc],rng.uniform(.018,.035),BARK)
-        sphere(loc,(rng.uniform(.22,.42),rng.uniform(.2,.38),rng.uniform(.18,.34)),LEAF if i%3 else LEAF_LIGHT,10,7)
+        leaf(loc, (math.cos(a), math.sin(a), rng.uniform(-.12,.42)), rng.uniform(.42,.72), rng.uniform(.13,.23), LEAF if i%3 else LEAF_LIGHT, "shrub_leaf")
     finish("shrub_mixed",[])
 
 def fern():
@@ -256,7 +290,7 @@ def fern():
             t=j/7; p=Vector(pts[j]); size=.24*(1-t*.55)
             for side in (-1,1):
                 q=p+Vector((-math.sin(a)*size*side,math.cos(a)*size*side,-.035))
-                o=sphere(q,(size*.72,.055,.035),FERN,8,5); o.rotation_euler[2]=a
+                leaf(q, (-math.sin(a)*side, math.cos(a)*side, -.18), size*2.2, size*.48, FERN, "fern_pinna")
     finish("fern_cluster",[])
 
 def rock():
