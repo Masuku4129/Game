@@ -14,28 +14,43 @@ on:
 jobs:
   export-apk:
     runs-on: ubuntu-latest
-    container:
-      image: barichello/godot-ci:4.4.1
     steps:
       - uses: actions/checkout@v4
-      - name: Install Godot export templates and signing key
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Install Godot and Android export templates
+        shell: bash
         run: |
-          set -eux
+          set -euxo pipefail
+          wget -q https://github.com/godotengine/godot/releases/download/4.4.1-stable/Godot_v4.4.1-stable_linux.x86_64.zip -O /tmp/godot.zip
+          unzip -o /tmp/godot.zip -d /tmp/godot
+          sudo install -m 0755 /tmp/godot/Godot_v4.4.1-stable_linux.x86_64 /usr/local/bin/godot
           mkdir -p "$HOME/.local/share/godot/export_templates/4.4.1.stable"
           wget -q https://github.com/godotengine/godot/releases/download/4.4.1-stable/Godot_v4.4.1-stable_export_templates.tpz -O /tmp/godot-templates.tpz
           unzip -o /tmp/godot-templates.tpz -d /tmp/godot-templates
           cp /tmp/godot-templates/templates/* "$HOME/.local/share/godot/export_templates/4.4.1.stable/"
           mkdir -p "$HOME/.android"
           keytool -genkeypair -v -keystore "$HOME/.android/debug.keystore" -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US"
-          echo "JAVA_HOME=$(dirname $(dirname $(readlink -f $(which javac))))" >> "$GITHUB_ENV"
+          echo "ANDROID_HOME=$ANDROID_SDK_ROOT" >> "$GITHUB_ENV"
+          echo "JAVA_HOME=$JAVA_HOME" >> "$GITHUB_ENV"
+
       - name: Validate Godot project
         run: godot --headless --editor --path godot --quit
+
       - name: Export Android debug APK
+        shell: bash
         run: |
-          set -eux
+          set -euxo pipefail
           mkdir -p godot/build
-          godot --headless --path godot --export-debug "Android" godot/build/wildlands-debug.apk
+          godot --headless --verbose --path godot --export-debug "Android" godot/build/wildlands-debug.apk
           test -s godot/build/wildlands-debug.apk
+          file godot/build/wildlands-debug.apk
+          unzip -t godot/build/wildlands-debug.apk
+
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
