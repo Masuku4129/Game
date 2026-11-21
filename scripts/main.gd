@@ -28,6 +28,7 @@ var debug_move_direction := Vector3.ZERO
 
 
 func _ready() -> void:
+	set_physics_process(true)
 	_setup_noise()
 	_create_environment()
 	_create_terrain()
