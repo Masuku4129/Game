@@ -202,6 +202,14 @@ def weighted_torso(name, material, radius_scale=1.0, front_open=False):
     mesh.from_pydata(vertices,[],faces)
     mesh.materials.append(material)
     mesh.update()
+    # Fail generation if a future edit flips the torso's surface normals.
+    normal_score=0.0
+    for polygon in mesh.polygons:
+        radial=polygon.center-Vector((0.0,0.0,1.18))
+        if radial.length > 1e-5:
+            normal_score += polygon.normal.dot(radial.normalized())
+    if normal_score <= 0.0:
+        raise RuntimeError("Continuous torso normals point inward; refusing GLB export")
     uv_layer=mesh.uv_layers.new(name="TorsoUV")
     for polygon in mesh.polygons:
         polygon.use_smooth=True
