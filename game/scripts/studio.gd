@@ -39,6 +39,8 @@ func _ready() -> void:
 		_beaver()
 	elif who == "pack":
 		_pack()
+	elif who == "hunt":
+		_hunt()
 
 ## Бобр: ракурсы и позы (шаг, плавание, грызёт, хлопок хвостом). STUDIO=beaver
 var bv: Node3D
@@ -176,6 +178,9 @@ func _env() -> void:
 	add_child(sun)
 
 func _process(_d: float) -> void:
+	if hu_mode:
+		_hunt_step()
+		return
 	if sp_mode:
 		_species_step()
 		return
@@ -356,3 +361,179 @@ func _save() -> void:
 			sheet.blit_rect(im, Rect2i(0, 0, CW, CH), Vector2i((i % cols) * CW, (i / cols) * CH))
 		sheet.save_png(dir + "/" + key + ".png")
 		print("studio saved ", key)
+
+# ---------- STUDIO=hunt: туши до и после разделки, шкура и мясо, кости, кровь на снегу ----------
+# HSCENES=через,запятую — какие сцены снять.
+
+const HUNT := preload("res://scripts/hunt.gd")
+const HMOD := preload("res://scripts/hunt_models.gd")
+var hu_mode := false
+var hu: Node3D
+var hu_root: Node3D
+var hu_scene := ""
+var hu_look := Vector3.ZERO
+var ground_mat: StandardMaterial3D
+
+func _hunt() -> void:
+	hu_mode = true
+	fake = FakeMain.new()
+	add_child(fake)
+	fake.hero = Node3D.new()
+	fake.add_child(fake.hero)
+	for c in get_children():
+		if c is MeshInstance3D and ground_mat == null:
+			ground_mat = (c as MeshInstance3D).material_override
+	hu = HUNT.new()
+	hu.main = fake
+	add_child(hu)
+	hu.blood = hu.BloodMM.new()
+	hu.add_child(hu.blood)
+	hu.set_process(false)
+	# [лист, сцена, ракурс, наклон, дистанция, высота взгляда, подпись]
+	var all := {
+		"roe": [["carcass_roe", 35, 30, 3.2, 0.2], ["carcass_roe", 120, 45, 3.4, 0.2], ["carcass_roe", 300, 60, 3.8, 0.1]],
+		"roe_skin": [["carcass_roe", 35, 30, 3.2, 0.2], ["carcass_roe", 120, 45, 3.4, 0.2], ["carcass_roe", 300, 60, 3.8, 0.1], ["carcass_roe", 0, 75, 3.0, 0.0]],
+		"roe_half": [["carcass_roe", 35, 30, 3.2, 0.2]],
+		"moose_skin": [["carcass_big", 40, 38, 8.0, 0.4]],
+		"moose": [["carcass_big", 40, 35, 6.0, 0.4]],
+		"boar_skin": [["carcass_big", 40, 38, 4.8, 0.3]],
+		"deer_skin": [["carcass_big", 40, 38, 6.5, 0.3]],
+		"bear_skin": [["carcass_big", 40, 38, 6.0, 0.3]],
+		"bones": [["carcass_big", 30, 40, 3.0, 0.1], ["carcass_big", 150, 55, 3.0, 0.1]],
+		"items": [["items", 30, 45, 1.2, 0.0], ["items", 200, 60, 1.0, 0.0]],
+		"snow": [["blood", 20, 40, 5.0, 0.0], ["blood", 0, 80, 7.0, 0.0], ["blood", 40, 25, 2.0, 0.0]],
+		"earth": [["blood", 20, 40, 5.0, 0.0], ["blood", 40, 25, 2.0, 0.0]],
+		"kneel": [],
+	}
+	for f in 14:
+		all["kneel"].append(["kneel", 60, 12, 3.6, 0.7, f * 0.4])
+	var want := OS.get_environment("HSCENES")
+	var keys: Array = all.keys() if want == "" else Array(want.split(","))
+	for k: String in keys:
+		for v: Array in all[k]:
+			tiles.append([v[0], k, v[1], v[2], v[3], v[4], v[5] if v.size() > 5 else 0.0])
+
+func _hu_clear() -> void:
+	if hu_root != null:
+		hu_root.queue_free()
+	hu_root = Node3D.new()
+	add_child(hu_root)
+	for pl: Dictionary in hu.piles:
+		(pl["node"] as Node3D).queue_free()
+	hu.piles.clear()
+	hu.blood.used = 0
+	hu.blood.head = 0
+	hu.blood.mm.visible_instance_count = 0
+	hu.force_snow = -1.0
+	ground_mat.albedo_color = Color(0.3, 0.26, 0.18)
+
+func _hu_animal(k: String, male: bool = true) -> Node3D:
+	var a = ANIMAL.new()
+	hu_root.add_child(a)
+	a.setup(k, fake, null, Vector3.ZERO, 11, 1.0)
+	if a.male != male:
+		a.male = male
+		a._build(false)
+	a.heading = 0.0
+	for i in 30:
+		a._animate(1.0 / 60.0)
+	a.kill()
+	return a
+
+func _hu_build(sc: String, t: Array) -> void:
+	_hu_clear()
+	hu_look = Vector3.ZERO
+	match sc:
+		"roe", "roe_skin", "roe_half", "moose", "moose_skin", "boar_skin", "deer_skin", "bear_skin":
+			var k := sc.split("_")[0]
+			var a := _hu_animal(k)
+			var Lk: float = clampf(float(a.parts["L"]) * 0.85, 0.45, 2.2)
+			hu_look = hu.body_center(a) * Vector3(1, 0, 1) + (Vector3(0.15, 0, -(0.3 + Lk * 0.25)) if sc.ends_with("_skin") else Vector3.ZERO)
+			hu.pool_at(hu.body_center(a), clampf(float(a.parts["L"]) * 0.25, 0.12, 0.6), 30.0)
+			if sc.ends_with("_skin") or sc.ends_with("_half"):
+				var ms: Array = HMOD.skin_carcass(a)
+				for m: ShaderMaterial in ms:
+					m.set_shader_parameter("skinned", 0.5 if sc.ends_with("_half") else 1.0)
+			if sc.ends_with("_skin"):
+				var L: float = clampf(float(a.parts["L"]) * 0.85, 0.45, 2.2)
+				var cen: Vector3 = hu.body_center(a)
+				var pl: Dictionary = hu._new_pile(cen + Vector3(0, 0, -(0.6 + L * 0.5)) + Vector3(0.3, 0, 0), 0.3)
+				var cols: Array = hu._fur_cols(a)
+				hu._add_hide(pl, L, cols[0], cols[1])
+				hu._add_meat(pl, hu.meat_count(a))
+				for i in 8:
+					var an := randf() * TAU
+					hu.splat(cen + Vector3(cos(an), 0, sin(an)) * randf_range(0.2, 0.8), randf_range(0.06, 0.14), 0.0 if i % 2 == 0 else 0.5, 30.0)
+		"bones":
+			var n := MeshInstance3D.new()
+			n.mesh = HMOD.bones_mesh(1.3, 7, true)
+			hu_root.add_child(n)
+		"items":
+			var pl2: Dictionary = hu._new_pile(Vector3.ZERO, 0.0)
+			hu._add_meat(pl2, 3)
+			hu._add_meat(pl2, 2, "meat_cooked")
+			var pl3: Dictionary = hu._new_pile(Vector3(0.0, 0, -0.75), 0.4)
+			hu._add_hide(pl3, 0.7, Color(0.93, 0.93, 0.92), Color(0.9, 0.9, 0.88))
+		"snow", "earth":
+			if sc == "snow":
+				hu.force_snow = 0.2
+				ground_mat.albedo_color = Color(0.66, 0.69, 0.74)
+			# след подранка: капли по извилистой тропе, лужа там, где лежал, место гибели
+			var p := Vector3(-3.0, 0, 3.0)
+			for i in 60:
+				var dirv := Vector3(sin(i * 0.12) * 0.6 + 0.6, 0, -0.8).normalized()
+				p += dirv * randf_range(0.08, 0.2)
+				if randf() < 0.55:
+					hu.splat(p + Vector3(randf_range(-0.15, 0.15), 0, randf_range(-0.15, 0.15)), randf_range(0.1, 0.2), 0.0, 16.0)
+			hu.splat(Vector3(0.6, 0, 0.6), 0.4, 0.5, 16.0, 0.6, 2.2)
+			hu.pool_at(Vector3(1.5, 0, -1.0), 0.45, 30.0)
+			hu.blood.set_time(1.0)
+		"kneel":
+			var h = HERO.new()
+			hu_root.add_child(h)
+			h.set_process(false)
+			hu._build_overlays(h.m_sk)
+			hu.hand_blood = 0.8
+			hu.body_blood = 0.3
+			hu._tick_overlays()
+			subj = h
+			ap = h.m_ap
+	hu.blood.set_time(1.0)
+
+func _hunt_step() -> void:
+	if ti >= tiles.size():
+		_save()
+		get_tree().quit()
+		return
+	var t: Array = tiles[ti]
+	var sc: String = t[1]
+	if wait == 0:
+		if sc != hu_scene or sc == "kneel":
+			if sc != hu_scene:
+				_hu_build(sc, t)
+			hu_scene = sc
+		if sc == "kneel":
+			ap.play("Fixing_Kneeling", 0.0)
+			ap.seek(float(t[6]), true)
+			ap.speed_scale = 0.0
+	var yaw := deg_to_rad(float(t[2]))
+	var pitch := deg_to_rad(float(t[3]))
+	var look := Vector3(0, float(t[5]), 0) + hu_look
+	cam.position = look + Vector3(sin(yaw) * cos(pitch), sin(pitch), cos(yaw) * cos(pitch)) * float(t[4])
+	cam.look_at(look, Vector3.UP)
+	wait += 1
+	if wait < 4:
+		return
+	wait = 0
+	var img := get_viewport().get_texture().get_image()
+	var w := img.get_width()
+	var h := img.get_height()
+	var cw := int(h * float(CW) / CH)
+	var crop := img.get_region(Rect2i((w - cw) / 2, 0, cw, h))
+	crop.resize(CW, CH, Image.INTERPOLATE_LANCZOS)
+	var key: String = t[0] + "_" + sc if t[0] != "kneel" else "kneel"
+	if not sheets.has(key):
+		sheets[key] = []
+	sheets[key].append(crop)
+	print("studio ", key, " ", t[6])
+	ti += 1

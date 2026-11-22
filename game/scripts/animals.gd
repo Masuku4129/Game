@@ -265,6 +265,44 @@ func group_drink(a: Node3D, spot: Vector3, slot: int) -> void:
 		if p != Vector3.INF:
 			o._go_drink(p, slot)
 
+# --- hunt: запах крови (hunt.gd добавляет: кровь героя, разделка, мясо в коробе) ---
+# [позиция, сила 0..2, до (с)]; хищник, учуяв, идёт проверить (animal.gd, состояние investigate)
+var scents: Array = []
+
+func add_scent(p: Vector3, strength: float, ttl: float) -> void:
+	var now := Time.get_ticks_msec() * 0.001
+	for s: Array in scents:
+		if (s[0] as Vector3).distance_to(p) < 6.0:
+			s[0] = p
+			s[1] = maxf(float(s[1]), strength)
+			s[2] = maxf(float(s[2]), now + ttl)
+			return
+	if scents.size() >= 48:
+		scents.pop_front()
+	scents.append([p, strength, now + ttl])
+
+## Кровь, которую зверь в точке p учуял (r — чутьё при силе 1), или INF. Чем слабее и дальше — тем реже.
+func scent_near(p: Vector3, r: float) -> Vector3:
+	var now := Time.get_ticks_msec() * 0.001
+	var best := Vector3.INF
+	var bk := 0.0
+	for i in range(scents.size() - 1, -1, -1):
+		var s: Array = scents[i]
+		if float(s[2]) < now:
+			scents.remove_at(i)
+			continue
+		var d := (s[0] as Vector3).distance_to(p)
+		var R := r * float(s[1])
+		if d < R:
+			var k := float(s[1]) * (1.0 - d / R)
+			if k > bk:
+				bk = k
+				best = s[0]
+	if best != Vector3.INF and rng.randf() > 0.3 * bk:
+		return Vector3.INF
+	return best
+# --- /hunt ---
+
 ## Туши.
 func add_carcass(a: Node3D) -> void:
 	if not carcasses.has(a):
