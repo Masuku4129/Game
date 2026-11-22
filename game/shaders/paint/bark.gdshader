@@ -13,15 +13,20 @@ uniform float clip_y = -10000.0;
 varying vec3 wp;
 varying float ly;
 varying vec3 wn;
+varying float vis;
 
 void vertex() {
 	wp = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;
 	ly = VERTEX.y;
 	wn = normalize((MODEL_MATRIX * vec4(NORMAL, 0.0)).xyz);
+	vis = dist_vis(INSTANCE_CUSTOM, MODEL_MATRIX[3].xyz);
+	if (abs(vis) < 0.001) {
+		VERTEX = vec3(0.0);
+	}
 }
 
 void fragment() {
-	if (ly < clip_y || (!no_fade && fade_discard(wp, FRAGCOORD.xy))) {
+	if (ly < clip_y || vis_discard(vis, FRAGCOORD.xy) || (!no_fade && fade_discard(wp, FRAGCOORD.xy))) {
 		discard;
 	}
 	float s = vnoise(vec2(UV.x * 6.0, UV.y * 1.2)) * 0.6 + vnoise(vec2(UV.x * 14.0, UV.y * 3.0)) * 0.4;

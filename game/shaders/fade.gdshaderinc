@@ -26,3 +26,31 @@ vec3 hero_push(vec3 w, float h, float tm) {
 	float wob = sin(tm * 9.0 + w.x * 3.0) * 0.15;
 	return vec3(dir.x, -0.35 - wob, dir.y) * near * h * 0.55;
 }
+
+// Плавное появление по дальности вместо щелчка целой клетки MultiMesh.
+// INSTANCE_CUSTOM.x — дальность, на которой экземпляр полностью растворился (0 — не растворять);
+// INSTANCE_CUSTOM.y = 1 — детальная ближняя модель дерева, -1 — лёгкая дальняя: на краю
+// круга near_r вокруг near_c они перетекают друг в друга дизерингом.
+uniform vec3 near_c = vec3(0.0, -100000.0, 0.0);
+uniform float near_r = 36.0;
+float dist_vis(vec4 ic, vec3 org) {
+	float v = 1.0;
+	if (ic.x > 0.0) {
+		v = 1.0 - smoothstep(ic.x - 12.0, ic.x, distance(org, cam_pos));
+	}
+	if (ic.y > 0.5) {
+		v *= 1.0 - smoothstep(near_r - 6.0, near_r, distance(org.xz, near_c.xz));
+	} else if (ic.y < -0.5) {
+		// дальняя версия берёт дополнение того же дизеринга: со стороны -v
+		v = -v * smoothstep(near_r - 6.0, near_r, distance(org.xz, near_c.xz));
+	}
+	return v;
+}
+// v из dist_vis: >0 — обычная доля видимости, <0 — дополняющий дизеринг.
+bool vis_discard(float v, vec2 fc) {
+	float n = fract(52.9829189 * fract(dot(fc, vec2(0.06711056, 0.00583715))));
+	if (v < 0.0) {
+		return -v < 0.999 && 1.0 - n > -v;
+	}
+	return v < 0.999 && n > v;
+}

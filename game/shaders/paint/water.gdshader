@@ -58,6 +58,33 @@ float vn(vec2 p) {
 	return mix(mix(h21(i), h21(i + vec2(1, 0)), f.x), mix(h21(i + vec2(0, 1)), h21(i + vec2(1, 1)), f.x), f.y);
 }
 
+// Дождь по воде: расходящиеся круги от капель в трёх слоях ячеек, у каждой капли свой ритм.
+// Возвращает (наклон x, наклон z, яркость кольца, всплеск в центре).
+vec4 rain_rings(vec2 p, float t) {
+	vec4 o = vec4(0.0);
+	for (int l = 0; l < 3; l++) {
+		float sc = 1.6 + float(l) * 0.9;
+		vec2 q = p * sc + float(l) * 3.7;
+		vec2 cell = floor(q);
+		vec2 f = fract(q) - 0.5;
+		float r1 = h21(cell + float(l) * 17.0);
+		float r2 = h21(cell * 1.7 + 5.3 + float(l));
+		// капля в ячейке бывает не всегда: чем сильнее дождь, тем чаще
+		float on = step(r2, rain * 0.9 + 0.1);
+		float ph = fract(t * (0.9 + r1 * 0.6) + r2);
+		vec2 c = (vec2(r1, r2) - 0.5) * 0.5;
+		vec2 dv = f - c;
+		float d = length(dv);
+		float rad = ph * 0.42;
+		float w = 1.0 - smoothstep(0.0, 0.05 + ph * 0.04, abs(d - rad));
+		float fade = (1.0 - ph) * (1.0 - ph) * on;
+		o.xy += dv / max(d, 0.001) * w * fade;
+		o.z += w * fade;
+		o.w += (1.0 - smoothstep(0.0, 0.05, d)) * (1.0 - smoothstep(0.0, 0.12, ph)) * on;
+	}
+	return o;
+}
+
 void vertex() {
 	wp = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;
 	if (strip > 0.5) {
@@ -83,13 +110,20 @@ void fragment() {
 	float ring = sin(dh * 9.0 - TIME * (4.0 + swim_move * 4.0)) * exp(-dh * 0.9) * swim * (1.0 - ice);
 	float foam = smoothstep(0.55, 0.0, dh) * swim * (0.4 + swim_move * 0.6) * (0.6 + 0.4 * vn(wp.xz * 8.0 + TIME * 2.0));
 	glint = max(glint, smoothstep(0.25, 0.7, ring));
+	vec4 rr = vec4(0.0);
+	if (rain > 0.02) {
+		rr = rain_rings(wp.xz, TIME) * (1.0 - ice) * smoothstep(0.02, 0.25, rain);
+	}
 	vec3 c = mix(lin(shallow), lin(deep), k);
-	c += vec3(0.85, 0.95, 0.9) * glint * 0.08;
+	// в дождь гладь темнеет и рябит, блики дробятся
+	c *= 1.0 - rain * 0.12 * (1.0 - ice);
+	c += vec3(0.85, 0.95, 0.9) * glint * 0.08 * (1.0 - rain * 0.5);
+	c += vec3(0.75, 0.82, 0.85) * (rr.z * 0.09 + rr.w * 0.22);
 	c = mix(c, vec3(0.8, 0.86, 0.84), foam * 0.6);
 	c = mix(c, vec3(0.78, 0.86, 0.9), ice);
 	ALBEDO = c;
-	ALPHA = mix(clamp(0.3 + k * 0.62 + glint * 0.08, 0.0, 0.85), 0.97, ice);
-	NORMAL = normalize(vec3((r1 - 0.5) * 0.25 + hd.x / max(dh, 0.01) * ring * 0.3, 1.0, (r2 - 0.5) * 0.25 + hd.y / max(dh, 0.01) * ring * 0.3) * mat3(INV_VIEW_MATRIX));
+	ALPHA = mix(clamp(0.3 + k * 0.62 + glint * 0.08 + rr.z * 0.1 + rr.w * 0.25, 0.0, 0.9), 0.97, ice);
+	NORMAL = normalize(vec3((r1 - 0.5) * 0.25 + hd.x / max(dh, 0.01) * ring * 0.3 + rr.x * 0.5, 1.0, (r2 - 0.5) * 0.25 + hd.y / max(dh, 0.01) * ring * 0.3 + rr.y * 0.5) * mat3(INV_VIEW_MATRIX));
 	ROUGHNESS = mix(0.55, 0.6, ice);
 	SPECULAR = 0.2;
 	METALLIC = 0.0;

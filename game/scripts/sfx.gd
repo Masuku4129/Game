@@ -1,7 +1,8 @@
 extends Node
 ## Звуки из записей (Oculus Audio Pack 01, CC BY 4.0, см. sounds/CREDITS.txt):
 ## дневной лес, ночной лес, ветер, дождь, река (3D у ближайшей воды), плеск при плавании,
-## шаги по траве, земле и снегу, птицы, шорох кустов. Волчий вой синтезируется.
+## шаги по траве, земле и снегу, птицы, шорох кустов. Волчий вой синтезируется,
+## как и шорох листвы на ветру, стук дождя по листьям и капель с крон после дождя.
 
 var main: Node3D
 var rng := RandomNumberGenerator.new()
@@ -18,6 +19,8 @@ var synth := {}
 var _bird_t := 4.0
 var _howl_t := 60.0
 var _bush_t := 0.0
+var _drip_t := 1.0
+var drip_s: Array = []
 
 func _ogg(n: String, loop: bool = false) -> AudioStream:
 	var s: AudioStreamOggVorbis = load("res://sounds/%s.ogg" % n)
@@ -46,6 +49,11 @@ func _ready() -> void:
 	for i in 2:
 		bushes.append(_ogg("bush%d" % (i + 1)))
 	land_s = _ogg("land")
+	# дождь по листве и шорох крон — синтез, бесшовные петли
+	loops["patter"] = _player(_patter())
+	loops["rustle"] = _player(_rustle())
+	for i in 3:
+		drip_s.append(_drip(i))
 	howl = _howl()
 	synth = {"crack": _crack(), "thud": _thud(), "slap": _slap(), "gnaw": _gnaw(), "splash": _splash()}
 	for i in 6:
@@ -195,6 +203,98 @@ func _gnaw() -> AudioStreamWAV:
 		b.encode_s16(i * 2, int(clampf(v, -1.0, 1.0) * 30000.0))
 	return _wav(b, rate)
 
+## Бесшовная петля: хвост плавно накладывается на начало.
+func _loop_wav(v: PackedFloat32Array, rate: int, gain: float) -> AudioStreamWAV:
+	var n := v.size()
+	var xf := int(rate * 0.25)
+	var m := n - xf
+	var b := PackedByteArray()
+	b.resize(m * 2)
+	for i in m:
+		var x := v[i]
+		if i < xf:
+			var t := float(i) / xf
+			x = v[i] * t + v[m + i] * (1.0 - t)
+		b.encode_s16(i * 2, int(clampf(x * gain, -1.0, 1.0) * 30000.0))
+	var w := _wav(b, rate)
+	w.loop_mode = AudioStreamWAV.LOOP_FORWARD
+	w.loop_begin = 0
+	w.loop_end = m
+	return w
+
+## Дождь по листьям: частые мелкие щелчки капель разной высоты поверх мягкого шипения.
+func _patter() -> AudioStreamWAV:
+	var rate := 22050
+	var n := int(2.75 * rate)
+	var v := PackedFloat32Array()
+	v.resize(n)
+	var r := RandomNumberGenerator.new()
+	r.seed = 11
+	var lp := 0.0
+	var hp := 0.0
+	var prev := 0.0
+	var drops: Array = []
+	for i in n:
+		if r.randf() < 0.01:
+			# капля: короткий затухающий тон 1,5–5 кГц с шумовой атакой
+			drops.append([r.randf_range(1500.0, 5000.0), r.randf_range(0.15, 0.6), 0.0])
+		var x := 0.0
+		var k := 0
+		while k < drops.size():
+			var d: Array = drops[k]
+			var t: float = d[2]
+			x += sin(TAU * float(d[0]) * t) * float(d[1]) * exp(-t * 180.0)
+			d[2] = t + 1.0 / rate
+			if t > 0.02:
+				drops.remove_at(k)
+			else:
+				k += 1
+		var nz := r.randf_range(-1.0, 1.0)
+		lp += (nz - lp) * 0.5
+		hp = lp - prev
+		prev = lp
+		v[i] = x * 0.5 + hp * 0.25
+	return _loop_wav(v, rate, 0.9)
+
+## Шорох листвы: полосовой шум с медленными порывами.
+func _rustle() -> AudioStreamWAV:
+	var rate := 22050
+	var n := int(4.25 * rate)
+	var v := PackedFloat32Array()
+	v.resize(n)
+	var r := RandomNumberGenerator.new()
+	r.seed = 12
+	var a := 0.0
+	var b := 0.0
+	var env := 0.5
+	var target := 0.5
+	for i in n:
+		if i % 2205 == 0:
+			target = r.randf_range(0.2, 1.0)
+		env += (target - env) * 0.0006
+		var nz := r.randf_range(-1.0, 1.0)
+		a += (nz - a) * 0.45
+		b += (a - b) * 0.12
+		# мелкие «трески» листьев
+		var crk := (r.randf_range(-1.0, 1.0) if r.randf() < 0.004 else 0.0) * env
+		v[i] = (a - b) * env * 0.9 + crk * 0.5
+	return _loop_wav(v, rate, 1.0)
+
+## Капля с кроны: короткий «плик» с падающей высотой.
+func _drip(seed_v: int) -> AudioStreamWAV:
+	var rate := 22050
+	var n := int(0.12 * rate)
+	var b := PackedByteArray()
+	b.resize(n * 2)
+	var f0 := 1400.0 + seed_v * 380.0
+	var ph := 0.0
+	for i in n:
+		var t := float(i) / rate
+		ph += TAU * f0 * (1.0 + exp(-t * 60.0) * 0.8) / rate
+		var x := sin(ph) * exp(-t * 45.0) * 0.6
+		b.encode_s16(i * 2, int(clampf(x, -1.0, 1.0) * 30000.0))
+	return _wav(b, rate)
+
 ## Звук в точке мира (бобры, деревья).
 func play_at(name_s: String, p: Vector3, db: float, pitch: float = 1.0) -> void:
 	if synth.has(name_s):
@@ -259,6 +359,12 @@ func _process(delta: float) -> void:
 	_vol("night", (1.0 - day) * warm * (1.0 - precip * 0.6) * 0.6, delta)
 	_vol("wind", 0.08 + float(w.wind) * 0.45 + winter * 0.15, delta)
 	_vol("rain", precip * 0.85, delta)
+	# листва: в дождь стучит по листьям, на ветру шумит; в лесу громче, без листвы тише
+	var fk := smoothstep(0.25, 0.75, main.forest_density(hp.x, hp.z))
+	var leafy := 1.0 - float(w.leaf_drop) * 0.7
+	var warm_rain := precip if float(w.temp) >= 0.5 else 0.0
+	_vol("patter", warm_rain * (0.25 + fk * 0.55) * leafy, delta)
+	_vol("rustle", (smoothstep(0.35, 1.8, float(w.wind)) * 0.45 + warm_rain * 0.2) * (0.3 + fk * 0.7) * leafy * (1.0 - winter * 0.6), delta)
 	var swim: float = hero.swimb
 	var moving: bool = hero.run_mag > 0.15
 	_vol("swim", swim * (0.75 if moving else 0.3), delta)
@@ -292,6 +398,14 @@ func _process(delta: float) -> void:
 	if _bush_t <= 0.0 and moving and swim < 0.3 and main.forest_density(hp.x, hp.z) > 0.6 and rng.randf() < 0.3:
 		_bush_t = rng.randf_range(2.5, 5.0)
 		_play(bushes[rng.randi() % bushes.size()], -14.0, rng.randf_range(0.9, 1.1))
+	# капель с крон после дождя
+	_drip_t -= delta
+	if _drip_t <= 0.0:
+		_drip_t = rng.randf_range(0.3, 1.4)
+		var wetk := float(w.wet) * fk * (1.0 - precip * 0.7)
+		if wetk > 0.2 and rng.randf() < wetk and float(w.temp) >= 0.5:
+			var a := rng.randf() * TAU
+			_play3d(drip_s[rng.randi() % drip_s.size()], hp + Vector3(cos(a) * rng.randf_range(1.0, 6.0), 0.3, sin(a) * rng.randf_range(1.0, 6.0)), -16.0, rng.randf_range(0.85, 1.2))
 	# волки воют по ночам
 	_howl_t -= delta
 	if _howl_t <= 0.0:

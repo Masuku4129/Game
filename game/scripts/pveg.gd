@@ -35,7 +35,7 @@ func _init() -> void:
 		["anthill", Color(0.18, 0.12, 0.07), Color(0.34, 0.24, 0.14), Color(0.5, 0.38, 0.22), 0.0],
 		["alder", Color(0.08, 0.17, 0.08), Color(0.2, 0.34, 0.14), Color(0.44, 0.54, 0.22), 0.9],
 		["rose", Color(0.1, 0.18, 0.08), Color(0.24, 0.36, 0.14), Color(0.48, 0.56, 0.24), 0.9],
-		["cherry", Color(0.5, 0.52, 0.46), Color(0.8, 0.8, 0.74), Color(0.96, 0.95, 0.9), 0.0],
+		["cherry", Color(0.1, 0.2, 0.09), Color(0.26, 0.42, 0.15), Color(0.56, 0.64, 0.25), 1.0],
 		["bilberry", Color(0.06, 0.14, 0.08), Color(0.14, 0.27, 0.13), Color(0.3, 0.42, 0.2), 0.6],
 		["moss", Color(0.18, 0.26, 0.08), Color(0.38, 0.48, 0.14), Color(0.6, 0.66, 0.26), 0.3],
 		["fireweed", Color(0.38, 0.08, 0.24), Color(0.68, 0.22, 0.46), Color(0.88, 0.5, 0.7), 0.0],
@@ -91,6 +91,13 @@ func _init() -> void:
 		for p in ["col_dark", "col_mid", "col_light", "autumn_k"]:
 			m.set_shader_parameter(p, mats[k].get_shader_parameter(p))
 		mats[k + "_card"] = m
+	# черёмуха: белый цвет только поздней весной (blossom), летом зелёная, осенью багряная
+	for k in ["cherry", "cherry_card"]:
+		mats[k].set_shader_parameter("bloom_k", 1.0)
+		mats[k].set_shader_parameter("col_autumn", Color(0.75, 0.28, 0.16))
+	# лиственница желтеет ровно, без багрянца
+	for k in ["larch", "larch_card"]:
+		mats[k].set_shader_parameter("autumn_red", 0.0)
 
 	rd.set_shader_parameter("strokes_tex", _grass_tex())
 	for k in mats.keys():

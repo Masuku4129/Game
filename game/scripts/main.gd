@@ -60,7 +60,7 @@ func _ready() -> void:
 	_make_terrain()
 	_make_water()
 	_scatter_all()
-	grass_mesh_vars = [pv.tuft(1500), pv.tuft(1501), pv.tuft(1502), pv.tuft(1503, 1.3), pv.tuft(1504, 0.8)]
+	grass_mesh_vars = [pv.tuft(1500), pv.tuft(1503, 1.3), pv.tuft(1504, 0.8)]
 	hero = preload("res://scripts/hero.gd").new()
 	hero.main = self
 	add_child(hero)
@@ -335,29 +335,53 @@ var moon: DirectionalLight3D
 
 func _make_environment() -> void:
 	sky_mat = ProceduralSkyMaterial.new()
+	sky_mat.sun_angle_max = 25.0
+	sky_mat.sun_curve = 0.08
 	var sky := Sky.new()
 	sky.sky_material = sky_mat
+	# небо меняется медленно: радиансу не нужно перерисовываться каждый кадр
+	sky.radiance_size = Sky.RADIANCE_SIZE_64
 	env = Environment.new()
+	# трава вокруг героя (клетки 3×3 по 32 м) вырастает между 20 и 32 м
+	pv.mats["tuft"].set_shader_parameter("grass_r", 34.0)
 	env.background_mode = Environment.BG_SKY
 	env.sky = sky
-	env.ambient_light_source = Environment.AMBIENT_SOURCE_SKY
+	# рассеянный свет — цвет неба, считаем сами (дешевле, чем свёртка неба на телефоне)
+	env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
+	env.reflected_light_source = Environment.REFLECTION_SOURCE_SKY
 	env.tonemap_mode = Environment.TONE_MAPPER_FILMIC
-	env.tonemap_exposure = 1.05
+	env.tonemap_exposure = 1.1
+	env.tonemap_white = 1.6
 	env.fog_enabled = true
-	env.fog_density = 0.85
+	env.fog_density = 1.0
 	# дымка по глубине: дальний лес растворяется раньше, чем кончается дальность видимости
 	env.fog_mode = Environment.FOG_MODE_DEPTH
 	env.fog_depth_begin = 45.0
 	env.fog_depth_end = 115.0
 	env.fog_depth_curve = 1.6
-	env.fog_sky_affect = 0.5
+	env.fog_sky_affect = 0.55
+	env.fog_sun_scatter = 0.25
+	# лёгкое свечение светлых мест (солнце в каплях, снег, закат)
+	env.glow_enabled = true
+	env.glow_intensity = 0.35
+	env.glow_strength = 0.9
+	env.glow_bloom = 0.02
+	env.glow_hdr_threshold = 1.05
+	env.glow_blend_mode = Environment.GLOW_BLEND_MODE_SOFTLIGHT
+	env.set_glow_level(0, 0.0)
+	env.set_glow_level(1, 0.0)
+	env.set_glow_level(2, 1.0)
+	env.set_glow_level(3, 0.6)
+	env.set_glow_level(4, 0.3)
+	env.adjustment_enabled = true
 	var we := WorldEnvironment.new()
 	we.environment = env
 	add_child(we)
 	sun = DirectionalLight3D.new()
 	sun.shadow_enabled = true
-	sun.directional_shadow_max_distance = 38.0
+	sun.directional_shadow_max_distance = 32.0
 	sun.directional_shadow_mode = DirectionalLight3D.SHADOW_ORTHOGONAL
+	sun.shadow_blur = 1.5
 	add_child(sun)
 	moon = DirectionalLight3D.new()
 	moon.light_color = Color(0.55, 0.66, 0.95)
@@ -365,41 +389,71 @@ func _make_environment() -> void:
 	add_child(moon)
 	_update_sky()
 
-## Время суток: sun/moon, цвета неба, туман, свет факела у героя.
+## Время суток и года: солнце, луна, цвета неба, рассеянный свет, дымка, туман в низинах,
+## цветокоррекция по сезону и погоде, свет факела у героя.
 func _update_sky() -> void:
 	var e := sin((t_hours / 24.0) * TAU - PI * 0.5)
 	var d := smoothstep(-0.05, 0.25, e)
 	var dusk := clampf(1.0 - absf(e) * 4.0, 0.0, 1.0)
-	var elev := clampf(e, 0.0, 1.0) * 60.0 + 5.0
-	sun.rotation_degrees = Vector3(-elev, 40.0 + (t_hours - 12.0) * 15.0, 0)
+	var lowsun := 1.0 - smoothstep(0.02, 0.45, e)
 	var cl: float = weather.cloud if weather != null else 0.0
-	sun.light_energy = 1.6 * smoothstep(0.0, 0.3, e) * (1.0 - cl * 0.72)
-	sun.light_color = Color(1.0, 0.55, 0.30).lerp(Color(1.0, 0.93, 0.82), smoothstep(0.0, 0.45, e))
+	var wet_air: float = weather.precip if weather != null else 0.0
+	var fogv: float = weather.fogv if weather != null else 0.0
+	var mist: float = weather.mist if weather != null else 0.0
+	# сезон: 0 осень, 1 зима, 2 весна, 3 лето; летом солнце выше и теплее, зимой низкое и бледное
+	var yp: float = weather.year_pos() if weather != null else 0.0
+	var summer := clampf(cos((yp - 0.875) * TAU) * 0.5 + 0.5, 0.0, 1.0)
+	var winter := clampf(cos((yp - 0.375) * TAU) * 0.5 + 0.5, 0.0, 1.0)
+	var autumn: float = weather.autumn * (1.0 - winter) if weather != null else 0.0
+	var max_elev := lerpf(34.0, 64.0, summer)
+	var elev := clampf(e, 0.0, 1.0) * max_elev + 5.0
+	sun.rotation_degrees = Vector3(-elev, 40.0 + (t_hours - 12.0) * 15.0, 0)
+	sun.light_energy = 1.55 * smoothstep(-0.03, 0.2, e) * (1.0 - cl * 0.7) * (1.0 - fogv * 0.3)
+	var noon := Color(1.0, 0.95, 0.86).lerp(Color(0.95, 0.96, 1.0), winter * 0.6)
+	sun.light_color = Color(1.0, 0.52, 0.27).lerp(Color(1.0, 0.76, 0.52), smoothstep(0.0, 0.2, e)).lerp(noon, smoothstep(0.18, 0.5, e))
 	sun.visible = e > -0.02
-	moon.light_energy = 0.3 * (1.0 - d)
+	# в пасмурную погоду тени мягкие и бледные
+	sun.shadow_opacity = clampf(1.0 - cl * 0.55 - fogv * 0.3, 0.3, 1.0)
+	moon.light_energy = 0.32 * (1.0 - d) * (1.0 - cl * 0.6)
 	moon.visible = d < 0.98
-	var day_top := Color(0.50, 0.58, 0.66)
-	var day_hor := Color(0.72, 0.75, 0.74)
-	var night_top := Color(0.015, 0.025, 0.06)
-	var night_hor := Color(0.05, 0.07, 0.12)
-	var top := night_top.lerp(day_top, d).lerp(Color(0.30, 0.32, 0.46), dusk * 0.55)
-	var hor := night_hor.lerp(day_hor, d).lerp(Color(0.88, 0.52, 0.34), dusk * 0.7)
-	var grey := Color(0.5, 0.53, 0.56) * (0.15 + d * 0.85)
+	var day_top := Color(0.40, 0.56, 0.74).lerp(Color(0.52, 0.6, 0.7), winter * 0.5)
+	var day_hor := Color(0.74, 0.79, 0.8)
+	var night_top := Color(0.012, 0.022, 0.055)
+	var night_hor := Color(0.04, 0.06, 0.11)
+	var top := night_top.lerp(day_top, d).lerp(Color(0.28, 0.3, 0.46), dusk * 0.55)
+	var hor := night_hor.lerp(day_hor, d).lerp(Color(0.95, 0.56, 0.32), dusk * 0.75)
+	var grey := Color(0.5, 0.53, 0.56) * (0.12 + d * 0.88)
 	top = top.lerp(grey, cl * 0.8)
 	hor = hor.lerp(grey.lightened(0.15), cl * 0.6)
 	sky_mat.sky_top_color = top
 	sky_mat.sky_horizon_color = hor
 	sky_mat.ground_horizon_color = hor.darkened(0.15)
 	sky_mat.ground_bottom_color = hor.darkened(0.6)
-	env.fog_light_color = hor.darkened(0.08)
-	env.ambient_light_energy = lerpf(0.22, 0.7, d) * (1.0 + cl * 0.25)
+	sky_mat.sun_angle_max = lerpf(25.0, 8.0, cl)
+	# дымка: тёплая к закату, сизая днём, тёмно-синяя ночью; в дождь и туман светлее и серее
+	var haze := hor.lerp(top, 0.25).darkened(0.05)
+	haze = haze.lerp(Color(0.62, 0.65, 0.67) * (0.15 + d * 0.85), maxf(fogv, wet_air) * 0.5)
+	env.fog_light_color = haze
+	env.fog_sun_scatter = 0.3 * d * (1.0 - cl) + dusk * 0.2
+	# рассеянный свет: днём от неба (голубой сверху + зелёный отсвет леса), ночью — лунный сизый
+	var amb_day := top.lerp(hor, 0.45).lerp(Color(0.5, 0.58, 0.42), 0.18)
+	var amb_night := Color(0.16, 0.2, 0.34)
+	env.ambient_light_color = amb_night.lerp(amb_day, d)
+	env.ambient_light_energy = lerpf(0.7, 1.6, d) * (1.0 + cl * 0.2)
+	# цветокоррекция: осень теплее и насыщеннее, зима и дождь — приглушённее, ночь — бледнее
+	env.adjustment_saturation = clampf(0.96 + autumn * 0.02 + summer * 0.03 - winter * 0.12 - wet_air * 0.14 - fogv * 0.1 - (1.0 - d) * 0.2, 0.6, 1.2)
+	env.adjustment_contrast = 1.04 + lowsun * d * 0.04 - fogv * 0.05
+	env.adjustment_brightness = 1.0 + (1.0 - d) * 0.06
+	env.glow_intensity = 0.25 + dusk * 0.25 + winter * 0.1
 	if weather != null:
 		# глубинная дымка: в тумане и дождь начинается ближе и гуще
-		env.fog_density = minf(1.0, 0.85 + weather.fogv * 0.15)
 		# камера ниже — видно дальше: дымка ближе, чтобы дальний край мира не появлялся на глазах
 		var low: float = clampf((45.0 - float(rig.pitch)) / 20.0, 0.0, 1.0) if rig != null else 0.0
-		env.fog_depth_begin = 45.0 - low * 15.0 - weather.fogv * 38.0 - weather.precip * 15.0
-		env.fog_depth_end = 115.0 - low * 30.0 - weather.fogv * 75.0 - weather.precip * 30.0
+		env.fog_depth_begin = 45.0 - low * 17.0 - fogv * 36.0 - wet_air * 14.0 - mist * 8.0
+		env.fog_depth_end = 100.0 - low * 18.0 - fogv * 62.0 - wet_air * 24.0
+		# туман в низинах: высотная дымка над рекой и в лощинах (утром и после дождя)
+		env.fog_height = WATER_Y + 1.6 + mist * 1.6
+		env.fog_height_density = mist * 0.22
 	if hero != null:
 		hero.torch.light_energy = 2.2 * (1.0 - d)
 	day_factor = d
@@ -520,8 +574,11 @@ var grass_mesh_vars: Array = []
 var grass_cells := {}
 var grass_timer := 0.0
 var _sky_timer := 0.0
-const GCELL := 16.0
-const GRADIUS := 2
+## Трава клетками 32 м вокруг героя (3×3): меньше вызовов отрисовки, чем 5×5 клеток по 16 м;
+## клетка строится по частям за несколько кадров, без рывка.
+const GCELL := 32.0
+const GRADIUS := 1
+var _gb := {}
 
 var _shot_n := 0
 ## Режим кадров для проверки в облаке: SHOTS=папка — снять несколько ракурсов и выйти.
@@ -592,6 +649,8 @@ func _process(delta: float) -> void:
 		m.set_shader_parameter("hero_pos", hp)
 		m.set_shader_parameter("cam_pos", cp)
 	pv.mats["tuft"].set_shader_parameter("hero_pos", hp)
+	pv.mats["tuft"].set_shader_parameter("cam_pos", cp)
+	pv.mats["tuft"].set_shader_parameter("grass_now", Time.get_ticks_msec() * 0.001)
 	water_mat.set_shader_parameter("hero_pos", hero.position)
 	water_mat.set_shader_parameter("swim", hero.swimb)
 	water_mat.set_shader_parameter("swim_move", clampf(hero.run_mag, 0.0, 1.0))
@@ -628,17 +687,27 @@ func _process(delta: float) -> void:
 		act_btn.text = lbl
 	if player_rig == null:
 		return
+	# недостроенная клетка травы: следующая полоса за кадр
+	if not _gb.is_empty():
+		_grass_step()
+		return
 	grass_timer -= delta
 	if grass_timer > 0.0:
 		return
-	grass_timer = 0.12
+	grass_timer = 0.1
 	var c := Vector2i(floori((player_rig.position.x + SIZE * 0.5) / GCELL), floori((player_rig.position.z + SIZE * 0.5) / GCELL))
 	# удалить далёкие клетки
 	for k in grass_cells.keys():
 		if absi(k.x - c.x) > GRADIUS + 1 or absi(k.y - c.y) > GRADIUS + 1:
 			grass_cells[k].queue_free()
 			grass_cells.erase(k)
-	# построить одну ближайшую недостающую клетку за раз
+	# построить одну недостающую клетку за раз: ближайшую, а из равных — ту, что впереди по
+	# взгляду камеры и по ходу героя (туда, куда смотрим, трава должна быть готова заранее)
+	var fwd := Vector2(-sin(rig.rotation.y), -cos(rig.rotation.y))
+	var hv: Vector3 = hero.vel
+	var mv := Vector2(hv.x, hv.z)
+	if mv.length() > 0.5:
+		fwd = (fwd + mv.normalized() * 1.5).normalized()
 	var best := Vector2i.ZERO
 	var best_d := 1e9
 	for dz in range(-GRADIUS, GRADIUS + 1):
@@ -646,12 +715,12 @@ func _process(delta: float) -> void:
 			var k := Vector2i(c.x + dx, c.y + dz)
 			if grass_cells.has(k) or k.x < 0 or k.y < 0 or k.x >= int(SIZE / GCELL) or k.y >= int(SIZE / GCELL):
 				continue
-			var d := float(dx * dx + dz * dz)
+			var d := float(dx * dx + dz * dz) - Vector2(dx, dz).dot(fwd) * 1.2
 			if d < best_d:
 				best_d = d
 				best = k
 	if best_d < 1e9:
-		_build_grass_cell(best)
+		_grass_begin(best)
 
 ## Проверка сезонов: тап по часам в правом верхнем углу перематывает время на 2 дня вперёд.
 func _unhandled_input(e: InputEvent) -> void:
@@ -722,35 +791,57 @@ func _update_stats(dt: float) -> void:
 		info = msg + "   " + info
 	hud.set_state([health, hunger, thirst, warmth, stamina], "%s, день %d · %02d:%02d · %d°C · %s" % [weather.season_name(), day_count, hh, mm, temp, weather.kind], info)
 
-func _build_grass_cell(k: Vector2i) -> void:
+## Высота видимой земли: билинейно по сетке рельефа (как её рисует сетка, в десятки раз быстрее height()).
+func grid_height(x: float, z: float) -> float:
+	var n := SEG + 1
+	var fx := clampf((x + SIZE * 0.5) / (SIZE / SEG), 0.0, SEG - 0.001)
+	var fz := clampf((z + SIZE * 0.5) / (SIZE / SEG), 0.0, SEG - 0.001)
+	var ix := int(fx)
+	var iz := int(fz)
+	var tx := fx - ix
+	var tz := fz - iz
+	var i := iz * n + ix
+	return lerpf(lerpf(terrain_hs[i], terrain_hs[i + 1], tx), lerpf(terrain_hs[i + n], terrain_hs[i + n + 1], tx), tz)
+
+func _grass_begin(k: Vector2i) -> void:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = k.y * 7919 + k.x * 104729 + 13
-	var x0 := k.x * GCELL - SIZE * 0.5
-	var z0 := k.y * GCELL - SIZE * 0.5
 	var per_var := []
 	for v in grass_mesh_vars:
 		per_var.append([])
+	_gb = {"k": k, "rng": rng, "pv": per_var, "z": 0.0}
+	_grass_step()
+
+## Полоса клетки травы глубиной 8 м; после последней — собрать MultiMesh.
+func _grass_step() -> void:
+	var k: Vector2i = _gb["k"]
+	var rng: RandomNumberGenerator = _gb["rng"]
+	var per_var: Array = _gb["pv"]
+	var x0 := k.x * GCELL - SIZE * 0.5
+	var z0 := k.y * GCELL - SIZE * 0.5
 	var step := 0.92
-	var z := 0.0
-	while z < GCELL:
+	var z: float = _gb["z"]
+	var z_end := minf(z + 8.0, GCELL)
+	while z < z_end:
 		var x := 0.0
 		while x < GCELL:
 			var px := x0 + x + rng.randf_range(-0.4, 0.4)
 			var pz := z0 + z + rng.randf_range(-0.4, 0.4)
 			x += step
-			var y := height(px, pz)
+			# высоты — из сетки рельефа (быстро и ровно по видимой земле), без шума на каждую точку
+			var y := grid_height(px, pz)
 			if y < water_level(px, pz) + 0.15:
 				continue
 			var fd := forest_density(px, pz)
-			var slope := 1.0 - normal_at(px, pz).y
+			var h1 := grid_height(px + 1.0, pz)
+			var h2 := grid_height(px - 1.0, pz)
+			var h3 := grid_height(px, pz + 1.0)
+			var h4 := grid_height(px, pz - 1.0)
+			var slope := 1.0 - Vector3(h2 - h1, 2.0, h4 - h3).normalized().y
 			# сплошной ковёр: на лугу густо, в лесу реже; пятна шума меняют только высоту
 			var patch := n_detail.get_noise_2d(px * 3.0, pz * 3.0) + n_forest.get_noise_2d(px * 6.0, pz * 6.0) * 0.5
 			if slope > 0.22 or rng.randf() > (1.0 - fd) * 0.75 + 0.25:
 				continue
-			var h1 := height(px + 1.0, pz)
-			var h2 := height(px - 1.0, pz)
-			var h3 := height(px, pz + 1.0)
-			var h4 := height(px, pz - 1.0)
 			if maxf(maxf(h1, h2), maxf(h3, h4)) - minf(minf(h1, h2), minf(h3, h4)) > 1.0:
 				continue
 			var s := rng.randf_range(1.1, 1.6)
@@ -758,6 +849,10 @@ func _build_grass_cell(k: Vector2i) -> void:
 			var b := Basis(Vector3.UP, rng.randf() * TAU).scaled(Vector3(s, s * tall, s))
 			per_var[rng.randi() % grass_mesh_vars.size()].append(Transform3D(b, Vector3(px, y - 0.03, pz)))
 		z += step
+	_gb["z"] = z
+	if z < GCELL:
+		return
+	_gb = {}
 	var holder := Node3D.new()
 	for vi in grass_mesh_vars.size():
 		var xs: Array = per_var[vi]
@@ -766,14 +861,18 @@ func _build_grass_cell(k: Vector2i) -> void:
 		var mm := MultiMesh.new()
 		mm.transform_format = MultiMesh.TRANSFORM_3D
 		mm.mesh = grass_mesh_vars[vi][0]
+		mm.use_custom_data = true
 		mm.instance_count = xs.size()
+		# время постройки клетки: шейдер по нему плавно выращивает траву
+		var born := Color(0.0, 0.0, Time.get_ticks_msec() * 0.001 + 0.05, 0.0)
 		for i in xs.size():
 			mm.set_instance_transform(i, xs[i])
+			mm.set_instance_custom_data(i, born)
 		var mmi := MultiMeshInstance3D.new()
 		mmi.multimesh = mm
 		mmi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-		mmi.visibility_range_end = (GRADIUS + 0.55) * GCELL
-		mmi.visibility_range_end_margin = 8.0
+		# клетка видна целиком, пока трава в ней не ушла за grass_r (там шейдер её уже убрал)
+		mmi.visibility_range_end = 72.0
 		holder.add_child(mmi)
 	add_child(holder)
 	grass_cells[k] = holder
@@ -919,20 +1018,18 @@ const NEAR_R := 36.0
 var tree_grid := {}
 var near_mesh := {}
 var near_mmi := {}
-var near_set := {}
 var _near_at := Vector3(1e9, 0, 0)
 var _near_t := 0.0
 var _tree_id := 0
 
-## Детальные деревья только вблизи: в радиусе NEAR_R дерево берётся из полной модели,
-## а в дальнем MultiMesh его экземпляр прячется. Остальной лес — лёгкие модели.
+## Детальные деревья только вблизи: в радиусе NEAR_R дерево берётся из полной модели.
+## Дальняя лёгкая модель на краю круга не прячется щелчком, а перетекает в детальную
+## дизерингом (шейдер сравнивает расстояние до near_c), поэтому смены моделей не видно.
 func _update_near(force: bool = false) -> void:
 	var c: Vector3 = rig.position
 	if not force and Vector2(c.x - _near_at.x, c.z - _near_at.z).length() < 2.5:
 		return
 	_near_at = c
-	var hide := Transform3D(Basis().scaled(Vector3(0.0001, 0.0001, 0.0001)), Vector3(0, -500, 0))
-	var now := {}
 	var by_key := {}
 	var r2 := NEAR_R * NEAR_R
 	var g0 := Vector2i(floori((c.x - NEAR_R) / 16.0), floori((c.z - NEAR_R) / 16.0))
@@ -946,19 +1043,13 @@ func _update_near(force: bool = false) -> void:
 				var t: Transform3D = rec[2]
 				if (t.origin.x - c.x) * (t.origin.x - c.x) + (t.origin.z - c.z) * (t.origin.z - c.z) > r2:
 					continue
-				var id: int = rec[4]
-				now[id] = rec
-				if not near_set.has(id):
-					rec[0].set_instance_transform(rec[1], hide)
 				var key: String = rec[3]
 				if not by_key.has(key):
 					by_key[key] = []
 				by_key[key].append(t)
-	for id in near_set.keys():
-		if not now.has(id):
-			var rec: Array = near_set[id]
-			rec[0].set_instance_transform(rec[1], rec[2])
-	near_set = now
+	for m in veg.fade_list + pv.fade_list:
+		m.set_shader_parameter("near_c", c)
+		m.set_shader_parameter("near_r", NEAR_R)
 	for key in near_mmi.keys():
 		if not by_key.has(key):
 			near_mmi[key].visible = false
@@ -967,6 +1058,7 @@ func _update_near(force: bool = false) -> void:
 			var mmi := MultiMeshInstance3D.new()
 			var mm := MultiMesh.new()
 			mm.transform_format = MultiMesh.TRANSFORM_3D
+			mm.use_custom_data = true
 			mm.mesh = near_mesh[key]
 			mmi.multimesh = mm
 			add_child(mmi)
@@ -976,6 +1068,7 @@ func _update_near(force: bool = false) -> void:
 		mi.multimesh.instance_count = xs.size()
 		for i in xs.size():
 			mi.multimesh.set_instance_transform(i, xs[i])
+			mi.multimesh.set_instance_custom_data(i, Color(0.0, 1.0, 0.0, 0.0))
 		mi.visible = true
 
 const PICK := ["berry", "mushroom", "twig", "pebble"]
@@ -1339,40 +1432,82 @@ func _scatter_all() -> void:
 						var br: float = BLOCK_R.get(kind, 0.0)
 						if br > 0.0 and not (kind in ["spruce", "birch"] and s < 0.5):
 							_add_blocker(x, z, br * s)
+				# мелочь у земли — не больше двух вариантов в клетке: каждый вариант это отдельные
+				# вызовы отрисовки, а различие мелких кустиков в кадре почти не видно
+				# (камни и прочее — не больше четырёх)
+				var nv: int = 2 if float(r[3]) <= 66.0 else 4
+				if pick_kind == "" and not cache_lod.has(r[0]) and vars.size() > nv:
+					for vi in range(nv, vars.size()):
+						per_var[vi % nv].append_array(per_var[vi])
+						per_var[vi] = []
 				for vi in vars.size():
-					var xs: Array = per_var[vi]
-					if xs.is_empty():
+					if per_var[vi].is_empty():
 						continue
-					var mm := MultiMesh.new()
-					mm.transform_format = MultiMesh.TRANSFORM_3D
 					var is_tree: bool = cache_lod.has(r[0])
-					mm.mesh = cache_lod[r[0]][vi][0] if is_tree else vars[vi][0]
-					mm.instance_count = xs.size()
-					for i in xs.size():
-						mm.set_instance_transform(i, xs[i])
-					var mmi := MultiMeshInstance3D.new()
-					mmi.multimesh = mm
-					mmi.visibility_range_end = r[3]
-					mmi.visibility_range_end_margin = 14.0
-					mmi.visibility_range_fade_mode = GeometryInstance3D.VISIBILITY_RANGE_FADE_SELF
-					mmi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON if r[4] else GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-					add_child(mmi)
-					if is_tree:
-						var key: String = r[0] + str(vi)
-						near_mesh[key] = vars[vi][0]
-						for i in xs.size():
-							var o: Vector3 = xs[i].origin
-							var gk := Vector2i(floori(o.x / 16.0), floori(o.z / 16.0))
-							if not tree_grid.has(gk):
-								tree_grid[gk] = []
-							_tree_id += 1
-							tree_grid[gk].append([mm, i, xs[i], key, _tree_id])
-					if pick_kind != "":
-						var pk := pick_kind
-						if pk == "mushroom" and vi < 2:
-							pk = "amanita"
-						for i in xs.size():
-							_add_pick(xs[i].origin, pk, mm, i)
+					# мелочь — клетками 32 м (лучше отсекается камерой), деревья — 64 м (меньше вызовов)
+					var fine: bool = true
+					# мелочь у земли (дальность по правилу до 66 м) тает к 44 м: дальше её не разглядеть,
+					# а при низкой камере там уже дымка; так в кадре вдвое меньше клеток мелочи
+					# всё остальное тает к 95 м — там уже сплошная дымка (fog_depth_end ≤ 100)
+					# кусты и стланик (до 85 м) — к 62 м
+					var far: float = minf(float(r[3]), 95.0) if float(r[3]) > 85.0 else (minf(float(r[3]), 62.0) if float(r[3]) > 66.0 else minf(float(r[3]), 44.0))
+					for xs: Array in _split_cell(per_var[vi], x0, z0, fine):
+						var mm := _vis_multimesh(cache_lod[r[0]][vi][0] if is_tree else vars[vi][0], xs, far, is_tree)
+						var mmi := MultiMeshInstance3D.new()
+						mmi.multimesh = mm
+						# клетка видна, пока хоть один её экземпляр может быть виден; каждый экземпляр
+						# растворяется сам по своей дальности (шейдер), поэтому клетки не «щёлкают»
+						mmi.visibility_range_end = far + (23.0 if fine else 46.0)
+						# тени только у крупного (деревья, валуны, стволы); мелочь без теней — вдвое меньше вызовов
+						# у деревьев тень бросает детальная ближняя модель (_update_near), дальняя — нет:
+						# дальше NEAR_R теней всё равно нет (directional_shadow_max_distance)
+						var shadow: bool = r[4] and float(r[3]) > 80.0 and not is_tree
+						mmi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON if shadow else GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+						add_child(mmi)
+						_place_cell_records(mm, xs, r, vi, vars, is_tree, pick_kind)
+
+## Разбить экземпляры клетки 64 м на четыре клетки 32 м (fine) или оставить одной группой.
+func _split_cell(xs: Array, x0: float, z0: float, fine: bool) -> Array:
+	if not fine:
+		return [xs]
+	var g: Array = [[], [], [], []]
+	for t: Transform3D in xs:
+		var qx := 1 if t.origin.x - x0 >= CELL * 0.5 else 0
+		var qz := 1 if t.origin.z - z0 >= CELL * 0.5 else 0
+		g[qz * 2 + qx].append(t)
+	return g.filter(func(a: Array) -> bool: return not a.is_empty())
+
+## MultiMesh с плавным исчезновением по дальности: в custom.x — дальность, custom.y = -1 у
+## лёгкой дальней версии дерева (вблизи она перетекает в детальную, см. fade.gdshaderinc).
+func _vis_multimesh(mesh: Mesh, xs: Array, far: float, lod_tree: bool) -> MultiMesh:
+	var mm := MultiMesh.new()
+	mm.transform_format = MultiMesh.TRANSFORM_3D
+	mm.use_custom_data = true
+	mm.mesh = mesh
+	mm.instance_count = xs.size()
+	var cd := Color(far, -1.0 if lod_tree else 0.0, 0.0, 0.0)
+	for i in xs.size():
+		mm.set_instance_transform(i, xs[i])
+		mm.set_instance_custom_data(i, cd)
+	return mm
+
+func _place_cell_records(mm: MultiMesh, xs: Array, r: Array, vi: int, vars: Array, is_tree: bool, pick_kind: String) -> void:
+	if is_tree:
+		var key: String = r[0] + str(vi)
+		near_mesh[key] = vars[vi][0]
+		for i in xs.size():
+			var o: Vector3 = xs[i].origin
+			var gk := Vector2i(floori(o.x / 16.0), floori(o.z / 16.0))
+			if not tree_grid.has(gk):
+				tree_grid[gk] = []
+			_tree_id += 1
+			tree_grid[gk].append([mm, i, xs[i], key, _tree_id])
+	if pick_kind != "":
+		var pk := pick_kind
+		if pk == "mushroom" and vi < 2:
+			pk = "amanita"
+		for i in xs.size():
+			_add_pick(xs[i].origin, pk, mm, i)
 
 # ---------- занятость места: стволы, камни и поваленные деревья не пересекаются ----------
 var occ := {}
@@ -1480,19 +1615,20 @@ func _cliff_rocks(vars: Array) -> void:
 		var xs: Array = per_var[vi]
 		if xs.is_empty():
 			continue
-		var mm := MultiMesh.new()
-		mm.transform_format = MultiMesh.TRANSFORM_3D
-		mm.mesh = vars[vi][0]
-		mm.instance_count = xs.size()
-		for i in xs.size():
-			mm.set_instance_transform(i, xs[i])
-		var mmi := MultiMeshInstance3D.new()
-		mmi.multimesh = mm
-		mmi.visibility_range_end = 100.0
-		mmi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-		mmi.visibility_range_end_margin = 14.0
-		mmi.visibility_range_fade_mode = GeometryInstance3D.VISIBILITY_RANGE_FADE_SELF
-		add_child(mmi)
+		# по клеткам 64 м: одна сетка на всю карту не отсекалась и рисовалась целиком
+		var groups := {}
+		for t: Transform3D in xs:
+			var gk := Vector2i(floori(t.origin.x / CELL), floori(t.origin.z / CELL))
+			if not groups.has(gk):
+				groups[gk] = []
+			groups[gk].append(t)
+		for gk in groups:
+			var mmi := MultiMeshInstance3D.new()
+			mmi.multimesh = _vis_multimesh(vars[vi][0], groups[gk], 95.0, false)
+			mmi.visibility_range_end = 141.0
+			mmi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+			add_child(mmi)
+			cliff_mmi.append(mmi)
 	print("cliff rocks ", per_var.reduce(func(acc, a): return acc + a.size(), 0))
 
 func _accept(kind: String, x: float, z: float, rng: RandomNumberGenerator) -> bool:

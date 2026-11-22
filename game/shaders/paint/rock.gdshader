@@ -10,13 +10,18 @@ uniform float moss_k = 0.4;
 uniform float snow = 0.0;
 uniform float wet = 0.0;
 varying vec3 wp;
+varying float vis;
 
 void vertex() {
 	wp = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;
+	vis = dist_vis(INSTANCE_CUSTOM, MODEL_MATRIX[3].xyz);
+	if (abs(vis) < 0.001) {
+		VERTEX = vec3(0.0);
+	}
 }
 
 void fragment() {
-	if (fade_discard(wp, FRAGCOORD.xy)) {
+	if (vis_discard(vis, FRAGCOORD.xy) || fade_discard(wp, FRAGCOORD.xy)) {
 		discard;
 	}
 	vec3 wn = normalize(cross(dFdx(wp), dFdy(wp)));

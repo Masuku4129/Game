@@ -14,6 +14,12 @@ uniform float autumn = 0.0;
 uniform float autumn_k = 1.0;
 uniform float leaf_drop = 0.0;
 uniform vec3 col_autumn = vec3(0.85, 0.55, 0.15);
+uniform float wet = 0.0;
+uniform float bloom_k = 0.0;
+uniform float blossom = 0.0;
+uniform vec3 col_bloom = vec3(0.95, 0.94, 0.9);
+varying float vis;
+varying float tree_r;
 varying vec3 wn;
 varying vec3 wpc;
 varying float drop_h;
@@ -34,17 +40,24 @@ void vertex() {
 	NORMAL = normalize((MODELVIEW_MATRIX * vec4(NORMAL, 0.0)).xyz);
 	wn = (INV_VIEW_MATRIX * vec4(NORMAL, 0.0)).xyz;
 	shade = COLOR.r;
+	vis = dist_vis(INSTANCE_CUSTOM, MODEL_MATRIX[3].xyz);
+	tree_r = whash3(floor(MODEL_MATRIX[3].xyz));
+	if (abs(vis) < 0.001) {
+		VERTEX = vec3(0.0);
+	}
 }
 
 void fragment() {
-	if (fade_discard(wpc, FRAGCOORD.xy) || drop_h < leaf_drop * autumn_k) {
+	if (vis_discard(vis, FRAGCOORD.xy) || fade_discard(wpc, FRAGCOORD.xy) || drop_h < leaf_drop * autumn_k) {
 		discard;
 	}
 	vec4 b = texture(brush, UV);
 	float up = wn.y * 0.5 + 0.5;
 	float g = clamp(up * 1.0 + (b.g - 0.5) * 0.6 + shade * 0.25 - 0.2, 0.0, 1.0);
 	vec3 c = g < 0.5 ? mix(lin(col_dark), lin(col_mid), g * 2.0) : mix(lin(col_mid), lin(col_light), g * 2.0 - 1.0);
-	c = mix(c, mix(lin(col_autumn) * 0.7, lin(col_autumn), g), autumn * autumn_k);
+	c = mix(c, autumn_col(col_autumn, g, tree_r), clamp(autumn * autumn_k * (0.8 + tree_r * 0.45), 0.0, 1.0));
+	c = mix(c, lin(col_bloom) * (0.8 + g * 0.25), bloom_k * blossom * step(0.45, fract(drop_h * 3.7)));
+	c *= 1.0 - wet * 0.15;
 	c = mix(c, vec3(0.9, 0.93, 0.97), smoothstep(0.6, 0.85, wn.y + b.g * 0.2) * snow);
 	ALBEDO = c;
 	ALPHA = b.a;

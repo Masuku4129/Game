@@ -1,6 +1,7 @@
 extends Node
 ## Календарь, сезоны и погода. Считает температуру, облачность, осадки, туман, ветер,
-## снежный покров, мокрость, осеннюю листву, лёд на реке; рисует дождь и снег вокруг камеры.
+## снежный покров, мокрость, осеннюю листву, цветение, туман в низинах, лёд на реке;
+## рисует дождь и снег вокруг камеры (остальные эффекты — atmo.gd).
 
 const DAYS_PER_SEASON := 12
 const SEASONS := ["Осень", "Зима", "Весна", "Лето"]
@@ -21,6 +22,10 @@ var wet := 0.0
 var autumn := 0.0
 var leaf_drop := 0.0
 var ice := 0.0
+## туман в низинах и над рекой: на рассвете, после дождя, в туманную погоду
+var mist := 0.0
+## цветение черёмухи (поздняя весна)
+var blossom := 0.0
 var t_cloud := 0.1
 var t_precip := 0.0
 var t_fog := 0.0
@@ -29,11 +34,16 @@ var _hours_acc := 0.0
 
 var rain: GPUParticles3D
 var flakes: GPUParticles3D
+var atmo
 
 func _ready() -> void:
 	rng.seed = 2026
 	rain = _make_particles(true)
 	flakes = _make_particles(false)
+	atmo = preload("res://scripts/atmo.gd").new()
+	atmo.main = main
+	atmo.weather = self
+	add_child(atmo)
 
 func _make_particles(is_rain: bool) -> GPUParticles3D:
 	var p := GPUParticles3D.new()
@@ -41,16 +51,19 @@ func _make_particles(is_rain: bool) -> GPUParticles3D:
 	pm.emission_shape = ParticleProcessMaterial.EMISSION_SHAPE_BOX
 	pm.emission_box_extents = Vector3(16, 1, 16)
 	pm.direction = Vector3(0, -1, 0)
-	pm.spread = 4.0 if is_rain else 25.0
+	pm.spread = 3.0 if is_rain else 25.0
 	pm.initial_velocity_min = 16.0 if is_rain else 0.6
 	pm.initial_velocity_max = 20.0 if is_rain else 1.4
 	pm.gravity = Vector3(0.8, -12.0, 0.3) if is_rain else Vector3(0.4, -1.3, 0.2)
 	p.process_material = pm
 	var q: PrimitiveMesh
 	if is_rain:
+		# струйка: вытянута по скорости (с ветром косит), к концам прозрачнее
 		var qm := QuadMesh.new()
-		qm.size = Vector2(0.02, 0.5)
+		qm.size = Vector2(0.03, 0.8)
 		q = qm
+		pm.scale_min = 0.7
+		pm.scale_max = 1.2
 	else:
 		var sm := SphereMesh.new()
 		sm.radius = 0.018
@@ -61,13 +74,25 @@ func _make_particles(is_rain: bool) -> GPUParticles3D:
 	var m := StandardMaterial3D.new()
 	m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	m.albedo_color = Color(0.75, 0.8, 0.85, 0.35) if is_rain else Color(0.97, 0.98, 1.0, 0.9)
+	m.albedo_color = Color(0.78, 0.83, 0.88, 0.32) if is_rain else Color(0.97, 0.98, 1.0, 0.9)
 	if is_rain:
-		m.billboard_mode = BaseMaterial3D.BILLBOARD_FIXED_Y
+		var gt := GradientTexture2D.new()
+		var gr := Gradient.new()
+		gr.set_color(0, Color(1, 1, 1, 0))
+		gr.set_color(1, Color(1, 1, 1, 0))
+		gr.add_point(0.35, Color(1, 1, 1, 1))
+		gr.add_point(0.8, Color(1, 1, 1, 0.8))
+		gt.gradient = gr
+		gt.fill_from = Vector2(0, 0)
+		gt.fill_to = Vector2(0, 1)
+		gt.width = 4
+		gt.height = 64
+		m.albedo_texture = gt
+		p.transform_align = GPUParticles3D.TRANSFORM_ALIGN_Z_BILLBOARD_Y_TO_VELOCITY
 	m.vertex_color_use_as_albedo = false
 	q.material = m
 	p.draw_pass_1 = q
-	p.amount = 2600 if is_rain else 3500
+	p.amount = 3000 if is_rain else 3500
 	p.lifetime = 1.4 if is_rain else 9.0
 	p.preprocess = 2.0 if is_rain else 9.0
 	p.visibility_aabb = AABB(Vector3(-30, -40, -30), Vector3(60, 60, 60))
@@ -187,6 +212,16 @@ func step(dh: float) -> void:
 	else:
 		autumn = smoothstep(3.85, 4.0, s) * 0.2
 		leaf_drop = 0.0
+	# цветение черёмухи: когда листва уже распустилась, к концу весны
+	blossom = smoothstep(2.55, 2.7, s) * (1.0 - smoothstep(2.88, 3.02, s)) if s < 3.2 else 0.0
+	# туман в низинах: на рассвете в безветрие, после дождя (мокро, но уже не льёт), в туманную погоду
+	var h: float = main.t_hours
+	var dawn := smoothstep(3.0, 5.5, h) * (1.0 - smoothstep(7.5, 10.5, h)) + (smoothstep(19.5, 22.0, h) + 1.0 - smoothstep(1.0, 4.0, h)) * 0.35
+	var calm := clampf(1.3 - wind * 0.8, 0.0, 1.0)
+	var t_mist := clampf(fogv * 0.9 + dawn * (0.45 + wet * 0.4) * calm + wet * (1.0 - precip) * 0.35 * calm + precip * 0.15, 0.0, 1.0)
+	if temp < -6.0:
+		t_mist *= 0.4
+	mist = lerpf(mist, t_mist, k)
 	kind = _kind_name()
 
 func update_visual(cam_target: Vector3) -> void:
@@ -195,6 +230,10 @@ func update_visual(cam_target: Vector3) -> void:
 	flakes.global_position = pos
 	var cold := temp < 0.5
 	var amt := clampf(precip * 1.15, 0.0, 1.0)
+	# ночью струи едва видны, днём — серебристые
+	var rm: StandardMaterial3D = (rain.draw_pass_1 as QuadMesh).material
+	var lv: float = 0.25 + float(main.day_factor) * 0.75
+	rm.albedo_color = Color(0.8 * lv, 0.85 * lv, 0.9 * lv, 0.3 + amt * 0.2)
 	rain.emitting = amt > 0.05 and not cold
 	flakes.emitting = amt > 0.05 and cold
 	rain.amount_ratio = amt
@@ -203,6 +242,7 @@ func update_visual(cam_target: Vector3) -> void:
 	pm.gravity = Vector3(wind * 1.2, -1.3, wind * 0.5)
 	var pr: ParticleProcessMaterial = rain.process_material
 	pr.gravity = Vector3(wind * 2.5, -12.0, wind * 1.0)
+	atmo.update(cam_target)
 
 ## Раздать параметры шейдерам.
 func apply(mats: Array, terrain: ShaderMaterial, blade: ShaderMaterial, water: ShaderMaterial) -> void:
@@ -212,6 +252,7 @@ func apply(mats: Array, terrain: ShaderMaterial, blade: ShaderMaterial, water: S
 		m.set_shader_parameter("autumn", autumn)
 		m.set_shader_parameter("leaf_drop", leaf_drop)
 		m.set_shader_parameter("wind", wind)
+		m.set_shader_parameter("blossom", blossom)
 	terrain.set_shader_parameter("snow", snow)
 	terrain.set_shader_parameter("wet", wet)
 	terrain.set_shader_parameter("freeze", clampf(-temp * 0.5, 0.0, 1.0))

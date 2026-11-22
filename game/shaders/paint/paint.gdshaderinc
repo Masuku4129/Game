@@ -4,11 +4,13 @@ vec3 lin(vec3 c) { return pow(c, vec3(2.2)); }
 uniform vec3 shade_cool = vec3(0.55, 0.62, 0.85);
 uniform float ramp_lo = -0.05;
 uniform float ramp_hi = 0.45;
+uniform float shadow_fill = 0.5;
 
 void light() {
 	float ndl = dot(NORMAL, LIGHT);
 	float t = smoothstep(ramp_lo, ramp_hi, ndl) * mix(0.25, 1.0, ATTENUATION);
-	vec3 c = mix(lin(shade_cool) * 0.3, vec3(1.0, 0.95, 0.85), t);
+	// тень не проваливается в черноту: холодная подсветка от неба (shadow_fill)
+	vec3 c = mix(lin(shade_cool) * shadow_fill, vec3(1.0, 0.95, 0.85), t);
 	DIFFUSE_LIGHT += c * LIGHT_COLOR / PI;
 }
 
@@ -30,4 +32,14 @@ float strokes(vec2 p) {
 	// мазки вдоль одного направления: сжатие по оси и два слоя
 	vec2 q = vec2(p.x * 0.35 + p.y * 0.2, p.y * 1.6 - p.x * 0.3);
 	return vnoise(q) * 0.6 + vnoise(q * 2.3 + 7.1) * 0.4;
+}
+
+float whash3(vec3 p) { p = mod(p, 1024.0); p = fract(p * 0.1031); p += dot(p, p.zyx + 31.32); return fract((p.x + p.y) * p.z); }
+// Осенний цвет кроны: у каждого дерева свой оттенок (r — хеш дерева) — от лимонного до багряного.
+uniform float autumn_red = 0.55;
+vec3 autumn_col(vec3 base, float g, float r) {
+	vec3 a = lin(base);
+	a = mix(a, lin(vec3(0.86, 0.72, 0.26)), (1.0 - smoothstep(0.0, 0.35, r)) * 0.5);
+	a = mix(a, lin(vec3(0.72, 0.3, 0.14)), smoothstep(0.6, 1.0, r) * autumn_red);
+	return a * mix(0.62, 1.05, g);
 }
