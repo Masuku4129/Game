@@ -2,7 +2,7 @@ extends Node3D
 ## Изометрическая камера под 60°: следует за героем; палец вне джойстика вращает,
 ## два пальца приближают и вращают.
 
-var pitch := 30.0
+var pitch := 60.0
 var distance := 13.0
 var target: Node3D
 var touches := {}

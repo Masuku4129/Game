@@ -23,20 +23,20 @@ jobs:
           DEBIAN_FRONTEND=noninteractive apt-get install -y -qq xvfb mesa-vulkan-drivers libvulkan1 libgl1-mesa-dri >/dev/null
       - name: Import project
         run: cd game && (timeout 600 godot --headless --import || true)
-      - name: Render preview frames
+      - name: Render style test shots
         run: |
+          mkdir -p /tmp/pv
           cd game
-          mkdir -p ../preview
-          timeout 900 xvfb-run -a -s "-screen 0 1920x864x24" godot --rendering-driver vulkan --write-movie ../preview/f.png --fixed-fps 10 --quit-after 220 2>&1 | grep -iE "error|shader|warning" | head -40 || true
-          ls ../preview | tail -3
+          SHOTS=/tmp/pv timeout 600 xvfb-run -a -s "-screen 0 1920x864x24" godot --rendering-driver vulkan --resolution 1920x864 res://scenes/style_test.tscn 2>&1 | grep -iE "error|shot" | head -40 || true
+          ls /tmp/pv
       - name: Publish preview frames to branch
         run: |
-          mkdir -p /tmp/pv && cp preview/f00000100.png preview/f00000219.png /tmp/pv/ || true
           git config --global --add safe.directory "$GITHUB_WORKSPACE"
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git checkout --orphan preview
           git rm -rf -q . || true
+          rm -rf game preview
           cp /tmp/pv/*.png . && git add *.png
           git commit -q -m "Кадры предпросмотра"
           git push -f origin preview
