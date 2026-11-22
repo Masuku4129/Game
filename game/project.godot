@@ -18,5 +18,5 @@ pointing/emulate_touch_from_mouse=true
 renderer/rendering_method="mobile"
 textures/vram_compression/import_etc2_astc=true
 anti_aliasing/quality/screen_space_aa=1
-scaling_3d/mode=1
+scaling_3d/mode=0
 scaling_3d/scale=0.7

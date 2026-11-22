@@ -290,15 +290,15 @@ func rock(seed_v: int) -> Array:
 	# 0 валун, 1 плоская плита, 2 высокая глыба, 3 колотая груда
 	var sx := R(1.0, 1.6)
 	var sz := R(0.9, 1.4)
-	var sy := [0.62, 0.32, 1.0, 0.75][kind]
-	var cs := [0.34, 0.2, 0.5, 0.62][kind]
+	var sy: float = [0.62, 0.32, 1.0, 0.75][kind]
+	var cs: float = [0.34, 0.2, 0.5, 0.62][kind]
 	var tints := [Color(1.0, 1.0, 0.98), Color(1.0, 0.93, 0.82), Color(0.82, 0.86, 0.95), Color(0.92, 0.9, 0.88)]
 	if kind == 2:
 		sx *= 0.65
 		sz *= 0.7
 	for i in verts.size():
 		var v := verts[i]
-		var k := 1.0 + cell.get_noise_3dv(v * 1.7) * cs + (1.0 - absf(ridge.get_noise_3dv(v * 2.0)) - 0.6) * 0.3 + ridge.get_noise_3dv(v * 9.0) * 0.035
+		var k: float = 1.0 + cell.get_noise_3dv(v * 1.7) * cs + (1.0 - absf(ridge.get_noise_3dv(v * 2.0)) - 0.6) * 0.3 + ridge.get_noise_3dv(v * 9.0) * 0.035
 		v = Vector3(v.x * sx, v.y * sy, v.z * sz) * k
 		var moss := clampf((v.y - 0.05) * 3.2, 0.0, 1.0) * clampf(ridge.get_noise_3dv(v * 3.0) + 0.65, 0.0, 1.0)
 		var c: Color = tints[kind].lerp(Color(0.52, 0.66, 0.32), moss).darkened(R(0.0, 0.1))
