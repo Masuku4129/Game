@@ -274,8 +274,11 @@ const GRADIUS := 2
 func _process(delta: float) -> void:
 	if hero == null or joy == null:
 		return
-	RenderingServer.global_shader_parameter_set("hero_pos", hero.position + Vector3(0, 1.0, 0))
-	RenderingServer.global_shader_parameter_set("cam_pos", rig.cam.global_position)
+	var hp: Vector3 = hero.position + Vector3(0, 1.0, 0)
+	var cp: Vector3 = rig.cam.global_position
+	for m in veg.fade_list:
+		m.set_shader_parameter("hero_pos", hp)
+		m.set_shader_parameter("cam_pos", cp)
 	hero.move_vec = joy.value
 	hero.cam_yaw = rig.rotation.y
 	# время суток: 1 игровой час за 75 секунд

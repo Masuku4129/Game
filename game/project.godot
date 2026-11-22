@@ -21,13 +21,3 @@ anti_aliasing/quality/screen_space_aa=1
 scaling_3d/mode=0
 scaling_3d/scale=0.7
 
-[shader_globals]
-
-hero_pos={
-"type": "vec3",
-"value": Vector3(0, 0, 0)
-}
-cam_pos={
-"type": "vec3",
-"value": Vector3(0, 50, 0)
-}

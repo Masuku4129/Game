@@ -1,5 +1,5 @@
-global uniform vec3 hero_pos;
-global uniform vec3 cam_pos;
+uniform vec3 hero_pos = vec3(0.0, -1000.0, 0.0);
+uniform vec3 cam_pos = vec3(0.0, -999.0, 0.0);
 
 // Растворяет (дизерингом) всё, что стоит на луче камера -> герой.
 bool fade_discard(vec3 wp, vec2 fc) {

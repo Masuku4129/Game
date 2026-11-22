@@ -8,6 +8,7 @@ const ROCK_SHADER := preload("res://shaders/rock.gdshader")
 
 var rng := RandomNumberGenerator.new()
 var mats := {}
+var fade_list: Array = []
 
 func _init() -> void:
 	for k in ["bark_spruce", "bark_pine", "bark_birch", "bark_dead"]:
@@ -15,6 +16,7 @@ func _init() -> void:
 		m.shader = load("res://shaders/bark.gdshader")
 		m.set_shader_parameter("tex", load("res://textures/%s.png" % k))
 		mats[k] = m
+		fade_list.append(m)
 	_card("needle", Color(0.78, 0.86, 0.70), 0.03)
 	_card("pine", Color(0.80, 0.84, 0.68), 0.03)
 	_card("birch_leaf", Color(0.86, 0.90, 0.70), 0.06)
@@ -30,6 +32,7 @@ func _init() -> void:
 	core.set_shader_parameter("tex", load("res://textures/needle.png"))
 	core.set_shader_parameter("tint", Color(0.06, 0.1, 0.07))
 	mats["core"] = core
+	fade_list.append(core)
 
 func _card(k: String, tint: Color, sway: float) -> void:
 	var m := ShaderMaterial.new()
@@ -38,6 +41,7 @@ func _card(k: String, tint: Color, sway: float) -> void:
 	m.set_shader_parameter("tint", tint)
 	m.set_shader_parameter("sway", sway)
 	mats[k] = m
+	fade_list.append(m)
 
 func R(a: float, b: float) -> float:
 	return rng.randf_range(a, b)
@@ -312,6 +316,7 @@ func rock(seed_v: int) -> Array:
 	m.shader = ROCK_SHADER
 	m.set_shader_parameter("rock", load("res://textures/ground_rock.png"))
 	m.set_shader_parameter("tile", [0.55, 0.4, 0.75, 0.9][kind])
+	fade_list.append(m)
 	st.set_material(m)
 	return [st.commit(), 0.6]
 
