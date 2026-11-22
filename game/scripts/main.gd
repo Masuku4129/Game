@@ -654,7 +654,7 @@ func _build_grass_cell(k: Vector2i) -> void:
 	var per_var := []
 	for v in grass_mesh_vars:
 		per_var.append([])
-	var step := 0.9
+	var step := 0.8
 	var z := 0.0
 	while z < GCELL:
 		var x := 0.0
@@ -667,18 +667,19 @@ func _build_grass_cell(k: Vector2i) -> void:
 				continue
 			var fd := forest_density(px, pz)
 			var slope := 1.0 - normal_at(px, pz).y
-			# трава куртинами: густо в пятнах, между ними чистая земля-луг
+			# сплошной ковёр: на лугу густо, в лесу реже; пятна шума меняют только высоту
 			var patch := n_detail.get_noise_2d(px * 3.0, pz * 3.0) + n_forest.get_noise_2d(px * 6.0, pz * 6.0) * 0.5
-			if slope > 0.1 or patch < 0.05 or rng.randf() > (1.0 - fd) * 0.9 + 0.1:
+			if slope > 0.22 or rng.randf() > (1.0 - fd) * 0.75 + 0.25:
 				continue
 			var h1 := height(px + 1.0, pz)
 			var h2 := height(px - 1.0, pz)
 			var h3 := height(px, pz + 1.0)
 			var h4 := height(px, pz - 1.0)
-			if maxf(maxf(h1, h2), maxf(h3, h4)) - minf(minf(h1, h2), minf(h3, h4)) > 0.7:
+			if maxf(maxf(h1, h2), maxf(h3, h4)) - minf(minf(h1, h2), minf(h3, h4)) > 1.0:
 				continue
-			var s := rng.randf_range(0.9, 1.5)
-			var b := Basis(Vector3.UP, rng.randf() * TAU).scaled(Vector3(s, s * rng.randf_range(0.8, 1.3), s))
+			var s := rng.randf_range(1.1, 1.6)
+			var tall := clampf(0.8 + patch * 0.6, 0.55, 1.4) * rng.randf_range(0.85, 1.15)
+			var b := Basis(Vector3.UP, rng.randf() * TAU).scaled(Vector3(s, s * tall, s))
 			per_var[rng.randi() % grass_mesh_vars.size()].append(Transform3D(b, Vector3(px, y - 0.03, pz)))
 		z += step
 	var holder := Node3D.new()

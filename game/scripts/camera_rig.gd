@@ -1,6 +1,6 @@
 extends Node3D
 ## Изометрическая камера под 45°: следует за героем; палец вне джойстика вращает,
-## два пальца приближают и вращают.
+## два пальца приближают и вращают; вверх-вниз — наклон 25–45°.
 
 var pitch := 45.0
 var distance := 12.0
@@ -44,6 +44,8 @@ func _unhandled_input(e: InputEvent) -> void:
 		touches[e.index] = e.position
 		if touches.size() == 1:
 			rotation.y -= e.relative.x * 0.006
+			# вверх-вниз пальцем — наклон камеры от 25° до 45°
+			pitch = clampf(pitch + e.relative.y * 0.08, 25.0, 45.0)
 		elif touches.size() == 2:
 			var p: Array = touches.values()
 			var d: float = p[0].distance_to(p[1])

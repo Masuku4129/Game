@@ -23,7 +23,8 @@ void vertex() {
 	float d = length(dv);
 	float near = (1.0 - smoothstep(0.2, 0.8, d)) * step(abs(w.y - hero_pos.y + 1.0), 1.5);
 	VERTEX += inverse(mat3(MODEL_MATRIX)) * vec3(dv.x / max(d, 0.001), -0.5, dv.y / max(d, 0.001)) * near * hgt * 0.35;
-	VERTEX.y *= max(0.0, 1.0 - snow * 1.5);
+	// под снегом трава уходит целиком, а не расплющивается по земле
+	VERTEX *= max(0.0, 1.0 - snow * 1.8);
 	// у края области трава плавно вырастает, а не появляется клеткой
 	VERTEX *= 1.0 - smoothstep(grass_r - 14.0, grass_r - 2.0, d);
 	NORMAL = vec3(0.0, 1.0, 0.0);
