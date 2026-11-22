@@ -19,6 +19,7 @@ void vertex() {
 	float k = sway * (0.4 + wind * 1.2) * max(VERTEX.y, 0.0);
 	VERTEX.x += sin(t) * k + wind * k * 0.6;
 	VERTEX.z += cos(t * 0.83) * k;
+	VERTEX += inverse(mat3(MODEL_MATRIX)) * hero_push(w, clamp(VERTEX.y, 0.0, 1.5), TIME);
 	wpf = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;
 	upn = normalize((MODEL_MATRIX * vec4(NORMAL, 0.0)).xyz).y;
 	opos = MODEL_MATRIX[3].xyz;

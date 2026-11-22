@@ -33,6 +33,18 @@ var _fps_t := 0.0
 var weather
 var feet
 var terrain_mat: ShaderMaterial
+var health := 1.0
+var thirst := 0.9
+var bleed := 0.0
+var injuries := {}
+var inv := {}
+var pickables := {}
+var animals
+var flash: ColorRect
+var dead_lbl: Label
+var dead_t := 0.0
+var msg_t := 0.0
+var msg := ""
 var water_mat: ShaderMaterial
 
 func _ready() -> void:
@@ -52,6 +64,10 @@ func _ready() -> void:
 	feet.main = self
 	add_child(feet)
 	hero.position = _find_start()
+	animals = preload("res://scripts/animals.gd").new()
+	animals.main = self
+	add_child(animals)
+	animals.populate()
 	rig = preload("res://scripts/camera_rig.gd").new()
 	rig.target = hero
 	add_child(rig)
@@ -97,6 +113,22 @@ func _ready() -> void:
 	fps_lbl.add_theme_constant_override("outline_size", 6)
 	fps_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	ui.add_child(fps_lbl)
+	flash = ColorRect.new()
+	flash.anchor_right = 1.0
+	flash.anchor_bottom = 1.0
+	flash.color = Color(0.6, 0.0, 0.0, 0.0)
+	flash.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	ui.add_child(flash)
+	dead_lbl = Label.new()
+	dead_lbl.anchor_right = 1.0
+	dead_lbl.anchor_bottom = 1.0
+	dead_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	dead_lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	dead_lbl.add_theme_font_size_override("font_size", 64)
+	dead_lbl.add_theme_color_override("font_outline_color", Color(0, 0, 0))
+	dead_lbl.add_theme_constant_override("outline_size", 10)
+	dead_lbl.visible = false
+	ui.add_child(dead_lbl)
 	_update_sky()
 
 func _find_start() -> Vector3:
@@ -406,11 +438,17 @@ func _process(delta: float) -> void:
 	for m in veg.fade_list:
 		m.set_shader_parameter("hero_pos", hp)
 		m.set_shader_parameter("cam_pos", cp)
+	veg.mats["blade"].set_shader_parameter("hero_pos", hp)
 	_fps_t -= delta
 	if _fps_t <= 0.0:
 		_fps_t = 0.5
 		fps_lbl.text = "FPS %d · вызовов %d · треуг. %.1f тыс." % [Engine.get_frames_per_second(), Performance.get_monitor(Performance.RENDER_TOTAL_DRAW_CALLS_IN_FRAME), Performance.get_monitor(Performance.RENDER_TOTAL_PRIMITIVES_IN_FRAME) / 1000.0]
-	hero.move_vec = joy.value
+	flash.color.a = maxf(0.0, flash.color.a - delta * 0.6)
+	if dead_t > 0.0:
+		dead_t -= delta
+		if dead_t <= 0.0:
+			_respawn()
+	hero.move_vec = joy.value if health > 0.0 else Vector2.ZERO
 	hero.cam_yaw = rig.rotation.y
 	# время суток: 1 игровой час за 75 секунд
 	t_hours += delta / 75.0
@@ -465,6 +503,26 @@ func _unhandled_input(e: InputEvent) -> void:
 
 func _update_stats(dt: float) -> void:
 	hunger = maxf(0.0, hunger - 0.0004 * dt)
+	thirst = maxf(0.0, thirst - 0.0007 * dt * (1.5 if hero.running else 1.0))
+	var gh := dt / 75.0
+	if health > 0.0:
+		# кровотечение, голод, жажда, холод — урон; сытый и в тепле — заживает
+		health -= bleed * 0.004 * dt
+		bleed = maxf(0.0, bleed - 0.0015 * dt)
+		if hunger <= 0.0 or thirst <= 0.0:
+			health -= 0.0012 * dt
+		if warmth < 0.1:
+			health -= 0.001 * dt
+		if bleed <= 0.01 and hunger > 0.2 and thirst > 0.2:
+			health = minf(1.0, health + gh * (0.02 if hero.state != "sit" else 0.035))
+		for k in injuries.keys():
+			injuries[k] = float(injuries[k]) - gh
+			if injuries[k] <= 0.0:
+				injuries.erase(k)
+		if health <= 0.0:
+			health = 0.0
+			_die("")
+	msg_t -= dt
 	var tc: float = weather.temp
 	var soak: float = maxf(float(weather.wet) * 0.6, float(hero.soaked))
 	var target_w := clampf(0.55 + tc * 0.025 - soak * 0.35 - weather.wind * 0.05 - (0.25 if hero.swimb > 0.5 else 0.0), 0.02, 0.95)
@@ -485,7 +543,20 @@ func _update_stats(dt: float) -> void:
 	var hh := int(t_hours)
 	var mm := int((t_hours - hh) * 60.0)
 	var temp := int(round(tc))
-	hud.set_state(hunger, warmth, stamina, "%s, день %d · %02d:%02d · %d°C · %s" % [weather.season_name(), day_count, hh, mm, temp, weather.kind])
+	var info := ""
+	if bleed > 0.02:
+		info += "Кровотечение! "
+	if not injuries.is_empty():
+		info += ", ".join(PackedStringArray(injuries.keys())) + " "
+	var items := PackedStringArray()
+	for k in inv.keys():
+		if int(inv[k]) > 0:
+			items.append("%s %d" % [PICK_NAME[k], inv[k]])
+	if not items.is_empty():
+		info += "· " + ", ".join(items)
+	if msg_t > 0.0:
+		info = msg + "   " + info
+	hud.set_state([health, hunger, thirst, warmth, stamina], "%s, день %d · %02d:%02d · %d°C · %s" % [weather.season_name(), day_count, hh, mm, temp, weather.kind], info)
 
 func _build_grass_cell(k: Vector2i) -> void:
 	var rng := RandomNumberGenerator.new()
@@ -587,6 +658,157 @@ func _variants(kind: String) -> Array:
 			for i in 2: out.append(veg.log_fallen(1100 + i))
 	return out
 
+const PICK := ["berry", "mushroom", "twig", "pebble"]
+const PICK_NAME := {"berry": "ягоды", "mushroom": "гриб", "amanita": "мухомор", "twig": "хворост", "pebble": "камень"}
+
+func _add_pick(p: Vector3, kind: String, mm: MultiMesh, i: int) -> void:
+	var k := Vector2i(floori(p.x / 8.0), floori(p.z / 8.0))
+	if not pickables.has(k):
+		pickables[k] = []
+	pickables[k].append([p, kind, mm, i])
+
+## Ближайшее, что можно подобрать (до 1,4 м).
+func find_pick(p: Vector3) -> Array:
+	var c := Vector2i(floori(p.x / 8.0), floori(p.z / 8.0))
+	var best: Array = []
+	var bd := 1.4 * 1.4
+	for dz in range(-1, 2):
+		for dx in range(-1, 2):
+			var k := Vector2i(c.x + dx, c.y + dz)
+			if not pickables.has(k):
+				continue
+			for it in pickables[k]:
+				var q: Vector3 = it[0]
+				var dd := Vector2(q.x - p.x, q.z - p.z).length_squared()
+				if dd < bd:
+					bd = dd
+					best = it
+	return best
+
+func take_pick(it: Array) -> void:
+	var q: Vector3 = it[0]
+	var k := Vector2i(floori(q.x / 8.0), floori(q.z / 8.0))
+	pickables[k].erase(it)
+	var mm: MultiMesh = it[2]
+	mm.set_instance_transform(it[3], Transform3D(Basis().scaled(Vector3(0.001, 0.001, 0.001)), q - Vector3(0, 5, 0)))
+	var kind: String = it[1]
+	match kind:
+		"berry":
+			hunger = minf(1.0, hunger + 0.05)
+			thirst = minf(1.0, thirst + 0.03)
+			_say("Съел горсть ягод")
+		"mushroom":
+			hunger = minf(1.0, hunger + 0.07)
+			_say("Съел гриб")
+		"amanita":
+			health = maxf(0.05, health - 0.2)
+			hunger = maxf(0.0, hunger - 0.05)
+			flash.color.a = 0.25
+			_say("Мухомор! Отравление")
+		_:
+			inv[kind] = int(inv.get(kind, 0)) + 1
+			_say("+1 %s" % PICK_NAME[kind])
+
+func near_water(p: Vector3) -> bool:
+	for a in 8:
+		var v := Vector3(cos(a * TAU / 8.0), 0, sin(a * TAU / 8.0)) * 1.3
+		if height(p.x + v.x, p.z + v.z) < WATER_Y - 0.05:
+			return true
+	return false
+
+func drink() -> void:
+	thirst = minf(1.0, thirst + 0.35)
+	_say("Напился")
+
+func bandage() -> void:
+	bleed = 0.0
+	for k in injuries.keys():
+		if k != "перелом ноги":
+			injuries[k] = minf(float(injuries[k]), 24.0)
+	_say("Раны перевязаны")
+
+func _say(t: String) -> void:
+	msg = t
+	msg_t = 3.0
+
+## Ближайший ствол (по сетке препятствий) или INF.
+func nearest_tree(p: Vector3, r: float) -> Vector3:
+	var c := Vector2i(floori(p.x / 8.0), floori(p.z / 8.0))
+	var best := Vector3.INF
+	var bd := r * r
+	var n := int(ceil(r / 8.0))
+	for dz in range(-n, n + 1):
+		for dx in range(-n, n + 1):
+			var k := Vector2i(c.x + dx, c.y + dz)
+			if not blockers.has(k):
+				continue
+			for b in blockers[k]:
+				var dd: float = (b.x - p.x) * (b.x - p.x) + (b.y - p.z) * (b.y - p.z)
+				if dd < bd:
+					bd = dd
+					best = Vector3(b.x, 0, b.y)
+	return best
+
+## Удар зверя: часть тела, кровотечение, переломы, отбрасывание.
+func hurt(amount: float, from: Vector3, kind: String) -> void:
+	if health <= 0.0:
+		return
+	var big := kind in ["bear", "tiger"]
+	var roll := randf()
+	var part := "нога"
+	if roll < (0.2 if big else 0.06):
+		part = "голова"
+	elif roll < (0.45 if big else 0.2):
+		part = "грудь"
+	elif roll < 0.65:
+		part = "рука"
+	var dmg := amount * (1.7 if big and part in ["голова", "грудь"] else 1.0)
+	if hero.state == "sit":
+		hero._stand_up()
+	health = maxf(0.0, health - dmg)
+	bleed = minf(1.0, bleed + dmg * 0.6)
+	var key := "рана: " + part
+	injuries[key] = float(injuries.get(key, 0.0)) + 24.0 + dmg * 80.0
+	if part == "нога" and (big or kind == "boar") and randf() < 0.35:
+		injuries["перелом ноги"] = 96.0
+	var away: Vector3 = hero.position - from
+	away.y = 0
+	hero.vel += away.normalized() * (6.0 if big else 3.0)
+	hero.land_t = 0.4
+	hero.land_k = 0.5
+	flash.color.a = clampf(0.25 + dmg, 0.0, 0.6)
+	if health <= 0.0:
+		_die(kind)
+
+func _die(kind: String) -> void:
+	hero.state = "dead"
+	dead_t = 6.0
+	var who: String = {"wolf": "волки", "bear": "медведь", "tiger": "тигр", "boar": "кабан"}.get(kind, "")
+	dead_lbl.text = "Вы погибли" + ("\n" + who if who != "" else "")
+	dead_lbl.visible = true
+
+func _respawn() -> void:
+	dead_lbl.visible = false
+	health = 0.6
+	bleed = 0.0
+	injuries.clear()
+	hunger = maxf(hunger, 0.5)
+	thirst = maxf(thirst, 0.5)
+	warmth = maxf(warmth, 0.5)
+	stamina = 1.0
+	for k in inv.keys():
+		inv[k] = int(inv[k]) / 2
+	hero.revive(_find_start())
+
+## Множитель скорости от ран: хромота при ранах ноги, сильнее при переломе.
+func move_factor() -> float:
+	var f := 1.0
+	if injuries.has("перелом ноги"):
+		f = 0.5
+	elif injuries.has("рана: нога"):
+		f = 0.78
+	return f * (0.6 + 0.4 * clampf(health * 2.0, 0.0, 1.0))
+
 const BLOCK_R := {"spruce": 0.4, "pine": 0.32, "birch": 0.28, "bare": 0.3, "spruce_dead": 0.3, "stump": 0.45, "rock": 0.5, "boulder": 0.6, "larch": 0.32, "aspen": 0.26}
 
 func _scatter_all() -> void:
@@ -630,6 +852,7 @@ func _scatter_all() -> void:
 				var per_var := []
 				for v in vars:
 					per_var.append([])
+				var pick_kind: String = r[0] if r[0] in PICK else ""
 				for k in int(r[1]) * 4:
 					var x := x0 + rng.randf() * CELL
 					var z := z0 + rng.randf() * CELL
@@ -690,6 +913,12 @@ func _scatter_all() -> void:
 					mmi.visibility_range_end_margin = 10.0
 					mmi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON if r[4] else GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 					add_child(mmi)
+					if pick_kind != "":
+						var pk := pick_kind
+						if pk == "mushroom" and vi < 2:
+							pk = "amanita"
+						for i in xs.size():
+							_add_pick(xs[i].origin, pk, mm, i)
 
 func _accept(kind: String, x: float, z: float, rng: RandomNumberGenerator) -> bool:
 	var y := height(x, z)

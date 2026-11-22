@@ -294,15 +294,44 @@ func _land(impact: float) -> void:
 
 ## Подпись кнопки действия по обстановке ("" — кнопку скрыть).
 func action_label() -> String:
+	if state == "dead" or state == "climb":
+		return ""
 	if state == "sit":
 		return "Встать"
-	if state == "walk" and swimb < 0.3 and not main.find_seat(position).is_empty():
+	if swimb > 0.3:
+		return ""
+	if main.bleed > 0.02:
+		return "Перевязать"
+	var it: Array = main.find_pick(position)
+	if not it.is_empty():
+		return "Собрать: " + main.PICK_NAME[it[1]]
+	if main.thirst < 0.95 and main.near_water(position):
+		return "Пить"
+	if not main.find_seat(position).is_empty():
 		return "Сесть"
 	return ""
 
 func do_action() -> void:
+	if state == "dead":
+		return
 	if state == "sit":
 		_stand_up()
+		return
+	var lbl := action_label()
+	if lbl == "Перевязать":
+		main.bandage()
+		land_t = 1.0
+		land_k = 0.6
+		return
+	if lbl.begins_with("Собрать"):
+		main.take_pick(main.find_pick(position))
+		land_t = 0.55
+		land_k = 0.85
+		return
+	if lbl == "Пить":
+		main.drink()
+		land_t = 1.1
+		land_k = 1.0
 		return
 	var st: Array = main.find_seat(position)
 	if st.is_empty():
@@ -312,6 +341,28 @@ func do_action() -> void:
 	state = "sit"
 	vel = Vector3.ZERO
 
+## Гибель: герой оседает и ложится на бок.
+var deadb := 0.0
+func _process_dead(delta: float) -> void:
+	deadb = minf(1.0, deadb + delta * 1.2)
+	var k := deadb * deadb * (3.0 - 2.0 * deadb)
+	body.rotation.z = lerpf(0.0, 1.5, k)
+	body.position.y = lerpf(0.0, 0.18, k)
+	knee_l.rotation.x = lerpf(knee_l.rotation.x, 0.8, delta * 3.0)
+	knee_r.rotation.x = lerpf(knee_r.rotation.x, 0.4, delta * 3.0)
+	arm_l.rotation.x = lerpf(arm_l.rotation.x, -0.6, delta * 3.0)
+	arm_r.rotation.x = lerpf(arm_r.rotation.x, 0.3, delta * 3.0)
+	torso.rotation.x = lerpf(torso.rotation.x, 0.3, delta * 3.0)
+
+func revive(p: Vector3) -> void:
+	state = "walk"
+	deadb = 0.0
+	body.rotation.z = 0.0
+	position = p
+	vel = Vector3.ZERO
+	vy = 0.0
+	airborne = false
+
 func _stand_up() -> void:
 	state = "walk"
 	position = stand_pos
@@ -320,6 +371,9 @@ func _process(delta: float) -> void:
 	if main == null:
 		return
 	soaked = maxf(0.0, soaked - delta * 0.004 * (1.0 + maxf(float(main.weather.temp), 0.0) * 0.1))
+	if state == "dead":
+		_process_dead(delta)
+		return
 	if state == "sit":
 		_process_sit(delta)
 		return
@@ -355,7 +409,7 @@ func _process(delta: float) -> void:
 			running = false
 		elif depth > 0.3:
 			wf = 1.0 - (depth - 0.3) * 0.55
-		target = d * sp_base * mag * f * wf * (1.0 - main.weather.snow * 0.3)
+		target = d * sp_base * mag * f * wf * (1.0 - main.weather.snow * 0.3) * main.move_factor()
 	else:
 		running = false
 	# крутой склон: человека тянет вниз, он теряет управление и катится
@@ -500,6 +554,11 @@ func _process(delta: float) -> void:
 	torso.rotation.z = sw * 0.03 * run_mag - turn
 	head_n.rotation.y = sw * 0.05 * run_mag
 	body.position.y = (absf(cw) - 0.6) * 0.05 * run_mag + minf(slope, 1.0) * 0.08 - cl * 0.15
+	# хромота: при ране ноги корпус проседает на больную сторону
+	var limp: float = 1.0 - main.move_factor()
+	if limp > 0.05:
+		torso.rotation.z += maxf(0.0, sin(phase)) * 0.2 * limp * minf(run_mag * 2.0, 1.0)
+		body.position.y -= maxf(0.0, sin(phase)) * 0.06 * limp
 	_pose_fall_land()
 	_pose_swim(delta, sp)
 
