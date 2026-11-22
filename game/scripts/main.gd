@@ -14,6 +14,7 @@ var n_forest := FastNoiseLite.new()
 var n_crag := FastNoiseLite.new()
 var n_crag2 := FastNoiseLite.new()
 var n_biome := FastNoiseLite.new()
+var n_zone := FastNoiseLite.new()
 
 var t_hours := 9.0
 var day_count := 1
@@ -253,9 +254,27 @@ func _setup_noise() -> void:
 	n_crag2.seed = 32; n_crag2.frequency = 0.55; n_crag2.fractal_octaves = 2
 	n_biome.seed = 4242; n_biome.frequency = 0.0042; n_biome.fractal_octaves = 2
 	n_forest.seed = 909; n_forest.frequency = 0.02; n_forest.fractal_octaves = 3
+	n_zone.seed = 2024; n_zone.noise_type = FastNoiseLite.TYPE_CELLULAR; n_zone.frequency = 0.011
+	n_zone.cellular_return_type = FastNoiseLite.RETURN_CELL_VALUE; n_zone.fractal_type = FastNoiseLite.FRACTAL_NONE
 
 func river_dist(x: float, z: float) -> float:
 	return absf(z - 70.0 * sin(x / 95.0) - 20.0)
+
+## Особые участки леса (ячейки ~90 м): 0 обычный, 1 гарь, 2 болото, 3 курумник, 4 бурелом.
+func zone(x: float, z: float) -> int:
+	var jx := x + n_detail.get_noise_2d(x * 0.7, z * 0.7) * 9.0
+	var jz := z + n_detail.get_noise_2d(z * 0.7 + 50.0, x * 0.7) * 9.0
+	var v := n_zone.get_noise_2d(jx, jz)
+	var y := height(x, z)
+	if v < -0.7:
+		return 1
+	if v < -0.35 and y < WATER_Y + 4.0:
+		return 2
+	if v > 0.72 or (v > 0.45 and biome(x, z) > 0.2):
+		return 3
+	if v > 0.2 and v < 0.42:
+		return 4
+	return 0
 
 func biome(x: float, z: float) -> float:
 	return clampf(n_biome.get_noise_2d(x, z) * 2.2, -1.0, 1.0)
@@ -378,6 +397,8 @@ func _make_terrain() -> void:
 	var norms := PackedVector3Array(); norms.resize(n * n)
 	var cols := PackedColorArray(); cols.resize(n * n)
 	var hs := PackedFloat32Array(); hs.resize(n * n)
+	var zuv := PackedVector2Array(); zuv.resize(n * n)
+	var zuv2 := PackedVector2Array(); zuv2.resize(n * n)
 	for iz in n:
 		for ix in n:
 			hs[iz * n + ix] = height(ix * step - half, iz * step - half)
@@ -399,6 +420,9 @@ func _make_terrain() -> void:
 			var mud := clampf((WATER_Y + 1.2 - y) / 1.5, 0.0, 1.0)
 			var leaves := clampf(n_detail.get_noise_2d(x * 2.0, z * 2.0) * 0.8 + fd * 0.5, 0.0, 1.0)
 			cols[i] = Color(fd, mud, leaves)
+			var zn := zone(x, z)
+			zuv[i] = Vector2(1.0 if zn == 1 else 0.0, 1.0 if zn == 2 else 0.0)
+			zuv2[i] = Vector2(1.0 if zn == 3 else 0.0, 1.0 if zn == 4 else 0.0)
 	var himg := Image.create_from_data(n, n, false, Image.FORMAT_RF, hs.to_byte_array())
 	hmap_tex = ImageTexture.create_from_image(himg)
 	var mat := ShaderMaterial.new()
@@ -413,9 +437,13 @@ func _make_terrain() -> void:
 			var v2 := PackedVector3Array(); v2.resize(m * m)
 			var n2 := PackedVector3Array(); n2.resize(m * m)
 			var c2 := PackedColorArray(); c2.resize(m * m)
+			var u2 := PackedVector2Array(); u2.resize(m * m)
+			var u3 := PackedVector2Array(); u3.resize(m * m)
 			for jz in m:
 				for jx in m:
 					var i := (cz * CH + jz) * n + cx * CH + jx
+					u2[jz * m + jx] = zuv[i]
+					u3[jz * m + jx] = zuv2[i]
 					v2[jz * m + jx] = verts[i]
 					n2[jz * m + jx] = norms[i]
 					c2[jz * m + jx] = cols[i]
@@ -429,6 +457,8 @@ func _make_terrain() -> void:
 			arr[Mesh.ARRAY_VERTEX] = v2
 			arr[Mesh.ARRAY_NORMAL] = n2
 			arr[Mesh.ARRAY_COLOR] = c2
+			arr[Mesh.ARRAY_TEX_UV] = u2
+			arr[Mesh.ARRAY_TEX_UV2] = u3
 			arr[Mesh.ARRAY_INDEX] = idx
 			var mesh := ArrayMesh.new()
 			mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arr)
@@ -502,7 +532,15 @@ func _shots() -> void:
 		if _shot_n == p[0]:
 			get_viewport().get_texture().get_image().save_png(dir + "/game_%d.png" % p[0])
 			print("shot game ", p[0], " tris ", Performance.get_monitor(Performance.RENDER_TOTAL_PRIMITIVES_IN_FRAME), " draws ", Performance.get_monitor(Performance.RENDER_TOTAL_DRAW_CALLS_IN_FRAME))
-	if _shot_n > 82:
+	# замер: сколько треугольников дают звери и птицы
+	if _shot_n == 81:
+		animals.visible = false
+	if _shot_n == 83:
+		print("shot no-animals tris ", Performance.get_monitor(Performance.RENDER_TOTAL_PRIMITIVES_IN_FRAME))
+		hero.visible = false
+	if _shot_n == 85:
+		print("shot no-hero tris ", Performance.get_monitor(Performance.RENDER_TOTAL_PRIMITIVES_IN_FRAME))
+	if _shot_n > 86:
 		get_tree().quit()
 
 func _process(delta: float) -> void:
@@ -754,8 +792,36 @@ func _variants(kind: String) -> Array:
 			for i in 4: out.append(pv.twig(1300 + i))
 		"stump":
 			out.append(pv.stump(1000))
-		"log":
-			for i in 2: out.append(pv.log_fallen(1100 + i))
+		"fallen0":
+			for i in 3: out.append(pv.fallen(3000 + i, 0))
+		"fallen1":
+			for i in 3: out.append(pv.fallen(3100 + i, 1))
+		"snag":
+			for i in 3: out.append(pv.snag(3200 + i, false))
+		"snag_b":
+			for i in 3: out.append(pv.snag(3300 + i, true))
+		"windfall":
+			for i in 2: out.append(pv.windfall(3400 + i))
+		"rose":
+			for i in 3: out.append(pv.shrub(3500 + i, "rose"))
+		"alder":
+			for i in 3: out.append(pv.shrub(3600 + i, "alder"))
+		"cherry":
+			for i in 2: out.append(pv.cherry(3700 + i))
+		"bilberry":
+			for i in 3: out.append(pv.bilberry(3800 + i))
+		"hummock":
+			for i in 3: out.append(pv.hummock(3900 + i))
+		"horsetail":
+			for i in 3: out.append(pv.horsetail(4000 + i))
+		"fireweed":
+			for i in 3: out.append(pv.fireweed(4100 + i))
+		"stlanik":
+			for i in 3: out.append(pv.stlanik(4200 + i))
+		"sedge":
+			for i in 2: out.append(pv.tuft(4300 + i, 2.2))
+		"slab":
+			for i in 4: out.append(pv.rock(4400 + i))
 	return out
 
 const TREE_KINDS := ["spruce", "pine", "birch", "larch", "aspen", "fir", "cedar", "rowan"]
@@ -973,17 +1039,18 @@ func move_factor() -> float:
 		f = 0.78
 	return f * (0.6 + 0.4 * clampf(health * 2.0, 0.0, 1.0))
 
-const BLOCK_R := {"fir": 0.36, "cedar": 0.38, "rowan": 0.2, "spruce": 0.4, "pine": 0.32, "birch": 0.28, "bare": 0.3, "spruce_dead": 0.3, "stump": 0.45, "rock": 0.5, "boulder": 0.6, "larch": 0.32, "aspen": 0.26}
+const BLOCK_R := {"snag": 0.25, "snag_b": 0.25, "cherry": 0.15, "fir": 0.36, "cedar": 0.38, "rowan": 0.2, "spruce": 0.4, "pine": 0.32, "birch": 0.28, "bare": 0.3, "spruce_dead": 0.3, "stump": 0.45, "rock": 0.5, "boulder": 0.6, "larch": 0.32, "aspen": 0.26}
 
 func _scatter_all() -> void:
 	# вид, попыток на клетку 32 м, масштаб, дальность видимости, тень, правило
 	var rules := [
-		["spruce", 30, Vector2(0.75, 1.15), 105.0, true, "spruce_t"],
-		["pine", 14, Vector2(0.85, 1.15), 110.0, true, "pine_t"],
-		["birch", 16, Vector2(0.8, 1.15), 110.0, true, "birch_t"],
-		["birch", 5, Vector2(0.8, 1.15), 110.0, true, "edge"],
-		["bare", 3, Vector2(0.8, 1.2), 110.0, true, "edge"],
-		["spruce_dead", 2, Vector2(0.7, 1.0), 110.0, true, "tree"],
+		["spruce", 30, Vector2(0.95, 1.45), 110.0, true, "spruce_t"],
+		["pine", 14, Vector2(1.05, 1.45), 115.0, true, "pine_t"],
+		["birch", 16, Vector2(1.0, 1.4), 115.0, true, "birch_t"],
+		["birch", 5, Vector2(1.0, 1.4), 115.0, true, "edge"],
+		["birch", 22, Vector2(0.22, 0.4), 70.0, false, "burnt_z"],
+		["bare", 3, Vector2(0.9, 1.3), 110.0, true, "edge"],
+		["spruce_dead", 2, Vector2(0.9, 1.3), 110.0, true, "tree"],
 		["spruce", 8, Vector2(0.18, 0.35), 75.0, true, "under"],
 		["bush", 30, Vector2(0.8, 1.5), 75.0, false, "under"],
 		["fern", 70, Vector2(0.7, 1.2), 60.0, false, "fern"],
@@ -992,17 +1059,40 @@ func _scatter_all() -> void:
 		["pebble", 40, Vector2(0.15, 0.45), 55.0, false, "pebble"],
 		["rock", 12, Vector2(0.5, 2.2), 115.0, true, "rock"],
 		["rock", 14, Vector2(1.8, 4.6), 125.0, true, "boulder"],
+		["rock", 45, Vector2(0.6, 2.4), 115.0, true, "rocky_z"],
+		["slab", 20, Vector2(1.2, 2.6), 110.0, true, "rocky_z"],
 		["stump", 3, Vector2(0.8, 1.2), 75.0, true, "under"],
-		["log", 2, Vector2(0.9, 1.1), 85.0, true, "under"],
-		["larch", 8, Vector2(0.85, 1.15), 110.0, true, "larch_t"],
-		["aspen", 8, Vector2(0.8, 1.15), 110.0, true, "edge"],
+		["fallen0", 2, Vector2(0.9, 1.2), 100.0, true, "under"],
+		["fallen1", 2, Vector2(0.9, 1.2), 100.0, true, "under"],
+		["fallen0", 9, Vector2(0.9, 1.2), 100.0, true, "windfall_z"],
+		["fallen1", 7, Vector2(0.9, 1.2), 100.0, true, "windfall_z"],
+		["windfall", 2, Vector2(0.9, 1.2), 85.0, true, "under"],
+		["windfall", 10, Vector2(0.9, 1.3), 85.0, true, "windfall_z"],
+		["snag", 3, Vector2(0.9, 1.2), 100.0, true, "tree"],
+		["snag", 8, Vector2(0.9, 1.3), 100.0, true, "windfall_z"],
+		["snag_b", 26, Vector2(0.9, 1.4), 105.0, true, "burnt_z"],
+		["fallen1", 4, Vector2(0.9, 1.2), 100.0, true, "burnt_z"],
+		["fireweed", 70, Vector2(0.8, 1.3), 70.0, false, "burnt_z"],
+		["fireweed", 8, Vector2(0.8, 1.2), 70.0, false, "meadow"],
+		["larch", 8, Vector2(1.05, 1.45), 115.0, true, "larch_t"],
+		["aspen", 8, Vector2(1.0, 1.4), 115.0, true, "edge"],
 		["berry", 25, Vector2(0.7, 1.3), 55.0, false, "under"],
+		["bilberry", 45, Vector2(0.8, 1.4), 55.0, false, "under"],
 		["mushroom", 14, Vector2(0.8, 1.4), 45.0, false, "under"],
-		["fir", 12, Vector2(0.85, 1.15), 105.0, true, "fir_t"],
-		["cedar", 6, Vector2(0.85, 1.2), 105.0, true, "cedar_t"],
+		["fir", 12, Vector2(1.05, 1.45), 110.0, true, "fir_t"],
+		["cedar", 6, Vector2(1.05, 1.5), 110.0, true, "cedar_t"],
 		["willow", 18, Vector2(0.8, 1.3), 75.0, true, "river"],
+		["alder", 14, Vector2(0.9, 1.4), 80.0, true, "river"],
+		["cherry", 4, Vector2(0.9, 1.3), 90.0, true, "river"],
+		["cherry", 2, Vector2(0.9, 1.3), 90.0, true, "edge"],
+		["rose", 12, Vector2(0.8, 1.2), 65.0, false, "edge"],
+		["horsetail", 30, Vector2(0.8, 1.3), 55.0, false, "bank"],
+		["horsetail", 30, Vector2(0.8, 1.3), 55.0, false, "bog_z"],
+		["hummock", 70, Vector2(0.8, 1.6), 65.0, false, "bog_z"],
+		["sedge", 50, Vector2(0.9, 1.4), 60.0, false, "bog_z"],
 		["juniper", 10, Vector2(0.7, 1.2), 60.0, false, "rocky"],
-		["rowan", 4, Vector2(0.8, 1.1), 90.0, true, "edge"],
+		["stlanik", 16, Vector2(0.8, 1.3), 80.0, true, "rocky_z"],
+		["rowan", 4, Vector2(0.9, 1.3), 90.0, true, "edge"],
 		["anthill", 1, Vector2(0.8, 1.2), 65.0, true, "under"],
 	]
 	var cache := {}
@@ -1036,42 +1126,65 @@ func _scatter_all() -> void:
 					var vi := rng.randi() % vars.size()
 					var sc: Vector2 = r[2]
 					var s := rng.randf_range(sc.x, sc.y)
+					var kind: String = r[0]
 					var b := Basis(Vector3.UP, rng.randf() * TAU).scaled(Vector3(s, s * rng.randf_range(0.9, 1.1), s))
-					if r[0] == "log":
-						# наклон по рельефу: концы лежат на земле
-						var ax0: Vector3 = b.x.normalized()
-						var h1 := height(x + ax0.x * 2.5, z + ax0.z * 2.5)
-						var h0 := height(x - ax0.x * 2.5, z - ax0.z * 2.5)
-						var tilt := atan2(h1 - h0, 5.0)
-						b = Basis(ax0.cross(Vector3.UP).normalized(), tilt) * b
-					per_var[vi].append(Transform3D(b, Vector3(x, height(x, z) - 0.05, z)))
+					if kind == "slab":
+						b = b.scaled(Vector3(1.0, 0.35, 1.0))
+					# место занято (ствол, камень, поваленное дерево) — не ставим
+					var occ_r := _occ_radius(kind, vars[vi], s)
 					var by: float = height(x, z) - 0.05
-					if r[0] == "rock":
+					var o := Vector3(x, by, z)
+					var fall_len := 0.0
+					if kind == "fallen0" or kind == "fallen1":
+						var fv: Array = vars[vi]
+						fall_len = float(fv[1]) * s
+						var ax0: Vector3 = b.x.normalized()
+						var x0f: float = float(fv[4]) * s
+						var pr := o + ax0 * x0f
+						var pt := o + ax0 * (x0f + fall_len)
+						if not _occ_free_line(pr, pt, float(fv[2]) * s + 0.3):
+							continue
+						var hr := height(pr.x, pr.z)
+						var ht := height(pt.x, pt.z)
+						b = Basis(ax0.cross(Vector3.UP).normalized(), atan2(ht - hr, fall_len)) * b
+						o.y = hr - 0.05
+					elif occ_r > 0.0:
+						if not _occ_free(x, z, occ_r):
+							continue
+						_occ_add(x, z, occ_r)
+					per_var[vi].append(Transform3D(b, o))
+					if kind == "rock" or kind == "slab":
 						# камень — твёрдый купол: на него можно встать или залезть
 						var rsc: Vector3 = vars[vi][2]
-						var hr: float = (rsc.x + rsc.z) * 0.45 * s
-						var ht: float = rsc.y * 0.9 * s
-						if ht > 0.12:
-							_add_solid([0, Vector3(x, by, z), Vector3.ZERO, hr, ht])
-					elif r[0] == "stump":
-						_add_solid([2, Vector3(x, by, z), Vector3.ZERO, 0.45 * s, 0.75 * s])
-					elif r[0] == "log":
-						var ax1: Vector3 = b.x
-						var o := Vector3(x, by, z)
-						_add_solid([1, o - ax1 * 2.3 + b.y * 0.3, o + ax1 * 2.3 + b.y * 0.28, 0.31 * s, 0.0])
-					else:
-						var br: float = BLOCK_R.get(r[0], 0.0)
-						if br > 0.0 and not (r[0] == "spruce" and r[5] == "under"):
-							_add_blocker(x, z, br * s)
-					if r[0] == "log":
-						var ax: Vector3 = b.x.normalized()
-						var yaw := atan2(ax.z, -ax.x)
-						for t in [-1.2, 1.2]:
-							var sx: float = x + ax.x * t
-							var sz: float = z + ax.z * t
-							_add_seat(Vector3(sx, height(sx, sz) + 0.62 * s, sz), yaw)
-					if r[0] == "stump":
+						var hr2: float = (rsc.x + rsc.z) * 0.45 * s
+						var ht2: float = rsc.y * 0.9 * b.y.length()
+						if ht2 > 0.12:
+							_add_solid([0, o, Vector3.ZERO, hr2, ht2])
+					elif kind == "stump":
+						_add_solid([2, o, Vector3.ZERO, 0.45 * s, 0.75 * s])
 						_add_seat(Vector3(x, height(x, z) + 0.7 * s, z), rng.randf() * TAU)
+					elif fall_len > 0.0:
+						# по стволу можно пройти: две капсулы (комель толще), сиденье у комля
+						var fv2: Array = vars[vi]
+						var xf := Transform3D(b, o)
+						var r0: float = float(fv2[2]) * s
+						var yb: float = float(fv2[3])
+						var x0b: float = float(fv2[4])
+						var Lm: float = float(fv2[1])
+						var pa := xf * Vector3(x0b, yb - r0 / s * 0.2, 0)
+						var pm := xf * Vector3(x0b + Lm * 0.5, r0 / s * 0.9 + 0.08 - r0 / s * 0.2, 0)
+						var pe := xf * Vector3(x0b + Lm * 0.85, 0.12, 0)
+						_add_solid([1, pa, pm, r0 * 0.95, 0.0])
+						_add_solid([1, pm, pe, r0 * 0.55, 0.0])
+						_occ_add_line(pa, pe, r0 + 0.2)
+						var ax: Vector3 = b.x.normalized()
+						_add_blocker(pa.x - ax.x * 0.3, pa.z - ax.z * 0.3, 1.0 if kind == "fallen0" else 0.5)
+						var ps := xf * Vector3(x0b + Lm * 0.3, 0, 0)
+						_add_seat(Vector3(ps.x, solid_top(ps.x, ps.z), ps.z), atan2(ax.z, -ax.x))
+					else:
+						var br: float = BLOCK_R.get(kind, 0.0)
+						if br > 0.0 and not (kind in ["spruce", "birch"] and s < 0.5):
+							_add_blocker(x, z, br * s)
 				for vi in vars.size():
 					var xs: Array = per_var[vi]
 					if xs.is_empty():
@@ -1107,6 +1220,58 @@ func _scatter_all() -> void:
 						for i in xs.size():
 							_add_pick(xs[i].origin, pk, mm, i)
 
+# ---------- занятость места: стволы, камни и поваленные деревья не пересекаются ----------
+var occ := {}
+
+func _occ_radius(kind: String, v: Array, s: float) -> float:
+	if kind in TREE_KINDS or kind in ["bare", "spruce_dead", "snag", "snag_b"]:
+		return (0.5 if s > 0.5 else 0.0) * s
+	if kind == "rock" or kind == "slab":
+		var rsc: Vector3 = v[2]
+		return (rsc.x + rsc.z) * 0.45 * s
+	match kind:
+		"stump", "anthill":
+			return 0.6 * s
+		"windfall":
+			return 2.2 * s
+		"bush", "willow", "alder", "juniper", "stlanik", "rose", "berry", "cherry":
+			return 0.35 * s
+	return 0.0
+
+func _occ_free(x: float, z: float, r: float) -> bool:
+	var gx := floori(x / 4.0)
+	var gz := floori(z / 4.0)
+	var reach := int(ceil((r + 3.0) / 4.0))
+	for ix in range(gx - reach, gx + reach + 1):
+		for iz in range(gz - reach, gz + reach + 1):
+			var k := Vector2i(ix, iz)
+			if not occ.has(k):
+				continue
+			for e: Vector3 in occ[k]:
+				if Vector2(x - e.x, z - e.y).length() < r + e.z:
+					return false
+	return true
+
+func _occ_add(x: float, z: float, r: float) -> void:
+	var k := Vector2i(floori(x / 4.0), floori(z / 4.0))
+	if not occ.has(k):
+		occ[k] = []
+	occ[k].append(Vector3(x, z, minf(r, 3.0)))
+
+func _occ_free_line(a: Vector3, b: Vector3, r: float) -> bool:
+	var n := int(ceil(a.distance_to(b) / 1.2)) + 1
+	for i in n:
+		var p := a.lerp(b, float(i) / float(n - 1))
+		if not _occ_free(p.x, p.z, r):
+			return false
+	return true
+
+func _occ_add_line(a: Vector3, b: Vector3, r: float) -> void:
+	var n := int(ceil(a.distance_to(b) / 1.2)) + 1
+	for i in n:
+		var p := a.lerp(b, float(i) / float(n - 1))
+		_occ_add(p.x, p.z, r)
+
 ## Скальные стены уступов: высокие глыбы вдоль обрыва и осыпь камней у подножия.
 func _cliff_rocks(vars: Array) -> void:
 	var rng := RandomNumberGenerator.new()
@@ -1139,6 +1304,7 @@ func _cliff_rocks(vars: Array) -> void:
 					var o := Vector3(px - up.x * 0.6, hb - 0.4, pz - up.y * 0.6)
 					per_var[vi].append(Transform3D(b, o))
 					_add_blocker(o.x, o.z, sxz * 0.7)
+					_occ_add(o.x, o.z, sxz * 0.9)
 					# осыпь у подножия
 					for k in 2:
 						if rng.randf() < 0.6:
@@ -1162,7 +1328,7 @@ func _cliff_rocks(vars: Array) -> void:
 			mm.set_instance_transform(i, xs[i])
 		var mmi := MultiMeshInstance3D.new()
 		mmi.multimesh = mm
-		mmi.visibility_range_end = 140.0
+		mmi.visibility_range_end = 120.0
 		mmi.visibility_range_end_margin = 14.0
 		mmi.visibility_range_fade_mode = GeometryInstance3D.VISIBILITY_RANGE_FADE_SELF
 		add_child(mmi)
@@ -1181,6 +1347,25 @@ func _accept(kind: String, x: float, z: float, rng: RandomNumberGenerator) -> bo
 	var slope := 1.0 - normal_at(x, z).y
 	var fd := forest_density(x, z)
 	var bio := biome(x, z)
+	var zn := zone(x, z)
+	match kind:
+		"burnt_z":
+			return zn == 1 and slope < 0.35 and rng.randf() < 0.85
+		"windfall_z":
+			return zn == 4 and slope < 0.3 and rng.randf() < 0.8
+		"bog_z":
+			return zn == 2 and slope < 0.2 and rng.randf() < 0.9
+		"rocky_z":
+			return zn == 3 and rng.randf() < 0.85
+		"meadow":
+			return zn == 0 and slope < 0.2 and rng.randf() < (1.0 - fd) * 0.8
+		"bank":
+			return slope < 0.3 and y < WATER_Y + 0.9 and river_dist(x, z) < 22.0 and rng.randf() < 0.8
+	# на гари, болоте и курумнике живого леса мало
+	var zk: float = [1.0, 0.06, 0.25, 0.3, 0.7][zn]
+	if kind.ends_with("_t") or kind in ["tree", "edge", "under", "fern"]:
+		if rng.randf() > zk:
+			return false
 	match kind:
 		"spruce_t":
 			return slope < 0.25 and rng.randf() < fd * fd * clampf(1.0 - bio * 0.8 - 0.2, 0.15, 1.0)

@@ -33,6 +33,14 @@ func _init() -> void:
 		["cap_red", Color(0.45, 0.06, 0.04), Color(0.72, 0.14, 0.08), Color(0.9, 0.35, 0.2), 0.0],
 		["cap_brown", Color(0.25, 0.14, 0.07), Color(0.45, 0.28, 0.14), Color(0.62, 0.45, 0.26), 0.0],
 		["anthill", Color(0.18, 0.12, 0.07), Color(0.34, 0.24, 0.14), Color(0.5, 0.38, 0.22), 0.0],
+		["alder", Color(0.08, 0.17, 0.08), Color(0.2, 0.34, 0.14), Color(0.44, 0.54, 0.22), 0.9],
+		["rose", Color(0.1, 0.18, 0.08), Color(0.24, 0.36, 0.14), Color(0.48, 0.56, 0.24), 0.9],
+		["cherry", Color(0.5, 0.52, 0.46), Color(0.8, 0.8, 0.74), Color(0.96, 0.95, 0.9), 0.0],
+		["bilberry", Color(0.06, 0.14, 0.08), Color(0.14, 0.27, 0.13), Color(0.3, 0.42, 0.2), 0.6],
+		["moss", Color(0.18, 0.26, 0.08), Color(0.38, 0.48, 0.14), Color(0.6, 0.66, 0.26), 0.3],
+		["fireweed", Color(0.38, 0.08, 0.24), Color(0.68, 0.22, 0.46), Color(0.88, 0.5, 0.7), 0.0],
+		["horsetail", Color(0.1, 0.2, 0.08), Color(0.24, 0.4, 0.14), Color(0.46, 0.58, 0.24), 0.5],
+		["lichen", Color(0.4, 0.42, 0.32), Color(0.62, 0.64, 0.5), Color(0.8, 0.8, 0.66), 0.0],
 	]:
 		var m := ShaderMaterial.new()
 		m.shader = fol
@@ -41,7 +49,7 @@ func _init() -> void:
 		m.set_shader_parameter("col_light", f[3])
 		m.set_shader_parameter("autumn_k", f[4])
 		mats[f[0]] = m
-	for b in [["cut", Color(0.78, 0.64, 0.44), Color(0.6, 0.46, 0.3), 0.0], ["stem", Color(0.9, 0.86, 0.76), Color(0.75, 0.7, 0.6), 0.0], ["log", Color(0.42, 0.34, 0.26), Color(0.24, 0.19, 0.15), 0.0], ["bark", Color(0.36, 0.27, 0.2), Color(0.2, 0.15, 0.11), 0.0], ["bark_pine", Color(0.52, 0.36, 0.24), Color(0.32, 0.22, 0.16), 0.0], ["bark_birch", Color(0.9, 0.88, 0.82), Color(0.72, 0.7, 0.66), 1.0], ["bark_dead", Color(0.48, 0.44, 0.38), Color(0.3, 0.27, 0.24), 0.0], ["bark_aspen", Color(0.66, 0.67, 0.6), Color(0.44, 0.45, 0.4), 0.0]]:
+	for b in [["cut", Color(0.78, 0.64, 0.44), Color(0.6, 0.46, 0.3), 0.0], ["stem", Color(0.9, 0.86, 0.76), Color(0.75, 0.7, 0.6), 0.0], ["log", Color(0.42, 0.34, 0.26), Color(0.24, 0.19, 0.15), 0.0], ["bark", Color(0.36, 0.27, 0.2), Color(0.2, 0.15, 0.11), 0.0], ["bark_pine", Color(0.52, 0.36, 0.24), Color(0.32, 0.22, 0.16), 0.0], ["bark_birch", Color(0.9, 0.88, 0.82), Color(0.72, 0.7, 0.66), 1.0], ["bark_dead", Color(0.48, 0.44, 0.38), Color(0.3, 0.27, 0.24), 0.0], ["bark_aspen", Color(0.66, 0.67, 0.6), Color(0.44, 0.45, 0.4), 0.0], ["burnt", Color(0.16, 0.14, 0.13), Color(0.07, 0.06, 0.06), 0.0], ["roots", Color(0.36, 0.27, 0.18), Color(0.2, 0.14, 0.09), 0.0]]:
 		var m := ShaderMaterial.new()
 		m.shader = brk
 		m.set_shader_parameter("col", b[1])
@@ -65,7 +73,7 @@ func _init() -> void:
 	# мазки листвы: те же цвета, что у сплошных крон
 	var bt := _brush_tex()
 	var lc := load("res://shaders/paint/leafcard.gdshader")
-	for k in ["spruce", "pine", "birch", "leaf", "bush", "larch", "fern", "fir", "cedar", "willow", "rowan", "juniper"]:
+	for k in ["spruce", "pine", "birch", "leaf", "bush", "larch", "fern", "fir", "cedar", "willow", "rowan", "juniper", "alder", "rose", "cherry"]:
 		var m := ShaderMaterial.new()
 		m.shader = lc
 		m.set_shader_parameter("brush", bt)
@@ -545,3 +553,204 @@ func dead_tree(seed_v: int) -> Array:
 		trunk(st, Vector3(0, y, 0), Vector3(0, y, 0) + d * L * 0.5, Vector3(0, y, 0) + d * L + Vector3(0, -0.2, 0), 0.04, 0.01, 1, 4)
 		y += R(0.5, 0.9)
 	return [_mesh([[st, "bark_dead"]]), H]
+
+
+# ---------- лесной хлам и новые растения ----------
+
+## Поваленное дерево вдоль +X. mode 0 — вывернуто с корнем (корневая тарелка с землёй),
+## mode 1 — переломлено: торчит обломок-пень с щепой, ствол лежит рядом.
+## Возвращает [mesh, длина, радиус у комля].
+func fallen(seed_v: int, mode: int) -> Array:
+	rng.seed = seed_v
+	var bk := _st()
+	var dr := _st()
+	var soil := _st()
+	var L := R(9.0, 13.0)
+	var r0 := R(0.26, 0.36)
+	var x0 := 0.0
+	if mode == 0:
+		# корневая тарелка: стоящий на ребре диск земли и корни веером
+		var rp := R(1.2, 1.6)
+		for i in 3:
+			blob(soil, Vector3(-0.15 - i * 0.08, rp * 0.55, R(-0.2, 0.2)), Vector3(0.22, rp * R(0.75, 0.95), rp * R(0.8, 1.0)), R(0.3, 0.8))
+		for i in 11:
+			var a := TAU * i / 11.0 + R(-0.2, 0.2)
+			var d := Vector3(0, cos(a), sin(a))
+			var c := Vector3(-0.1, rp * 0.55, 0)
+			trunk(dr, c + d * 0.2, c + d * rp * 0.7 + Vector3(R(-0.3, 0.1), 0, 0), c + d * rp * R(1.0, 1.35) + Vector3(R(-0.5, 0.0), 0, 0), 0.08, 0.015, 2, 4)
+		x0 = 0.2
+	else:
+		# обломок: пень 1–2 м со щепой по краю
+		var sh := R(1.0, 2.0)
+		trunk(bk, Vector3(-0.5, -0.2, 0), Vector3(-0.5, sh * 0.5, 0), Vector3(-0.5, sh, 0), r0 * 1.1, r0, 2, 8)
+		for i in 7:
+			var a := TAU * i / 7.0
+			var d := Vector3(cos(a), 0, sin(a)) * r0 * 0.8
+			trunk(dr, Vector3(-0.5, sh, 0) + d, Vector3(-0.5, sh + 0.2, 0) + d * 0.8, Vector3(-0.5, sh + R(0.25, 0.7), 0) + d * 0.4, 0.06, 0.005, 1, 3)
+		x0 = 0.3
+	# ствол: комель чуть приподнят, вершина лежит на земле
+	var yb := r0 + (0.35 if mode == 0 else 0.2)
+	trunk(bk, Vector3(x0, yb, 0), Vector3(x0 + L * 0.5, r0 * 0.9 + 0.08, R(-0.3, 0.3)), Vector3(x0 + L, 0.12, R(-0.5, 0.5)), r0, 0.07, 6, 8)
+	if mode == 1:
+		for i in 6:
+			var a := TAU * i / 6.0
+			var d := Vector3(0, cos(a), sin(a)) * r0 * 0.8
+			trunk(dr, Vector3(x0, yb, 0) + d, Vector3(x0 - 0.2, yb, 0) + d * 0.8, Vector3(x0 - R(0.3, 0.6), yb, 0) + d * 0.3, 0.06, 0.005, 1, 3)
+	# обломанные сухие сучья, часть упирается в землю
+	var n := rng.randi_range(9, 14)
+	for i in n:
+		var t := R(0.3, 0.95)
+		var p := Vector3(x0 + L * t, lerpf(yb, 0.12, t) + r0 * (1.0 - t) * 0.3, 0)
+		var a := R(-PI * 0.9, PI * 0.9)
+		var d := Vector3(R(0.1, 0.5), cos(a), sin(a)).normalized()
+		var bl := R(0.4, 1.6) * (1.2 - t * 0.6)
+		var e := p + d * bl
+		e.y = maxf(e.y, -0.1)
+		trunk(dr, p, (p + e) * 0.5 + Vector3(0, 0.05, 0), e, 0.045, 0.012, 1, 4)
+	return [_mesh([[bk, "log"], [dr, "bark_dead" if mode == 1 else "roots"], [soil, "anthill"]]), L, r0, yb, x0]
+
+## Сухостой-обломок: обгоревший или серый ствол 2–5 м с рваной вершиной.
+func snag(seed_v: int, burnt: bool) -> Array:
+	rng.seed = seed_v
+	var st := _st()
+	var H := R(2.0, 5.5)
+	var r := R(0.18, 0.3)
+	trunk(st, Vector3(0, -0.2, 0), Vector3(R(-0.1, 0.1), H * 0.5, R(-0.1, 0.1)), Vector3(R(-0.2, 0.2), H, R(-0.2, 0.2)), r, r * 0.7, 3, 7)
+	for i in 6:
+		var a := TAU * i / 6.0
+		var d := Vector3(cos(a), 0, sin(a)) * r * 0.6
+		trunk(st, Vector3(0, H, 0) + d, Vector3(0, H + 0.2, 0) + d, Vector3(0, H + R(0.2, 0.8), 0) + d * 0.3, 0.05, 0.005, 1, 3)
+	for i in rng.randi_range(2, 5):
+		var y := R(0.8, H - 0.3)
+		var a := R(0, TAU)
+		var d := Vector3(cos(a), R(-0.2, 0.2), sin(a))
+		trunk(st, Vector3(0, y, 0), Vector3(0, y, 0) + d * 0.3, Vector3(0, y, 0) + d * R(0.4, 0.9), 0.04, 0.01, 1, 3)
+	return [_mesh([[st, "burnt" if burnt else "bark_dead"]]), H]
+
+## Бурелом: несколько тонких стволов крест-накрест.
+func windfall(seed_v: int) -> Array:
+	rng.seed = seed_v
+	var st := _st()
+	for i in rng.randi_range(3, 5):
+		var a := R(0, PI)
+		var d := Vector3(cos(a), 0, sin(a))
+		var L := R(3.0, 6.0)
+		var y0 := R(0.1, 0.9)
+		var c := Vector3(R(-1, 1), 0, R(-1, 1))
+		trunk(st, c - d * L * 0.5 + Vector3(0, y0, 0), c + Vector3(0, y0 * 0.6 + 0.1, 0), c + d * L * 0.5 + Vector3(0, 0.1, 0), R(0.1, 0.17), 0.05, 3, 6)
+		for k in 3:
+			var p := c + d * R(-L * 0.4, L * 0.4) + Vector3(0, y0 * 0.5, 0)
+			var e := p + Vector3(R(-0.6, 0.6), R(0.2, 0.8), R(-0.6, 0.6))
+			trunk(st, p, (p + e) * 0.5, e, 0.03, 0.01, 1, 3)
+	return [_mesh([[st, "bark_dead"]]), 1.0]
+
+## Низкий куст с вкраплениями: шиповник (красные плоды), ольха (тёмный, высокий).
+func shrub(seed_v: int, kind: String) -> Array:
+	rng.seed = seed_v
+	var fl := _st()
+	var bk := _st()
+	var dots := _st()
+	cards = null if lod else _st()
+	var tall := 1.8 if kind == "alder" else 1.0
+	for i in rng.randi_range(3, 5):
+		var a := R(0, TAU)
+		var d := R(0.1, 0.6)
+		var c := Vector3(cos(a) * d, R(0.4, 0.8) * tall, sin(a) * d)
+		trunk(bk, Vector3(cos(a) * 0.08, 0, sin(a) * 0.08), c * 0.5, c, 0.04, 0.02, 1, 4)
+		leafblob(fl, cards, c, Vector3(R(0.4, 0.6), R(0.35, 0.55) * tall, R(0.4, 0.6)), R(0.3, 1.0))
+	if kind == "rose":
+		for i in 18:
+			var a := R(0, TAU)
+			blob(dots, Vector3(cos(a) * R(0.3, 0.7), R(0.3, 0.9), sin(a) * R(0.3, 0.7)), Vector3(0.04, 0.055, 0.04), R(0.5, 1.0))
+	return [_mesh([[fl, kind], [cards, kind + "_card"], [bk, "bark_dead"], [dots, "berry"]]), tall]
+
+## Черёмуха: небольшое дерево в белом цвету.
+func cherry(seed_v: int) -> Array:
+	rng.seed = seed_v
+	var bk := _st()
+	var fl := _st()
+	var gr := _st()
+	cards = null if lod else _st()
+	var H := R(3.5, 5.5)
+	for t in rng.randi_range(2, 3):
+		var a := R(0, TAU)
+		var top := Vector3(cos(a) * R(0.6, 1.2), H * R(0.85, 1.0), sin(a) * R(0.6, 1.2))
+		trunk(bk, Vector3(cos(a) * 0.1, 0, sin(a) * 0.1), top * 0.5 + Vector3(R(-0.2, 0.2), 0, R(-0.2, 0.2)), top, 0.09, 0.03, 3, 5)
+		for k in 3:
+			var c := top * R(0.6, 1.0) + Vector3(R(-0.8, 0.8), R(-0.3, 0.4), R(-0.8, 0.8))
+			blob(gr, c, Vector3(0.8, 0.6, 0.8), R(0.3, 0.9))
+			leafblob(fl, cards, c + Vector3(0, 0.15, 0), Vector3(0.75, 0.55, 0.75), R(0.5, 1.0))
+	return [_mesh([[bk, "bark_dead"], [gr, "alder"], [fl, "cherry"], [cards, "cherry_card"]]), H]
+
+## Черничник-брусничник: низкая плотная куртинка с ягодами.
+func bilberry(seed_v: int) -> Array:
+	rng.seed = seed_v
+	var fl := _st()
+	var bs := _st()
+	for i in rng.randi_range(5, 8):
+		var a := R(0, TAU)
+		var d := R(0.0, 0.9)
+		blob(fl, Vector3(cos(a) * d, 0.08, sin(a) * d), Vector3(R(0.25, 0.4), R(0.12, 0.2), R(0.25, 0.4)), R(0.2, 1.0))
+	for i in 16:
+		var a := R(0, TAU)
+		var d := R(0.0, 1.0)
+		blob(bs, Vector3(cos(a) * d, R(0.12, 0.25), sin(a) * d), Vector3.ONE * 0.03, R(0.4, 1.0))
+	return [_mesh([[fl, "bilberry"], [bs, "berry"]]), 0.25]
+
+## Моховая кочка (на болоте — с пучком осоки сверху).
+func hummock(seed_v: int) -> Array:
+	rng.seed = seed_v
+	var st := _st()
+	blob(st, Vector3(0, 0.05, 0), Vector3(R(0.4, 0.7), R(0.25, 0.45), R(0.4, 0.7)), R(0.3, 1.0))
+	if rng.randf() < 0.6:
+		blob(st, Vector3(R(-0.3, 0.3), 0.1, R(-0.3, 0.3)), Vector3(0.3, 0.2, 0.3), R(0.3, 1.0))
+	return [_mesh([[st, "moss"]]), 0.4]
+
+## Хвощ: пучок тонких зелёных стеблей с мутовками.
+func horsetail(seed_v: int) -> Array:
+	rng.seed = seed_v
+	var st := _st()
+	var wh := _st()
+	for i in rng.randi_range(9, 14):
+		var a := R(0, TAU)
+		var d := R(0, 0.35)
+		var b := Vector3(cos(a) * d, 0, sin(a) * d)
+		var h := R(0.4, 0.8)
+		var lean := Vector3(R(-0.08, 0.08), 0, R(-0.08, 0.08))
+		trunk(st, b, b + lean * 0.5 + Vector3(0, h * 0.5, 0), b + lean + Vector3(0, h, 0), 0.012, 0.005, 2, 3)
+		for k in 3:
+			var y := h * (0.3 + k * 0.2)
+			blob(wh, b + lean * (y / h) + Vector3(0, y, 0), Vector3(0.06, 0.015, 0.06), R(0.4, 1.0))
+	return [_mesh([[st, "horsetail"], [wh, "horsetail"]]), 0.8]
+
+## Иван-чай: высокие стебли с розовыми свечами соцветий.
+func fireweed(seed_v: int) -> Array:
+	rng.seed = seed_v
+	var stl := _st()
+	var fl := _st()
+	var lv := _st()
+	for i in rng.randi_range(5, 9):
+		var a := R(0, TAU)
+		var d := R(0, 0.45)
+		var b := Vector3(cos(a) * d, 0, sin(a) * d)
+		var h := R(0.9, 1.5)
+		trunk(stl, b, b + Vector3(R(-0.05, 0.05), h * 0.5, R(-0.05, 0.05)), b + Vector3(0, h, 0), 0.015, 0.008, 2, 3)
+		blob(lv, b + Vector3(0, h * 0.4, 0), Vector3(0.12, 0.2, 0.12), R(0.3, 0.8))
+		blob(fl, b + Vector3(0, h * 0.85, 0), Vector3(0.07, 0.22, 0.07), R(0.4, 1.0))
+	return [_mesh([[stl, "horsetail"], [lv, "horsetail"], [fl, "fireweed"]]), 1.3]
+
+## Кедровый стланик: стелющиеся по камням ветви с хвойными подушками.
+func stlanik(seed_v: int) -> Array:
+	rng.seed = seed_v
+	var bk := _st()
+	var fl := _st()
+	cards = null if lod else _st()
+	for i in rng.randi_range(4, 6):
+		var a := R(0, TAU)
+		var d := Vector3(cos(a), 0, sin(a))
+		var L := R(1.5, 3.0)
+		var e := d * L + Vector3(0, R(0.6, 1.2), 0)
+		trunk(bk, Vector3(0, 0.1, 0), d * L * 0.5 + Vector3(0, 0.15, 0), e, 0.08, 0.03, 2, 5)
+		leafblob(fl, cards, e, Vector3(R(0.7, 1.0), R(0.4, 0.6), R(0.7, 1.0)), R(0.3, 1.0))
+		leafblob(fl, cards, d * L * 0.55 + Vector3(0, 0.5, 0), Vector3(0.6, 0.4, 0.6), R(0.3, 1.0))
+	return [_mesh([[bk, "bark"], [fl, "cedar"], [cards, "cedar_card"]]), 1.2]

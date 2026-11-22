@@ -257,7 +257,7 @@ func _process(delta: float) -> void:
 			a._acc += delta
 		if was_far and not a.far:
 			a._acc = 0.0
-		a.visible = d < SHOW_R and not a.dead and a.state != "sleep"
+		a.visible = d < (40.0 if a.kind in ["hare", "squirrel", "beaver"] else SHOW_R) and not a.dead and a.state != "sleep"
 		if a.parts.has("ap"):
 			a.parts["ap"].active = a.visible
 	var per := maxi(1, n / 20)
@@ -271,7 +271,7 @@ func _process(delta: float) -> void:
 			a._acc = 0.0
 	for b in birds:
 		var d := Vector2(b.position.x - hp.x, b.position.z - hp.z).length()
-		b.visible = d < 60.0
+		b.visible = d < 45.0
 		if d < 90.0:
 			b.tick(delta)
 

@@ -13,10 +13,12 @@ uniform float snow = 0.0;
 uniform float wet = 0.0;
 varying vec3 wp;
 varying vec3 wn;
+varying vec4 zw;
 
 void vertex() {
 	wp = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;
 	wn = normalize((MODEL_MATRIX * vec4(NORMAL, 0.0)).xyz);
+	zw = vec4(UV, UV2);
 }
 
 void fragment() {
@@ -34,6 +36,23 @@ void fragment() {
 	float crack = smoothstep(0.08, 0.0, abs(fract(wp.y * 0.7 + vnoise(wp.xz * 0.8) * 1.5) - 0.5) - 0.42);
 	vec3 cliff = lin(vec3(0.42, 0.41, 0.38)) * (0.75 + strata * 0.3 + fine * 0.15) * (1.0 - crack * 0.45);
 	c = mix(c, cliff, smoothstep(0.5, 0.7, slope));
+	// особые участки: гарь, болото, курумник, бурелом (края рваные от шума)
+	float ze = (s - 0.5) * 0.5 + (big - 0.5) * 0.3;
+	float kb = smoothstep(0.35, 0.65, zw.x + ze);
+	float kg = smoothstep(0.35, 0.65, zw.y + ze);
+	float kr = smoothstep(0.35, 0.65, zw.z + ze);
+	float kw = smoothstep(0.35, 0.65, zw.w + ze);
+	vec3 ash = mix(lin(vec3(0.13, 0.11, 0.1)), lin(vec3(0.42, 0.4, 0.36)), smoothstep(0.4, 0.8, fine + s * 0.4 - 0.2));
+	ash = mix(ash, lin(vec3(0.36, 0.42, 0.16)), smoothstep(0.55, 0.8, big) * 0.6);
+	c = mix(c, ash, kb);
+	vec3 bog = mix(lin(vec3(0.5, 0.5, 0.18)), lin(vec3(0.3, 0.36, 0.12)), smoothstep(0.3, 0.7, s));
+	bog = mix(bog, lin(vec3(0.62, 0.36, 0.22)), smoothstep(0.7, 0.85, fine) * 0.5);
+	bog = mix(bog, lin(vec3(0.08, 0.1, 0.07)), smoothstep(0.62, 0.7, big + s * 0.3) * 0.8);
+	c = mix(c, bog, kg);
+	vec3 kur = lin(vec3(0.45, 0.44, 0.4)) * (0.7 + fine * 0.4);
+	kur = mix(kur, lin(vec3(0.68, 0.7, 0.56)), smoothstep(0.6, 0.85, s) * 0.6);
+	c = mix(c, kur, kr * 0.85);
+	c = mix(c, lin(litter) * (0.8 + fine * 0.3), kw * 0.6);
 	// дно и берег: песок с округлыми камешками
 	float sh = smoothstep(water_y + 0.5, water_y - 0.1, wp.y);
 	vec2 pq = wp.xz * 1.6 + vec2(vnoise(wp.xz * 1.3), vnoise(wp.zx * 1.3 + 5.0)) * 0.9;
@@ -47,6 +66,6 @@ void fragment() {
 	c = mix(c, vec3(0.88, 0.91, 0.96) * (0.95 + fine * 0.05), smoothstep(0.2, 0.5, snow + wn.y * 0.2 - 0.2) * step(0.01, snow));
 	c *= 1.0 - wet * 0.25;
 	ALBEDO = c;
-	ROUGHNESS = mix(1.0, 0.5, wet);
+	ROUGHNESS = mix(1.0, 0.5, max(wet, kg * smoothstep(0.62, 0.7, big + s * 0.3)));
 	SPECULAR = 0.0;
 }

@@ -853,7 +853,9 @@ func _animate_model(delta: float) -> void:
 	if state == "sit":
 		_play("Sitting_Idle", 1.0, 0.4)
 		model.rotation = Vector3(0, body.rotation.y, 0)
-		model.position = Vector3(0, 1.03 - _pelvis_y(), 0)
+		# таз точно над сиденьем: смещение позы анимации убираем
+		var pl: Vector3 = m_sk.get_bone_global_pose(m_sk.find_bone("pelvis")).origin
+		model.position = Vector3(0, 1.03, 0) - model.basis * Vector3(pl.x, pl.y, pl.z + 0.04)
 		return
 	if swimb > 0.5:
 		# поза плавания уже в анимации: только поворот и высота над водой
