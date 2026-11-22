@@ -198,7 +198,7 @@ func _process(delta: float) -> void:
 	var best := Vector3.INF
 	for k in 12:
 		var a := TAU * k / 12.0
-		for rr in [6.0, 14.0, 26.0]:
+		for rr: float in [6.0, 14.0, 26.0]:
 			var x := hp.x + cos(a) * rr
 			var z := hp.z + sin(a) * rr
 			if main.height(x, z) < main.WATER_Y - 0.1 and (best == Vector3.INF or Vector2(x - hp.x, z - hp.z).length() < Vector2(best.x - hp.x, best.z - hp.z).length()):
