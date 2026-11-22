@@ -11,9 +11,9 @@ var mats := {}
 
 func _init() -> void:
 	for k in ["bark_spruce", "bark_pine", "bark_birch", "bark_dead"]:
-		var m := StandardMaterial3D.new()
-		m.albedo_texture = load("res://textures/%s.png" % k)
-		m.roughness = 1.0
+		var m := ShaderMaterial.new()
+		m.shader = load("res://shaders/bark.gdshader")
+		m.set_shader_parameter("tex", load("res://textures/%s.png" % k))
 		mats[k] = m
 	_card("needle", Color(0.78, 0.86, 0.70), 0.03)
 	_card("pine", Color(0.80, 0.84, 0.68), 0.03)
@@ -25,9 +25,10 @@ func _init() -> void:
 	var blade := ShaderMaterial.new()
 	blade.shader = BLADE_SHADER
 	mats["blade"] = blade
-	var core := StandardMaterial3D.new()
-	core.albedo_color = Color(0.07, 0.13, 0.08)
-	core.roughness = 1.0
+	var core := ShaderMaterial.new()
+	core.shader = load("res://shaders/bark.gdshader")
+	core.set_shader_parameter("tex", load("res://textures/needle.png"))
+	core.set_shader_parameter("tint", Color(0.06, 0.1, 0.07))
 	mats["core"] = core
 
 func _card(k: String, tint: Color, sway: float) -> void:

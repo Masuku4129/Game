@@ -92,7 +92,7 @@ func blocked(x: float, z: float, rad: float) -> bool:
 	return false
 
 func _setup_noise() -> void:
-	n_hill.seed = 1640; n_hill.frequency = 0.006; n_hill.fractal_octaves = 4
+	n_hill.seed = 1640; n_hill.frequency = 0.004; n_hill.fractal_octaves = 4
 	n_cliff.seed = 77; n_cliff.frequency = 0.009; n_cliff.fractal_octaves = 2
 	n_detail.seed = 5; n_detail.frequency = 0.05; n_detail.fractal_octaves = 3
 	n_crag.seed = 31; n_crag.frequency = 0.16; n_crag.fractal_octaves = 4
@@ -108,15 +108,15 @@ func biome(x: float, z: float) -> float:
 
 func height(x: float, z: float) -> float:
 	var rocky := clampf(biome(x, z), 0.0, 1.0)
-	var h := n_hill.get_noise_2d(x, z) * (12.0 + rocky * 9.0) + n_detail.get_noise_2d(x, z) * 1.0 + 3.0
+	var h := n_hill.get_noise_2d(x, z) * (8.0 + rocky * 6.0) + n_detail.get_noise_2d(x, z) * 1.0 + 3.0
 	var c := n_cliff.get_noise_2d(x, z)
 	# ступени-обрывы: резкий подъём на узкой полосе шума
-	var t1 := smoothstep(0.09, 0.16, c)
-	var t2 := smoothstep(0.31, 0.37, c)
-	h += t1 * 8.0 + t2 * 7.0
+	var t1 := smoothstep(0.09, 0.21, c)
+	var t2 := smoothstep(0.31, 0.43, c)
+	h += t1 * 6.0 + t2 * 5.0
 	# рваная скалистая поверхность обрывов: крупные и мелкие сколы только на самом уступе
 	var face := (t1 * (1.0 - t1) + t2 * (1.0 - t2)) * 4.0
-	h += n_crag.get_noise_2d(x, z) * 3.2 * face + n_crag2.get_noise_2d(x, z) * 1.1 * face
+	h += n_crag.get_noise_2d(x, z) * 1.8 * face + n_crag2.get_noise_2d(x, z) * 0.6 * face
 	var r := 1.0 - smoothstep(7.0, 32.0, river_dist(x, z))
 	return lerpf(h, WATER_Y - 2.5, r)
 
@@ -274,6 +274,8 @@ const GRADIUS := 2
 func _process(delta: float) -> void:
 	if hero == null or joy == null:
 		return
+	RenderingServer.global_shader_parameter_set("hero_pos", hero.position + Vector3(0, 1.0, 0))
+	RenderingServer.global_shader_parameter_set("cam_pos", rig.cam.global_position)
 	hero.move_vec = joy.value
 	hero.cam_yaw = rig.rotation.y
 	# время суток: 1 игровой час за 75 секунд
@@ -415,6 +417,8 @@ func _variants(kind: String) -> Array:
 			for i in 2: out.append(veg.log_fallen(1100 + i))
 	return out
 
+const BLOCK_R := {"spruce": 0.4, "pine": 0.32, "birch": 0.28, "bare": 0.3, "spruce_dead": 0.3, "stump": 0.45, "rock": 0.7, "boulder": 0.8}
+
 func _scatter_all() -> void:
 	# вид, попыток на клетку 32 м, масштаб, дальность видимости, тень, правило
 	var rules := [
@@ -425,15 +429,15 @@ func _scatter_all() -> void:
 		["bare", 3, Vector2(0.8, 1.2), 90.0, true, "edge"],
 		["spruce_dead", 2, Vector2(0.7, 1.0), 90.0, true, "tree"],
 		["spruce", 8, Vector2(0.18, 0.35), 60.0, true, "under"],
-		["bush", 20, Vector2(0.8, 1.5), 60.0, false, "under"],
+		["bush", 30, Vector2(0.8, 1.5), 60.0, false, "under"],
 		["fern", 70, Vector2(0.7, 1.2), 45.0, false, "fern"],
 		["reeds", 14, Vector2(0.8, 1.4), 80.0, false, "reed"],
-		["twig", 40, Vector2(0.8, 1.3), 40.0, false, "under"],
+		["twig", 60, Vector2(0.8, 1.3), 40.0, false, "under"],
 		["pebble", 40, Vector2(0.15, 0.45), 40.0, false, "pebble"],
 		["rock", 12, Vector2(0.5, 2.2), 85.0, true, "rock"],
 		["rock", 14, Vector2(1.8, 4.6), 110.0, true, "boulder"],
-		["stump", 2, Vector2(0.8, 1.2), 60.0, true, "under"],
-		["log", 1, Vector2(0.9, 1.1), 70.0, true, "under"],
+		["stump", 3, Vector2(0.8, 1.2), 60.0, true, "under"],
+		["log", 2, Vector2(0.9, 1.1), 70.0, true, "under"],
 	]
 	var cache := {}
 	for r in rules:
@@ -461,6 +465,9 @@ func _scatter_all() -> void:
 					var s := rng.randf_range(sc.x, sc.y)
 					var b := Basis(Vector3.UP, rng.randf() * TAU).scaled(Vector3(s, s * rng.randf_range(0.9, 1.1), s))
 					per_var[vi].append(Transform3D(b, Vector3(x, height(x, z) - 0.05, z)))
+					var br: float = BLOCK_R.get(r[5] if r[0] == "rock" else r[0], 0.0)
+					if br > 0.0 and not (r[0] == "spruce" and r[5] == "under"):
+						_add_blocker(x, z, br * s)
 				for vi in vars.size():
 					var xs: Array = per_var[vi]
 					if xs.is_empty():

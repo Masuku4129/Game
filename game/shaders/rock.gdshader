@@ -1,5 +1,6 @@
 shader_type spatial;
 render_mode diffuse_burley;
+#include "res://shaders/fade.gdshaderinc"
 // Камни и валуны: трипланарная текстура скалы в двух масштабах с рельефом из карты высот.
 uniform sampler2D rock : source_color, filter_linear_mipmap_anisotropic, repeat_enable;
 uniform float tile = 0.55;
@@ -17,6 +18,9 @@ vec4 tri(vec3 p, vec3 bw, float sc) {
 }
 
 void fragment() {
+	if (fade_discard(wp, FRAGCOORD.xy)) {
+		discard;
+	}
 	vec3 bw = pow(abs(wn), vec3(4.0));
 	bw /= (bw.x + bw.y + bw.z);
 	vec4 a = tri(wp, bw, tile);

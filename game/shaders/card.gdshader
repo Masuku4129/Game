@@ -1,9 +1,11 @@
 shader_type spatial;
 render_mode cull_disabled, diffuse_burley;
+#include "res://shaders/fade.gdshaderinc"
 // Карточки хвои, листвы, травы: альфа-отсечение, лёгкое качание на ветру.
 uniform sampler2D tex : source_color, filter_linear_mipmap, repeat_disable;
 uniform vec4 tint : source_color = vec4(1.0);
 uniform float sway = 0.05;
+varying vec3 wpf;
 
 void vertex() {
 	vec3 w = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;
@@ -11,9 +13,13 @@ void vertex() {
 	float k = sway * max(VERTEX.y, 0.0);
 	VERTEX.x += sin(t) * k;
 	VERTEX.z += cos(t * 0.83) * k;
+	wpf = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;
 }
 
 void fragment() {
+	if (fade_discard(wpf, FRAGCOORD.xy)) {
+		discard;
+	}
 	vec4 c = texture(tex, UV);
 	ALBEDO = c.rgb * tint.rgb * COLOR.rgb;
 	ALPHA = c.a;
