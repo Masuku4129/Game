@@ -13,6 +13,7 @@ var n_detail := FastNoiseLite.new()
 var n_forest := FastNoiseLite.new()
 var n_crag := FastNoiseLite.new()
 var n_crag2 := FastNoiseLite.new()
+var n_biome := FastNoiseLite.new()
 
 var t_hours := 9.0
 var day_count := 1
@@ -96,13 +97,18 @@ func _setup_noise() -> void:
 	n_detail.seed = 5; n_detail.frequency = 0.05; n_detail.fractal_octaves = 3
 	n_crag.seed = 31; n_crag.frequency = 0.16; n_crag.fractal_octaves = 4
 	n_crag2.seed = 32; n_crag2.frequency = 0.55; n_crag2.fractal_octaves = 2
+	n_biome.seed = 4242; n_biome.frequency = 0.0042; n_biome.fractal_octaves = 2
 	n_forest.seed = 909; n_forest.frequency = 0.02; n_forest.fractal_octaves = 3
 
 func river_dist(x: float, z: float) -> float:
 	return absf(z - 70.0 * sin(x / 95.0) - 20.0)
 
+func biome(x: float, z: float) -> float:
+	return clampf(n_biome.get_noise_2d(x, z) * 2.2, -1.0, 1.0)
+
 func height(x: float, z: float) -> float:
-	var h := n_hill.get_noise_2d(x, z) * 12.0 + n_detail.get_noise_2d(x, z) * 1.0 + 3.0
+	var rocky := clampf(biome(x, z), 0.0, 1.0)
+	var h := n_hill.get_noise_2d(x, z) * (12.0 + rocky * 9.0) + n_detail.get_noise_2d(x, z) * 1.0 + 3.0
 	var c := n_cliff.get_noise_2d(x, z)
 	# ступени-обрывы: резкий подъём на узкой полосе шума
 	var t1 := smoothstep(0.09, 0.16, c)
@@ -119,7 +125,13 @@ func normal_at(x: float, z: float) -> Vector3:
 	return Vector3(height(x - e, z) - height(x + e, z), 2.0 * e, height(x, z - e) - height(x, z + e)).normalized()
 
 func forest_density(x: float, z: float) -> float:
-	return clampf(n_forest.get_noise_2d(x, z) * 1.6 + 0.55, 0.0, 1.0)
+	var b := biome(x, z)
+	var d := n_forest.get_noise_2d(x, z) * 1.6 + 0.55
+	if b > 0.0:
+		d -= b * 0.75
+	else:
+		d += b * 0.5
+	return clampf(d, 0.0, 1.0)
 
 var sky_mat: ProceduralSkyMaterial
 var env: Environment
@@ -144,7 +156,7 @@ func _make_environment() -> void:
 	add_child(we)
 	sun = DirectionalLight3D.new()
 	sun.shadow_enabled = true
-	sun.directional_shadow_max_distance = 70.0
+	sun.directional_shadow_max_distance = 45.0
 	sun.directional_shadow_mode = DirectionalLight3D.SHADOW_PARALLEL_2_SPLITS
 	add_child(sun)
 	moon = DirectionalLight3D.new()
@@ -322,7 +334,7 @@ func _build_grass_cell(k: Vector2i) -> void:
 	var per_var := []
 	for v in grass_mesh_vars:
 		per_var.append([])
-	var step := 1.15
+	var step := 1.4
 	var z := 0.0
 	while z < GCELL:
 		var x := 0.0
@@ -390,7 +402,7 @@ func _variants(kind: String) -> Array:
 		"grass":
 			for i in 4: out.append(veg.grass(800 + i))
 		"rock":
-			for i in 4: out.append(veg.rock(900 + i))
+			for i in 8: out.append(veg.rock(900 + i))
 		"pebble":
 			for i in 3: out.append(veg.rock(950 + i))
 		"reeds":
@@ -406,19 +418,20 @@ func _variants(kind: String) -> Array:
 func _scatter_all() -> void:
 	# вид, попыток на клетку 32 м, масштаб, дальность видимости, тень, правило
 	var rules := [
-		["spruce", 30, Vector2(0.75, 1.15), 120.0, true, "tree"],
-		["pine", 9, Vector2(0.85, 1.15), 120.0, true, "tree"],
-		["birch", 9, Vector2(0.8, 1.15), 120.0, true, "edge"],
-		["bare", 3, Vector2(0.8, 1.2), 120.0, true, "edge"],
-		["spruce_dead", 2, Vector2(0.7, 1.0), 120.0, true, "tree"],
+		["spruce", 30, Vector2(0.75, 1.15), 90.0, true, "spruce_t"],
+		["pine", 14, Vector2(0.85, 1.15), 90.0, true, "pine_t"],
+		["birch", 16, Vector2(0.8, 1.15), 90.0, true, "birch_t"],
+		["birch", 5, Vector2(0.8, 1.15), 90.0, true, "edge"],
+		["bare", 3, Vector2(0.8, 1.2), 90.0, true, "edge"],
+		["spruce_dead", 2, Vector2(0.7, 1.0), 90.0, true, "tree"],
 		["spruce", 8, Vector2(0.18, 0.35), 60.0, true, "under"],
 		["bush", 20, Vector2(0.8, 1.5), 60.0, false, "under"],
 		["fern", 70, Vector2(0.7, 1.2), 45.0, false, "fern"],
 		["reeds", 14, Vector2(0.8, 1.4), 80.0, false, "reed"],
 		["twig", 40, Vector2(0.8, 1.3), 40.0, false, "under"],
 		["pebble", 40, Vector2(0.15, 0.45), 40.0, false, "pebble"],
-		["rock", 10, Vector2(0.5, 2.2), 100.0, true, "rock"],
-		["rock", 14, Vector2(1.8, 4.6), 140.0, true, "boulder"],
+		["rock", 12, Vector2(0.5, 2.2), 85.0, true, "rock"],
+		["rock", 14, Vector2(1.8, 4.6), 110.0, true, "boulder"],
 		["stump", 2, Vector2(0.8, 1.2), 60.0, true, "under"],
 		["log", 1, Vector2(0.9, 1.1), 70.0, true, "under"],
 	]
@@ -478,7 +491,14 @@ func _accept(kind: String, x: float, z: float, rng: RandomNumberGenerator) -> bo
 		return kind == "rock" and y > WATER_Y - 0.8 and rng.randf() < 0.3
 	var slope := 1.0 - normal_at(x, z).y
 	var fd := forest_density(x, z)
+	var bio := biome(x, z)
 	match kind:
+		"spruce_t":
+			return slope < 0.25 and rng.randf() < fd * fd * clampf(1.0 - bio * 0.8 - 0.2, 0.15, 1.0)
+		"pine_t":
+			return slope < 0.25 and rng.randf() < fd * clampf(0.3 + bio * 0.8, 0.05, 1.0)
+		"birch_t":
+			return slope < 0.25 and rng.randf() < fd * clampf(0.15 - bio * 0.9, 0.0, 1.0)
 		"tree":
 			return slope < 0.25 and rng.randf() < fd * fd
 		"edge":
@@ -490,7 +510,7 @@ func _accept(kind: String, x: float, z: float, rng: RandomNumberGenerator) -> bo
 		"grass":
 			return slope < 0.32 and rng.randf() < (1.0 - fd) * 0.9 + 0.15
 		"rock":
-			return slope > 0.15 or rng.randf() < 0.15
+			return slope > 0.15 or rng.randf() < 0.15 + maxf(bio, 0.0) * 0.6
 		"boulder":
 			return slope > 0.3 and rng.randf() < 0.3
 	return true

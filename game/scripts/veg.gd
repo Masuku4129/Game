@@ -286,14 +286,22 @@ func rock(seed_v: int) -> Array:
 	ridge.fractal_octaves = 3
 	var st := SurfaceTool.new()
 	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	var kind := seed_v % 4
+	# 0 валун, 1 плоская плита, 2 высокая глыба, 3 колотая груда
 	var sx := R(1.0, 1.6)
 	var sz := R(0.9, 1.4)
+	var sy := [0.62, 0.32, 1.0, 0.75][kind]
+	var cs := [0.34, 0.2, 0.5, 0.62][kind]
+	var tints := [Color(1.0, 1.0, 0.98), Color(1.0, 0.93, 0.82), Color(0.82, 0.86, 0.95), Color(0.92, 0.9, 0.88)]
+	if kind == 2:
+		sx *= 0.65
+		sz *= 0.7
 	for i in verts.size():
 		var v := verts[i]
-		var k := 1.0 + cell.get_noise_3dv(v * 1.7) * 0.34 + (1.0 - absf(ridge.get_noise_3dv(v * 2.0)) - 0.6) * 0.3 + ridge.get_noise_3dv(v * 9.0) * 0.035
-		v = Vector3(v.x * sx, v.y * 0.62, v.z * sz) * k
+		var k := 1.0 + cell.get_noise_3dv(v * 1.7) * cs + (1.0 - absf(ridge.get_noise_3dv(v * 2.0)) - 0.6) * 0.3 + ridge.get_noise_3dv(v * 9.0) * 0.035
+		v = Vector3(v.x * sx, v.y * sy, v.z * sz) * k
 		var moss := clampf((v.y - 0.05) * 3.2, 0.0, 1.0) * clampf(ridge.get_noise_3dv(v * 3.0) + 0.65, 0.0, 1.0)
-		var c := Color(1.0, 1.0, 0.98).lerp(Color(0.52, 0.66, 0.32), moss).darkened(R(0.0, 0.1))
+		var c: Color = tints[kind].lerp(Color(0.52, 0.66, 0.32), moss).darkened(R(0.0, 0.1))
 		st.set_color(c)
 		st.add_vertex(v)
 	for i in idx:
@@ -302,6 +310,7 @@ func rock(seed_v: int) -> Array:
 	var m := ShaderMaterial.new()
 	m.shader = ROCK_SHADER
 	m.set_shader_parameter("rock", load("res://textures/ground_rock.png"))
+	m.set_shader_parameter("tile", [0.55, 0.4, 0.75, 0.9][kind])
 	st.set_material(m)
 	return [st.commit(), 0.6]
 

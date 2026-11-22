@@ -3,7 +3,7 @@ extends Node3D
 ## два пальца приближают и вращают.
 
 var pitch := 60.0
-var distance := 30.0
+var distance := 13.0
 var target: Node3D
 var touches := {}
 var last_pinch := 0.0
@@ -11,9 +11,9 @@ var last_angle := 0.0
 var cam := Camera3D.new()
 
 func _ready() -> void:
-	cam.fov = 40.0
+	cam.fov = 45.0
 	cam.near = 0.5
-	cam.far = 420.0
+	cam.far = 300.0
 	add_child(cam)
 	_update()
 
@@ -45,12 +45,12 @@ func _unhandled_input(e: InputEvent) -> void:
 			var d: float = p[0].distance_to(p[1])
 			var a: float = (p[1] - p[0]).angle()
 			if last_pinch > 0.0:
-				distance = clampf(distance * last_pinch / d, 8.0, 70.0)
+				distance = clampf(distance * last_pinch / d, 5.0, 45.0)
 			rotation.y -= a - last_angle
 			last_pinch = d
 			last_angle = a
 	elif e is InputEventMouseButton and e.pressed:
 		if e.button_index == MOUSE_BUTTON_WHEEL_UP:
-			distance = maxf(8.0, distance * 0.9)
+			distance = maxf(5.0, distance * 0.9)
 		elif e.button_index == MOUSE_BUTTON_WHEEL_DOWN:
-			distance = minf(70.0, distance * 1.1)
+			distance = minf(45.0, distance * 1.1)
