@@ -7,8 +7,8 @@ uniform float ramp_hi = 0.45;
 void light() {
 	float ndl = dot(NORMAL, LIGHT);
 	float t = smoothstep(ramp_lo, ramp_hi, ndl) * mix(0.25, 1.0, ATTENUATION);
-	vec3 c = mix(shade_cool * 0.35, vec3(1.0, 0.97, 0.9), t);
-	DIFFUSE_LIGHT += c * LIGHT_COLOR / PI * (0.35 + 0.65 * t);
+	vec3 c = mix(shade_cool * 0.3, vec3(1.0, 0.95, 0.85), t);
+	DIFFUSE_LIGHT += c * LIGHT_COLOR / PI;
 }
 
 // Мазки: вытянутый шум для живописной неровности цвета.

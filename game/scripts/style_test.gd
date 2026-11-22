@@ -62,23 +62,23 @@ func _env() -> void:
 	env.background_mode = Environment.BG_SKY
 	env.sky = sky
 	env.ambient_light_source = Environment.AMBIENT_SOURCE_SKY
-	env.ambient_light_energy = 0.9
+	env.ambient_light_energy = 0.5
 	env.tonemap_mode = Environment.TONE_MAPPER_FILMIC
-	env.tonemap_exposure = 1.0
+	env.tonemap_exposure = 0.95
 	env.fog_enabled = true
 	env.fog_light_color = Color(0.72, 0.8, 0.84)
 	env.fog_density = 0.006
 	env.fog_sun_scatter = 0.25
 	env.fog_aerial_perspective = 0.4
 	env.adjustment_enabled = true
-	env.adjustment_saturation = 1.08
+	env.adjustment_saturation = 1.15
 	env.adjustment_contrast = 1.04
 	var we := WorldEnvironment.new()
 	we.environment = env
 	add_child(we)
 	var sun := DirectionalLight3D.new()
 	sun.light_color = Color(1.0, 0.92, 0.78)
-	sun.light_energy = 1.25
+	sun.light_energy = 1.0
 	sun.rotation_degrees = Vector3(-42, -35, 0)
 	sun.shadow_enabled = true
 	sun.shadow_blur = 2.5
@@ -163,7 +163,7 @@ func _scatter() -> void:
 	var bus := [pv.bush(31), pv.bush(32)]
 	var roc := [pv.rock(41), pv.rock(42), pv.rock(43), pv.rock(44)]
 	var tuf := [pv.tuft(51), pv.tuft(52), pv.tuft(53, 1.4)]
-	for i in 2600:
+	for i in 7000:
 		var x := randf_range(-W * 0.5, W * 0.5)
 		var z := randf_range(-W * 0.5, W * 0.5)
 		var y := height(x, z)
@@ -172,7 +172,7 @@ func _scatter() -> void:
 		var d := density(x, z)
 		var r := randf()
 		var b := Basis(Vector3.UP, randf() * TAU)
-		if r < d * 0.09:
+		if r < d * d * 0.16:
 			var s := randf_range(0.8, 1.2)
 			var k := randf()
 			var t := Transform3D(b.scaled(Vector3(s, s, s)), Vector3(x, y - 0.1, z))
@@ -182,7 +182,7 @@ func _scatter() -> void:
 				pn.append(t)
 			else:
 				bi.append(t)
-		elif r < 0.12 + d * 0.06 and r > 0.1:
+		elif r > 0.9 and r < 0.92 + d * 0.03:
 			bu.append(Transform3D(b.scaled(Vector3.ONE * randf_range(0.7, 1.4)), Vector3(x, y, z)))
 		elif r > 0.985:
 			rk.append(Transform3D(b.scaled(Vector3.ONE * randf_range(0.4, 2.5)), Vector3(x, y - 0.1, z)))
@@ -192,7 +192,7 @@ func _scatter() -> void:
 		var z := -30.0 + sin(x * 0.04) * 8.0 + randf_range(-9.0, 9.0)
 		rk.append(Transform3D(Basis(Vector3.UP, randf() * TAU).scaled(Vector3.ONE * randf_range(0.3, 1.6)), Vector3(x, height(x, z) - 0.1, z)))
 	# кочки травы: гуще на поляне, редко в лесу
-	for i in 9000:
+	for i in 14000:
 		var x := randf_range(-W * 0.5, W * 0.5)
 		var z := randf_range(-W * 0.5, W * 0.5)
 		var y := height(x, z)
@@ -200,7 +200,7 @@ func _scatter() -> void:
 			continue
 		if randf() > (1.0 - density(x, z)) * 0.9 + 0.08:
 			continue
-		var s := randf_range(0.7, 1.5)
+		var s := randf_range(0.9, 1.8)
 		tf.append(Transform3D(Basis(Vector3.UP, randf() * TAU).scaled(Vector3(s, s * randf_range(0.8, 1.3), s)), Vector3(x, y - 0.02, z)))
 	_place(spr, sp, true)
 	_place(pin, pn, true)

@@ -12,11 +12,11 @@ func _init() -> void:
 	var fol := load("res://shaders/paint/foliage.gdshader")
 	var brk := load("res://shaders/paint/bark.gdshader")
 	for f in [
-		["spruce", Color(0.07, 0.15, 0.13), Color(0.16, 0.3, 0.22), Color(0.36, 0.5, 0.3), 0.0],
-		["pine", Color(0.1, 0.2, 0.14), Color(0.25, 0.4, 0.22), Color(0.52, 0.62, 0.3), 0.3],
-		["birch", Color(0.2, 0.32, 0.14), Color(0.42, 0.58, 0.24), Color(0.78, 0.82, 0.4), 1.0],
-		["leaf", Color(0.16, 0.28, 0.14), Color(0.34, 0.5, 0.22), Color(0.66, 0.74, 0.32), 1.0],
-		["bush", Color(0.13, 0.24, 0.12), Color(0.3, 0.44, 0.2), Color(0.58, 0.66, 0.3), 0.8],
+		["spruce", Color(0.04, 0.1, 0.08), Color(0.1, 0.21, 0.15), Color(0.28, 0.4, 0.22), 0.0],
+		["pine", Color(0.07, 0.15, 0.1), Color(0.18, 0.31, 0.16), Color(0.4, 0.5, 0.22), 0.3],
+		["birch", Color(0.12, 0.22, 0.1), Color(0.3, 0.44, 0.16), Color(0.58, 0.64, 0.24), 1.0],
+		["leaf", Color(0.1, 0.2, 0.1), Color(0.24, 0.38, 0.15), Color(0.5, 0.58, 0.22), 1.0],
+		["bush", Color(0.09, 0.18, 0.08), Color(0.22, 0.34, 0.13), Color(0.45, 0.52, 0.2), 0.8],
 	]:
 		var m := ShaderMaterial.new()
 		m.shader = fol
@@ -64,6 +64,13 @@ func _icosphere() -> Array:
 		out.append([m[0], m[1], m[2]])
 	return [v, out]
 
+## Пятно кроны: 2–3 сросшихся облака дают неровный «живописный» край.
+func clump(st: SurfaceTool, c: Vector3, sc: Vector3, shade: float) -> void:
+	blob(st, c, sc, shade)
+	for i in rng.randi_range(1, 2):
+		var o := Vector3(R(-0.6, 0.6), R(-0.2, 0.4), R(-0.6, 0.6)) * sc
+		blob(st, c + o, sc * R(0.5, 0.7), clampf(shade + R(-0.2, 0.3), 0.0, 1.0))
+
 ## Облако листвы: искажённая шумом сфера, нормали — от центра (мягкий объём), чуть вверх.
 func blob(st: SurfaceTool, c: Vector3, sc: Vector3, shade: float, autumn_k: float = 1.0) -> void:
 	var verts: Array = _ico[0]
@@ -72,7 +79,7 @@ func blob(st: SurfaceTool, c: Vector3, sc: Vector3, shade: float, autumn_k: floa
 	var pts: Array = []
 	for p in verts:
 		var q: Vector3 = p
-		var n := 1.0 + 0.22 * sin(q.x * 3.1 + off) * cos(q.z * 2.7 + off) + 0.12 * sin(q.y * 5.3 + off * 2.0)
+		var n := 1.0 + 0.25 * sin(q.x * 3.1 + off) * cos(q.z * 2.7 + off) + 0.15 * sin(q.y * 5.3 + off * 2.0) + R(-0.06, 0.06)
 		# низ облака приплюснут — как у настоящих крон
 		if q.y < 0:
 			q.y *= 0.7
@@ -118,8 +125,8 @@ func skirt(st: SurfaceTool, y: float, r: float, h: float, teeth: int, shade: flo
 	var a0 := R(0, TAU)
 	for i in n:
 		var a := a0 + TAU * i / n
-		var rr := r * (1.0 if i % 2 == 0 else R(0.62, 0.75))
-		var dy := -r * 0.18 * (1.0 if i % 2 == 0 else 0.4) + R(-0.05, 0.05)
+		var rr := r * (R(0.95, 1.08) if i % 2 == 0 else R(0.7, 0.82))
+		var dy := -r * (0.38 if i % 2 == 0 else 0.22) + R(-0.06, 0.06)
 		ring.append(Vector3(cos(a) * rr, y + dy, sin(a) * rr))
 	var inner := Vector3(0, y + h * 0.25, 0)
 	for i in n:
@@ -127,8 +134,8 @@ func skirt(st: SurfaceTool, y: float, r: float, h: float, teeth: int, shade: flo
 		var b: Vector3 = ring[(i + 1) % n]
 		for v in [top, b, a]:
 			var d: Vector3 = v - Vector3(0, y, 0)
-			var nrm := (Vector3(d.x, 0, d.z).normalized() * 0.8 + Vector3(0, 0.9, 0)).normalized() if v != top else Vector3.UP
-			st.set_color(Color(shade * (1.0 if v == top else 0.85), 0, 0, 1))
+			var nrm := (Vector3(d.x, 0, d.z).normalized() * 0.9 + Vector3(0, 0.55, 0)).normalized() if v != top else Vector3.UP
+			st.set_color(Color(shade * (0.25 if v == top else 1.0), 0, 0, 1))
 			st.set_normal(nrm)
 			st.add_vertex(v)
 		# низ юбки — тёмный, закрывает просвет
@@ -153,17 +160,17 @@ func _st() -> SurfaceTool:
 ## Ель: 7–10 ярусов, верхушка-пика.
 func spruce(seed_v: int) -> Array:
 	rng.seed = seed_v
-	var H := R(8.0, 12.5)
+	var H := R(7.0, 11.0)
 	var bk := _st()
 	var fl := _st()
-	trunk(bk, Vector3.ZERO, Vector3(0, H * 0.5, 0), Vector3(0, H * 0.9, 0), 0.26, 0.05, 2, 6)
-	var tiers := rng.randi_range(7, 10)
-	var R0 := H * R(0.26, 0.32)
+	trunk(bk, Vector3.ZERO, Vector3(0, H * 0.5, 0), Vector3(0, H * 0.9, 0), 0.24, 0.05, 2, 6)
+	var tiers := rng.randi_range(8, 11)
+	var R0 := H * R(0.2, 0.25)
 	for i in tiers:
 		var t := float(i) / tiers
 		var y := lerpf(H * 0.14, H * 0.86, t)
 		var r := R0 * (1.0 - t * 0.85) * R(0.9, 1.1)
-		skirt(fl, y, r, (H - y) * 0.35 + 0.6, rng.randi_range(6, 8), lerpf(0.4, 0.9, t))
+		skirt(fl, y, r, r * 0.7 + 0.4, rng.randi_range(9, 13), lerpf(0.5, 1.0, t))
 	skirt(fl, H * 0.9, 0.35, H * 0.12, 4, 1.0)
 	return [_mesh([[bk, "bark"], [fl, "spruce"]]), H]
 
@@ -181,7 +188,7 @@ func pine(seed_v: int) -> Array:
 		var d := R(0.6, 2.0)
 		var c := Vector3(cos(a) * d, y, sin(a) * d) + top * Vector3(1, 0, 1) * (y / H)
 		trunk(bk, Vector3(top.x * y / H * 0.8, y - 0.8, top.z * y / H * 0.8), (Vector3(top.x * y / H, y - 0.6, top.z * y / H) + c) * 0.5, c, 0.07, 0.03, 1, 4)
-		blob(fl, c + Vector3(0, 0.3, 0), Vector3(R(1.3, 2.0), R(0.6, 0.9), R(1.3, 2.0)), R(0.4, 1.0))
+		clump(fl, c + Vector3(0, 0.3, 0), Vector3(R(1.3, 2.0), R(0.6, 0.9), R(1.3, 2.0)), R(0.4, 1.0))
 	return [_mesh([[bk, "bark_pine"], [fl, "pine"]]), H]
 
 ## Берёза: белый ствол с наклоном, вертикальные лёгкие облака.
@@ -202,7 +209,7 @@ func birch(seed_v: int, kind: String = "birch") -> Array:
 		var c := axis + Vector3(cos(a) * d, 0, sin(a) * d)
 		if i % 2 == 0:
 			trunk(bk, axis - Vector3(0, 0.5, 0), (axis + c) * 0.5, c, 0.05, 0.02, 1, 4)
-		blob(fl, c, Vector3(R(0.9, 1.4), R(1.0, 1.6), R(0.9, 1.4)) * (1.0 - t * 0.3), R(0.3, 1.0))
+		clump(fl, c, Vector3(R(0.8, 1.2), R(0.8, 1.3), R(0.8, 1.2)) * (1.0 - t * 0.3), R(0.3, 1.0))
 	return [_mesh([[bk, "bark_birch"], [fl, "birch" if kind == "birch" else "leaf"]]), H]
 
 func bush(seed_v: int) -> Array:
@@ -242,15 +249,15 @@ func rock(seed_v: int) -> Array:
 func tuft(seed_v: int, tall: float = 1.0) -> Array:
 	rng.seed = seed_v
 	var st := _st()
-	var n := rng.randi_range(7, 11)
+	var n := rng.randi_range(12, 16)
 	for i in n:
 		var a := TAU * i / n + R(-0.3, 0.3)
 		var dir := Vector3(cos(a), 0, sin(a))
 		var side := Vector3(-dir.z, 0, dir.x)
-		var h := R(0.25, 0.5) * tall
-		var w := R(0.05, 0.09)
-		var lean := R(0.25, 0.6)
-		var b := dir * R(0.0, 0.08)
+		var h := R(0.18, 0.38) * tall
+		var w := R(0.06, 0.1)
+		var lean := R(0.4, 0.85)
+		var b := dir * R(0.0, 0.12)
 		var m := b + dir * h * lean * 0.4 + Vector3(0, h * 0.6, 0)
 		var tp := b + dir * h * lean + Vector3(0, h, 0)
 		var shade := R(0.0, 1.0)
