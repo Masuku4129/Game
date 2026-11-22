@@ -12,7 +12,7 @@ func _init() -> void:
 	var fol := load("res://shaders/paint/foliage.gdshader")
 	var brk := load("res://shaders/paint/bark.gdshader")
 	for f in [
-		["spruce", Color(0.04, 0.1, 0.08), Color(0.1, 0.21, 0.15), Color(0.28, 0.4, 0.22), 0.0],
+		["spruce", Color(0.08, 0.16, 0.12), Color(0.17, 0.3, 0.2), Color(0.4, 0.52, 0.28), 0.0],
 		["pine", Color(0.07, 0.15, 0.1), Color(0.18, 0.31, 0.16), Color(0.4, 0.5, 0.22), 0.3],
 		["birch", Color(0.12, 0.22, 0.1), Color(0.3, 0.44, 0.16), Color(0.58, 0.64, 0.24), 1.0],
 		["leaf", Color(0.1, 0.2, 0.1), Color(0.24, 0.38, 0.15), Color(0.5, 0.58, 0.22), 1.0],
@@ -24,7 +24,7 @@ func _init() -> void:
 		m.set_shader_parameter("col_mid", f[2])
 		m.set_shader_parameter("col_light", f[3])
 		mats[f[0]] = m
-	for b in [["bark", Color(0.36, 0.27, 0.2), Color(0.2, 0.15, 0.11), 0.0], ["bark_pine", Color(0.62, 0.36, 0.2), Color(0.36, 0.22, 0.14), 0.0], ["bark_birch", Color(0.9, 0.88, 0.82), Color(0.72, 0.7, 0.66), 1.0], ["bark_dead", Color(0.48, 0.44, 0.38), Color(0.3, 0.27, 0.24), 0.0]]:
+	for b in [["bark", Color(0.36, 0.27, 0.2), Color(0.2, 0.15, 0.11), 0.0], ["bark_pine", Color(0.52, 0.36, 0.24), Color(0.32, 0.22, 0.16), 0.0], ["bark_birch", Color(0.9, 0.88, 0.82), Color(0.72, 0.7, 0.66), 1.0], ["bark_dead", Color(0.48, 0.44, 0.38), Color(0.3, 0.27, 0.24), 0.0]]:
 		var m := ShaderMaterial.new()
 		m.shader = brk
 		m.set_shader_parameter("col", b[1])
@@ -135,7 +135,7 @@ func skirt(st: SurfaceTool, y: float, r: float, h: float, teeth: int, shade: flo
 		for v in [top, b, a]:
 			var d: Vector3 = v - Vector3(0, y, 0)
 			var nrm := (Vector3(d.x, 0, d.z).normalized() * 0.9 + Vector3(0, 0.55, 0)).normalized() if v != top else Vector3.UP
-			st.set_color(Color(shade * (0.25 if v == top else 1.0), 0, 0, 1))
+			st.set_color(Color(shade * (0.75 if v == top else 1.0), 0, 0, 1))
 			st.set_normal(nrm)
 			st.add_vertex(v)
 		# низ юбки — тёмный, закрывает просвет
@@ -249,14 +249,14 @@ func rock(seed_v: int) -> Array:
 func tuft(seed_v: int, tall: float = 1.0) -> Array:
 	rng.seed = seed_v
 	var st := _st()
-	var n := rng.randi_range(12, 16)
+	var n := rng.randi_range(18, 24)
 	for i in n:
 		var a := TAU * i / n + R(-0.3, 0.3)
 		var dir := Vector3(cos(a), 0, sin(a))
 		var side := Vector3(-dir.z, 0, dir.x)
-		var h := R(0.18, 0.38) * tall
-		var w := R(0.06, 0.1)
-		var lean := R(0.4, 0.85)
+		var h := R(0.14, 0.3) * tall
+		var w := R(0.07, 0.11)
+		var lean := R(0.55, 1.0)
 		var b := dir * R(0.0, 0.12)
 		var m := b + dir * h * lean * 0.4 + Vector3(0, h * 0.6, 0)
 		var tp := b + dir * h * lean + Vector3(0, h, 0)

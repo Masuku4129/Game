@@ -2,8 +2,8 @@ shader_type spatial;
 render_mode cull_disabled;
 #include "res://shaders/paint/paint.gdshaderinc"
 // Земля, написанная пятнами: луг, лесная подстилка, камень на склонах, галька у воды.
-uniform vec3 meadow = vec3(0.26, 0.38, 0.12);
-uniform vec3 meadow2 = vec3(0.42, 0.48, 0.16);
+uniform vec3 meadow = vec3(0.3, 0.4, 0.14);
+uniform vec3 meadow2 = vec3(0.47, 0.5, 0.2);
 uniform vec3 forest = vec3(0.16, 0.22, 0.11);
 uniform vec3 litter = vec3(0.30, 0.23, 0.14);
 uniform vec3 stone = vec3(0.42, 0.41, 0.38);
