@@ -183,7 +183,7 @@ func spruce(seed_v: int, dead: bool = false) -> Array:
 ## Ветвистое дерево: сосна, берёза, лиственное или голое (без листвы).
 func branchy(seed_v: int, kind: String) -> Array:
 	rng.seed = seed_v
-	var P := {
+	var P: Dictionary = {
 		"pine": {"H": R(12, 15), "r": 0.3, "start": 0.62, "lv": 3, "spread": 0.9, "leaf": "pine", "cs": 1.6, "bark": "bark_pine", "n": 3},
 		"birch": {"H": R(8, 11), "r": 0.17, "start": 0.5, "lv": 3, "spread": 0.6, "leaf": "birch_leaf", "cs": 0.95, "bark": "bark_birch", "n": 3},
 		"bare": {"H": R(7, 10), "r": 0.22, "start": 0.35, "lv": 4, "spread": 0.75, "leaf": "", "cs": 0.0, "bark": "bark_dead", "n": 3},

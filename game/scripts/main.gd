@@ -135,7 +135,7 @@ func _make_water() -> void:
 
 # ---------- растительность ----------
 
-var veg := preload("res://scripts/veg.gd").new()
+var veg = preload("res://scripts/veg.gd").new()
 
 ## Варианты: [mesh, высота]. Несколько вариантов на породу, чтобы лес не повторялся.
 func _variants(kind: String) -> Array:
