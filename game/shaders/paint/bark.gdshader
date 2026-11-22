@@ -6,6 +6,7 @@ render_mode cull_disabled;
 uniform vec3 col = vec3(0.35, 0.25, 0.18);
 uniform vec3 col2 = vec3(0.22, 0.16, 0.12);
 uniform float birch = 0.0;
+uniform bool no_fade = false;
 uniform float snow = 0.0;
 varying vec3 wp;
 varying vec3 wn;
@@ -16,7 +17,7 @@ void vertex() {
 }
 
 void fragment() {
-	if (fade_discard(wp, FRAGCOORD.xy)) {
+	if (!no_fade && fade_discard(wp, FRAGCOORD.xy)) {
 		discard;
 	}
 	float s = vnoise(vec2(UV.x * 6.0, UV.y * 1.2)) * 0.6 + vnoise(vec2(UV.x * 14.0, UV.y * 3.0)) * 0.4;

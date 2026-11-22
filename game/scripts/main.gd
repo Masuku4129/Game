@@ -300,7 +300,7 @@ func _make_environment() -> void:
 	env.tonemap_mode = Environment.TONE_MAPPER_FILMIC
 	env.tonemap_exposure = 1.05
 	env.fog_enabled = true
-	env.fog_density = 0.004
+	env.fog_density = 0.006
 	env.fog_sky_affect = 0.5
 	var we := WorldEnvironment.new()
 	we.environment = env
@@ -345,7 +345,7 @@ func _update_sky() -> void:
 	env.fog_light_color = hor.darkened(0.08)
 	env.ambient_light_energy = lerpf(0.22, 0.7, d) * (1.0 + cl * 0.25)
 	if weather != null:
-		env.fog_density = 0.004 + weather.fogv * 0.03 + weather.precip * 0.008 + weather.snow * 0.0
+		env.fog_density = 0.006 + weather.fogv * 0.03 + weather.precip * 0.008 + weather.snow * 0.0
 	if hero != null:
 		hero.torch.light_energy = 2.2 * (1.0 - d)
 	day_factor = d
@@ -642,14 +642,14 @@ func _variants(kind: String) -> Array:
 		"spruce":
 			for i in 4: out.append(pv.spruce(100 + i))
 		"spruce_dead":
-			for i in 2: out.append(veg.spruce(200 + i, true))
+			for i in 2: out.append(pv.dead_tree(200 + i))
 		"pine":
 			for i in 3: out.append(pv.pine(300 + i))
 		"birch":
 			for i in 3: out.append(pv.birch(400 + i))
 		"bare":
-			for i in 2: out.append(veg.branchy(500 + i, "bare"))
-			out.append(veg.branchy(510, "bare_birch"))
+			for i in 2: out.append(pv.dead_tree(500 + i))
+			out.append(pv.dead_tree(510))
 		"bush":
 			for i in 3: out.append(pv.bush(600 + i))
 		"larch":
@@ -657,14 +657,14 @@ func _variants(kind: String) -> Array:
 		"aspen":
 			for i in 3: out.append(pv.birch(1500 + i, "leaf"))
 		"berry":
-			for i in 3: out.append(veg.berry_bush(1600 + i))
+			for i in 3: out.append(pv.berry_bush(1600 + i))
 		"mushroom":
-			for i in 2: out.append(veg.mushroom(1700 + i, true))
-			for i in 3: out.append(veg.mushroom(1710 + i, false))
+			for i in 2: out.append(pv.mushroom(1700 + i, true))
+			for i in 3: out.append(pv.mushroom(1710 + i, false))
 		"anthill":
-			out.append(veg.anthill(1800))
+			out.append(pv.anthill(1800))
 		"fern":
-			for i in 3: out.append(veg.fern(700 + i))
+			for i in 3: out.append(pv.fern(700 + i))
 		"grass":
 			for i in 4: out.append(veg.grass(800 + i))
 		"rock":
@@ -672,16 +672,16 @@ func _variants(kind: String) -> Array:
 		"pebble":
 			for i in 3: out.append(pv.rock(950 + i))
 		"reeds":
-			for i in 3: out.append(veg.reeds(1200 + i))
+			for i in 3: out.append(pv.reeds(1200 + i))
 		"twig":
-			for i in 4: out.append(veg.twig(1300 + i))
+			for i in 4: out.append(pv.twig(1300 + i))
 		"stump":
-			out.append(veg.stump(1000))
+			out.append(pv.stump(1000))
 		"log":
-			for i in 2: out.append(veg.log_fallen(1100 + i))
+			for i in 2: out.append(pv.log_fallen(1100 + i))
 	return out
 
-const TREE_KINDS := []
+const TREE_KINDS := ["spruce", "pine", "birch", "larch", "aspen"]
 const NEAR_R := 30.0
 var tree_grid := {}
 var near_mesh := {}
@@ -929,9 +929,9 @@ func _scatter_all() -> void:
 		if not cache.has(r[0]):
 			cache[r[0]] = _variants(r[0])
 			if r[0] in TREE_KINDS:
-				veg.lod = true
+				pv.lod = true
 				cache_lod[r[0]] = _variants(r[0])
-				veg.lod = false
+				pv.lod = false
 	var cells := int(SIZE / CELL)
 	for cz in cells:
 		for cx in cells:
@@ -1003,7 +1003,8 @@ func _scatter_all() -> void:
 					var mmi := MultiMeshInstance3D.new()
 					mmi.multimesh = mm
 					mmi.visibility_range_end = r[3]
-					mmi.visibility_range_end_margin = 10.0
+					mmi.visibility_range_end_margin = 14.0
+					mmi.visibility_range_fade_mode = GeometryInstance3D.VISIBILITY_RANGE_FADE_SELF
 					mmi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON if r[4] else GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 					add_child(mmi)
 					if is_tree:
