@@ -6,7 +6,7 @@ const AM = preload("res://scripts/animal_model.gd")
 const SK = preload("res://scripts/skin.gd")
 
 # чутьё на человека (м), время активности, роль
-const SENSE := {"hare": 14.0, "squirrel": 10.0, "fox": 26.0, "roe": 36.0, "deer": 45.0, "boar": 22.0, "wolf": 55.0, "bear": 26.0, "tiger": 40.0, "beaver": 12.0}
+const SENSE := {"hare": 14.0, "squirrel": 10.0, "fox": 26.0, "roe": 36.0, "deer": 45.0, "boar": 22.0, "wolf": 55.0, "bear": 26.0, "tiger": 40.0, "beaver": 8.0}
 const ACTIVE := {"hare": "night", "fox": "dusk", "wolf": "night", "roe": "dusk", "deer": "dusk", "boar": "dusk", "bear": "day", "tiger": "dusk", "squirrel": "day", "beaver": "night"}
 const PREY := ["hare", "squirrel", "roe", "deer", "beaver"]
 const DAMAGE := {"wolf": 0.12, "bear": 0.4, "boar": 0.22, "tiger": 0.5}
@@ -55,6 +55,15 @@ var far := false
 var group := -1
 var _acc := 0.0
 var rng := RandomNumberGenerator.new()
+# бобр на работе (state "job" — идёт/плывёт к job_p, "gnaw" — грызёт, повернувшись к job_face)
+var job_p := Vector3.ZERO
+var job_face := Vector3.ZERO
+var arrived := false
+var gnaw_low := false
+var carry: Node3D = null
+var slap_t := 0.0
+var dive_k := 0.0
+var gnaw_k := 0.0
 
 func setup(k: String, m: Node3D, mg: Node, pos: Vector3, seed_v: int, sc: float = 1.0) -> void:
 	kind = k
@@ -132,7 +141,7 @@ func think() -> void:
 			if not (kind == "bear" and w.season_index() == 1):
 				visible = true
 				_new_wander()
-		"wander", "graze", "rest", "alert":
+		"wander", "graze", "rest", "alert", "job", "gnaw":
 			# хищник: охота на добычу или на человека
 			if (kind in ["fox", "wolf", "tiger"] or HUNTS.has(kind)) and (state != "rest" or rng.randf() < 0.05):
 				_hunt_choice(dh, sense, hero_alive)
@@ -149,7 +158,8 @@ func think() -> void:
 				state = "flee"
 				state_t = 6.0
 				return
-			if dh < sense and not (kind in ["bear", "wolf", "tiger"] and hero_alive):
+			var busy := state == "job" or state == "gnaw"
+			if dh < sense and not (kind in ["bear", "wolf", "tiger"] and hero_alive) and (not busy or dh < sense * 0.55):
 				if dh < sense * 0.55 or state == "alert":
 					threat = hero
 					state = "flee"
@@ -163,7 +173,7 @@ func think() -> void:
 				state = "alert"
 				state_t = 2.0
 				return
-			if state_t <= 0.0:
+			if state_t <= 0.0 and not busy:
 				if not is_active():
 					state = "rest"
 					state_t = rng.randf_range(20.0, 60.0)
@@ -258,8 +268,13 @@ func tick(delta: float) -> void:
 		think()
 		if state == "flee" and was != "flee" and threat != null:
 			mgr.alarm(self, threat)
+			# бобр в воде бьёт хвостом по воде и уходит под воду
+			if kind == "beaver" and swim_k > 0.5 and slap_t <= 0.0:
+				slap_t = 0.7
 	if state == "sleep":
 		return
+	if state == "gnaw" and job_face != Vector3.ZERO:
+		heading = lerp_angle(heading, atan2(job_face.x - position.x, job_face.z - position.z), minf(1.0, delta * 5.0))
 	var run: float = sp["run"] * (1.0 if scale_k > 0.6 else 0.7)
 	var walk: float = sp["walk"]
 	var goal := target
@@ -270,10 +285,20 @@ func tick(delta: float) -> void:
 			if Vector2(goal.x - position.x, goal.z - position.z).length() < 1.0:
 				state_t = 0.0
 				want = 0.0
-		"graze", "rest", "alert", "tree":
+		"graze", "rest", "alert", "tree", "gnaw":
 			want = 0.0
+		"job":
+			goal = job_p
+			want = walk * (1.5 if swim_k > 0.5 else 1.0)
+			var dj := Vector2(job_p.x - position.x, job_p.z - position.z).length()
+			if dj < maxf(0.35, walk * 2.0 * delta):
+				arrived = true
+				want = 0.0
 		"flee":
-			if threat != null:
+			if kind == "beaver":
+				# бобр уходит к хатке
+				goal = home
+			elif threat != null:
 				var away := (position - threat.position)
 				away.y = 0
 				goal = position + away.normalized() * 10.0
@@ -328,7 +353,7 @@ func tick(delta: float) -> void:
 	if to.length() > 0.2 and want > 0.0:
 		var hd := atan2(to.x, to.z)
 		heading = lerp_angle(heading, hd, minf(1.0, delta * (3.0 + want * 0.4)))
-	if swim_k > 0.3:
+	if swim_k > 0.3 and kind != "beaver":
 		want *= 0.45
 	speed = move_toward(speed, want, delta * (4.0 + want * 0.8))
 	var flying: bool = kind == "capercaillie" and climb_h > 0.5
@@ -350,12 +375,16 @@ func tick(delta: float) -> void:
 			position.z = np.z
 	_unstick(delta)
 	var g: float = main.ground_at(position.x, position.z)
-	swim_k = clampf((main.WATER_Y - 0.25 - g) / 0.6, 0.0, 1.0) if swimmer() else 0.0
-	if swim_k > 0.0:
-		# плывёт: над водой голова и спина
-		g = lerpf(g, main.WATER_Y - float(parts.get("H", 0.8)) * 0.55, swim_k)
+	var wl: float = main.water_level(position.x, position.z)
+	swim_k = clampf((wl - 0.25 - g) / 0.6, 0.0, 1.0) if swimmer() else 0.0
 	if kind == "beaver":
-		g = maxf(g, main.WATER_Y - 0.12)
+		# плывёт: над водой только голова и спина; испуганный ныряет у хатки
+		var hide := state == "flee" and slap_t <= 0.0 and swim_k > 0.8
+		dive_k = move_toward(dive_k, 1.0 if hide else 0.0, delta * 1.5)
+		g = lerpf(g, wl - 0.32 * scale_k - dive_k * 0.4, swim_k)
+	elif swim_k > 0.0:
+		# плывёт: над водой голова и спина
+		g = lerpf(g, wl - float(parts.get("H", 0.8)) * 0.55, swim_k)
 	position.y = g + climb_h
 	rotation.y = heading
 	if not far:
@@ -468,6 +497,9 @@ func _animate_model(delta: float) -> void:
 func _animate(delta: float) -> void:
 	if parts.has("rig"):
 		_animate_rig(delta)
+		return
+	if kind == "beaver":
+		_animate_beaver(delta)
 		return
 	if parts.has("ap"):
 		_animate_model(delta)
@@ -784,3 +816,61 @@ func _lekking() -> bool:
 		return false
 	var t: float = main.t_hours
 	return t < 9.0 and main.weather != null and main.weather.season_index() == 2
+
+## Бобр: вперевалку на суше, гребёт задними лапами в воде (над водой голова и спина),
+## встаёт на хвост и грызёт ствол, бьёт хвостом по воде при тревоге.
+func _animate_beaver(delta: float) -> void:
+	var body: Node3D = parts["body"]
+	var head: Node3D = parts["head"]
+	var tail: Node3D = parts["tail"]
+	var legs: Array = parts["legs"]
+	var H: float = parts["H"]
+	var t := Time.get_ticks_msec() * 0.001 + float(rng.seed % 100)
+	var sw := swim_k
+	var mv := clampf(speed * 4.0, 0.0, 1.0)
+	phase += speed * lerpf(26.0, 11.0, sw) / scale_k * delta
+	gnaw_k = move_toward(gnaw_k, 1.0 if state == "gnaw" else 0.0, delta * 3.0)
+	var gk := smoothstep(0.0, 1.0, gnaw_k)
+	var up := gk * (0.0 if gnaw_low else 1.0)
+	var low := gk * (1.0 if gnaw_low else 0.0)
+	# корпус: на суше — покачивание с боку на бок; вплавь — нос чуть вверх
+	var roll := sin(phase) * 0.11 * mv * (1.0 - sw)
+	var pitch := -0.35 * sw + sin(phase) * 0.03 * mv * sw
+	var bob := absf(sin(phase)) * 0.012 * mv * (1.0 - sw) + sin(t * 1.7) * 0.004
+	body.position.y = H + bob + up * 0.15 * scale_k
+	body.rotation = Vector3(lerpf(pitch, -0.75, up) + low * 0.3, sin(phase) * 0.06 * mv * (1.0 - sw), roll * (1.0 - gk))
+	# хлопок хвостом: поднять — шлёпнуть
+	var slap := 0.0
+	if slap_t > 0.0:
+		var u := 1.0 - slap_t / 0.7
+		var was := slap_t
+		slap_t -= delta
+		slap = 1.6 * smoothstep(0.0, 0.5, u) * (1.0 - smoothstep(0.55, 0.68, u)) - 0.35 * smoothstep(0.55, 0.68, u) * (1.0 - smoothstep(0.8, 1.0, u))
+		if was > 0.7 * 0.38 and slap_t <= 0.7 * 0.38 and main != null and main.sfx != null:
+			main.sfx.play_at("slap", position, 6.0, rng.randf_range(0.9, 1.1))
+		# зад поднимается над водой, хвост — вверх, затем нырок носом вниз
+		body.rotation.x += 0.7 * smoothstep(0.0, 0.3, u) * (1.0 - smoothstep(0.85, 1.0, u)) + 0.3 * smoothstep(0.6, 0.9, u)
+	# хвост: на суше волочится, в воде — руль и лёгкие взмахи, при грызении — опора
+	tail.rotation.x = lerpf(-0.3 + sin(phase) * 0.04 * mv, sin(phase) * 0.2, sw) * (1.0 - up) + up * 0.78 - low * 0.3 + slap
+	tail.rotation.y = lerpf(-sin(phase) * 0.18 * mv, sin(t * 1.3) * 0.12, sw) * (1.0 - gk)
+	# лапы: на суше диагональная походка; вплавь — передние прижаты, задние гребут вместе
+	for i in 4:
+		var lg: Dictionary = legs[i]
+		var hip: Node3D = lg["hip"]
+		var front: bool = lg["front"]
+		var off: float = [0.0, 0.5, 0.5, 0.0][i]
+		var land := sin(phase + off * TAU) * 0.6 * mv
+		var swim := (1.0 if front else 0.6 + sin(phase) * 0.7)
+		var a := lerpf(land, swim, sw)
+		if front:
+			a = lerpf(a, -1.25, up)
+			a = lerpf(a, -0.25 + sin(t * 9.0) * 0.1, low)
+		else:
+			a = lerpf(a, 0.75, up)
+			a = lerpf(a, -0.3, low)
+		hip.rotation.x = a
+	# голова: грызёт — частые движения челюстью и наклоны набок
+	var chew := sin(t * 23.0) * 0.07
+	var look := sin(t * 0.5) * 0.25 * (1.0 - mv) * (1.0 - gk)
+	head.rotation = Vector3(sin(phase * 2.0) * 0.03 * mv + (0.55 + chew) * up + (0.35 + chew) * low - 0.08 * sw,
+		look + sin(t * 0.9) * 0.3 * gk, sin(t * 0.7) * 0.35 * gk)

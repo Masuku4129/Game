@@ -12,8 +12,40 @@ uniform float rain = 0.0;
 uniform vec3 hero_pos = vec3(0.0, -1000.0, 0.0);
 uniform float swim = 0.0;
 uniform float swim_move = 0.0;
+// бобровые плотины: dams — центр створа (x, z), подъём перед плотиной, спад после;
+// dams_t — направление течения (x, z), 1 — плотина есть. Зона: вдоль течения -up_len..down_len,
+// поперёк — half_w от оси реки. strip = 1 — полоса воды у плотины (уровень по зоне), 0 — общая гладь (в зоне её нет).
+uniform vec4 dams[4];
+uniform vec4 dams_t[4];
+uniform float up_len = 55.0;
+uniform float down_len = 35.0;
+uniform float half_w = 30.0;
+uniform float strip = 0.0;
 vec3 lin(vec3 c) { return pow(c, vec3(2.2)); }
 varying vec3 wp;
+
+float river_d(vec2 p) { return abs(p.y - 70.0 * sin(p.x / 95.0) - 20.0); }
+float dam_level(vec2 p) {
+	float o = 0.0;
+	float lat = 1.0 - smoothstep(half_w - 6.0, half_w, river_d(p));
+	for (int i = 0; i < 4; i++) {
+		if (dams_t[i].z > 0.5) {
+			float u = dot(p - dams[i].xy, dams_t[i].xy);
+			o += (u < 0.0 ? dams[i].z * smoothstep(-up_len, -up_len * 0.35, u) : -dams[i].w * (1.0 - smoothstep(2.0, down_len, u))) * step(-up_len, u) * step(u, down_len);
+		}
+	}
+	return o * lat;
+}
+bool in_zone(vec2 p) {
+	bool r = false;
+	if (river_d(p) < half_w) {
+		for (int i = 0; i < 4; i++) {
+			float u = dot(p - dams[i].xy, dams_t[i].xy);
+			if (dams_t[i].z > 0.5 && u > -up_len && u < down_len) { r = true; }
+		}
+	}
+	return r;
+}
 
 float h21(vec2 p) {
 	p = mod(p, 1024.0);
@@ -28,9 +60,17 @@ float vn(vec2 p) {
 
 void vertex() {
 	wp = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;
+	if (strip > 0.5) {
+		float o = dam_level(wp.xz);
+		VERTEX.y += o;
+		wp.y += o;
+	}
 }
 
 void fragment() {
+	if (in_zone(wp.xz) != (strip > 0.5)) {
+		discard;
+	}
 	float gy = texture(hmap, wp.xz / hsize + 0.5).r;
 	float depth = clamp(wp.y - gy, 0.0, 10.0);
 	float k = smoothstep(0.0, 2.2, depth);

@@ -48,6 +48,7 @@ var dead_t := 0.0
 var msg_t := 0.0
 var msg := ""
 var water_mat: ShaderMaterial
+var beavers
 
 func _ready() -> void:
 	_setup_noise()
@@ -66,6 +67,11 @@ func _ready() -> void:
 	feet.main = self
 	add_child(feet)
 	hero.position = _find_start()
+	# бобры: плотины, пруды и хатки (до зверей — бобров селят у хаток)
+	beavers = preload("res://scripts/beavers.gd").new()
+	beavers.main = self
+	add_child(beavers)
+	beavers.setup(hero.position)
 	animals = preload("res://scripts/animals.gd").new()
 	animals.main = self
 	add_child(animals)
@@ -256,6 +262,10 @@ func _setup_noise() -> void:
 	n_forest.seed = 909; n_forest.frequency = 0.02; n_forest.fractal_octaves = 3
 	n_zone.seed = 2024; n_zone.noise_type = FastNoiseLite.TYPE_CELLULAR; n_zone.frequency = 0.011
 	n_zone.cellular_return_type = FastNoiseLite.RETURN_CELL_VALUE; n_zone.fractal_type = FastNoiseLite.FRACTAL_NONE
+
+## Уровень воды в точке: у бобровых плотин выше (пруд) или ниже (после плотины).
+func water_level(x: float, z: float) -> float:
+	return WATER_Y + (beavers.level_off(x, z) if beavers != null else 0.0)
 
 func river_dist(x: float, z: float) -> float:
 	return absf(z - 70.0 * sin(x / 95.0) - 20.0)
@@ -710,7 +720,7 @@ func _build_grass_cell(k: Vector2i) -> void:
 			var pz := z0 + z + rng.randf_range(-0.4, 0.4)
 			x += step
 			var y := height(px, pz)
-			if y < WATER_Y + 0.15:
+			if y < water_level(px, pz) + 0.15:
 				continue
 			var fd := forest_density(px, pz)
 			var slope := 1.0 - normal_at(px, pz).y
@@ -951,7 +961,7 @@ func take_pick(it: Array) -> void:
 func near_water(p: Vector3) -> bool:
 	for a in 8:
 		var v := Vector3(cos(a * TAU / 8.0), 0, sin(a * TAU / 8.0)) * 1.3
-		if height(p.x + v.x, p.z + v.z) < WATER_Y - 0.05:
+		if height(p.x + v.x, p.z + v.z) < water_level(p.x + v.x, p.z + v.z) - 0.05:
 			return true
 	return false
 

@@ -499,13 +499,14 @@ func _process_main(delta: float) -> void:
 		body.rotation.y = lerp_angle(body.rotation.y, atan2(face.x, face.z), minf(1.0, 9.0 * delta))
 	var ground: float = main.ground_at(position.x, position.z)
 	var iced: bool = main.weather.ice >= 0.85
-	depth = 0.0 if iced else maxf(0.0, main.WATER_Y - ground)
+	var wl: float = main.water_level(position.x, position.z)
+	depth = 0.0 if iced else maxf(0.0, wl - ground)
 	var ty := ground
 	if iced:
-		ty = maxf(ground, main.WATER_Y)
+		ty = maxf(ground, wl)
 	elif depth > 1.25:
 		# на месте держится вертикально, над водой только голова и плечи; в гребке — спина у поверхности
-		ty = main.WATER_Y - 1.0 - 0.5 * (1.0 - swim_spk) + sin(Time.get_ticks_msec() * 0.003) * 0.03
+		ty = wl - 1.0 - 0.5 * (1.0 - swim_spk) + sin(Time.get_ticks_msec() * 0.003) * 0.03
 		soaked = 1.0
 		# течение сносит вдоль реки
 		position.x += 0.45 * delta
@@ -860,7 +861,7 @@ func _animate_model(delta: float) -> void:
 	if swimb > 0.5:
 		# поза плавания уже в анимации: только поворот и высота над водой
 		model.rotation = Vector3(0, body.rotation.y, 0)
-		model.position = Vector3(0, main.WATER_Y - 0.12 - position.y - _pelvis_y(), 0)
+		model.position = Vector3(0, main.water_level(position.x, position.z) - 0.12 - position.y - _pelvis_y(), 0)
 		if _hspeed > 0.3:
 			_play("Swim_Fwd", clampf(_hspeed / 1.6, 0.6, 1.3))
 		else:
