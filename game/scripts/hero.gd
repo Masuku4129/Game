@@ -196,7 +196,7 @@ func _process(delta: float) -> void:
 	sliding = lerpf(sliding, s, minf(1.0, 4.0 * delta))
 	var accel := 11.0 * (1.0 - sliding * 0.75)
 	vel = vel.move_toward(target, accel * delta)
-		vel.y = 0.0
+	vel.y = 0.0
 	var step := vel * delta
 	var p := position
 	if step.length() > 0.00001:
