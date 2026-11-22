@@ -342,7 +342,7 @@ func _make_environment() -> void:
 	sun = DirectionalLight3D.new()
 	sun.shadow_enabled = true
 	sun.directional_shadow_max_distance = 38.0
-	sun.directional_shadow_mode = DirectionalLight3D.SHADOW_PARALLEL_2_SPLITS
+	sun.directional_shadow_mode = DirectionalLight3D.SHADOW_ORTHOGONAL
 	add_child(sun)
 	moon = DirectionalLight3D.new()
 	moon.light_color = Color(0.55, 0.66, 0.95)
