@@ -223,7 +223,7 @@ func _species() -> void:
 	fake.hero = Node3D.new()
 	fake.hero.position = Vector3(0, 0, 30)
 	fake.add_child(fake.hero)
-	var kinds := ["moose", "lynx", "wolverine", "capercaillie", "muskdeer"]
+	var kinds := ["moose", "lynx", "wolverine", "capercaillie", "muskdeer", "hare", "squirrel", "boar", "bear", "tiger"]
 	var ke := OS.get_environment("KINDS")
 	if ke != "":
 		kinds = Array(ke.split(","))
@@ -235,7 +235,7 @@ func _species() -> void:
 		for f in 3:
 			tiles.append([k, k, true, 90, 4, "walk", 0.0, 2.0 + f * 0.27, "шаг %d" % (f + 1)])
 		for f in 3:
-			tiles.append([k, k, true, 55 if bird else 90, 25 if bird else 4, "run", 1.0, 2.0 + f * 0.11, ("полёт %d" if bird else "бег %d") % (f + 1)])
+			tiles.append([k, k, true, 160 if bird else 90, 35 if bird else 4, "run", 1.0, 2.0 + f * 0.11, ("полёт %d" if bird else "бег %d") % (f + 1)])
 		tiles.append([k, k, true, 60, 10, "graze", 0.0, 3.0, "кормится"])
 		tiles.append([k, k, true, 60, 8, "attack", 0.0, 0.35, "токует" if bird else ("угроза" if k in ["moose", "muskdeer"] else "нападение")])
 		tiles.append([k, k, true, 60, 10, "rest", 0.0, 4.0, "отдыхает"])
@@ -257,6 +257,8 @@ func _species_step() -> void:
 		a.setup(t[1], fake, null, Vector3.ZERO, 5, sc)
 		a.male = male
 		a._build(false)
+		if a.parts.has("def"):
+			print("studio tris ", t[1], " ", a.parts["def"]["tris"])
 		a.heading = 0.0
 		var st: String = t[5]
 		var run: float = a.sp["run"]

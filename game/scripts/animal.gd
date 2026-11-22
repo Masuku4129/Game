@@ -579,43 +579,52 @@ func _animate(delta: float) -> void:
 	tail.rotation.x = sin(phase * 2.0) * 0.1 * mv + (0.4 if r > 0.5 else 0.0)
 	tail.rotation.y = sin(Time.get_ticks_msec() * 0.003) * 0.15 * (1.0 - mv)
 
-# ---------- Походка новых зверей тайги (модели build_taiga) ----------
-# Нога из трёх звеньев: в опоре нога отходит назад, в переносе сгибается (запястье и скакательный
-# сустав складываются), лапа держится вдоль земли. Аллюры: шаг, рысь, галоп, прыжки; лёжка;
-# кормёжка (голова к земле), настороже (голова вверх, к человеку), бросок/угроза.
+# ---------- Походка зверей на скелете (модели build_taiga) ----------
+# Поворачиваются кости: нога (лопатка/таз, плечо/бедро, предплечье/голень, пясть/плюсна,
+# копыто/лапа), таз и грудь (хребет гнётся на галопе и прыжках), два звена шеи, голова,
+# челюсть, хвост. Порядок постановки ног — как на съёмках Майбриджа: шаг — латеральная
+# последовательность ЛЗ, ЛП, ПЗ, ПП; рысь — диагональные пары; галоп — у кошек вращательный
+# (ЛЗ, ПЗ, ПП, ЛП), у копытных поперечный (ЛЗ, ПЗ, ЛП, ПП); прыжки куньих и зайца — задние
+# почти вместе, передние почти вместе. Опора — половина цикла: нога идёт назад; перенос —
+# нога сгибается (запястье, скакательный сустав), копыто/лапа держится вдоль земли.
 
 var _rig_t := 0.0
-var _gait_offs := [0.25, 0.75, 0.0, 0.5]
+var _gait_offs := [0.5, 0.0, 0.75, 0.25]
 var _lie_k := 0.0
 var _feed_k := 0.0
 var _alert_k := 0.0
 
+static func _bx(skel: Skeleton3D, b: int, a: float) -> void:
+	skel.set_bone_pose_rotation(b, Quaternion(Vector3.RIGHT, a))
+
+static func _be(skel: Skeleton3D, b: int, e: Vector3) -> void:
+	skel.set_bone_pose_rotation(b, Basis.from_euler(e).get_rotation_quaternion())
+
 func _animate_rig(delta: float) -> void:
 	_attack_t -= delta
 	_rig_t += delta
-	if parts.has("wings"):
+	var d: Dictionary = parts["def"]
+	if d.has("bird"):
 		_animate_bird(delta)
 		return
-	var d: Dictionary = parts["def"]
-	var body: Node3D = parts["body"]
-	var neck: Node3D = parts["neck"]
-	var head: Node3D = parts["head"]
-	var legs: Array = parts["legs"]
+	var skel: Skeleton3D = parts["skel"]
 	var sk: float = parts["sk"]
 	var walk: float = sp["walk"]
 	var run: float = sp["run"]
 	var gait: String = sp["gait"]
 	var r := clampf((speed - walk) / maxf(run - walk, 0.1), 0.0, 1.0)
 	var mv := clampf(speed / (walk * 0.4), 0.0, 1.0)
-	# порядок ног: ЛП, ПП, ЛЗ, ПЗ; доли фазы
-	var offs := [0.25, 0.75, 0.0, 0.5]
+	# доли фазы ног [ЛП, ПП, ЛЗ, ПЗ]: нога ставится, когда её фаза проходит −π/2
+	var offs := [0.5, 0.0, 0.75, 0.25]
 	if speed > walk * 1.5:
-		if gait == "trot" or (gait == "gallop" and r < 0.3):
-			offs = [0.0, 0.5, 0.5, 0.0]
-		elif gait == "gallop":
-			offs = [0.6, 0.7, 0.0, 0.1]
-		else:
-			offs = [0.55, 0.6, 0.0, 0.05]
+		var gal := [0.5, 0.6, 0.0, 0.9] if kind in ["lynx", "tiger"] else [0.6, 0.5, 0.0, 0.9]
+		match gait:
+			"trot":
+				offs = [0.0, 0.5, 0.5, 0.0]
+			"trotgallop", "gallop":
+				offs = [0.0, 0.5, 0.5, 0.0] if r < (0.45 if gait == "trotgallop" else 0.2) else gal
+			_:
+				offs = [0.55, 0.45, 0.0, 0.95]
 	var gk := minf(1.0, delta * 3.0)
 	for i in 4:
 		var dd := wrapf(float(offs[i]) - float(_gait_offs[i]), -0.5, 0.5)
@@ -623,127 +632,137 @@ func _animate_rig(delta: float) -> void:
 	r_s = lerpf(r_s, r, minf(1.0, delta * 4.0))
 	r = r_s
 	var leg_h: float = float(d["H"]) * sk
-	var stride := leg_h * lerpf(float(sp["swalk"]), float(sp["srun"]), r)
+	var stride := leg_h * lerpf(float(sp.get("swalk", 1.3)), float(sp.get("srun", 4.0)), r)
 	phase += speed / maxf(stride, 0.05) * TAU * delta
-	var amp := (0.3 + r * 0.32) * mv
+	var amp := (0.28 + r * float(d.get("arun", 0.3))) * mv
 	_lie_k = lerpf(_lie_k, 1.0 if state in ["rest", "sleep"] and speed < 0.1 else 0.0, minf(1.0, delta * 1.5))
 	_feed_k = lerpf(_feed_k, 1.0 if state == "graze" and speed < 0.1 else 0.0, minf(1.0, delta * 2.5))
 	_alert_k = lerpf(_alert_k, 1.0 if state == "alert" else 0.0, minf(1.0, delta * 4.0))
 	var atk := 0.0
 	if _attack_t > 0.0:
 		atk = sin(clampf(_attack_t / 0.8, 0.0, 1.0) * PI)
-	var pred: bool = kind in ["lynx", "wolverine"]
+	var pred: bool = kind in ["lynx", "wolverine", "tiger", "bear"]
 	var rear: bool = kind == "moose"
 	var lie := _lie_k
-	for i in 4:
+	var lie_f: Array = d.get("lie_f", [1.2, -2.5, 2.4])
+	var lie_h: Array = d.get("lie_h", [-1.45, 2.6, -2.3])
+	var legs: Array = d["legs"]
+	var fsum := 0.0
+	var hsum := 0.0
+	for i in legs.size():
 		var lg: Dictionary = legs[i]
-		var j: Array = lg["j"]
-		var rest: Array = lg["rest"]
+		var bs: Array = lg["b"]
+		var rel: Array = lg["rel"]
 		var front: bool = lg["front"]
 		var ph: float = phase + float(_gait_offs[i]) * TAU
 		var s := sin(ph)
-		var c := cos(ph)
-		var lift := maxf(0.0, -c)
+		var lift := maxf(0.0, -cos(ph))
 		lift = lift * lift * (3.0 - 2.0 * lift) * mv
-		var a0: float = float(rest[0]) + amp * s
-		var a1: float = rest[1]
-		var a2: float = rest[2]
+		var d0 := amp * s
+		var d1 := 0.0
+		var d2 := 0.0
 		if front:
-			a0 -= lift * (0.15 + r * 0.1)
-			a1 -= lift * (0.35 + r * 0.25)
-			a2 += lift * (1.2 + r * 0.5)
+			d0 -= lift * (0.15 + r * 0.1)
+			d1 -= lift * (0.35 + r * 0.3)
+			d2 += lift * (1.1 + r * 0.5)
+			fsum += s * mv
 		else:
-			a0 -= lift * (0.3 + r * 0.2)
-			a1 += lift * (0.6 + r * 0.3)
-			a2 -= lift * (0.8 + r * 0.3)
-		# лёжка: ноги подогнуты под туловище
-		if front:
-			a0 = lerpf(a0, 1.2, lie)
-			a1 = lerpf(a1, -2.5, lie)
-			a2 = lerpf(a2, 2.5, lie)
-		else:
-			a0 = lerpf(a0, -1.45, lie)
-			a1 = lerpf(a1, 2.6, lie)
-			a2 = lerpf(a2, -2.3, lie)
-		# бросок хищника: передние вперёд, задние толкаются; лось — встаёт на дыбы и бьёт копытами
+			d0 -= lift * (0.3 + r * 0.2)
+			d1 += lift * (0.55 + r * 0.3)
+			d2 -= lift * (0.7 + r * 0.3)
+			hsum += s * mv
+		var T: Array = lie_f if front else lie_h
+		d0 = lerpf(d0, float(T[0]) - float(rel[0]), lie)
+		d1 = lerpf(d1, float(T[1]) - float(rel[1]), lie)
+		d2 = lerpf(d2, float(T[2]) - float(rel[2]), lie)
+		# бросок хищника: передние вперёд, задние толкаются; лось — на дыбы, бьёт копытами;
+		# кабарга и кабан — бьют передней ногой / поддевают
 		if atk > 0.0:
 			if pred or rear:
 				if front:
-					a0 -= atk * (1.0 if pred else 1.3)
-					a1 += atk * (0.2 if pred else 1.1)
+					d0 -= atk * (1.0 if pred else 1.3)
+					d1 += atk * (0.2 if pred else 1.1)
 				else:
-					a0 += atk * (0.6 if pred else 0.15)
+					d0 += atk * (0.6 if pred else 0.15)
 			elif i == 0:
-				# кабарга: бьёт передним копытом
-				a0 -= atk * 0.7
-				a1 -= atk * 0.6
-				a2 += atk * 1.2
-		j[0].rotation.x = a0
-		j[1].rotation.x = a1
-		j[2].rotation.x = a2
-		# лапа/копыто: вдоль земли в опоре, подогнута в переносе
-		var cum := a0 + a1 + a2
-		j[3].rotation.x = -cum * (1.0 - lie) + (lift * (0.9 if front else -0.5))
-	# туловище: подъём и качание по аллюру, наклон по склону, лёжка
+				d0 -= atk * 0.7
+				d1 -= atk * 0.6
+				d2 += atk * 1.2
+		var sc := amp * s * (0.3 if front else 0.12) * (1.0 - lie)
+		_bx(skel, bs[0], sc)
+		_bx(skel, bs[1], d0 - sc)
+		_bx(skel, bs[2], d1)
+		_bx(skel, bs[3], d2)
+		if bs.size() > 4:
+			_bx(skel, bs[4], -(d0 + d1 + d2) * (1.0 - lie) + lift * (0.8 if front else -0.5))
+	# туловище: подскок и качание по аллюру, изгиб хребта, наклон по склону, лёжка
 	var L: float = parts["L"]
 	var fwd := Vector3(sin(heading), 0, cos(heading))
 	var hf: float = main.ground_at(position.x + fwd.x * L * 0.4, position.z + fwd.z * L * 0.4)
 	var hb: float = main.ground_at(position.x - fwd.x * L * 0.4, position.z - fwd.z * L * 0.4)
 	var slope := -atan2(hf - hb, L * 0.8) * (1.0 - swim_k)
 	var H0: float = d["H"]
+	var fast: bool = gait != "trot" and speed > walk * 1.5 and r > 0.2
 	var bounce := 0.0
 	var rock := 0.0
-	if gait in ["gallop", "bound"] and speed > walk * 1.5:
-		bounce = maxf(0.0, sin(phase)) * 0.09 * r
-		rock = sin(phase + 0.6) * 0.1 * r
+	var flex := 0.0
+	if fast:
+		bounce = maxf(0.0, sin(phase + 0.8)) * 0.07 * r
+		rock = sin(phase + 0.6) * 0.08 * r
+		flex = (hsum - fsum) * 0.5 * float(d.get("flex", 0.12)) * r
 	else:
 		bounce = absf(sin(phase)) * (0.012 + 0.03 * r)
-	var y := H0 * (1.0 + bounce) * (1.0 - lie) + float(d["lie_y"]) * lie
+	var dy := H0 * bounce * (1.0 - lie) - (H0 - float(d["lie_y"])) * lie
 	var pitch := rock
 	if atk > 0.0:
 		pitch -= atk * (0.3 if pred else (0.55 if rear else -0.1))
-		y += atk * H0 * (0.12 if pred else 0.0)
+		dy += atk * H0 * (0.12 if pred else 0.0)
 		if rear:
-			# на дыбы: вращение вокруг задних ног
-			y += sin(atk * 0.55) * 0.8 * absf(float((d["legs"][2]["pos"] as Vector3).z))
-	body.position.y = lerpf(body.position.y, y, minf(1.0, delta * 12.0))
-	body.rotation.x = lerpf(body.rotation.x, pitch, minf(1.0, delta * 10.0))
+			var gp: Array = d["gpos"]
+			dy += sin(atk * 0.55) * 0.8 * absf((gp[d["pelvis"]] as Vector3).z - (gp[d["root"]] as Vector3).z)
+	var root: int = d["root"]
+	var rp: Vector3 = (d["gpos"] as Array)[root]
+	skel.set_bone_pose_position(root, rp + Vector3(0, dy, 0))
+	_be(skel, root, Vector3(pitch, 0, sin(phase) * 0.025 * mv * (1.0 - r)))
+	_bx(skel, d["pelvis"], -flex)
+	_bx(skel, d["chest"], flex * 0.6 + sin(_rig_t * 1.6) * 0.008 * (1.0 - mv))
 	var m: Node3D = parts["model"]
-	m.rotation.x = lerpf(m.rotation.x, slope, minf(1.0, delta * 6.0))
-	_breath += delta * (1.3 + r * 4.0)
-	body.rotation.z = sin(phase) * 0.03 * mv * (1.0 - r)
-	body.scale = Vector3(1.0 + sin(_breath) * 0.012 * (1.0 - mv), 1.0 + sin(_breath) * 0.015 * (1.0 - mv), 1.0)
+	var tilt := slope
+	if kind == "squirrel" and climb_h > 0.0:
+		tilt = -1.45
+	m.rotation.x = lerpf(m.rotation.x, tilt, minf(1.0, delta * 6.0))
 	# шея и голова: кивок на шагу, вниз к корму, вверх настороже, вперёд на бегу
-	var np0: float = d["neck_pitch"]
-	var hp0: float = d["head_pitch"]
-	var feed_n := 1.25 if kind != "wolverine" else 0.6
+	var G: Array = d.get("graze", [1.1, 0.35])
 	var nod := sin(phase * 2.0) * 0.06 * mv * (1.0 - r)
-	var chew := sin(_rig_t * 3.0 + float(rng.seed % 7)) * 0.08 * _feed_k
-	var np := np0 + nod + (feed_n - np0 * 0.3) * _feed_k - 0.3 * _alert_k + 0.35 * r - 0.25 * lie + chew
-	var hp := hp0 - nod * 0.5 - 0.35 * _feed_k + 0.1 * _alert_k - 0.25 * r
+	var chew := sin(_rig_t * 3.0 + float(rng.seed % 7)) * 0.06 * _feed_k
+	var nd := nod + float(G[0]) * _feed_k - 0.35 * _alert_k + 0.3 * r - 0.15 * lie + chew
+	var hd := -nod * 0.5 + float(G[1]) * _feed_k + 0.15 * _alert_k - 0.2 * r
+	var jaw := maxf(0.0, sin(_rig_t * 6.0)) * 0.12 * _feed_k
 	if atk > 0.0:
-		np += atk * (0.25 if pred else (0.9 if rear else 0.5))
-		hp += atk * (-0.3 if pred else 0.2)
-	neck.rotation.x = np
-	head.rotation.x = hp
+		nd += atk * (0.25 if pred else (0.9 if rear else 0.5))
+		hd += atk * (-0.35 if pred else 0.2)
+		jaw += atk * (0.5 if pred else 0.0)
+	var yaw := 0.0
 	if _alert_k > 0.05 and main.hero != null:
 		var to: Vector3 = main.hero.position - position
-		neck.rotation.y = lerpf(neck.rotation.y, clampf(wrapf(atan2(to.x, to.z) - heading, -PI, PI), -1.0, 1.0) * 0.6, minf(1.0, delta * 3.0))
+		yaw = clampf(wrapf(atan2(to.x, to.z) - heading, -PI, PI), -1.0, 1.0) * 0.6 * _alert_k
 	else:
-		neck.rotation.y = lerpf(neck.rotation.y, sin(_rig_t * 0.4 + float(rng.seed % 5)) * 0.25 * lie, minf(1.0, delta * 2.0))
-	var tail: Node3D = parts["tail"]
-	var tp0: float = d["tail_pitch"]
-	tail.rotation.x = tp0 - (0.35 * r if kind in ["lynx", "wolverine"] else 0.0) + sin(phase * 2.0) * 0.08 * mv
-	tail.rotation.y = sin(_rig_t * 2.2) * 0.12 * (1.0 - mv)
+		yaw = sin(_rig_t * 0.4 + float(rng.seed % 5)) * 0.3 * lie
+	_be(skel, d["neck1"], Vector3(nd * 0.6, yaw * 0.6, 0))
+	_be(skel, d["neck2"], Vector3(nd * 0.4, yaw * 0.4, 0))
+	_bx(skel, d["head"], hd)
+	_bx(skel, d["jaw"], jaw)
+	var tails: Array = d["tails"]
+	var tl := -(0.3 * r if pred or kind == "wolverine" else 0.0) + sin(phase * 2.0) * 0.06 * mv
+	var tw := sin(_rig_t * 2.2) * 0.15 * (1.0 - mv)
+	for k in tails.size():
+		_be(skel, tails[k], Vector3(tl * (1.0 if k == 0 else 0.4), tw * (0.6 + k * 0.3), 0))
 
 ## Глухарь: шаг с кивками головы, пробежка, взлёт и полёт с частыми взмахами и планированием,
 ## клюёт с земли, токует (хвост веером, шея вверх, крылья опущены), сидит.
 func _animate_bird(delta: float) -> void:
 	var d: Dictionary = parts["def"]
-	var body: Node3D = parts["body"]
-	var neck: Node3D = parts["neck"]
-	var head: Node3D = parts["head"]
-	var legs: Array = parts["legs"]
+	var skel: Skeleton3D = parts["skel"]
 	var sk: float = parts["sk"]
 	var walk: float = sp["walk"]
 	var fly := clampf(climb_h / 1.5, 0.0, 1.0)
@@ -758,57 +777,60 @@ func _animate_bird(delta: float) -> void:
 	parts["disp"] = lerpf(float(parts.get("disp", 0.0)), disp, minf(1.0, delta * 3.0))
 	var dk: float = parts["disp"]
 	var lie := _lie_k
-	for i in 2:
-		var lg: Dictionary = legs[i]
-		var j: Array = lg["j"]
-		var rest: Array = lg["rest"]
+	var legs: Array = d["legs"]
+	for i in legs.size():
+		var bs: Array = (legs[i] as Dictionary)["b"]
 		var ph: float = phase + float(i) * PI
 		var s := sin(ph)
 		var lift := maxf(0.0, -cos(ph))
 		lift = lift * lift * (3.0 - 2.0 * lift) * mv
-		var a0: float = float(rest[0]) + s * (0.45 + r * 0.3) * mv - lift * 0.4
-		var a1: float = float(rest[1]) + lift * 0.9
-		var a2: float = float(rest[2]) - lift * 0.5
+		var a0 := s * (0.45 + r * 0.3) * mv - lift * 0.4
+		var a1 := lift * 0.9
+		var a2 := -lift * 0.5
 		# в полёте лапы поджаты назад; сидя — подогнуты
-		a0 = lerpf(lerpf(a0, 0.9, fly), -1.2, lie)
-		a1 = lerpf(lerpf(a1, 2.0, fly), 2.6, lie)
-		a2 = lerpf(a2, -0.5, lie)
-		j[0].rotation.x = a0
-		j[1].rotation.x = a1
-		j[2].rotation.x = a2
-		j[3].rotation.x = -(a0 + a1 + a2) * (1.0 - fly) + lift * 0.8 + fly * 1.2
+		a0 = lerpf(lerpf(a0, 1.1, fly), -0.6, lie)
+		a1 = lerpf(lerpf(a1, 1.3, fly), 1.6, lie)
+		a2 = lerpf(a2, -1.0, lie)
+		_bx(skel, bs[0], a0)
+		_bx(skel, bs[1], a1)
+		_bx(skel, bs[2], a2)
+		if bs.size() > 3:
+			_bx(skel, bs[3], -(a0 + a1 + a2) * (1.0 - fly) + lift * 0.8 + fly * 1.0)
 	var H0: float = d["H"]
 	var bob := absf(sin(phase)) * 0.03 * mv
-	body.position.y = lerpf(H0 * (1.0 + bob), float(d["lie_y"]), lie)
-	body.rotation.x = lerpf(body.rotation.x, 0.25 * r * (1.0 - fly) + 0.08 * fly - 0.15 * dk + 0.35 * _feed_k, minf(1.0, delta * 6.0))
-	body.rotation.z = sin(phase) * 0.06 * mv
+	var root: int = d["root"]
+	var rp: Vector3 = (d["gpos"] as Array)[root]
+	skel.set_bone_pose_position(root, rp + Vector3(0, H0 * bob - (H0 - float(d["lie_y"])) * lie, 0))
+	parts["pitch"] = lerpf(float(parts.get("pitch", 0.0)), 0.25 * r * (1.0 - fly) + 0.15 * fly - 0.15 * dk + 0.3 * _feed_k, minf(1.0, delta * 6.0))
+	_be(skel, root, Vector3(float(parts["pitch"]), 0, sin(phase) * 0.06 * mv))
 	# голова «ходит» взад-вперёд на каждом шаге
 	var pump := sin(phase * 2.0) * 0.18 * mv * (1.0 - r)
-	var np0: float = d["neck_pitch"]
-	var hp0: float = d["head_pitch"]
 	var peck := maxf(0.0, sin(_rig_t * 5.0 + float(rng.seed % 9))) * 0.3 * _feed_k
-	neck.rotation.x = np0 + pump + (1.05 + peck) * _feed_k + 0.5 * r * (1.0 - fly) + 0.6 * fly - 0.3 * _alert_k - 0.35 * dk + 0.2 * lie
-	head.rotation.x = hp0 - pump * 0.8 + 0.5 * _feed_k - 0.3 * r - 0.5 * fly - 0.55 * dk
-	neck.rotation.y = sin(_rig_t * 0.9 + float(rng.seed % 5)) * 0.35 * (1.0 - mv) * (1.0 - _feed_k)
-	# хвост: сложен и опущен; на току — поднят и раскрыт веером; в полёте — раскрыт
-	var tail: Node3D = parts["tail"]
-	tail.rotation.x = lerpf(float(d["tail_pitch"]) - 0.1 * fly, 1.35, dk)
-	var spread := maxf(dk, fly * 0.6)
-	tail.scale = Vector3(lerpf(0.6, 1.0, spread), 1.0, lerpf(0.85, 1.0, spread))
+	var nd := pump + (0.9 + peck) * _feed_k + 0.4 * r * (1.0 - fly) + 0.5 * fly - 0.3 * _alert_k - 0.4 * dk + 0.15 * lie
+	var yaw := sin(_rig_t * 0.9 + float(rng.seed % 5)) * 0.35 * (1.0 - mv) * (1.0 - _feed_k)
+	_be(skel, d["neck1"], Vector3(nd * 0.5, yaw * 0.5, 0))
+	_be(skel, d["neck2"], Vector3(nd * 0.5, yaw * 0.5, 0))
+	_bx(skel, d["head"], -pump * 0.8 + 0.5 * _feed_k - 0.3 * r - 0.5 * fly - 0.5 * dk)
+	_bx(skel, d["jaw"], 0.25 * dk * maxf(0.0, sin(_rig_t * 7.0)))
+	# хвост: сложен; на току — поднят и раскрыт веером; в полёте — раскрыт
+	var t0: int = (d["tails"] as Array)[0]
+	var spread := maxf(dk, fly * 0.7)
+	_bx(skel, t0, lerpf(-0.1 * fly, 1.4, dk))
+	skel.set_bone_pose_scale(t0, Vector3(lerpf(1.0, float(d["fan"]), spread), 1.0, 1.0))
 	# крылья: сложены вдоль боков; в полёте раскрыты и машут; на току приспущены
 	var flap := sin(_rig_t * 22.0)
 	var glide := 1.0 if fmod(_rig_t, 2.4) < 1.5 else 0.15
-	for w: Dictionary in parts["wings"]:
+	for w: Dictionary in (d["chains"] as Dictionary)["w"]:
 		var sd: float = w["sd"]
-		var f: Node3D = w["f"]
-		var wn: Node3D = w["w"]
-		var wm: Node3D = w["m"]
-		var open := fly
-		wn.rotation.y = -sd * lerpf(0.05 + 0.25 * dk, PI * 0.5, open)
-		# крен пера: широкой стороной к боку, когда сложено, и горизонтально в полёте
-		wm.rotation.z = sd * lerpf(-1.45 + 0.2 * dk, -1.57, open)
-		f.rotation.z = lerpf(-sd * 0.35 * dk, sd * (flap * 0.9 * glide + 0.1), open)
-		f.rotation.x = -0.3 * (1.0 - open)
+		var b0: int = w["b"][0]
+		var b1: int = w["b"][1]
+		# плечо: разворот наружу (по Y), взмах (по Z); кисть: доворот
+		var yw := -sd * lerpf(0.04 + 0.12 * dk, PI * 0.5, fly)
+		var fl := lerpf(sd * 0.25 * dk, -sd * (flap * 0.8 * glide + 0.1), fly)
+		# порядок: крен пера (сложено — вертикально, в полёте — горизонтально), разворот, взмах
+		var q := Quaternion(Vector3.BACK, fl) * Quaternion(Vector3.UP, yw) * Quaternion(Vector3.BACK, sd * PI * 0.5 * fly)
+		skel.set_bone_pose_rotation(b0, q)
+		_be(skel, b1, Vector3(0.0, -sd * 0.15 * fly, -sd * flap * 0.3 * glide * fly))
 
 ## Токование: самец весной на рассвете (и в студии — по сигналу броска).
 func _lekking() -> bool:
