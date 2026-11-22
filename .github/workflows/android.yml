@@ -9,6 +9,33 @@ concurrency:
 permissions:
   contents: write
 jobs:
+  preview:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    continue-on-error: true
+    container:
+      image: barichello/godot-ci:4.3
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install software GPU
+        run: |
+          apt-get update -qq
+          DEBIAN_FRONTEND=noninteractive apt-get install -y -qq xvfb mesa-vulkan-drivers libvulkan1 libgl1-mesa-dri >/dev/null
+      - name: Import project
+        run: cd game && (timeout 600 godot --headless --import || true)
+      - name: Render preview frames
+        run: |
+          cd game
+          mkdir -p ../preview
+          timeout 900 xvfb-run -a -s "-screen 0 1920x864x24" godot --rendering-driver vulkan --write-movie ../preview/f.png --fixed-fps 10 --quit-after 220 2>&1 | grep -iE "error|shader|warning" | head -40 || true
+          ls ../preview | tail -3
+      - uses: actions/upload-artifact@v4
+        with:
+          name: preview
+          path: |
+            preview/f00000100.png
+            preview/f00000219.png
+          if-no-files-found: warn
   export:
     runs-on: ubuntu-latest
     timeout-minutes: 30
