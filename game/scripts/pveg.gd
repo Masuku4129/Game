@@ -204,6 +204,13 @@ func clump(st: SurfaceTool, c: Vector3, sc: Vector3, shade: float) -> void:
 		var o := Vector3(R(-0.6, 0.6), R(-0.2, 0.4), R(-0.6, 0.6)) * sc
 		leafblob(st, cards, c + o, sc * R(0.55, 0.75), clampf(shade + R(-0.2, 0.3), 0.0, 1.0))
 
+## Мелкая деталь (ягода, мутовка, соцветие): икосаэдр в 20 граней вместо 80.
+func dot(st: SurfaceTool, c: Vector3, sc: Vector3, shade: float) -> void:
+	var was := lod
+	lod = true
+	blob(st, c, sc, shade)
+	lod = was
+
 ## Облако листвы: искажённая шумом сфера, нормали — от центра (мягкий объём), чуть вверх.
 func blob(st: SurfaceTool, c: Vector3, sc: Vector3, shade: float, autumn_k: float = 1.0) -> void:
 	var verts: Array = _ico0[0] if lod else _ico[0]
@@ -492,7 +499,7 @@ func berry_bush(seed_v: int) -> Array:
 	for i in 14:
 		var a := R(0, TAU)
 		var p := Vector3(cos(a) * R(0.2, 0.42), R(0.15, 0.55), sin(a) * R(0.2, 0.42))
-		blob(bs, p, Vector3.ONE * 0.045, R(0.5, 1.0))
+		dot(bs, p, Vector3.ONE * 0.045, R(0.5, 1.0))
 	return [_mesh([[fl, "bush"], [cards, "bush_card"], [bs, "berry"]]), 0.6]
 
 ## Гриб: ножка и шляпка (красная — мухомор).
@@ -661,7 +668,7 @@ func shrub(seed_v: int, kind: String) -> Array:
 	if kind == "rose":
 		for i in 18:
 			var a := R(0, TAU)
-			blob(dots, Vector3(cos(a) * R(0.3, 0.7), R(0.3, 0.9), sin(a) * R(0.3, 0.7)), Vector3(0.04, 0.055, 0.04), R(0.5, 1.0))
+			dot(dots, Vector3(cos(a) * R(0.3, 0.7), R(0.3, 0.9), sin(a) * R(0.3, 0.7)), Vector3(0.04, 0.055, 0.04), R(0.5, 1.0))
 	return [_mesh([[fl, kind], [cards, kind + "_card"], [bk, "bark_dead"], [dots, "berry"]]), tall]
 
 ## Черёмуха: небольшое дерево в белом цвету.
@@ -687,14 +694,14 @@ func bilberry(seed_v: int) -> Array:
 	rng.seed = seed_v
 	var fl := _st()
 	var bs := _st()
-	for i in rng.randi_range(5, 8):
+	for i in rng.randi_range(4, 6):
 		var a := R(0, TAU)
 		var d := R(0.0, 0.9)
 		blob(fl, Vector3(cos(a) * d, 0.08, sin(a) * d), Vector3(R(0.25, 0.4), R(0.12, 0.2), R(0.25, 0.4)), R(0.2, 1.0))
 	for i in 16:
 		var a := R(0, TAU)
 		var d := R(0.0, 1.0)
-		blob(bs, Vector3(cos(a) * d, R(0.12, 0.25), sin(a) * d), Vector3.ONE * 0.03, R(0.4, 1.0))
+		dot(bs, Vector3(cos(a) * d, R(0.12, 0.25), sin(a) * d), Vector3.ONE * 0.03, R(0.4, 1.0))
 	return [_mesh([[fl, "bilberry"], [bs, "berry"]]), 0.25]
 
 ## Моховая кочка (на болоте — с пучком осоки сверху).
@@ -718,9 +725,9 @@ func horsetail(seed_v: int) -> Array:
 		var h := R(0.4, 0.8)
 		var lean := Vector3(R(-0.08, 0.08), 0, R(-0.08, 0.08))
 		trunk(st, b, b + lean * 0.5 + Vector3(0, h * 0.5, 0), b + lean + Vector3(0, h, 0), 0.012, 0.005, 2, 3)
-		for k in 3:
-			var y := h * (0.3 + k * 0.2)
-			blob(wh, b + lean * (y / h) + Vector3(0, y, 0), Vector3(0.06, 0.015, 0.06), R(0.4, 1.0))
+		for k in 2:
+			var y := h * (0.35 + k * 0.25)
+			dot(wh, b + lean * (y / h) + Vector3(0, y, 0), Vector3(0.06, 0.015, 0.06), R(0.4, 1.0))
 	return [_mesh([[st, "horsetail"], [wh, "horsetail"]]), 0.8]
 
 ## Иван-чай: высокие стебли с розовыми свечами соцветий.
@@ -735,8 +742,8 @@ func fireweed(seed_v: int) -> Array:
 		var b := Vector3(cos(a) * d, 0, sin(a) * d)
 		var h := R(0.9, 1.5)
 		trunk(stl, b, b + Vector3(R(-0.05, 0.05), h * 0.5, R(-0.05, 0.05)), b + Vector3(0, h, 0), 0.015, 0.008, 2, 3)
-		blob(lv, b + Vector3(0, h * 0.4, 0), Vector3(0.12, 0.2, 0.12), R(0.3, 0.8))
-		blob(fl, b + Vector3(0, h * 0.85, 0), Vector3(0.07, 0.22, 0.07), R(0.4, 1.0))
+		dot(lv, b + Vector3(0, h * 0.4, 0), Vector3(0.12, 0.2, 0.12), R(0.3, 0.8))
+		dot(fl, b + Vector3(0, h * 0.85, 0), Vector3(0.07, 0.22, 0.07), R(0.4, 1.0))
 	return [_mesh([[stl, "horsetail"], [lv, "horsetail"], [fl, "fireweed"]]), 1.3]
 
 ## Кедровый стланик: стелющиеся по камням ветви с хвойными подушками.
