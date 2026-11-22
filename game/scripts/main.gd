@@ -26,6 +26,8 @@ var hunger := 0.85
 var warmth := 0.8
 var stamina := 1.0
 var blockers := {}
+var seats := {}
+var act_btn: Button
 var weather
 var feet
 var terrain_mat: ShaderMaterial
@@ -67,6 +69,20 @@ func _ready() -> void:
 	joy.offset_top = -400.0
 	joy.offset_bottom = -40.0
 	ui.add_child(joy)
+	act_btn = Button.new()
+	act_btn.anchor_left = 1.0
+	act_btn.anchor_right = 1.0
+	act_btn.anchor_top = 1.0
+	act_btn.anchor_bottom = 1.0
+	act_btn.offset_left = -330.0
+	act_btn.offset_right = -60.0
+	act_btn.offset_top = -230.0
+	act_btn.offset_bottom = -90.0
+	act_btn.add_theme_font_size_override("font_size", 40)
+	act_btn.focus_mode = Control.FOCUS_NONE
+	act_btn.visible = false
+	act_btn.pressed.connect(func(): hero.do_action())
+	ui.add_child(act_btn)
 	_update_sky()
 
 func _find_start() -> Vector3:
@@ -85,6 +101,30 @@ func _add_blocker(x: float, z: float, r: float) -> void:
 	if not blockers.has(k):
 		blockers[k] = []
 	blockers[k].append(Vector3(x, z, r))
+
+func _add_seat(p: Vector3, yaw: float) -> void:
+	var k := Vector2i(floori(p.x / 8.0), floori(p.z / 8.0))
+	if not seats.has(k):
+		seats[k] = []
+	seats[k].append([p, yaw])
+
+## Ближайшее место, где можно сесть (в радиусе 1,5 м): [точка сиденья, поворот] или [].
+func find_seat(p: Vector3) -> Array:
+	var c := Vector2i(floori(p.x / 8.0), floori(p.z / 8.0))
+	var best: Array = []
+	var bd := 1.5 * 1.5
+	for dz in range(-1, 2):
+		for dx in range(-1, 2):
+			var k := Vector2i(c.x + dx, c.y + dz)
+			if not seats.has(k):
+				continue
+			for s in seats[k]:
+				var sp: Vector3 = s[0]
+				var dd := Vector2(sp.x - p.x, sp.z - p.z).length_squared()
+				if dd < bd:
+					bd = dd
+					best = s
+	return best
 
 func blocked(x: float, z: float, rad: float) -> bool:
 	var c := Vector2i(floori(x / 8.0), floori(z / 8.0))
@@ -313,6 +353,9 @@ func _process(delta: float) -> void:
 		_update_sky()
 		_update_stats(0.25)
 		weather.apply(veg.fade_list, terrain_mat, veg.mats["blade"], water_mat)
+		var lbl: String = hero.action_label()
+		act_btn.visible = lbl != ""
+		act_btn.text = lbl
 	if player_rig == null:
 		return
 	grass_timer -= delta
@@ -351,7 +394,8 @@ func _unhandled_input(e: InputEvent) -> void:
 func _update_stats(dt: float) -> void:
 	hunger = maxf(0.0, hunger - 0.0004 * dt)
 	var tc: float = weather.temp
-	var target_w := clampf(0.55 + tc * 0.025 - weather.wet * 0.25 - weather.wind * 0.05, 0.05, 0.95)
+	var soak: float = maxf(float(weather.wet) * 0.6, float(hero.soaked))
+	var target_w := clampf(0.55 + tc * 0.025 - soak * 0.35 - weather.wind * 0.05 - (0.25 if hero.swimb > 0.5 else 0.0), 0.02, 0.95)
 	warmth = lerpf(warmth, target_w, 0.01 * dt * 4.0)
 	if hero.moving:
 		var drain := 0.012
@@ -359,9 +403,13 @@ func _update_stats(dt: float) -> void:
 			drain = 0.05
 		if hero.climbing > 0.5:
 			drain = 0.04
+		if hero.state == "climb":
+			drain = 0.07
+		if hero.swimb > 0.5:
+			drain = 0.035
 		stamina = maxf(0.0, stamina - drain * dt)
 	else:
-		stamina = minf(1.0, stamina + 0.05 * dt)
+		stamina = minf(1.0, stamina + (0.11 if hero.state == "sit" else 0.05) * dt)
 	var hh := int(t_hours)
 	var mm := int((t_hours - hh) * 60.0)
 	var temp := int(round(tc))
@@ -533,10 +581,17 @@ func _scatter_all() -> void:
 					if br > 0.0 and not (r[0] == "spruce" and r[5] == "under"):
 						_add_blocker(x, z, br * s)
 					if r[0] == "log":
-						# бревно: цепочка кругов вдоль оси
+						# бревно: цепочка кругов вдоль оси, сиденья поперёк
 						var ax: Vector3 = b.x.normalized()
 						for t in [-2.0, -1.0, 0.0, 1.0, 2.0]:
 							_add_blocker(x + ax.x * t, z + ax.z * t, 0.4)
+						var yaw := atan2(ax.z, -ax.x)
+						for t in [-1.2, 1.2]:
+							var sx := x + ax.x * t
+							var sz := z + ax.z * t
+							_add_seat(Vector3(sx, height(sx, sz) + 0.62 * s, sz), yaw)
+					if r[0] == "stump":
+						_add_seat(Vector3(x, height(x, z) + 0.7 * s, z), rng.randf() * TAU)
 				for vi in vars.size():
 					var xs: Array = per_var[vi]
 					if xs.is_empty():

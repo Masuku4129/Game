@@ -29,6 +29,16 @@ var sliding := 0.0
 var lean := 0.0
 var tilt := 0.0
 var last_sw := 0.0
+# состояния: walk, sit, climb; плавание и брод внутри walk
+var state := "walk"
+var seat: Array = []
+var stand_pos := Vector3.ZERO
+var sitb := 0.0
+var swimb := 0.0
+var climbb := 0.0
+var cphase := 0.0
+var soaked := 0.0
+var depth := 0.0
 var skirt_l := Node3D.new()
 var skirt_r := Node3D.new()
 var last_yaw := 0.0
@@ -254,8 +264,6 @@ func _can_walk(p: Vector3) -> bool:
 	if absf(p.x) > half or absf(p.z) > half:
 		return false
 	var y: float = main.height(p.x, p.z)
-	if y < main.WATER_Y - 0.9 and main.weather.ice < 0.85:
-		return false
 	if y - position.y > 1.1:
 		return false
 	var n: Vector3 = main.normal_at(p.x, p.z)
@@ -263,9 +271,44 @@ func _can_walk(p: Vector3) -> bool:
 		return false
 	return not main.blocked(p.x, p.z, 0.32)
 
+## Подпись кнопки действия по обстановке ("" — кнопку скрыть).
+func action_label() -> String:
+	if state == "sit":
+		return "Встать"
+	if state == "walk" and swimb < 0.3 and not main.find_seat(position).is_empty():
+		return "Сесть"
+	return ""
+
+func do_action() -> void:
+	if state == "sit":
+		_stand_up()
+		return
+	var st: Array = main.find_seat(position)
+	if st.is_empty():
+		return
+	seat = st
+	stand_pos = position
+	state = "sit"
+	vel = Vector3.ZERO
+
+func _stand_up() -> void:
+	state = "walk"
+	position = stand_pos
+
 func _process(delta: float) -> void:
 	if main == null:
 		return
+	soaked = maxf(0.0, soaked - delta * 0.004 * (1.0 + maxf(float(main.weather.temp), 0.0) * 0.1))
+	if state == "sit":
+		_process_sit(delta)
+		return
+	if state == "climb":
+		_process_climb(delta)
+		return
+	sitb = maxf(0.0, sitb - delta * 4.0)
+	climbb = maxf(0.0, climbb - delta * 4.0)
+	leg_l.rotation.z = 0.0
+	leg_r.rotation.z = 0.0
 	var mag := minf(move_vec.length(), 1.0)
 	var n: Vector3 = main.normal_at(position.x, position.z)
 	var down := Vector3(n.x, 0, n.z)
@@ -285,7 +328,13 @@ func _process(delta: float) -> void:
 		var stam: float = main.stamina
 		running = mag > 0.92 and stam > 0.08
 		var sp_base := run_speed if running else speed
-		target = d * sp_base * mag * f * (1.0 - main.weather.snow * 0.3)
+		var wf := 1.0
+		if depth > 1.25:
+			wf = 0.45
+			running = false
+		elif depth > 0.3:
+			wf = 1.0 - (depth - 0.3) * 0.55
+		target = d * sp_base * mag * f * wf * (1.0 - main.weather.snow * 0.3)
 	else:
 		running = false
 	# крутой склон: человека тянет вниз, он теряет управление и катится
@@ -306,16 +355,36 @@ func _process(delta: float) -> void:
 			p.z += step.z
 			vel.x = 0.0
 		else:
+			# упёрлись в крутую стену: если это скала, а не дерево — начинаем лезть
+			var q := position + d * 0.5
+			var nq: Vector3 = main.normal_at(q.x, q.z)
+			if mag > 0.5 and nq.y < 0.42 and depth < 0.5 and not main.blocked(q.x, q.z, 0.2) and float(main.stamina) > 0.1:
+				state = "climb"
 			vel = Vector3.ZERO
 	position.x = p.x
 	position.z = p.z
+	# стоим на круче без опоры (сорвались) — съезжаем вниз
+	if n.y < 0.4 and depth < 0.5:
+		position += down * 5.0 * delta
 	var sp := vel.length()
 	moving = sp > 0.25
 	if moving and (mag > 0.12 or sliding > 0.2):
 		var face: Vector3 = d if mag > 0.12 and sliding < 0.4 else vel.normalized()
 		body.rotation.y = lerp_angle(body.rotation.y, atan2(face.x, face.z), minf(1.0, 9.0 * delta))
 	var ground: float = main.height(position.x, position.z)
-	var ty := maxf(ground, main.WATER_Y if main.weather.ice >= 0.85 else main.WATER_Y - 0.35)
+	var iced: bool = main.weather.ice >= 0.85
+	depth = 0.0 if iced else maxf(0.0, main.WATER_Y - ground)
+	var ty := ground
+	if iced:
+		ty = maxf(ground, main.WATER_Y)
+	elif depth > 1.25:
+		ty = main.WATER_Y - 1.0 + sin(Time.get_ticks_msec() * 0.003) * 0.03
+		soaked = 1.0
+		# течение сносит вдоль реки
+		position.x += 0.45 * delta
+	elif depth > 0.6:
+		soaked = maxf(soaked, 0.5)
+	swimb = lerpf(swimb, 1.0 if depth > 1.25 else 0.0, minf(1.0, 4.0 * delta))
 	# на подъёме ставим сразу на землю (не тонет), вниз опускаем быстро и плавно
 	if ty > position.y:
 		position.y = ty
@@ -385,3 +454,133 @@ func _process(delta: float) -> void:
 	torso.rotation.z = sw * 0.03 * run_mag - turn
 	head_n.rotation.y = sw * 0.05 * run_mag
 	body.position.y = (absf(cw) - 0.6) * 0.05 * run_mag + minf(slope, 1.0) * 0.08 - cl * 0.15
+	_pose_swim(delta, sp)
+
+## Плавание брассом: тело горизонтально, руки гребут, ноги толкаются.
+func _pose_swim(delta: float, sp: float) -> void:
+	var b := swimb
+	if b < 0.01:
+		body.rotation.x = 0.0
+		body.position.x = 0.0
+		body.position.z = 0.0
+		return
+	cphase += delta * (2.2 + sp * 1.5)
+	var c := sin(cphase)
+	var pitch := b * 1.2
+	body.rotation.x = pitch
+	var off := Vector3(0, 0.97 * (1.0 - cos(pitch)), -0.97 * sin(pitch))
+	body.position = Basis(Vector3.UP, body.rotation.y) * off + Vector3(0, body.position.y * (1.0 - b), 0)
+	arm_l.rotation.x = lerpf(arm_l.rotation.x, -2.4 + c * 0.7, b)
+	arm_r.rotation.x = lerpf(arm_r.rotation.x, -2.4 + c * 0.7, b)
+	arm_l.rotation.z = lerpf(arm_l.rotation.z, 0.3 + maxf(0.0, c) * 0.9, b)
+	arm_r.rotation.z = lerpf(arm_r.rotation.z, -0.3 - maxf(0.0, c) * 0.9, b)
+	elb_l.rotation.x = lerpf(elb_l.rotation.x, -0.3 - maxf(0.0, -c) * 1.0, b)
+	elb_r.rotation.x = lerpf(elb_r.rotation.x, -0.3 - maxf(0.0, -c) * 1.0, b)
+	leg_l.rotation.x = lerpf(leg_l.rotation.x, 0.15 + c * 0.25, b)
+	leg_r.rotation.x = lerpf(leg_r.rotation.x, 0.15 + c * 0.25, b)
+	knee_l.rotation.x = lerpf(knee_l.rotation.x, 0.3 + maxf(0.0, -c) * 0.9, b)
+	knee_r.rotation.x = lerpf(knee_r.rotation.x, 0.3 + maxf(0.0, -c) * 0.9, b)
+	skirt_l.rotation.x = leg_l.rotation.x * 0.5
+	skirt_r.rotation.x = leg_r.rotation.x * 0.5
+	head_n.rotation.x = -pitch * 0.8
+
+## Сидит на пне или бревне: ноги согнуты, руки на коленях, лёгкое дыхание.
+func _process_sit(delta: float) -> void:
+	if move_vec.length() > 0.6:
+		_stand_up()
+		return
+	var sp: Vector3 = seat[0]
+	var tgt := Vector3(sp.x, sp.y - 0.93, sp.z)
+	position = position.lerp(tgt, minf(1.0, 8.0 * delta))
+	body.rotation.y = lerp_angle(body.rotation.y, float(seat[1]), minf(1.0, 8.0 * delta))
+	sitb = minf(1.0, sitb + delta * 3.0)
+	moving = false
+	running = false
+	run_mag = 0.0
+	climbing = 0.0
+	var b := sitb
+	var br := sin(Time.get_ticks_msec() * 0.0015)
+	leg_l.rotation.x = lerpf(leg_l.rotation.x, -1.45, b)
+	leg_r.rotation.x = lerpf(leg_r.rotation.x, -1.4, b)
+	leg_l.rotation.z = -0.12 * b
+	leg_r.rotation.z = 0.12 * b
+	knee_l.rotation.x = lerpf(knee_l.rotation.x, 1.45, b)
+	knee_r.rotation.x = lerpf(knee_r.rotation.x, 1.35, b)
+	ank_l.rotation.x = lerpf(ank_l.rotation.x, 0.0, b)
+	ank_r.rotation.x = lerpf(ank_r.rotation.x, 0.0, b)
+	skirt_l.rotation.x = leg_l.rotation.x * 0.75
+	skirt_r.rotation.x = leg_r.rotation.x * 0.75
+	arm_l.rotation.x = lerpf(arm_l.rotation.x, -0.75, b)
+	arm_r.rotation.x = lerpf(arm_r.rotation.x, -0.7, b)
+	arm_l.rotation.z = 0.12
+	arm_r.rotation.z = -0.12
+	elb_l.rotation.x = lerpf(elb_l.rotation.x, -0.55, b)
+	elb_r.rotation.x = lerpf(elb_r.rotation.x, -0.6, b)
+	torso.rotation.x = 0.22 + br * 0.015
+	torso.rotation.y = 0.0
+	torso.rotation.z = 0.0
+	torso.position.x = 0.0
+	head_n.rotation.x = -0.15
+	head_n.rotation.y = sin(Time.get_ticks_msec() * 0.0004) * 0.35
+	body.position = Vector3.ZERO
+	body.rotation.x = 0.0
+
+## Лазание по скале: лицом к стене, руки перехватывают выше, ноги ищут упор.
+func _process_climb(delta: float) -> void:
+	var n: Vector3 = main.normal_at(position.x, position.z)
+	var up_dir := -Vector3(n.x, 0, n.z)
+	if up_dir.length() < 0.05:
+		state = "walk"
+		return
+	up_dir = up_dir.normalized()
+	var right := up_dir.cross(Vector3.UP).normalized()
+	var mag := minf(move_vec.length(), 1.0)
+	var d := Vector3.ZERO
+	if mag > 0.12:
+		d = Vector3(move_vec.x, 0, move_vec.y).normalized().rotated(Vector3.UP, cam_yaw)
+	var climb_in := d.dot(up_dir) * mag
+	var side := d.dot(right) * mag
+	var stam: float = main.stamina
+	if stam <= 0.01:
+		# силы кончились — срыв
+		state = "walk"
+		position -= up_dir * 0.6
+		return
+	var slope := Vector3(n.x, 0, n.z).length() / maxf(n.y, 0.05)
+	var dy := climb_in * 0.85 * delta
+	var p := position + up_dir * (dy / maxf(slope, 0.6)) + right * side * 0.6 * delta
+	var nn: Vector3 = main.normal_at(p.x, p.z)
+	if nn.y > 0.08 and not main.blocked(p.x, p.z, 0.25):
+		position.x = p.x
+		position.z = p.z
+	position.y = main.height(position.x, position.z)
+	cphase += absf(dy) * 7.0 + absf(side) * delta * 5.0
+	moving = absf(climb_in) > 0.1 or absf(side) > 0.1
+	climbing = 1.0
+	running = false
+	# выбрались наверх или спустились на пологое
+	if nn.y >= 0.6 or main.normal_at(position.x, position.z).y >= 0.6:
+		state = "walk"
+		position += up_dir * (0.4 if climb_in > 0.0 else -0.2)
+		return
+	body.rotation.y = lerp_angle(body.rotation.y, atan2(up_dir.x, up_dir.z), minf(1.0, 8.0 * delta))
+	climbb = minf(1.0, climbb + delta * 4.0)
+	var c := sin(cphase)
+	var b := climbb
+	arm_l.rotation.x = lerpf(arm_l.rotation.x, -2.5 - c * 0.45, b)
+	arm_r.rotation.x = lerpf(arm_r.rotation.x, -2.5 + c * 0.45, b)
+	arm_l.rotation.z = 0.15
+	arm_r.rotation.z = -0.15
+	elb_l.rotation.x = lerpf(elb_l.rotation.x, -0.5 - maxf(0.0, c) * 0.8, b)
+	elb_r.rotation.x = lerpf(elb_r.rotation.x, -0.5 - maxf(0.0, -c) * 0.8, b)
+	leg_l.rotation.x = lerpf(leg_l.rotation.x, -0.5 + c * 0.45, b)
+	leg_r.rotation.x = lerpf(leg_r.rotation.x, -0.5 - c * 0.45, b)
+	knee_l.rotation.x = lerpf(knee_l.rotation.x, 0.9 - c * 0.5, b)
+	knee_r.rotation.x = lerpf(knee_r.rotation.x, 0.9 + c * 0.5, b)
+	skirt_l.rotation.x = leg_l.rotation.x * 0.5
+	skirt_r.rotation.x = leg_r.rotation.x * 0.5
+	torso.rotation.x = 0.4
+	torso.rotation.z = c * 0.05
+	head_n.rotation.x = -0.6
+	body.position = Vector3(0, -0.1, -0.15)
+	body.rotation.x = 0.0
