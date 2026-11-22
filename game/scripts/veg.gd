@@ -37,6 +37,21 @@ func _init() -> void:
 		sm.set_shader_parameter("tint", pair[1])
 		mats[pair[0]] = sm
 		fade_list.append(sm)
+	var wimg := Image.create(64, 64, false, Image.FORMAT_RGBA8)
+	for y in 64:
+		for x in 64:
+			var dd := Vector2(x - 31.5, y - 31.5).length() / 32.0
+			var ring := 0.5 + 0.5 * sin(dd * 38.0 + sin(atan2(y - 31.5, x - 31.5) * 3.0) * 0.6)
+			var c := Color(0.72, 0.58, 0.4).lerp(Color(0.55, 0.42, 0.28), ring * 0.6)
+			if dd > 0.9:
+				c = Color(0.3, 0.22, 0.15)
+			wimg.set_pixel(x, y, c)
+	wimg.generate_mipmaps()
+	var cut := ShaderMaterial.new()
+	cut.shader = load("res://shaders/bark.gdshader")
+	cut.set_shader_parameter("tex", ImageTexture.create_from_image(wimg))
+	mats["cut"] = cut
+	fade_list.append(cut)
 	var lit := ShaderMaterial.new()
 	lit.shader = load("res://shaders/bark.gdshader")
 	lit.set_shader_parameter("tex", load("res://textures/ground_forest.png"))
@@ -92,6 +107,7 @@ func _bez_d(p0: Vector3, p1: Vector3, p2: Vector3, t: float) -> Vector3:
 ## Изогнутая сужающаяся труба по кривой Безье: ствол, ветка, корень.
 func tube(s: Surf, p0: Vector3, p1: Vector3, p2: Vector3, r0: float, r1: float, seg: int = 6, rad: int = 6) -> void:
 	var length := p0.distance_to(p1) + p1.distance_to(p2)
+	var urep := maxf(1.0, roundf(TAU * r0 * 1.3))
 	var base := s.n
 	for i in seg + 1:
 		var t := float(i) / seg
@@ -104,7 +120,7 @@ func tube(s: Surf, p0: Vector3, p1: Vector3, p2: Vector3, r0: float, r1: float, 
 		for j in rad + 1:
 			var a := TAU * j / rad
 			var d := nn * cos(a) + bb * sin(a)
-			s.v(p + d * r, d, Vector2(float(j) / rad, t * length * 0.5))
+			s.v(p + d * r, d, Vector2(float(j) / rad * urep, t * length * 0.5))
 	for i in seg:
 		for j in rad:
 			var a := base + i * (rad + 1) + j
@@ -343,6 +359,20 @@ func rock(seed_v: int) -> Array:
 	st.set_material(m)
 	return [st.commit(), 0.6]
 
+## Круглый срез (торец бревна, верх пня): диск с годичными кольцами.
+func disc(s: Surf, c: Vector3, nrm: Vector3, r: float, seg: int = 14) -> void:
+	var ref := Vector3.RIGHT if absf(nrm.y) > 0.9 else Vector3.UP
+	var a1 := nrm.cross(ref).normalized()
+	var a2 := nrm.cross(a1).normalized()
+	var base := s.n
+	s.v(c, nrm, Vector2(0.5, 0.5))
+	for j in seg + 1:
+		var a := TAU * j / seg
+		s.v(c + (a1 * cos(a) + a2 * sin(a)) * r, nrm, Vector2(0.5 + cos(a) * 0.5, 0.5 + sin(a) * 0.5))
+	for j in seg:
+		s.tri(base, base + 1 + j, base + 2 + j)
+		s.tri(base, base + 2 + j, base + 1 + j)
+
 ## Пень с корнями.
 func stump(seed_v: int) -> Array:
 	rng.seed = seed_v
@@ -352,7 +382,9 @@ func stump(seed_v: int) -> Array:
 		var a := TAU * i / 5 + R(-0.3, 0.3)
 		var d := Vector3(cos(a), 0, sin(a))
 		tube(bark, d * 0.35 + Vector3(0, 0.3, 0), d * 0.8 + Vector3(0, 0.08, 0), d * R(1.2, 1.6) + Vector3(0, -0.1, 0), 0.16, 0.04, 5, 6)
-	return [_commit([bark], ["bark_dead"]), 0.75]
+	var top := Surf.new()
+	disc(top, Vector3(0, 0.75, 0), Vector3.UP, 0.45)
+	return [_commit([bark, top], ["bark_dead", "cut"]), 0.75]
 
 ## Упавшее бревно.
 func log_fallen(seed_v: int) -> Array:
@@ -363,7 +395,10 @@ func log_fallen(seed_v: int) -> Array:
 	for i in 3:
 		var x := R(-L * 0.4, L * 0.4)
 		tube(bark, Vector3(x, 0.4, 0), Vector3(x + R(-0.3, 0.3), 0.8, R(0.2, 0.4)), Vector3(x + R(-0.5, 0.5), 1.1, R(0.5, 0.9)), 0.06, 0.015, 4, 5)
-	return [_commit([bark], ["bark_dead"]), 0.6]
+	var ends := Surf.new()
+	disc(ends, Vector3(-L * 0.5, 0.3, 0), Vector3.LEFT, 0.34)
+	disc(ends, Vector3(L * 0.5, 0.28, 0), Vector3.RIGHT, 0.26)
+	return [_commit([bark, ends], ["bark_dead", "cut"]), 0.6]
 
 ## Клочок травы из ~50 тонких травинок с цветом по высоте. Клочки в сетке ~1 м сливаются в ковёр.
 func grass_patch(seed_v: int) -> Array:

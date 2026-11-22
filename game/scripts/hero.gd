@@ -39,6 +39,12 @@ var climbb := 0.0
 var cphase := 0.0
 var soaked := 0.0
 var depth := 0.0
+var vy := 0.0
+var airborne := false
+var fallb := 0.0
+var land_t := 0.0
+var land_k := 0.0
+var last_impact := 0.0
 var skirt_l := Node3D.new()
 var skirt_r := Node3D.new()
 var last_yaw := 0.0
@@ -263,13 +269,28 @@ func _can_walk(p: Vector3) -> bool:
 	var half: float = main.SIZE * 0.5 - 8.0
 	if absf(p.x) > half or absf(p.z) > half:
 		return false
-	var y: float = main.height(p.x, p.z)
+	var y: float = main.ground_at(p.x, p.z)
 	if y - position.y > 1.1:
 		return false
-	var n: Vector3 = main.normal_at(p.x, p.z)
+	# обрыв вниз: шагнуть можно — дальше герой падает
+	if y < position.y - 0.6 or airborne:
+		return not main.blocked(p.x, p.z, 0.32)
+	var n: Vector3 = main.ground_normal(p.x, p.z)
 	if n.y < 0.42:
 		return false
 	return not main.blocked(p.x, p.z, 0.32)
+
+## Приземление: от скорости удара зависит, присядет ли герой, потеряет ли силы.
+func _land(impact: float) -> void:
+	last_impact = impact
+	if depth > 1.0:
+		return
+	if impact > 5.0:
+		land_t = clampf(impact * 0.07, 0.25, 1.2)
+		land_k = clampf((impact - 5.0) / 8.0, 0.35, 1.0)
+		vel *= 0.2
+	if impact > 9.0:
+		main.stamina = maxf(0.0, float(main.stamina) - (impact - 9.0) * 0.08)
 
 ## Подпись кнопки действия по обстановке ("" — кнопку скрыть).
 func action_label() -> String:
@@ -310,7 +331,7 @@ func _process(delta: float) -> void:
 	leg_l.rotation.z = 0.0
 	leg_r.rotation.z = 0.0
 	var mag := minf(move_vec.length(), 1.0)
-	var n: Vector3 = main.normal_at(position.x, position.z)
+	var n: Vector3 = main.ground_normal(position.x, position.z)
 	var down := Vector3(n.x, 0, n.z)
 	var slope := down.length() / maxf(n.y, 0.01)
 	if down.length() > 0.001:
@@ -341,6 +362,11 @@ func _process(delta: float) -> void:
 	var s := 0.0
 	sliding = lerpf(sliding, s, minf(1.0, 4.0 * delta))
 	var accel := 11.0 * (1.0 - sliding * 0.75)
+	if airborne:
+		accel = 0.5
+		target = vel
+	elif land_t > 0.0:
+		target *= 0.2
 	vel = vel.move_toward(target, accel * delta)
 	vel.y = 0.0
 	var step := vel * delta
@@ -357,21 +383,22 @@ func _process(delta: float) -> void:
 		else:
 			# упёрлись в крутую стену: если это скала, а не дерево — начинаем лезть
 			var q := position + d * 0.5
-			var nq: Vector3 = main.normal_at(q.x, q.z)
+			var nq: Vector3 = main.ground_normal(q.x, q.z)
 			if mag > 0.5 and nq.y < 0.42 and depth < 0.5 and not main.blocked(q.x, q.z, 0.2) and float(main.stamina) > 0.1:
 				state = "climb"
 			vel = Vector3.ZERO
 	position.x = p.x
 	position.z = p.z
-	# стоим на круче без опоры (сорвались) — съезжаем вниз
-	if n.y < 0.4 and depth < 0.5:
-		position += down * 5.0 * delta
+	# стоим на круче без опоры — съезжаем вниз, набирая скорость
+	if n.y < 0.4 and depth < 0.5 and not airborne:
+		vel += down * 9.0 * (1.0 - n.y) * delta * 3.0
+		position += down * minf(vel.length(), 6.0) * delta
 	var sp := vel.length()
 	moving = sp > 0.25
 	if moving and (mag > 0.12 or sliding > 0.2):
 		var face: Vector3 = d if mag > 0.12 and sliding < 0.4 else vel.normalized()
 		body.rotation.y = lerp_angle(body.rotation.y, atan2(face.x, face.z), minf(1.0, 9.0 * delta))
-	var ground: float = main.height(position.x, position.z)
+	var ground: float = main.ground_at(position.x, position.z)
 	var iced: bool = main.weather.ice >= 0.85
 	depth = 0.0 if iced else maxf(0.0, main.WATER_Y - ground)
 	var ty := ground
@@ -385,11 +412,30 @@ func _process(delta: float) -> void:
 	elif depth > 0.6:
 		soaked = maxf(soaked, 0.5)
 	swimb = lerpf(swimb, 1.0 if depth > 1.25 else 0.0, minf(1.0, 4.0 * delta))
-	# на подъёме ставим сразу на землю (не тонет), вниз опускаем быстро и плавно
-	if ty > position.y:
+	# вертикаль: на подъёме ставим на опору; небольшой спуск — идём по земле;
+	# обрыв — свободное падение с гравитацией и приземлением
+	if ty >= position.y:
+		if airborne:
+			_land(-vy)
 		position.y = ty
+		vy = 0.0
+		airborne = false
+	elif not airborne and position.y - ty < 0.45 and depth <= 1.25:
+		position.y = ty
+		vy = 0.0
+	elif depth > 1.25 and not airborne:
+		position.y = lerpf(position.y, ty, minf(1.0, 6.0 * delta))
 	else:
-		position.y = lerpf(position.y, ty, minf(1.0, 20.0 * delta))
+		airborne = true
+		vy -= 9.8 * delta
+		position.y += vy * delta
+		if position.y <= ty:
+			position.y = ty
+			_land(-vy)
+			vy = 0.0
+			airborne = false
+	fallb = lerpf(fallb, 1.0 if (airborne and vy < -3.0) else 0.0, minf(1.0, 8.0 * delta))
+	land_t = maxf(0.0, land_t - delta)
 	# походка: фаза от пройденного пути, размах от скорости
 	var sn := clampf(sp / speed, 0.0, 1.6)
 	run_mag = lerpf(run_mag, sn, minf(1.0, 8.0 * delta))
@@ -454,7 +500,34 @@ func _process(delta: float) -> void:
 	torso.rotation.z = sw * 0.03 * run_mag - turn
 	head_n.rotation.y = sw * 0.05 * run_mag
 	body.position.y = (absf(cw) - 0.6) * 0.05 * run_mag + minf(slope, 1.0) * 0.08 - cl * 0.15
+	_pose_fall_land()
 	_pose_swim(delta, sp)
+
+## Падение: руки в стороны и вверх, ноги поджаты. Приземление: глубокий присед.
+func _pose_fall_land() -> void:
+	var f := fallb
+	if f > 0.01:
+		arm_l.rotation.x = lerpf(arm_l.rotation.x, -1.9, f)
+		arm_r.rotation.x = lerpf(arm_r.rotation.x, -1.7, f)
+		arm_l.rotation.z = lerpf(arm_l.rotation.z, 0.9, f)
+		arm_r.rotation.z = lerpf(arm_r.rotation.z, -0.9, f)
+		leg_l.rotation.x = lerpf(leg_l.rotation.x, -0.5, f)
+		leg_r.rotation.x = lerpf(leg_r.rotation.x, 0.1, f)
+		knee_l.rotation.x = lerpf(knee_l.rotation.x, 0.9, f)
+		knee_r.rotation.x = lerpf(knee_r.rotation.x, 0.5, f)
+		torso.rotation.x = lerpf(torso.rotation.x, -0.15, f)
+	if land_t > 0.0:
+		var k := clampf(land_t * 3.0, 0.0, 1.0) * land_k
+		leg_l.rotation.x = lerpf(leg_l.rotation.x, -1.0, k)
+		leg_r.rotation.x = lerpf(leg_r.rotation.x, -0.8, k)
+		knee_l.rotation.x = lerpf(knee_l.rotation.x, 1.7, k)
+		knee_r.rotation.x = lerpf(knee_r.rotation.x, 1.5, k)
+		ank_l.rotation.x = lerpf(ank_l.rotation.x, -0.6, k)
+		ank_r.rotation.x = lerpf(ank_r.rotation.x, -0.6, k)
+		torso.rotation.x = lerpf(torso.rotation.x, 0.6, k)
+		arm_l.rotation.x = lerpf(arm_l.rotation.x, -0.9, k)
+		arm_r.rotation.x = lerpf(arm_r.rotation.x, -0.9, k)
+		body.position.y -= 0.45 * k
 
 ## Плавание брассом: тело горизонтально, руки гребут, ноги толкаются.
 func _pose_swim(delta: float, sp: float) -> void:
@@ -527,7 +600,7 @@ func _process_sit(delta: float) -> void:
 
 ## Лазание по скале: лицом к стене, руки перехватывают выше, ноги ищут упор.
 func _process_climb(delta: float) -> void:
-	var n: Vector3 = main.normal_at(position.x, position.z)
+	var n: Vector3 = main.ground_normal(position.x, position.z)
 	var up_dir := -Vector3(n.x, 0, n.z)
 	if up_dir.length() < 0.05:
 		state = "walk"
@@ -549,17 +622,17 @@ func _process_climb(delta: float) -> void:
 	var slope := Vector3(n.x, 0, n.z).length() / maxf(n.y, 0.05)
 	var dy := climb_in * 0.85 * delta
 	var p := position + up_dir * (dy / maxf(slope, 0.6)) + right * side * 0.6 * delta
-	var nn: Vector3 = main.normal_at(p.x, p.z)
+	var nn: Vector3 = main.ground_normal(p.x, p.z)
 	if nn.y > 0.08 and not main.blocked(p.x, p.z, 0.25):
 		position.x = p.x
 		position.z = p.z
-	position.y = main.height(position.x, position.z)
+	position.y = main.ground_at(position.x, position.z)
 	cphase += absf(dy) * 7.0 + absf(side) * delta * 5.0
 	moving = absf(climb_in) > 0.1 or absf(side) > 0.1
 	climbing = 1.0
 	running = false
 	# выбрались наверх или спустились на пологое
-	if nn.y >= 0.6 or main.normal_at(position.x, position.z).y >= 0.6:
+	if nn.y >= 0.6 or main.ground_normal(position.x, position.z).y >= 0.6:
 		state = "walk"
 		position += up_dir * (0.4 if climb_in > 0.0 else -0.2)
 		return

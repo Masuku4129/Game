@@ -215,6 +215,7 @@ func apply(mats: Array, terrain: ShaderMaterial, blade: ShaderMaterial, water: S
 	terrain.set_shader_parameter("snow", snow)
 	terrain.set_shader_parameter("wet", wet)
 	terrain.set_shader_parameter("freeze", clampf(-temp * 0.5, 0.0, 1.0))
+	terrain.set_shader_parameter("rain", precip if temp >= 0.5 else 0.0)
 	blade.set_shader_parameter("snow", snow)
 	blade.set_shader_parameter("dry", clampf(autumn * 0.8 + (1.0 - smoothstep(0.0, 0.4, temp)) * 0.3, 0.0, 1.0))
 	blade.set_shader_parameter("wind", wind)

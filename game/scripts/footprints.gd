@@ -50,7 +50,7 @@ func _ready() -> void:
 ## Отпечаток стопы в точке p, направление yaw.
 func stamp(p: Vector3, yaw: float) -> void:
 	var w = main.weather
-	var y: float = main.height(p.x, p.z)
+	var y: float = main.ground_at(p.x, p.z)
 	var snow: float = w.snow
 	var mud := clampf((main.WATER_Y + 1.3 - y) / 1.3, 0.0, 1.0)
 	var wet: float = w.wet
@@ -59,12 +59,12 @@ func stamp(p: Vector3, yaw: float) -> void:
 	if snow > 0.25:
 		col = Color(0.55, 0.6, 0.72, 0.55 * smoothstep(0.25, 0.6, snow))
 		lf = 240.0
-	elif (wet > 0.35 or mud > 0.3) and w.temp > 0.0:
-		col = Color(0.16, 0.12, 0.09, 0.5 * maxf(wet, mud))
+	elif (wet > 0.12 or mud > 0.3) and w.temp > 0.0:
+		col = Color(0.1, 0.075, 0.055, clampf(0.35 + maxf(wet, mud) * 0.45, 0.0, 0.8))
 		lf = 160.0
 	else:
 		return
-	var n: Vector3 = main.normal_at(p.x, p.z)
+	var n: Vector3 = main.ground_normal(p.x, p.z)
 	var fwd := Vector3(sin(yaw), 0, cos(yaw))
 	var right := fwd.cross(n).normalized()
 	var f2 := n.cross(right).normalized()

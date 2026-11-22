@@ -5,7 +5,7 @@ extends Node3D
 const SIZE := 512.0
 const SEG := 384
 const WATER_Y := -2.0
-const CELL := 32.0
+const CELL := 64.0
 
 var n_hill := FastNoiseLite.new()
 var n_cliff := FastNoiseLite.new()
@@ -28,6 +28,8 @@ var stamina := 1.0
 var blockers := {}
 var seats := {}
 var act_btn: Button
+var fps_lbl: Label
+var _fps_t := 0.0
 var weather
 var feet
 var terrain_mat: ShaderMaterial
@@ -83,6 +85,18 @@ func _ready() -> void:
 	act_btn.visible = false
 	act_btn.pressed.connect(func(): hero.do_action())
 	ui.add_child(act_btn)
+	fps_lbl = Label.new()
+	fps_lbl.anchor_left = 0.5
+	fps_lbl.anchor_right = 0.5
+	fps_lbl.offset_left = -300.0
+	fps_lbl.offset_right = 300.0
+	fps_lbl.offset_top = 14.0
+	fps_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	fps_lbl.add_theme_font_size_override("font_size", 24)
+	fps_lbl.add_theme_color_override("font_outline_color", Color(0, 0, 0))
+	fps_lbl.add_theme_constant_override("outline_size", 6)
+	fps_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	ui.add_child(fps_lbl)
 	_update_sky()
 
 func _find_start() -> Vector3:
@@ -101,6 +115,60 @@ func _add_blocker(x: float, z: float, r: float) -> void:
 	if not blockers.has(k):
 		blockers[k] = []
 	blockers[k].append(Vector3(x, z, r))
+
+## Твёрдые тела, на которые можно встать: [вид, a, b, радиус, высота].
+## 0 — купол камня (a — центр основания), 1 — бревно (ось a→b), 2 — пень-цилиндр.
+var solids := {}
+
+func _add_solid(sd: Array) -> void:
+	var a: Vector3 = sd[1]
+	var c := a
+	var ext: float = sd[3] + 0.5
+	if sd[0] == 1:
+		var bb: Vector3 = sd[2]
+		c = (a + bb) * 0.5
+		ext += a.distance_to(bb) * 0.5
+	for gx in range(floori((c.x - ext) / 8.0), floori((c.x + ext) / 8.0) + 1):
+		for gz in range(floori((c.z - ext) / 8.0), floori((c.z + ext) / 8.0) + 1):
+			var k := Vector2i(gx, gz)
+			if not solids.has(k):
+				solids[k] = []
+			solids[k].append(sd)
+
+## Верх твёрдого тела в точке (или -1e9, если его нет).
+func solid_top(x: float, z: float) -> float:
+	var k := Vector2i(floori(x / 8.0), floori(z / 8.0))
+	if not solids.has(k):
+		return -1e9
+	var best := -1e9
+	for sd in solids[k]:
+		var a: Vector3 = sd[1]
+		var r: float = sd[3]
+		match int(sd[0]):
+			0:
+				var d := Vector2(x - a.x, z - a.z).length()
+				if d < r:
+					best = maxf(best, a.y + float(sd[4]) * sqrt(1.0 - (d / r) * (d / r)))
+			1:
+				var bb: Vector3 = sd[2]
+				var ab := Vector2(bb.x - a.x, bb.z - a.z)
+				var t := clampf(Vector2(x - a.x, z - a.z).dot(ab) / maxf(ab.length_squared(), 0.001), 0.0, 1.0)
+				var cp := a.lerp(bb, t)
+				var d := Vector2(x - cp.x, z - cp.z).length()
+				if d < r:
+					best = maxf(best, cp.y + sqrt(r * r - d * d))
+			2:
+				if Vector2(x - a.x, z - a.z).length() < r:
+					best = maxf(best, a.y + float(sd[4]))
+	return best
+
+## Высота опоры: земля или камень/бревно/пень сверху.
+func ground_at(x: float, z: float) -> float:
+	return maxf(height(x, z), solid_top(x, z))
+
+func ground_normal(x: float, z: float) -> Vector3:
+	var e := 0.3
+	return Vector3(ground_at(x - e, z) - ground_at(x + e, z), 2.0 * e, ground_at(x, z - e) - ground_at(x, z + e)).normalized()
 
 func _add_seat(p: Vector3, yaw: float) -> void:
 	var k := Vector2i(floori(p.x / 8.0), floori(p.z / 8.0))
@@ -207,7 +275,7 @@ func _make_environment() -> void:
 	add_child(we)
 	sun = DirectionalLight3D.new()
 	sun.shadow_enabled = true
-	sun.directional_shadow_max_distance = 45.0
+	sun.directional_shadow_max_distance = 38.0
 	sun.directional_shadow_mode = DirectionalLight3D.SHADOW_PARALLEL_2_SPLITS
 	add_child(sun)
 	moon = DirectionalLight3D.new()
@@ -338,6 +406,10 @@ func _process(delta: float) -> void:
 	for m in veg.fade_list:
 		m.set_shader_parameter("hero_pos", hp)
 		m.set_shader_parameter("cam_pos", cp)
+	_fps_t -= delta
+	if _fps_t <= 0.0:
+		_fps_t = 0.5
+		fps_lbl.text = "FPS %d · вызовов %d · треуг. %.1f тыс." % [Engine.get_frames_per_second(), Performance.get_monitor(Performance.RENDER_TOTAL_DRAW_CALLS_IN_FRAME), Performance.get_monitor(Performance.RENDER_TOTAL_PRIMITIVES_IN_FRAME) / 1000.0]
 	hero.move_vec = joy.value
 	hero.cam_yaw = rig.rotation.y
 	# время суток: 1 игровой час за 75 секунд
@@ -558,7 +630,7 @@ func _scatter_all() -> void:
 				var per_var := []
 				for v in vars:
 					per_var.append([])
-				for k in int(r[1]):
+				for k in int(r[1]) * 4:
 					var x := x0 + rng.randf() * CELL
 					var z := z0 + rng.randf() * CELL
 					if not _accept(r[5], x, z, rng):
@@ -575,16 +647,26 @@ func _scatter_all() -> void:
 						var tilt := atan2(h1 - h0, 5.0)
 						b = Basis(ax0.cross(Vector3.UP).normalized(), tilt) * b
 					per_var[vi].append(Transform3D(b, Vector3(x, height(x, z) - 0.05, z)))
-					var br: float = BLOCK_R.get(r[5] if r[0] == "rock" else r[0], 0.0)
-					if r[0] == "rock" and s < 0.9:
-						br = 0.0
-					if br > 0.0 and not (r[0] == "spruce" and r[5] == "under"):
-						_add_blocker(x, z, br * s)
+					var by: float = height(x, z) - 0.05
+					if r[0] == "rock":
+						# камень — твёрдый купол: на него можно встать или залезть
+						var kind: int = vi % 4
+						var hr: float = [0.62, 0.68, 0.45, 0.6][kind] * s
+						var ht: float = [0.33, 0.17, 0.52, 0.4][kind] * s
+						if ht > 0.12:
+							_add_solid([0, Vector3(x, by, z), Vector3.ZERO, hr, ht])
+					elif r[0] == "stump":
+						_add_solid([2, Vector3(x, by, z), Vector3.ZERO, 0.45 * s, 0.75 * s])
+					elif r[0] == "log":
+						var ax1: Vector3 = b.x
+						var o := Vector3(x, by, z)
+						_add_solid([1, o - ax1 * 2.3 + b.y * 0.3, o + ax1 * 2.3 + b.y * 0.28, 0.31 * s, 0.0])
+					else:
+						var br: float = BLOCK_R.get(r[0], 0.0)
+						if br > 0.0 and not (r[0] == "spruce" and r[5] == "under"):
+							_add_blocker(x, z, br * s)
 					if r[0] == "log":
-						# бревно: цепочка кругов вдоль оси, сиденья поперёк
 						var ax: Vector3 = b.x.normalized()
-						for t in [-2.0, -1.0, 0.0, 1.0, 2.0]:
-							_add_blocker(x + ax.x * t, z + ax.z * t, 0.4)
 						var yaw := atan2(ax.z, -ax.x)
 						for t in [-1.2, 1.2]:
 							var sx: float = x + ax.x * t
@@ -606,7 +688,6 @@ func _scatter_all() -> void:
 					mmi.multimesh = mm
 					mmi.visibility_range_end = r[3]
 					mmi.visibility_range_end_margin = 10.0
-					mmi.visibility_range_fade_mode = GeometryInstance3D.VISIBILITY_RANGE_FADE_SELF
 					mmi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON if r[4] else GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 					add_child(mmi)
 
