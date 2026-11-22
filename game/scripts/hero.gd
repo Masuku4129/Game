@@ -4,7 +4,10 @@ extends Node3D
 var main: Node3D
 var move_vec := Vector2.ZERO
 var cam_yaw := 0.0
-var speed := 2.4
+var speed := 3.1
+var run_speed := 4.8
+var running := false
+var climbing := 0.0
 var moving := false
 var run_mag := 0.0
 var phase := 0.0
@@ -25,6 +28,7 @@ var vel := Vector3.ZERO
 var sliding := 0.0
 var lean := 0.0
 var tilt := 0.0
+var last_sw := 0.0
 var torch := OmniLight3D.new()
 
 func _mat(c: Color, rough: float = 0.9) -> StandardMaterial3D:
@@ -107,8 +111,8 @@ func _ready() -> void:
 		knee.add_child(ank)
 		_ell(ank, _sph(), boot_c, Vector3(0, -0.02, 0.07), Vector3(0.17, 0.12, 0.34))
 	# кафтан: подол с меховой оторочкой, красный кушак, пуговицы
-	_ell(torso, _cyl(0.19, 0.29, 0.55), kaftan, Vector3(0, -0.04, 0), Vector3(1.0, 1.0, 0.82))
-	_ell(torso, _tor(0.255, 0.3), fur, Vector3(0, -0.31, 0), Vector3(1.0, 1.0, 0.82))
+	_ell(torso, _cyl(0.2, 0.33, 0.5), kaftan, Vector3(0, -0.02, 0), Vector3(1.0, 1.0, 0.95))
+	_ell(torso, _tor(0.3, 0.35), fur, Vector3(0, -0.27, 0), Vector3(1.0, 1.0, 0.95))
 	_ell(torso, _capsule(0.5, 1.0), kaftan, Vector3(0, 0.36, 0), Vector3(0.46, 0.8, 0.34))
 	_part(torso, BoxMesh.new(), kaftan2, Vector3(0, 0.2, 0.15)).scale = Vector3(0.035, 0.9, 0.02)
 	for i in 5:
@@ -132,11 +136,6 @@ func _ready() -> void:
 	_ell(torso, _capsule(0.5, 1.0), leather, Vector3(0, 0.34, -0.25), Vector3(0.36, 0.52, 0.2))
 	_ell(torso, _sph(), Color(0.28, 0.2, 0.12), Vector3(0.14, 0.12, -0.31), Vector3(0.14, 0.16, 0.1))
 	_part(torso, _cyl(0.085, 0.085, 0.5), Color(0.38, 0.4, 0.3), Vector3(0, 0.66, -0.28), Vector3(0, 0, PI * 0.5))
-	_part(torso, _cyl(0.02, 0.025, 1.2), Color(0.3, 0.19, 0.1), Vector3(-0.08, 0.42, -0.37), Vector3(0.0, 0, 0.35))
-	_part(torso, _cyl(0.014, 0.014, 0.55), Color(0.35, 0.36, 0.38), Vector3(-0.32, 0.88, -0.37), Vector3(0.0, 0, 0.35))
-	# топор за кушаком
-	_part(torso, _cyl(0.018, 0.022, 0.55), Color(0.4, 0.28, 0.16), Vector3(-0.22, -0.08, 0.1), Vector3(0.0, 0, 0.5))
-	_part(torso, BoxMesh.new(), Color(0.55, 0.57, 0.6), Vector3(-0.38, 0.12, 0.1), Vector3(0, 0, 0.5)).scale = Vector3(0.03, 0.14, 0.17)
 	# руки: плечо, локоть, предплечье, кисть, меховая манжета
 	for side in [-1.0, 1.0]:
 		var arm: Node3D = arm_l if side < 0.0 else arm_r
@@ -167,7 +166,7 @@ func _can_walk(p: Vector3) -> bool:
 	if y - position.y > 1.1:
 		return false
 	var n: Vector3 = main.normal_at(p.x, p.z)
-	if n.y < 0.5:
+	if n.y < 0.42:
 		return false
 	return not main.blocked(p.x, p.z, 0.32)
 
@@ -187,10 +186,15 @@ func _process(delta: float) -> void:
 		var along := d.dot(down)
 		var f := 1.0
 		if along < 0.0:
-			f = clampf(1.0 + along * slope * 1.7, 0.3, 1.0)
+			f = clampf(1.0 + along * slope * 0.7, 0.5, 1.0)
 		else:
-			f = minf(1.0 + along * slope * 0.25, 1.2)
-		target = d * speed * mag * f * (1.0 - main.weather.snow * 0.3)
+			f = minf(1.0 + along * slope * 0.2, 1.15)
+		var stam: float = main.stamina
+		running = mag > 0.92 and stam > 0.08
+		var sp_base := run_speed if running else speed
+		target = d * sp_base * mag * f * (1.0 - main.weather.snow * 0.3)
+	else:
+		running = false
 	# крутой склон: человека тянет вниз, он теряет управление и катится
 	var s := 0.0
 	sliding = lerpf(sliding, s, minf(1.0, 4.0 * delta))
@@ -219,18 +223,30 @@ func _process(delta: float) -> void:
 		body.rotation.y = lerp_angle(body.rotation.y, atan2(face.x, face.z), minf(1.0, 9.0 * delta))
 	var ground: float = main.height(position.x, position.z)
 	var ty := maxf(ground, main.WATER_Y if main.weather.ice >= 0.85 else main.WATER_Y - 0.35)
-	position.y = lerpf(position.y, ty, minf(1.0, 14.0 * delta))
+	# на подъёме ставим сразу на землю (не тонет), вниз опускаем быстро и плавно
+	if ty > position.y:
+		position.y = ty
+	else:
+		position.y = lerpf(position.y, ty, minf(1.0, 20.0 * delta))
 	# походка: фаза от пройденного пути, размах от скорости
-	var sn := clampf(sp / speed, 0.0, 1.3)
+	var sn := clampf(sp / speed, 0.0, 1.6)
 	run_mag = lerpf(run_mag, sn, minf(1.0, 8.0 * delta))
 	phase += sp * delta * 2.8
 	var fwd := Vector3(sin(body.rotation.y), 0, cos(body.rotation.y))
 	var incline := 0.0
 	if sp > 0.1:
 		incline = clampf(-fwd.dot(down) * slope, -0.8, 0.8)  # >0 вверх
+	# крутой подъём: карабкается, помогая руками
+	var want_climb := 1.0 if (incline > 0.55 and sp > 0.1) else 0.0
+	climbing = lerpf(climbing, want_climb, minf(1.0, 6.0 * delta))
 	lean = lerpf(lean, 0.05 * run_mag + maxf(incline, 0.0) * 0.5 - maxf(-incline, 0.0) * 0.15, minf(1.0, 5.0 * delta))
-	var amp := 0.62 * minf(run_mag, 1.1)
+	var amp := 0.5 * minf(run_mag, 1.5)
 	var sw := sin(phase)
+	if moving and signf(sw) != signf(last_sw) and main.feet != null:
+		var side := 1.0 if sw > 0.0 else -1.0
+		var rgt := Vector3(cos(body.rotation.y), 0, -sin(body.rotation.y))
+		main.feet.stamp(position + rgt * side * 0.11, body.rotation.y)
+	last_sw = sw
 	var cw := cos(phase)
 	var up := 1.0 + maxf(incline, 0.0) * 0.8
 	var br := sin(Time.get_ticks_msec() * 0.0017) * 0.012 * (1.0 - run_mag)
@@ -246,8 +262,19 @@ func _process(delta: float) -> void:
 	arm_r.rotation.z = -0.05
 	elb_l.rotation.x = -0.2 - maxf(0.0, sw) * amp * 0.5
 	elb_r.rotation.x = -0.2 - maxf(0.0, -sw) * amp * 0.5
-	torso.rotation.x = lean + br
+	var cl := climbing
+	if cl > 0.01:
+		# руки тянутся вперёд-вверх и перехватывают склон, колени высоко
+		arm_l.rotation.x = lerpf(arm_l.rotation.x, -1.6 - sw * 0.5, cl)
+		arm_r.rotation.x = lerpf(arm_r.rotation.x, -1.6 + sw * 0.5, cl)
+		elb_l.rotation.x = lerpf(elb_l.rotation.x, -0.5 - maxf(0.0, sw) * 0.6, cl)
+		elb_r.rotation.x = lerpf(elb_r.rotation.x, -0.5 - maxf(0.0, -sw) * 0.6, cl)
+		leg_l.rotation.x = lerpf(leg_l.rotation.x, sw * 0.45 - 0.45, cl)
+		leg_r.rotation.x = lerpf(leg_r.rotation.x, -sw * 0.45 - 0.45, cl)
+		knee_l.rotation.x = lerpf(knee_l.rotation.x, 0.6 + maxf(0.0, -cw) * 0.6, cl)
+		knee_r.rotation.x = lerpf(knee_r.rotation.x, 0.6 + maxf(0.0, cw) * 0.6, cl)
+	torso.rotation.x = lean + br + cl * 0.45
 	torso.rotation.y = -sw * 0.09 * run_mag
 	torso.rotation.z = sw * 0.03 * run_mag
 	head_n.rotation.y = sw * 0.05 * run_mag
-	body.position.y = (absf(cw) - 0.6) * 0.05 * run_mag
+	body.position.y = (absf(cw) - 0.6) * 0.05 * run_mag + minf(slope, 1.0) * 0.08 - cl * 0.15

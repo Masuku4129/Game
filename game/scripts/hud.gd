@@ -22,5 +22,5 @@ func _draw() -> void:
 		draw_string(f, Vector2(28, y), names[i], HORIZONTAL_ALIGNMENT_LEFT, -1, 22, Color(1, 1, 1, 0.92))
 		draw_rect(Rect2(28, y + 8, 230, 11), Color(0, 0, 0, 0.5))
 		draw_rect(Rect2(28, y + 8, 230.0 * clampf(vals[i], 0.0, 1.0), 11), cols[i])
-	draw_string(f, Vector2(size.x - 428, 41), clock, HORIZONTAL_ALIGNMENT_RIGHT, 400, 26, Color(0, 0, 0, 0.6))
-	draw_string(f, Vector2(size.x - 430, 40), clock, HORIZONTAL_ALIGNMENT_RIGHT, 400, 26, Color(1, 1, 1, 0.95))
+	draw_string(f, Vector2(size.x - 728, 41), clock, HORIZONTAL_ALIGNMENT_RIGHT, 700, 26, Color(0, 0, 0, 0.6))
+	draw_string(f, Vector2(size.x - 730, 40), clock, HORIZONTAL_ALIGNMENT_RIGHT, 700, 26, Color(1, 1, 1, 0.95))

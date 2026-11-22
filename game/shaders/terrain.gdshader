@@ -11,6 +11,7 @@ uniform float tile_rock = 0.5;
 uniform float bump = 1.1;
 uniform float snow = 0.0;
 uniform float wet = 0.0;
+uniform float freeze = 0.0;
 varying vec3 wpos;
 varying vec3 wnor;
 
@@ -84,15 +85,18 @@ void fragment() {
 	NORMAL = normalize((VIEW_MATRIX * vec4(nw, 0.0)).xyz);
 	// каверны темнее
 	col *= 0.7 + hgt * 0.5;
-	// мокрая земля темнее и блестит, лужи в низинах
-	float puddle = smoothstep(0.62, 0.8, macro) * (1.0 - rk) * wet;
-	col *= 1.0 - wet * 0.3;
-	col = mix(col, col * 0.55, puddle);
 	// снежный покров: сначала на ровном, потом всё, кроме круч
 	float sn = clamp(snow * 1.6 - 0.2 - slope * 3.0 + (macro - 0.5) * 0.6 + (hgt - 0.5) * 0.3, 0.0, 1.0);
+	// мокрая земля темнее; лужи в низинах только там, где нет снега; при морозе лёд
+	float pm = smoothstep(0.62, 0.8, macro) * (1.0 - rk) * (1.0 - sn);
+	float puddle = pm * wet;
+	float icep = pm * freeze * max(wet, 0.35) * (1.0 - sn);
+	col *= 1.0 - wet * 0.3 * (1.0 - sn);
+	col = mix(col, col * 0.5, puddle * (1.0 - freeze));
+	col = mix(col, vec3(0.62, 0.68, 0.72) * (0.85 + hgt * 0.2), icep);
 	vec3 snow_col = vec3(0.86, 0.89, 0.94) * (0.92 + hgt * 0.12);
 	col = mix(col, snow_col, sn);
 	ALBEDO = col;
-	ROUGHNESS = mix(mix(0.95, 0.55, mud), 0.25, max(puddle, wet * 0.4)) * (1.0 - sn * 0.1);
+	ROUGHNESS = mix(mix(mix(0.95, 0.55, mud), 0.22, max(puddle, wet * 0.4) * (1.0 - sn)), 0.15, icep);
 	SPECULAR = 0.25;
 }

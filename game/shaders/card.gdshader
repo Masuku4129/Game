@@ -8,6 +8,7 @@ uniform vec4 tint : source_color = vec4(1.0);
 uniform float sway = 0.05;
 uniform float yellow_k = 0.0;
 uniform float drop_k = 0.0;
+uniform float fall_red = 0.0;
 varying vec3 wpf;
 varying float upn;
 varying vec3 opos;
@@ -39,7 +40,7 @@ void fragment() {
 	// осень: жёлтые и рыжие оттенки у лиственных, у травы бурые
 	float a = clamp(autumn * yellow_k * (0.75 + tree_r * 0.6), 0.0, 1.0);
 	float l = dot(col, vec3(0.3, 0.55, 0.15));
-	vec3 fall = mix(vec3(1.25, 0.95, 0.3), vec3(1.15, 0.55, 0.2), tree_r) * l * 1.35;
+	vec3 fall = mix(mix(vec3(1.25, 0.95, 0.3), vec3(1.15, 0.55, 0.2), tree_r), vec3(1.25, 0.32, 0.2), fall_red * (0.5 + tree_r * 0.5)) * l * 1.35;
 	col = mix(col, fall, a);
 	// снег лежит на верхних сторонах
 	float s = snow_cover(upn * 0.6 + 0.4, wpf) * 0.85;

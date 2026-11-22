@@ -39,24 +39,35 @@ func _make_particles(is_rain: bool) -> GPUParticles3D:
 	var p := GPUParticles3D.new()
 	var pm := ParticleProcessMaterial.new()
 	pm.emission_shape = ParticleProcessMaterial.EMISSION_SHAPE_BOX
-	pm.emission_box_extents = Vector3(22, 1, 22)
+	pm.emission_box_extents = Vector3(16, 1, 16)
 	pm.direction = Vector3(0, -1, 0)
 	pm.spread = 4.0 if is_rain else 25.0
 	pm.initial_velocity_min = 16.0 if is_rain else 0.6
 	pm.initial_velocity_max = 20.0 if is_rain else 1.4
 	pm.gravity = Vector3(0.8, -12.0, 0.3) if is_rain else Vector3(0.4, -1.3, 0.2)
 	p.process_material = pm
-	var q := QuadMesh.new()
-	q.size = Vector2(0.025, 0.55) if is_rain else Vector2(0.07, 0.07)
+	var q: PrimitiveMesh
+	if is_rain:
+		var qm := QuadMesh.new()
+		qm.size = Vector2(0.02, 0.5)
+		q = qm
+	else:
+		var sm := SphereMesh.new()
+		sm.radius = 0.018
+		sm.height = 0.036
+		sm.radial_segments = 4
+		sm.rings = 2
+		q = sm
 	var m := StandardMaterial3D.new()
 	m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 	m.albedo_color = Color(0.75, 0.8, 0.85, 0.35) if is_rain else Color(0.97, 0.98, 1.0, 0.9)
-	m.billboard_mode = BaseMaterial3D.BILLBOARD_FIXED_Y if is_rain else BaseMaterial3D.BILLBOARD_PARTICLES
+	if is_rain:
+		m.billboard_mode = BaseMaterial3D.BILLBOARD_FIXED_Y
 	m.vertex_color_use_as_albedo = false
 	q.material = m
 	p.draw_pass_1 = q
-	p.amount = 2600 if is_rain else 2200
+	p.amount = 2600 if is_rain else 3500
 	p.lifetime = 1.4 if is_rain else 9.0
 	p.preprocess = 2.0 if is_rain else 9.0
 	p.visibility_aabb = AABB(Vector3(-30, -40, -30), Vector3(60, 60, 60))
@@ -87,7 +98,7 @@ func base_temp(y: float) -> float:
 func _pick_weather() -> void:
 	var s := season_index()
 	# вероятности: ясно, облачно, осадки, туман, буря
-	var w: Array = [[0.25, 0.3, 0.3, 0.1, 0.05], [0.35, 0.25, 0.25, 0.05, 0.1], [0.3, 0.3, 0.25, 0.1, 0.05], [0.45, 0.25, 0.15, 0.05, 0.1]][s]
+	var w: Array = [[0.25, 0.3, 0.3, 0.1, 0.05], [0.2, 0.25, 0.4, 0.05, 0.1], [0.3, 0.3, 0.25, 0.1, 0.05], [0.45, 0.25, 0.15, 0.05, 0.1]][s]
 	var r := rng.randf()
 	var k := 0
 	while k < 4 and r > w[k]:
@@ -118,6 +129,18 @@ func _kind_name() -> String:
 		return "Облачно"
 	return "Ясно"
 
+## Перемотка: прожить hours игровых часов шагами по полчаса.
+func fast_forward(hours: float) -> void:
+	var left := hours
+	while left > 0.0:
+		var dh := minf(0.5, left)
+		main.t_hours += dh
+		if main.t_hours >= 24.0:
+			main.t_hours -= 24.0
+			main.day_count += 1
+		step(dh)
+		left -= dh
+
 ## dh — прошедшие игровые часы.
 func step(dh: float) -> void:
 	next_change -= dh
@@ -137,11 +160,14 @@ func step(dh: float) -> void:
 		snow = minf(1.0, snow + precip * dh * 0.09)
 	elif temp > 1.0:
 		snow = maxf(0.0, snow - (temp * 0.004 + precip * 0.02) * dh)
+	# в зимний мороз покров держится и понемногу растёт (позёмка, иней)
+	if season_index() == 1 and temp < -2.0:
+		snow = minf(maxf(snow, 0.35), snow + dh * 0.015) if snow < 0.95 else snow
 	# мокрость: дождь мочит, солнце и ветер сушат
 	if not cold and precip > 0.1:
 		wet = minf(1.0, wet + precip * dh * 0.8)
 	else:
-		wet = maxf(0.0, wet - dh * (0.08 + main.day_factor * 0.12))
+		wet = maxf(0.0, wet - dh * (0.08 + main.day_factor * 0.12) * clampf(temp / 10.0, 0.1, 1.0))
 	# река замерзает после нескольких дней мороза
 	if temp < -6.0:
 		ice = minf(1.0, ice + dh * 0.012)
@@ -188,6 +214,7 @@ func apply(mats: Array, terrain: ShaderMaterial, blade: ShaderMaterial, water: S
 		m.set_shader_parameter("wind", wind)
 	terrain.set_shader_parameter("snow", snow)
 	terrain.set_shader_parameter("wet", wet)
+	terrain.set_shader_parameter("freeze", clampf(-temp * 0.5, 0.0, 1.0))
 	blade.set_shader_parameter("snow", snow)
 	blade.set_shader_parameter("dry", clampf(autumn * 0.8 + (1.0 - smoothstep(0.0, 0.4, temp)) * 0.3, 0.0, 1.0))
 	blade.set_shader_parameter("wind", wind)

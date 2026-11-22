@@ -27,6 +27,7 @@ var warmth := 0.8
 var stamina := 1.0
 var blockers := {}
 var weather
+var feet
 var terrain_mat: ShaderMaterial
 var water_mat: ShaderMaterial
 
@@ -43,6 +44,9 @@ func _ready() -> void:
 	hero = preload("res://scripts/hero.gd").new()
 	hero.main = self
 	add_child(hero)
+	feet = preload("res://scripts/footprints.gd").new()
+	feet.main = self
+	add_child(feet)
 	hero.position = _find_start()
 	rig = preload("res://scripts/camera_rig.gd").new()
 	rig.target = hero
@@ -123,6 +127,7 @@ func height(x: float, z: float) -> float:
 	# рваная скалистая поверхность обрывов: крупные и мелкие сколы только на самом уступе
 	var face := (t1 * (1.0 - t1) + t2 * (1.0 - t2)) * 4.0
 	h += n_crag.get_noise_2d(x, z) * 1.8 * face + n_crag2.get_noise_2d(x, z) * 0.6 * face
+	h = maxf(h, WATER_Y + 0.6 + n_detail.get_noise_2d(x * 0.5, z * 0.5) * 0.3)
 	var r := 1.0 - smoothstep(7.0, 32.0, river_dist(x, z))
 	return lerpf(h, WATER_Y - 2.5, r)
 
@@ -340,8 +345,7 @@ func _unhandled_input(e: InputEvent) -> void:
 	if e is InputEventScreenTouch and e.pressed:
 		var vs := get_viewport().get_visible_rect().size
 		if e.position.x > vs.x - 520.0 and e.position.y < 90.0:
-			day_count += 2
-			weather.next_change = 0.0
+			weather.fast_forward(48.0)
 			get_viewport().set_input_as_handled()
 
 func _update_stats(dt: float) -> void:
@@ -350,7 +354,12 @@ func _update_stats(dt: float) -> void:
 	var target_w := clampf(0.55 + tc * 0.025 - weather.wet * 0.25 - weather.wind * 0.05, 0.05, 0.95)
 	warmth = lerpf(warmth, target_w, 0.01 * dt * 4.0)
 	if hero.moving:
-		stamina = maxf(0.0, stamina - 0.012 * dt)
+		var drain := 0.012
+		if hero.running:
+			drain = 0.05
+		if hero.climbing > 0.5:
+			drain = 0.04
+		stamina = maxf(0.0, stamina - drain * dt)
 	else:
 		stamina = minf(1.0, stamina + 0.05 * dt)
 	var hh := int(t_hours)
@@ -429,6 +438,17 @@ func _variants(kind: String) -> Array:
 			out.append(veg.branchy(510, "bare_birch"))
 		"bush":
 			for i in 3: out.append(veg.bush(600 + i))
+		"larch":
+			for i in 3: out.append(veg.branchy(1400 + i, "larch"))
+		"aspen":
+			for i in 3: out.append(veg.branchy(1500 + i, "aspen"))
+		"berry":
+			for i in 3: out.append(veg.berry_bush(1600 + i))
+		"mushroom":
+			for i in 2: out.append(veg.mushroom(1700 + i, true))
+			for i in 3: out.append(veg.mushroom(1710 + i, false))
+		"anthill":
+			out.append(veg.anthill(1800))
 		"fern":
 			for i in 3: out.append(veg.fern(700 + i))
 		"grass":
@@ -447,17 +467,17 @@ func _variants(kind: String) -> Array:
 			for i in 2: out.append(veg.log_fallen(1100 + i))
 	return out
 
-const BLOCK_R := {"spruce": 0.4, "pine": 0.32, "birch": 0.28, "bare": 0.3, "spruce_dead": 0.3, "stump": 0.45, "rock": 0.7, "boulder": 0.8}
+const BLOCK_R := {"spruce": 0.4, "pine": 0.32, "birch": 0.28, "bare": 0.3, "spruce_dead": 0.3, "stump": 0.45, "rock": 0.5, "boulder": 0.6, "larch": 0.32, "aspen": 0.26}
 
 func _scatter_all() -> void:
 	# вид, попыток на клетку 32 м, масштаб, дальность видимости, тень, правило
 	var rules := [
-		["spruce", 30, Vector2(0.75, 1.15), 90.0, true, "spruce_t"],
-		["pine", 14, Vector2(0.85, 1.15), 90.0, true, "pine_t"],
-		["birch", 16, Vector2(0.8, 1.15), 90.0, true, "birch_t"],
-		["birch", 5, Vector2(0.8, 1.15), 90.0, true, "edge"],
-		["bare", 3, Vector2(0.8, 1.2), 90.0, true, "edge"],
-		["spruce_dead", 2, Vector2(0.7, 1.0), 90.0, true, "tree"],
+		["spruce", 30, Vector2(0.75, 1.15), 80.0, true, "spruce_t"],
+		["pine", 14, Vector2(0.85, 1.15), 80.0, true, "pine_t"],
+		["birch", 16, Vector2(0.8, 1.15), 80.0, true, "birch_t"],
+		["birch", 5, Vector2(0.8, 1.15), 80.0, true, "edge"],
+		["bare", 3, Vector2(0.8, 1.2), 80.0, true, "edge"],
+		["spruce_dead", 2, Vector2(0.7, 1.0), 80.0, true, "tree"],
 		["spruce", 8, Vector2(0.18, 0.35), 60.0, true, "under"],
 		["bush", 30, Vector2(0.8, 1.5), 60.0, false, "under"],
 		["fern", 70, Vector2(0.7, 1.2), 45.0, false, "fern"],
@@ -465,9 +485,14 @@ func _scatter_all() -> void:
 		["twig", 60, Vector2(0.8, 1.3), 40.0, false, "under"],
 		["pebble", 40, Vector2(0.15, 0.45), 40.0, false, "pebble"],
 		["rock", 12, Vector2(0.5, 2.2), 85.0, true, "rock"],
-		["rock", 14, Vector2(1.8, 4.6), 110.0, true, "boulder"],
+		["rock", 14, Vector2(1.8, 4.6), 95.0, true, "boulder"],
 		["stump", 3, Vector2(0.8, 1.2), 60.0, true, "under"],
 		["log", 2, Vector2(0.9, 1.1), 70.0, true, "under"],
+		["larch", 8, Vector2(0.85, 1.15), 80.0, true, "larch_t"],
+		["aspen", 8, Vector2(0.8, 1.15), 80.0, true, "edge"],
+		["berry", 25, Vector2(0.7, 1.3), 40.0, false, "under"],
+		["mushroom", 14, Vector2(0.8, 1.4), 30.0, false, "under"],
+		["anthill", 1, Vector2(0.8, 1.2), 50.0, true, "under"],
 	]
 	var cache := {}
 	for r in rules:
@@ -494,10 +519,24 @@ func _scatter_all() -> void:
 					var sc: Vector2 = r[2]
 					var s := rng.randf_range(sc.x, sc.y)
 					var b := Basis(Vector3.UP, rng.randf() * TAU).scaled(Vector3(s, s * rng.randf_range(0.9, 1.1), s))
+					if r[0] == "log":
+						# наклон по рельефу: концы лежат на земле
+						var ax0: Vector3 = b.x.normalized()
+						var h1 := height(x + ax0.x * 2.5, z + ax0.z * 2.5)
+						var h0 := height(x - ax0.x * 2.5, z - ax0.z * 2.5)
+						var tilt := atan2(h1 - h0, 5.0)
+						b = Basis(ax0.cross(Vector3.UP).normalized(), tilt) * b
 					per_var[vi].append(Transform3D(b, Vector3(x, height(x, z) - 0.05, z)))
 					var br: float = BLOCK_R.get(r[5] if r[0] == "rock" else r[0], 0.0)
+					if r[0] == "rock" and s < 0.9:
+						br = 0.0
 					if br > 0.0 and not (r[0] == "spruce" and r[5] == "under"):
 						_add_blocker(x, z, br * s)
+					if r[0] == "log":
+						# бревно: цепочка кругов вдоль оси
+						var ax: Vector3 = b.x.normalized()
+						for t in [-2.0, -1.0, 0.0, 1.0, 2.0]:
+							_add_blocker(x + ax.x * t, z + ax.z * t, 0.4)
 				for vi in vars.size():
 					var xs: Array = per_var[vi]
 					if xs.is_empty():
@@ -536,6 +575,8 @@ func _accept(kind: String, x: float, z: float, rng: RandomNumberGenerator) -> bo
 			return slope < 0.25 and rng.randf() < fd * clampf(0.3 + bio * 0.8, 0.05, 1.0)
 		"birch_t":
 			return slope < 0.25 and rng.randf() < fd * clampf(0.15 - bio * 0.9, 0.0, 1.0)
+		"larch_t":
+			return slope < 0.3 and rng.randf() < fd * clampf(0.2 + bio * 0.6, 0.05, 0.8)
 		"tree":
 			return slope < 0.25 and rng.randf() < fd * fd
 		"edge":

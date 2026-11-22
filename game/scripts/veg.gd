@@ -24,6 +24,25 @@ func _init() -> void:
 	_card("fern", Color(0.72, 0.80, 0.62), 0.08, 0.9, 0.8)
 	_card("grass", Color(0.86, 0.88, 0.70), 0.12, 0.7, 0.0)
 	_card("reed", Color(0.9, 0.95, 0.8), 0.07, 0.6, 0.0)
+	_card("needle", Color(0.95, 1.05, 0.62), 0.04, 1.0, 1.0, "larch")
+	_card("broad_leaf", Color(0.84, 0.92, 0.7), 0.09, 1.0, 1.0, "aspen")
+	mats["aspen"].set_shader_parameter("fall_red", 1.0)
+	var img := Image.create(4, 4, false, Image.FORMAT_RGBA8)
+	img.fill(Color.WHITE)
+	var white := ImageTexture.create_from_image(img)
+	for pair in [["berry", Color(0.62, 0.08, 0.1)], ["cap_red", Color(0.72, 0.12, 0.08)], ["cap_brown", Color(0.42, 0.27, 0.15)], ["stem", Color(0.85, 0.82, 0.74)]]:
+		var sm := ShaderMaterial.new()
+		sm.shader = load("res://shaders/bark.gdshader")
+		sm.set_shader_parameter("tex", white)
+		sm.set_shader_parameter("tint", pair[1])
+		mats[pair[0]] = sm
+		fade_list.append(sm)
+	var lit := ShaderMaterial.new()
+	lit.shader = load("res://shaders/bark.gdshader")
+	lit.set_shader_parameter("tex", load("res://textures/ground_forest.png"))
+	lit.set_shader_parameter("tint", Color(0.75, 0.6, 0.45))
+	mats["litter"] = lit
+	fade_list.append(lit)
 	var blade := ShaderMaterial.new()
 	blade.shader = BLADE_SHADER
 	mats["blade"] = blade
@@ -34,7 +53,7 @@ func _init() -> void:
 	mats["core"] = core
 	fade_list.append(core)
 
-func _card(k: String, tint: Color, sway: float, yellow: float = 0.0, drop: float = 0.0) -> void:
+func _card(k: String, tint: Color, sway: float, yellow: float = 0.0, drop: float = 0.0, key: String = "") -> void:
 	var m := ShaderMaterial.new()
 	m.shader = CARD_SHADER
 	m.set_shader_parameter("tex", load("res://textures/%s.png" % k))
@@ -42,7 +61,7 @@ func _card(k: String, tint: Color, sway: float, yellow: float = 0.0, drop: float
 	m.set_shader_parameter("sway", sway)
 	m.set_shader_parameter("yellow_k", yellow)
 	m.set_shader_parameter("drop_k", drop)
-	mats[k] = m
+	mats[key if key != "" else k] = m
 	fade_list.append(m)
 
 func R(a: float, b: float) -> float:
@@ -200,6 +219,8 @@ func branchy(seed_v: int, kind: String) -> Array:
 		"pine": {"H": R(12, 15), "r": 0.3, "start": 0.62, "lv": 3, "spread": 0.9, "leaf": "pine", "cs": 1.6, "bark": "bark_pine", "n": 3},
 		"birch": {"H": R(8, 11), "r": 0.17, "start": 0.5, "lv": 3, "spread": 0.6, "leaf": "birch_leaf", "cs": 0.95, "bark": "bark_birch", "n": 3},
 		"bare": {"H": R(7, 10), "r": 0.22, "start": 0.35, "lv": 4, "spread": 0.75, "leaf": "", "cs": 0.0, "bark": "bark_dead", "n": 3},
+		"larch": {"H": R(13, 17), "r": 0.3, "start": 0.4, "lv": 3, "spread": 0.7, "leaf": "larch", "cs": 1.2, "bark": "bark_pine", "n": 4},
+		"aspen": {"H": R(10, 14), "r": 0.2, "start": 0.55, "lv": 3, "spread": 0.6, "leaf": "aspen", "cs": 1.0, "bark": "bark_birch", "n": 3},
 		"bare_birch": {"H": R(8, 10), "r": 0.17, "start": 0.45, "lv": 4, "spread": 0.6, "leaf": "", "cs": 0.0, "bark": "bark_birch", "n": 3},
 	}[kind]
 	var bark := Surf.new()
@@ -397,3 +418,44 @@ func twig(seed_v: int) -> Array:
 		var sd := Vector3(R(0.2, 0.8), 0, R(-1, 1)).normalized()
 		tube(bark, d * t + Vector3(0, 0.05, 0), d * t + sd * 0.2 + Vector3(0, 0.1, 0), d * t + sd * R(0.35, 0.6) + Vector3(0, 0.05, 0), 0.015, 0.006, 3, 4)
 	return [_commit([bark], ["bark_dead"]), 0.15]
+
+## Ягодный куст (брусника/черника/шиповник): низкий куст с ягодами.
+func berry_bush(seed_v: int) -> Array:
+	rng.seed = seed_v
+	var lf := Surf.new()
+	var bark := Surf.new()
+	var br := Surf.new()
+	for i in 4:
+		tube(bark, Vector3.ZERO, Vector3(R(-0.15, 0.15), 0.25, R(-0.15, 0.15)), Vector3(R(-0.35, 0.35), R(0.4, 0.6), R(-0.35, 0.35)), 0.02, 0.008, 3, 4)
+	for i in 18:
+		var d := Vector3(R(-1, 1), R(0.0, 1), R(-1, 1)).normalized()
+		var p := Vector3(0, 0.3, 0) + d * R(0.15, 0.45)
+		var b := Basis.from_euler(Vector3(R(0, 6), R(0, 6), R(0, 6)))
+		card(lf, p - b.y * 0.25, b, 0.5, 0.5, R(0.75, 1.0))
+	for i in 26:
+		var d := Vector3(R(-1, 1), R(0.1, 1), R(-1, 1)).normalized()
+		var p := Vector3(0, 0.3, 0) + d * R(0.3, 0.5)
+		tube(br, p - Vector3(0, 0.025, 0), p, p + Vector3(0, 0.025, 0), 0.028, 0.02, 2, 5)
+	return [_commit([bark, lf, br], ["bark_dead", "broad_leaf", "berry"]), 0.7]
+
+## Гриб: ножка и шляпка (мухомор или боровик).
+func mushroom(seed_v: int, red: bool) -> Array:
+	rng.seed = seed_v
+	var st := Surf.new()
+	var cap := Surf.new()
+	for i in rng.randi_range(1, 3):
+		var o := Vector3(R(-0.25, 0.25), 0, R(-0.25, 0.25)) if i > 0 else Vector3.ZERO
+		var h := R(0.1, 0.2)
+		tube(st, o, o + Vector3(R(-0.02, 0.02), h * 0.5, 0), o + Vector3(R(-0.03, 0.03), h, R(-0.03, 0.03)), 0.022, 0.018, 3, 6)
+		var top := o + Vector3(0, h, 0)
+		var cr := R(0.06, 0.1)
+		tube(cap, top - Vector3(0, 0.015, 0), top + Vector3(0, cr * 0.35, 0), top + Vector3(0, cr * 0.6, 0), cr, 0.005, 4, 10)
+	return [_commit([st, cap], ["stem", "cap_red" if red else "cap_brown"]), 0.3]
+
+## Муравейник: конус из хвои у основания ели.
+func anthill(seed_v: int) -> Array:
+	rng.seed = seed_v
+	var s := Surf.new()
+	var r := R(0.6, 0.9)
+	tube(s, Vector3(0, -0.05, 0), Vector3(0, r * 0.5, 0), Vector3(0, r * 0.95, 0), r, 0.06, 6, 14)
+	return [_commit([s], ["litter"]), 1.0]
