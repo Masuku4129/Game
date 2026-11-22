@@ -72,7 +72,7 @@ func enter(s: Dictionary) -> void:
 			p.visible = false
 	main._say("В избе" + ("" if bool(s.get("stove_lit", false)) else " холодно — затопите печь"))
 
-func leave() -> void:
+func leave(teleport: bool = true) -> void:
 	if not inside:
 		return
 	cancel_place()
@@ -82,10 +82,11 @@ func leave() -> void:
 	var hero: Node3D = main.hero
 	if hero.state == "sit":
 		hero._stand_up()
-	var p := _xf(s) * Vector3(0, 0, GEO.CD * 0.5 + 1.5)
-	p.y = main.height(p.x, p.z)
-	hero.position = p
-	hero.body.rotation.y = float(s["yaw"])
+	if teleport:
+		var p := _xf(s) * Vector3(0, 0, GEO.CD * 0.5 + 1.5)
+		p.y = main.height(p.x, p.z)
+		hero.position = p
+		hero.body.rotation.y = float(s["yaw"])
 	if _prev_cam != null and is_instance_valid(_prev_cam):
 		_prev_cam.current = true
 	else:
@@ -117,6 +118,12 @@ func _process(_d: float) -> void:
 		return
 	if cur.is_empty() or not camp.list.has(cur):
 		inside = false
+		return
+	# вышел через дверь ногами — обычная камера
+	var lp: Vector3 = _xf(cur).affine_inverse() * main.hero.position
+	var ih := GEO.inner_half()
+	if absf(lp.x) > ih.x + 0.4 or absf(lp.z) > ih.y + 0.4:
+		leave(false)
 		return
 	# джойстик — относительно своей камеры
 	main.rig.rotation.y = float(cur["yaw"])

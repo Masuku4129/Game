@@ -50,6 +50,7 @@ var msg := ""
 var water_mat: ShaderMaterial
 var beavers
 var inventory  # короб: inventory.gd
+var hunt  # --- hunt: туши, разделка, кровь, запах крови (hunt.gd) ---
 var camp  # --- build: лагерь и постройки (structures.gd) ---
 
 func _ready() -> void:
@@ -118,6 +119,12 @@ func _ready() -> void:
 	inventory = preload("res://scripts/inventory.gd").new()
 	inventory.main = self
 	ui.add_child(inventory)
+	# --- hunt: разделка туш, кровь, запах крови (hunt.gd) ---
+	hunt = preload("res://scripts/hunt.gd").new()
+	hunt.main = self
+	add_child(hunt)
+	hunt.setup()
+	# --- /hunt ---
 	# --- build: лагерь, постройки, стройка (structures.gd + build_mode/cabin/camp_ui) ---
 	camp = preload("res://scripts/structures.gd").new()
 	camp.main = self
@@ -795,7 +802,7 @@ func _update_stats(dt: float) -> void:
 	var items := PackedStringArray()
 	for k in inv.keys():
 		if int(inv[k]) > 0:
-			items.append("%s %d" % [PICK_NAME.get(k, preload("res://scripts/items.gd").name_of(k).to_lower()), inv[k]])  # build: не только PICK_NAME
+			items.append("%s %d" % [PICK_NAME.get(k, preload("res://scripts/items.gd").name_of(k).to_lower()), inv[k]])  # hunt: любые предметы из items.gd
 	if not items.is_empty():
 		info += "· " + ", ".join(items)
 	if msg_t > 0.0:
@@ -1155,6 +1162,10 @@ func drink() -> void:
 	_say("Напился")
 
 func bandage() -> void:
+	# --- hunt: повязка из короба; без неё — только зажать рану (hunt.gd) ---
+	if hunt != null and hunt.bandage():
+		return
+	# --- /hunt ---
 	bleed = 0.0
 	for k in injuries.keys():
 		if k != "перелом ноги":
@@ -1203,6 +1214,10 @@ func hurt(amount: float, from: Vector3, kind: String) -> void:
 		inventory.abort()
 	health = maxf(0.0, health - dmg)
 	bleed = minf(1.0, bleed + dmg * 0.6)
+	# --- hunt: брызги крови, кровь на одежде, разделка прерывается ---
+	if hunt != null:
+		hunt.on_hero_hurt(dmg, part, from)
+	# --- /hunt ---
 	var key := "рана: " + part
 	injuries[key] = float(injuries.get(key, 0.0)) + 24.0 + dmg * 80.0
 	if part == "нога" and (big or kind == "boar") and randf() < 0.35:

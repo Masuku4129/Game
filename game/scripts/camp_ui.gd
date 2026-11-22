@@ -446,7 +446,8 @@ func _process(delta: float) -> void:
 				btn.text = String(ctx_acts[i][0])
 		if panel.visible and _fn.is_valid():
 			_refresh_panel()
-	main.joy.visible = not panel.visible and not inv_open
+	if panel.visible:
+		main.joy.visible = false   # иначе видимостью джойстика управляет inventory.gd
 
 func _ctx(i: int) -> void:
 	if i < ctx_acts.size():

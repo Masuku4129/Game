@@ -974,6 +974,21 @@ func _run_test() -> void:
 	match _tf:
 		60:
 			main.inv.merge({"pebble": 40, "twig": 20, "branch": 30, "spruce_twigs": 40, "firewood": 12, "meat_raw": 3, "fish_raw": 2, "hide": 1, "log": 30, "moss": 12, "clay": 10, "plank": 40, "fiber": 6, "bark": 4, "shovel": 1}, true)
+			# поляна рядом: редкий лес, ровно, не у воды
+			var best: Vector3 = main.hero.position
+			var found := false
+			for rr in range(0, 160, 6):
+				for kk in 24:
+					var ang := TAU * kk / 24.0
+					var x: float = main.hero.position.x + cos(ang) * rr
+					var z: float = main.hero.position.z + sin(ang) * rr
+					if main.forest_density(x, z) < 0.12 and main.normal_at(x, z).y > 0.97 and main.height(x, z) > main.WATER_Y + 1.5 and main.zone(x, z) == 0:
+						best = Vector3(x, main.height(x, z), z)
+						found = true
+						break
+				if found:
+					break
+			main.hero.position = best
 			set_camp(main.hero.position)
 			build.start()
 			for k: String in ["campfire", "leanto", "tree_shelter"]:

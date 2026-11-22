@@ -32,6 +32,8 @@ const DRINKERS := ["roe", "deer", "moose", "boar", "wolf", "bear", "fox", "lynx"
 const HERD := ["roe", "deer", "moose", "boar", "muskdeer"]
 # выносливость на бегу (с): кошки — короткий рывок, волк — долгая погоня
 const ENDURE := {"lynx": 6.0, "tiger": 8.0, "fox": 10.0, "wolf": 45.0, "bear": 14.0}
+# --- hunt: на сколько метров хищник чует свежую кровь силы 1 (animals.scent_near) ---
+const SMELL := {"wolf": 70.0, "bear": 90.0, "tiger": 60.0, "wolverine": 70.0, "fox": 45.0, "lynx": 30.0}
 
 var kind := ""
 var sp: Dictionary
@@ -231,7 +233,7 @@ func think() -> void:
 			# бобр в хатке: выходит, когда отдохнул (днём — реже)
 			if state_t <= 0.0 and dh > 8.0 and (is_active() or not lodge_ok or rng.randf() < 0.2):
 				_emerge()
-		"wander", "graze", "rest", "alert", "job", "gnaw", "watch":
+		"wander", "graze", "rest", "alert", "job", "gnaw", "watch", "investigate":
 			# хищник: охота на добычу или на человека (сытый не охотится)
 			if (kind in ["wolf", "tiger"] or HUNTS.has(kind)) and sated <= 0.0 and (state != "rest" or rng.randf() < 0.05):
 				_hunt_choice(dh, sense, hero_alive)
@@ -252,6 +254,15 @@ func think() -> void:
 					state = "feed"
 					state_t = rng.randf_range(40.0, 90.0)
 					return
+			# --- hunt: хищник учуял свежую кровь — идёт проверить ---
+			if SMELL.has(kind) and sated <= 0.0 and not busy and state != "investigate" and rng.randf() < 0.1:
+				var bp: Vector3 = mgr.scent_near(position, float(SMELL[kind]))
+				if bp != Vector3.INF and bp.distance_to(position) > 3.0:
+					target = bp + Vector3(rng.randf_range(-2.0, 2.0), 0, rng.randf_range(-2.0, 2.0))
+					state = "investigate"
+					state_t = 90.0
+					return
+			# --- /hunt ---
 			if state_t <= 0.0 and not busy:
 				_idle_choice()
 		"ambush":
@@ -390,7 +401,7 @@ func _hunt_choice(dh: float, sense: float, hero_alive: bool) -> void:
 			state_t = 20.0
 		return
 	# волки и тигр: на человека — ночью или зимой; иначе на копытных (слабых — охотнее)
-	if hero_alive and dh < sense and (hungry_night or kind == "tiger"):
+	if hero_alive and dh < sense and (hungry_night or kind == "tiger" or float(main.bleed) > 0.05):  # hunt: кровь героя
 		prey = main.hero
 		state = "stalk"
 		state_t = 25.0
@@ -533,6 +544,13 @@ func tick(delta: float) -> void:
 				want = 0.0
 		"graze", "rest", "alert", "tree", "gnaw", "watch", "ambush":
 			want = 0.0
+		# --- hunt: идёт на запах крови, на месте — принюхивается ---
+		"investigate":
+			want = walk * 1.6
+			if Vector2(goal.x - position.x, goal.z - position.z).length() < 1.5:
+				want = 0.0
+				state_t = minf(state_t, 6.0)
+		# --- /hunt ---
 		"job":
 			goal = job_p
 			want = walk * (1.5 if swim_k > 0.5 else 1.0)
@@ -798,6 +816,11 @@ func _strike(tg: Node3D) -> void:
 ## Укус хищника: крупного зверя валят не с первого раза.
 func bitten(by: Node3D) -> void:
 	hp_left -= 1
+	# --- hunt: брызги крови, рана кровит ---
+	var hn: Variant = main.get("hunt")
+	if hn != null:
+		hn.on_bitten(self, by)
+	# --- /hunt ---
 	if hp_left <= 0:
 		kill()
 	elif state != "flee":
@@ -824,8 +847,18 @@ func kill() -> void:
 		(parts["ap"] as AnimationPlayer).active = false
 	if mgr != null:
 		mgr.add_carcass(self)
+	# --- hunt: лужа крови, туша на учёт для разделки ---
+	var hn: Variant = main.get("hunt")
+	if hn != null:
+		hn.on_kill(self)
+	# --- /hunt ---
 
 func _revive() -> void:
+	# --- hunt: на месте туши — кости, модель снова в шкуре ---
+	var hn: Variant = main.get("hunt")
+	if hn != null:
+		hn.on_revive(self)
+	# --- /hunt ---
 	dead = false
 	meat = 0.0
 	tire = 0.0
