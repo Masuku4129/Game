@@ -56,7 +56,7 @@ func _ready() -> void:
 	_make_terrain()
 	_make_water()
 	_scatter_all()
-	grass_mesh_vars = [veg.grass_patch(1500), veg.grass_patch(1501), veg.grass_patch(1502), veg.grass_patch(1503), veg.grass_patch(1504)]
+	grass_mesh_vars = [pv.tuft(1500), pv.tuft(1501), pv.tuft(1502), pv.tuft(1503, 1.3), pv.tuft(1504, 0.8)]
 	hero = preload("res://scripts/hero.gd").new()
 	hero.main = self
 	add_child(hero)
@@ -378,7 +378,7 @@ func _make_terrain() -> void:
 			grass *= 1.0 - smoothstep(0.08, 0.22, 1.0 - norms[i].y)
 			var mud := clampf((WATER_Y + 1.2 - y) / 1.5, 0.0, 1.0)
 			var leaves := clampf(n_detail.get_noise_2d(x * 2.0, z * 2.0) * 0.8 + fd * 0.5, 0.0, 1.0)
-			cols[i] = Color(grass, mud, leaves)
+			cols[i] = Color(fd, mud, leaves)
 	var idx := PackedInt32Array()
 	for iz in SEG:
 		for ix in SEG:
@@ -393,10 +393,8 @@ func _make_terrain() -> void:
 	var mesh := ArrayMesh.new()
 	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arr)
 	var mat := ShaderMaterial.new()
-	mat.shader = preload("res://shaders/terrain.gdshader")
-	mat.set_shader_parameter("forest", load("res://textures/ground_forest.png"))
-	mat.set_shader_parameter("grass", load("res://textures/ground_grass.png"))
-	mat.set_shader_parameter("rock", load("res://textures/ground_rock.png"))
+	mat.shader = preload("res://shaders/paint/ground.gdshader")
+	mat.set_shader_parameter("water_y", WATER_Y)
 	mesh.surface_set_material(0, mat)
 	terrain_mat = mat
 	var mi := MeshInstance3D.new()
@@ -409,8 +407,7 @@ func _make_water() -> void:
 	plane.subdivide_width = 2
 	plane.subdivide_depth = 2
 	var mat := ShaderMaterial.new()
-	mat.shader = preload("res://shaders/water.gdshader")
-	mat.set_shader_parameter("wave", load("res://textures/water_wave.png"))
+	mat.shader = preload("res://shaders/paint/water.gdshader")
 	plane.material = mat
 	water_mat = mat
 	var mi := MeshInstance3D.new()
@@ -422,6 +419,7 @@ func _make_water() -> void:
 # ---------- растительность ----------
 
 var veg = preload("res://scripts/veg.gd").new()
+var pv = preload("res://scripts/pveg.gd").new()
 var player_rig: Node3D
 var grass_mesh_vars: Array = []
 var grass_cells := {}
@@ -438,7 +436,10 @@ func _process(delta: float) -> void:
 	for m in veg.fade_list:
 		m.set_shader_parameter("hero_pos", hp)
 		m.set_shader_parameter("cam_pos", cp)
-	veg.mats["blade"].set_shader_parameter("hero_pos", hp)
+	for m in pv.fade_list:
+		m.set_shader_parameter("hero_pos", hp)
+		m.set_shader_parameter("cam_pos", cp)
+	pv.mats["tuft"].set_shader_parameter("hero_pos", hp)
 	_fps_t -= delta
 	if _fps_t <= 0.0:
 		_fps_t = 0.5
@@ -466,7 +467,7 @@ func _process(delta: float) -> void:
 		_sky_timer = 0.25
 		_update_sky()
 		_update_stats(0.25)
-		weather.apply(veg.fade_list, terrain_mat, veg.mats["blade"], water_mat)
+		weather.apply(veg.fade_list + pv.fade_list, terrain_mat, pv.mats["tuft"], water_mat)
 		var lbl: String = hero.action_label()
 		act_btn.visible = lbl != ""
 		act_btn.text = lbl
@@ -570,7 +571,7 @@ func _build_grass_cell(k: Vector2i) -> void:
 	var per_var := []
 	for v in grass_mesh_vars:
 		per_var.append([])
-	var step := 1.4
+	var step := 1.25
 	var z := 0.0
 	while z < GCELL:
 		var x := 0.0
@@ -620,22 +621,22 @@ func _variants(kind: String) -> Array:
 	var out := []
 	match kind:
 		"spruce":
-			for i in 4: out.append(veg.spruce(100 + i))
+			for i in 4: out.append(pv.spruce(100 + i))
 		"spruce_dead":
 			for i in 2: out.append(veg.spruce(200 + i, true))
 		"pine":
-			for i in 3: out.append(veg.branchy(300 + i, "pine"))
+			for i in 3: out.append(pv.pine(300 + i))
 		"birch":
-			for i in 3: out.append(veg.branchy(400 + i, "birch"))
+			for i in 3: out.append(pv.birch(400 + i))
 		"bare":
 			for i in 2: out.append(veg.branchy(500 + i, "bare"))
 			out.append(veg.branchy(510, "bare_birch"))
 		"bush":
-			for i in 3: out.append(veg.bush(600 + i))
+			for i in 3: out.append(pv.bush(600 + i))
 		"larch":
-			for i in 3: out.append(veg.branchy(1400 + i, "larch"))
+			for i in 3: out.append(pv.birch(1400 + i, "larch"))
 		"aspen":
-			for i in 3: out.append(veg.branchy(1500 + i, "aspen"))
+			for i in 3: out.append(pv.birch(1500 + i, "leaf"))
 		"berry":
 			for i in 3: out.append(veg.berry_bush(1600 + i))
 		"mushroom":
@@ -648,9 +649,9 @@ func _variants(kind: String) -> Array:
 		"grass":
 			for i in 4: out.append(veg.grass(800 + i))
 		"rock":
-			for i in 8: out.append(veg.rock(900 + i, 1))
+			for i in 8: out.append(pv.rock(900 + i))
 		"pebble":
-			for i in 3: out.append(veg.rock(950 + i, 0))
+			for i in 3: out.append(pv.rock(950 + i))
 		"reeds":
 			for i in 3: out.append(veg.reeds(1200 + i))
 		"twig":
@@ -661,7 +662,7 @@ func _variants(kind: String) -> Array:
 			for i in 2: out.append(veg.log_fallen(1100 + i))
 	return out
 
-const TREE_KINDS := ["spruce", "spruce_dead", "pine", "birch", "bare", "larch", "aspen"]
+const TREE_KINDS := []
 const NEAR_R := 30.0
 var tree_grid := {}
 var near_mesh := {}
@@ -945,9 +946,9 @@ func _scatter_all() -> void:
 					var by: float = height(x, z) - 0.05
 					if r[0] == "rock":
 						# камень — твёрдый купол: на него можно встать или залезть
-						var kind: int = vi % 4
-						var hr: float = [0.62, 0.68, 0.45, 0.6][kind] * s
-						var ht: float = [0.33, 0.17, 0.52, 0.4][kind] * s
+						var rsc: Vector3 = vars[vi][2]
+						var hr: float = (rsc.x + rsc.z) * 0.45 * s
+						var ht: float = rsc.y * 0.9 * s
 						if ht > 0.12:
 							_add_solid([0, Vector3(x, by, z), Vector3.ZERO, hr, ht])
 					elif r[0] == "stump":

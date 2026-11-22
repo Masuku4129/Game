@@ -1,6 +1,7 @@
 shader_type spatial;
 render_mode cull_disabled;
 #include "res://shaders/paint/paint.gdshaderinc"
+#include "res://shaders/fade.gdshaderinc"
 // Кора: базовый цвет и мазки; у берёзы — тёмные чечевички (COLOR.g = 1).
 uniform vec3 col = vec3(0.35, 0.25, 0.18);
 uniform vec3 col2 = vec3(0.22, 0.16, 0.12);
@@ -15,6 +16,9 @@ void vertex() {
 }
 
 void fragment() {
+	if (fade_discard(wp, FRAGCOORD.xy)) {
+		discard;
+	}
 	float s = vnoise(vec2(UV.x * 6.0, UV.y * 1.2)) * 0.6 + vnoise(vec2(UV.x * 14.0, UV.y * 3.0)) * 0.4;
 	vec3 c = mix(lin(col2), lin(col), s);
 	if (birch > 0.5) {

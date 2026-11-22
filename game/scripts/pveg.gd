@@ -5,6 +5,7 @@ extends RefCounted
 
 var rng := RandomNumberGenerator.new()
 var mats := {}
+var fade_list: Array = []
 var _ico: Array = []
 
 func _init() -> void:
@@ -17,12 +18,14 @@ func _init() -> void:
 		["birch", Color(0.14, 0.25, 0.11), Color(0.36, 0.5, 0.18), Color(0.7, 0.74, 0.3), 1.0],
 		["leaf", Color(0.12, 0.22, 0.1), Color(0.3, 0.45, 0.17), Color(0.62, 0.68, 0.27), 1.0],
 		["bush", Color(0.1, 0.2, 0.09), Color(0.26, 0.4, 0.15), Color(0.56, 0.62, 0.24), 0.8],
+		["larch", Color(0.12, 0.2, 0.1), Color(0.34, 0.46, 0.2), Color(0.66, 0.7, 0.3), 1.0],
 	]:
 		var m := ShaderMaterial.new()
 		m.shader = fol
 		m.set_shader_parameter("col_dark", f[1])
 		m.set_shader_parameter("col_mid", f[2])
 		m.set_shader_parameter("col_light", f[3])
+		m.set_shader_parameter("autumn_k", f[4])
 		mats[f[0]] = m
 	for b in [["bark", Color(0.36, 0.27, 0.2), Color(0.2, 0.15, 0.11), 0.0], ["bark_pine", Color(0.52, 0.36, 0.24), Color(0.32, 0.22, 0.16), 0.0], ["bark_birch", Color(0.9, 0.88, 0.82), Color(0.72, 0.7, 0.66), 1.0], ["bark_dead", Color(0.48, 0.44, 0.38), Color(0.3, 0.27, 0.24), 0.0]]:
 		var m := ShaderMaterial.new()
@@ -41,13 +44,17 @@ func _init() -> void:
 	# мазки листвы: те же цвета, что у сплошных крон
 	var bt := _brush_tex()
 	var lc := load("res://shaders/paint/leafcard.gdshader")
-	for k in ["spruce", "pine", "birch", "leaf", "bush"]:
+	for k in ["spruce", "pine", "birch", "leaf", "bush", "larch"]:
 		var m := ShaderMaterial.new()
 		m.shader = lc
 		m.set_shader_parameter("brush", bt)
-		for p in ["col_dark", "col_mid", "col_light"]:
+		for p in ["col_dark", "col_mid", "col_light", "autumn_k"]:
 			m.set_shader_parameter(p, mats[k].get_shader_parameter(p))
 		mats[k + "_card"] = m
+
+	for k in mats.keys():
+		if k != "tuft":
+			fade_list.append(mats[k])
 
 ## Текстура мазка листвы: десяток листьев-эллипсов в круге, рваный край, g — оттенок.
 func _brush_tex() -> Texture2D:
@@ -312,7 +319,7 @@ func birch(seed_v: int, kind: String = "birch") -> Array:
 		if i % 2 == 0:
 			trunk(bk, axis - Vector3(0, 0.5, 0), (axis + c) * 0.5, c, 0.05, 0.02, 1, 4)
 		clump(fl, c, Vector3(R(0.8, 1.2), R(0.8, 1.3), R(0.8, 1.2)) * (1.0 - t * 0.3), R(0.3, 1.0))
-	var lk := "birch" if kind == "birch" else "leaf"
+	var lk := kind if kind in ["birch", "larch"] else "leaf"
 	return [_mesh([[bk, "bark_birch"], [fl, lk], [cards, lk + "_card"]]), H]
 
 func bush(seed_v: int) -> Array:
@@ -347,7 +354,7 @@ func rock(seed_v: int) -> Array:
 			st.set_color(Color(shade, 0, 0, 1))
 			st.set_normal(verts[tri[k]])
 			st.add_vertex(pts[tri[k]])
-	return [_mesh([[st, "rock"]]), sc.y]
+	return [_mesh([[st, "rock"]]), sc.y, sc]
 
 ## Пучок травы: три перекрещенные карточки с мазками травинок.
 func tuft(seed_v: int, tall: float = 1.0) -> Array:

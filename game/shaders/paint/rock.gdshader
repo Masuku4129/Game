@@ -1,6 +1,7 @@
 shader_type spatial;
 render_mode cull_disabled;
 #include "res://shaders/paint/paint.gdshaderinc"
+#include "res://shaders/fade.gdshaderinc"
 // Камень гранями: плоские грани, тёплый серый, мох сверху, мазки.
 uniform vec3 col = vec3(0.44, 0.42, 0.37);
 uniform vec3 col_dark = vec3(0.26, 0.26, 0.27);
@@ -15,6 +16,9 @@ void vertex() {
 }
 
 void fragment() {
+	if (fade_discard(wp, FRAGCOORD.xy)) {
+		discard;
+	}
 	vec3 wn = normalize(cross(dFdx(wp), dFdy(wp)));
 	if (dot(wn, CAMERA_POSITION_WORLD - wp) < 0.0) { wn = -wn; }
 	vec3 n = (VIEW_MATRIX * vec4(wn, 0.0)).xyz;
