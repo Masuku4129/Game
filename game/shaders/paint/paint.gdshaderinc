@@ -1,13 +1,14 @@
+vec3 lin(vec3 c) { return pow(c, vec3(2.2)); }
 // Живописный свет: мягкая «ступень» света вместо физически точного затухания,
 // тени уходят в холодный цвет, освещённые стороны — в тёплый.
-uniform vec3 shade_cool : source_color = vec3(0.55, 0.62, 0.85);
+uniform vec3 shade_cool = vec3(0.55, 0.62, 0.85);
 uniform float ramp_lo = -0.05;
 uniform float ramp_hi = 0.45;
 
 void light() {
 	float ndl = dot(NORMAL, LIGHT);
 	float t = smoothstep(ramp_lo, ramp_hi, ndl) * mix(0.25, 1.0, ATTENUATION);
-	vec3 c = mix(shade_cool * 0.3, vec3(1.0, 0.95, 0.85), t);
+	vec3 c = mix(lin(shade_cool) * 0.3, vec3(1.0, 0.95, 0.85), t);
 	DIFFUSE_LIGHT += c * LIGHT_COLOR / PI;
 }
 

@@ -2,8 +2,8 @@ shader_type spatial;
 render_mode cull_disabled;
 #include "res://shaders/paint/paint.gdshaderinc"
 // Кочка травы: широкие мазки-листья, цвет от корня к кончику, ветер, приминание у героя.
-uniform vec3 col_root : source_color = vec3(0.16, 0.26, 0.1);
-uniform vec3 col_tip : source_color = vec3(0.62, 0.68, 0.3);
+uniform vec3 col_root = vec3(0.16, 0.26, 0.1);
+uniform vec3 col_tip = vec3(0.62, 0.68, 0.3);
 uniform float wind = 0.5;
 uniform float snow = 0.0;
 uniform float dry = 0.0;
@@ -26,8 +26,8 @@ void vertex() {
 }
 
 void fragment() {
-	vec3 c = mix(col_root, col_tip, smoothstep(0.0, 1.0, hgt)) * (0.85 + COLOR.r * 0.3);
-	c = mix(c, vec3(0.78, 0.66, 0.38) * (0.6 + hgt * 0.5), dry);
+	vec3 c = mix(lin(col_root), lin(col_tip), smoothstep(0.0, 1.0, hgt)) * (0.85 + COLOR.r * 0.3);
+	c = mix(c, lin(vec3(0.78, 0.66, 0.38)) * (0.6 + hgt * 0.5), dry);
 	ALBEDO = c;
 	ROUGHNESS = 1.0;
 	SPECULAR = 0.0;
