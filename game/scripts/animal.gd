@@ -176,7 +176,7 @@ func think() -> void:
 
 func _hunt_choice(dh: float, sense: float, hero_alive: bool) -> void:
 	var w = main.weather
-	var hungry_night := not float(main.day_factor) > 0.5 or w.season_index() == 1
+	var hungry_night: bool = not float(main.day_factor) > 0.5 or w.season_index() == 1
 	if kind == "fox":
 		var h = mgr.nearest_of(self, ["hare"], 30.0)
 		if h != null:
@@ -269,7 +269,7 @@ func tick(delta: float) -> void:
 				if d < 0.6 + float(parts["L"]) * 0.55:
 					_strike(tg)
 		"retreat":
-			var away2 := position - main.hero.position
+			var away2: Vector3 = position - main.hero.position
 			away2.y = 0
 			goal = position + away2.normalized() * 10.0
 			want = run * 0.6
