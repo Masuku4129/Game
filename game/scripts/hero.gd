@@ -40,6 +40,8 @@ var climbb := 0.0
 var cphase := 0.0
 var soaked := 0.0
 var depth := 0.0
+var sink := 0.0      # погружение в снег, м
+var mud_sink := 0.0  # погружение в грязь, м (модель опускается)
 var vy := 0.0
 var airborne := false
 var fallb := 0.0
@@ -454,7 +456,7 @@ func _process_main(delta: float) -> void:
 			running = false
 		elif depth > 0.3:
 			wf = 1.0 - (depth - 0.3) * 0.55
-		target = d * sp_base * mag * f * wf * (1.0 - main.weather.snow * 0.3) * main.move_factor()
+		target = d * sp_base * mag * f * wf * _sink_slow() * main.move_factor()
 	else:
 		running = false
 	# крутой склон: человека тянет вниз, он теряет управление и катится
@@ -535,6 +537,7 @@ func _process_main(delta: float) -> void:
 			vy = 0.0
 			airborne = false
 	fallb = lerpf(fallb, 1.0 if (airborne and vy < -4.5) else 0.0, minf(1.0, 5.0 * delta))
+	_update_sink(delta)
 	land_t = maxf(0.0, land_t - delta)
 	# походка: фаза от пройденного пути, размах от скорости
 	var sn := clampf(sp / speed, 0.0, 1.6)
@@ -611,6 +614,19 @@ func _process_main(delta: float) -> void:
 		body.position.y -= maxf(0.0, sin(phase)) * 0.06 * limp
 	_pose_fall_land()
 	_pose_swim(delta, sp)
+
+## Насколько ноги ушли в снег и в грязь (по щиколотку, по колено, по пояс).
+func _update_sink(delta: float) -> void:
+	var sk := Vector2.ZERO
+	if main.feet != null and not airborne and swimb < 0.2:
+		sk = main.feet.sink_at(position)
+	sink = sk.x
+	mud_sink = lerpf(mud_sink, sk.y, minf(1.0, 3.0 * delta))
+
+func _sink_slow() -> float:
+	if main.feet == null:
+		return 1.0
+	return main.feet.slow(Vector2(sink, mud_sink))
 
 ## Падение: руки в стороны и вверх, ноги поджаты. Приземление: глубокий присед.
 func _pose_fall_land() -> void:
@@ -846,7 +862,7 @@ func _animate_model(delta: float) -> void:
 	_last_pos = position
 	_hspeed = lerpf(_hspeed, Vector2(d.x, d.z).length() / maxf(delta, 0.001), minf(1.0, delta * 8.0))
 	model.rotation = Vector3(body.rotation.x, body.rotation.y, body.rotation.z)
-	model.position = Vector3.ZERO
+	model.position = Vector3(0, -mud_sink, 0)
 	if state == "dead":
 		_play("Death01", 1.0, 0.2)
 		return

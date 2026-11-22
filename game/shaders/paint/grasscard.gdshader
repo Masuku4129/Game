@@ -10,6 +10,8 @@ uniform float snow = 0.0;
 uniform float dry = 0.0;
 uniform vec3 hero_pos = vec3(0.0, -1000.0, 0.0);
 uniform float grass_r = 38.0;
+uniform sampler2D field_tex : filter_linear;
+uniform float mud_m = 0.0;
 varying float hgt;
 
 void vertex() {
@@ -27,6 +29,9 @@ void vertex() {
 	VERTEX *= max(0.0, 1.0 - snow * 1.8);
 	// у края области трава плавно вырастает, а не появляется клеткой
 	VERTEX *= 1.0 - smoothstep(grass_r - 14.0, grass_r - 2.0, d);
+	// в вязкой грязи трава вытоптана и редкая
+	float mf = texture(field_tex, ((w.xz + 256.0) / (512.0 / 384.0) + 0.5) / 385.0).b;
+	VERTEX *= 1.0 - smoothstep(0.3, 0.7, mf) * clamp(mud_m / 0.15, 0.0, 1.0) * 0.85;
 	NORMAL = vec3(0.0, 1.0, 0.0);
 }
 

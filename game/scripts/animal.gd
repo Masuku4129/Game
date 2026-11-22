@@ -45,6 +45,8 @@ var climb_h := 0.0
 var far := false
 var group := -1
 var _acc := 0.0
+var trk := 0.0       # путь с последнего следа
+var trk_side := 1.0
 var rng := RandomNumberGenerator.new()
 
 func setup(k: String, m: Node3D, mg: Node, pos: Vector3, seed_v: int, sc: float = 1.0) -> void:
@@ -334,6 +336,9 @@ func tick(delta: float) -> void:
 	if kind == "beaver":
 		g = maxf(g, main.WATER_Y - 0.12)
 	position.y = g + climb_h
+	# на снегу: лёгкие бегут поверху, тяжёлые проваливаются; в снегу и грязи — следы
+	if climb_h <= 0.0 and swim_k <= 0.0 and main.feet != null and g < main.height(position.x, position.z) + 0.1:
+		position.y += main.feet.animal_step(self, speed * delta)
 	rotation.y = heading
 	if not far:
 		_animate(delta)

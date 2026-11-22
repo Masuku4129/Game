@@ -369,6 +369,8 @@ func _update_sky() -> void:
 	day_factor = d
 
 var hmap_tex: ImageTexture
+var terrain_hs := PackedFloat32Array()
+var terrain_cols := PackedColorArray()
 
 func _make_terrain() -> void:
 	var n := SEG + 1
@@ -401,6 +403,8 @@ func _make_terrain() -> void:
 			cols[i] = Color(fd, mud, leaves)
 	var himg := Image.create_from_data(n, n, false, Image.FORMAT_RF, hs.to_byte_array())
 	hmap_tex = ImageTexture.create_from_image(himg)
+	terrain_hs = hs
+	terrain_cols = cols
 	var mat := ShaderMaterial.new()
 	mat.shader = preload("res://shaders/paint/ground.gdshader")
 	mat.set_shader_parameter("water_y", WATER_Y)
@@ -436,6 +440,7 @@ func _make_terrain() -> void:
 			var mi := MeshInstance3D.new()
 			mi.mesh = mesh
 			mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+			mi.extra_cull_margin = 2.0  # снег поднимает поверхность в шейдере
 			add_child(mi)
 
 func _make_water() -> void:
@@ -625,6 +630,9 @@ func _update_stats(dt: float) -> void:
 			drain = 0.035
 		if hero.swimb > 0.5:
 			drain = 0.012
+		# по колено в снегу или грязи — тяжело, по пояс — очень тяжело
+		var sk: float = hero.sink + hero.mud_sink * 1.5
+		drain = drain * (1.0 + sk * 3.0) + sk * 0.01
 		stamina = maxf(0.0, stamina - drain * dt)
 	else:
 		stamina = minf(1.0, stamina + (0.14 if hero.state == "sit" else 0.07) * dt)
