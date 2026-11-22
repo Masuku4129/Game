@@ -540,7 +540,14 @@ func _shots() -> void:
 		hero.visible = false
 	if _shot_n == 85:
 		print("shot no-hero tris ", Performance.get_monitor(Performance.RENDER_TOTAL_PRIMITIVES_IN_FRAME))
-	if _shot_n > 86:
+		for m in cliff_mmi:
+			m.visible = false
+	if _shot_n == 87:
+		print("shot no-cliff tris ", Performance.get_monitor(Performance.RENDER_TOTAL_PRIMITIVES_IN_FRAME))
+		sun.shadow_enabled = false
+	if _shot_n == 89:
+		print("shot no-shadow tris ", Performance.get_monitor(Performance.RENDER_TOTAL_PRIMITIVES_IN_FRAME))
+	if _shot_n > 90:
 		get_tree().quit()
 
 func _process(delta: float) -> void:
@@ -1222,6 +1229,7 @@ func _scatter_all() -> void:
 
 # ---------- занятость места: стволы, камни и поваленные деревья не пересекаются ----------
 var occ := {}
+var cliff_mmi: Array = []
 
 func _occ_radius(kind: String, v: Array, s: float) -> float:
 	if kind in TREE_KINDS or kind in ["bare", "spruce_dead", "snag", "snag_b"]:
@@ -1280,7 +1288,7 @@ func _cliff_rocks(vars: Array) -> void:
 	for v in vars:
 		per_var.append([])
 	var half := SIZE * 0.5 - 4.0
-	var step := 2.2
+	var step := 3.2
 	var z := -half
 	while z < half:
 		var x := -half
@@ -1298,7 +1306,7 @@ func _cliff_rocks(vars: Array) -> void:
 				if dh > 3.0:
 					var vi := rng.randi() % vars.size()
 					var rsc: Vector3 = vars[vi][2]
-					var sxz := rng.randf_range(1.5, 2.6)
+					var sxz := rng.randf_range(2.0, 3.2)
 					var sy := dh * rng.randf_range(0.75, 1.05) / rsc.y
 					var b := Basis(Vector3.UP, atan2(up.x, up.y) + rng.randf_range(-0.5, 0.5)).scaled(Vector3(sxz, sy, sxz * 0.8))
 					var o := Vector3(px - up.x * 0.6, hb - 0.4, pz - up.y * 0.6)
@@ -1307,7 +1315,7 @@ func _cliff_rocks(vars: Array) -> void:
 					_occ_add(o.x, o.z, sxz * 0.9)
 					# осыпь у подножия
 					for k in 2:
-						if rng.randf() < 0.6:
+						if rng.randf() < 0.4:
 							var d := rng.randf_range(1.8, 4.5)
 							var sx2 := px - up.x * d + rng.randf_range(-1.5, 1.5)
 							var sz2 := pz - up.y * d + rng.randf_range(-1.5, 1.5)
@@ -1328,7 +1336,8 @@ func _cliff_rocks(vars: Array) -> void:
 			mm.set_instance_transform(i, xs[i])
 		var mmi := MultiMeshInstance3D.new()
 		mmi.multimesh = mm
-		mmi.visibility_range_end = 120.0
+		mmi.visibility_range_end = 100.0
+		mmi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 		mmi.visibility_range_end_margin = 14.0
 		mmi.visibility_range_fade_mode = GeometryInstance3D.VISIBILITY_RANGE_FADE_SELF
 		add_child(mmi)
