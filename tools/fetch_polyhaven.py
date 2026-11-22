@@ -19,7 +19,7 @@ else:
     for aid in sys.argv[2:]:
         files = jget(f"{API}/files/{aid}")
         d = os.path.join(root, aid); os.makedirs(d, exist_ok=True)
-        if "gltf" in files:
+        if "gltf" in files and "Diffuse" not in files:
             g = files["gltf"]["1k"]["gltf"]
             open(os.path.join(d, aid + ".gltf"), "wb").write(get(g["url"]))
             for rel, inc in g.get("include", {}).items():
@@ -30,7 +30,7 @@ else:
                 if m in files and "1k" in files[m]:
                     f = files[m]["1k"].get("jpg") or files[m]["1k"].get("png")
                     open(os.path.join(d, f"{aid}_{m.lower()}." + f["url"].rsplit(".", 1)[1]), "wb").write(get(f["url"]))
-        if "gltf" in files:
+        if "gltf" in files and "Diffuse" not in files:
             j = json.load(open(os.path.join(d, aid + ".gltf")))
             tris = sum(j["accessors"][pr["indices"]]["count"] // 3 for m in j["meshes"] for pr in m["primitives"] if "indices" in pr)
             print("ok", aid, "MB", round(sum(os.path.getsize(os.path.join(r,f)) for r,_,fs in os.walk(d) for f in fs)/1e6,1), "meshes", len(j["meshes"]), "nodes", [n.get("name") for n in j["nodes"]][:12], "tris", tris)

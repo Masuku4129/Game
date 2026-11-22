@@ -9,7 +9,28 @@ concurrency:
 permissions:
   contents: write
 jobs:
+  assets:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Cache assets
+        id: cache
+        uses: actions/cache@v4
+        with:
+          path: game/assets/ph
+          key: ph2-${{ hashFiles('tools/assets.txt', 'tools/fetch_polyhaven.py', 'tools/pack_models.sh') }}
+      - name: Download and pack
+        if: steps.cache.outputs.cache-hit != 'true'
+        run: |
+          python3 tools/fetch_polyhaven.py get $(cat tools/assets.txt)
+          tools/pack_models.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ph-assets
+          path: game/assets/ph
+          retention-days: 3
   export:
+    needs: assets
     runs-on: ubuntu-latest
     timeout-minutes: 30
     container:
@@ -18,16 +39,10 @@ jobs:
       GODOT_VERSION: "4.3"
     steps:
       - uses: actions/checkout@v4
-      - name: Cache assets
-        uses: actions/cache@v4
+      - uses: actions/download-artifact@v4
         with:
+          name: ph-assets
           path: game/assets/ph
-          key: ph-${{ hashFiles('tools/assets.txt', 'tools/fetch_polyhaven.py') }}
-      - name: Download Poly Haven assets
-        run: |
-          apt-get update -qq >/dev/null 2>&1 || true
-          command -v python3 || (apt-get install -y -qq python3 >/dev/null)
-          python3 tools/fetch_polyhaven.py get $(cat tools/assets.txt)
       - name: Setup Godot templates and editor settings
         run: |
           mkdir -p ~/.local/share/godot/export_templates/ ~/.config/
