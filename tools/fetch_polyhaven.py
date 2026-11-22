@@ -30,4 +30,9 @@ else:
                 if m in files and "1k" in files[m]:
                     f = files[m]["1k"].get("jpg") or files[m]["1k"].get("png")
                     open(os.path.join(d, f"{aid}_{m.lower()}." + f["url"].rsplit(".", 1)[1]), "wb").write(get(f["url"]))
-        print("ok", aid)
+        if "gltf" in files:
+            j = json.load(open(os.path.join(d, aid + ".gltf")))
+            tris = sum(j["accessors"][pr["indices"]]["count"] // 3 for m in j["meshes"] for pr in m["primitives"] if "indices" in pr)
+            print("ok", aid, "meshes", len(j["meshes"]), "nodes", [n.get("name") for n in j["nodes"]][:12], "tris", tris)
+        else:
+            print("ok", aid, os.listdir(d))

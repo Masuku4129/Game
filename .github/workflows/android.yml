@@ -18,13 +18,23 @@ jobs:
       GODOT_VERSION: "4.3"
     steps:
       - uses: actions/checkout@v4
+      - name: Cache assets
+        uses: actions/cache@v4
+        with:
+          path: game/assets/ph
+          key: ph-${{ hashFiles('tools/assets.txt', 'tools/fetch_polyhaven.py') }}
+      - name: Download Poly Haven assets
+        run: |
+          apt-get update -qq >/dev/null 2>&1 || true
+          command -v python3 || (apt-get install -y -qq python3 >/dev/null)
+          python3 tools/fetch_polyhaven.py get $(cat tools/assets.txt)
       - name: Setup Godot templates and editor settings
         run: |
           mkdir -p ~/.local/share/godot/export_templates/ ~/.config/
           cp -r /root/.config/godot ~/.config/godot || true
           cp -r /root/.local/share/godot/export_templates/${GODOT_VERSION}.stable ~/.local/share/godot/export_templates/ || true
       - name: Import project
-        run: cd game && (timeout 300 godot --headless --editor --quit || true)
+        run: cd game && (timeout 900 godot --headless --import || timeout 600 godot --headless --editor --quit || true)
       - name: Export APK
         run: |
           mkdir -p build
