@@ -8,16 +8,20 @@ uniform vec3 col2 = vec3(0.22, 0.16, 0.12);
 uniform float birch = 0.0;
 uniform bool no_fade = false;
 uniform float snow = 0.0;
+// подгрызенное дерево: ниже clip_y (по модели) коры нет
+uniform float clip_y = -10000.0;
 varying vec3 wp;
+varying float ly;
 varying vec3 wn;
 
 void vertex() {
 	wp = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;
+	ly = VERTEX.y;
 	wn = normalize((MODEL_MATRIX * vec4(NORMAL, 0.0)).xyz);
 }
 
 void fragment() {
-	if (!no_fade && fade_discard(wp, FRAGCOORD.xy)) {
+	if (ly < clip_y || (!no_fade && fade_discard(wp, FRAGCOORD.xy))) {
 		discard;
 	}
 	float s = vnoise(vec2(UV.x * 6.0, UV.y * 1.2)) * 0.6 + vnoise(vec2(UV.x * 14.0, UV.y * 3.0)) * 0.4;

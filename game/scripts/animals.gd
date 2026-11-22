@@ -71,12 +71,14 @@ func populate() -> void:
 	for ti in 2:
 		var tp := _spot(func(x, z): return x > 60.0 and z > 60.0, start, 120.0)
 		_spawn("tiger", tp, 1.0, -1)
-	# бобры: хатка на реке
-	for gi in 4:
-		var bp := _spot(func(x, z): return main.river_dist(x, z) < 9.0 and main.height(x, z) < main.WATER_Y + 0.6 and main.height(x, z) > main.WATER_Y - 1.2, start, 40.0)
-		_lodge(bp)
-		for k in 2:
-			_spawn("beaver", _near(bp, 3.0), 1.0, 500 + gi)
+	# бобры: по 3 у каждой хатки (колонии — в beavers.gd)
+	for ci in main.beavers.colonies.size():
+		var col: Dictionary = main.beavers.colonies[ci]
+		var lp: Vector3 = col["lodge"]
+		for k in 3:
+			var bv: Node3D = _spawn("beaver", _near(lp, 3.5), rng.randf_range(0.9, 1.05), 500 + ci)
+			bv.home = lp
+			col["beavers"].append(bv)
 	# птицы: стайки
 	_make_bird_mesh()
 	for gi in 28:
@@ -156,36 +158,6 @@ func _den(p: Vector3, r: float, h: float) -> void:
 	hole.visibility_range_end = 60.0
 	add_child(hole)
 	main._add_solid([0, Vector3(p.x, y - h * 0.25, p.z), Vector3.ZERO, r * 0.95, h * 0.75])
-
-## Бобровая хатка: конус из веток у воды.
-func _lodge(p: Vector3) -> void:
-	var y: float = maxf(main.ground_at(p.x, p.z), main.WATER_Y - 0.4)
-	var mi := MeshInstance3D.new()
-	var cm := CylinderMesh.new()
-	cm.top_radius = 0.25
-	cm.bottom_radius = 1.6
-	cm.height = 1.4
-	cm.radial_segments = 10
-	mi.mesh = cm
-	mi.material_override = main.veg.mats["bark_dead"]
-	mi.position = Vector3(p.x, y + 0.5, p.z)
-	mi.visibility_range_end = 80.0
-	add_child(mi)
-	for i in 9:
-		var st := MeshInstance3D.new()
-		var sc := CylinderMesh.new()
-		sc.top_radius = 0.03
-		sc.bottom_radius = 0.04
-		sc.height = 1.6
-		sc.radial_segments = 4
-		st.mesh = sc
-		st.material_override = main.veg.mats["bark_dead"]
-		var a := TAU * i / 9.0
-		st.position = Vector3(p.x + cos(a) * 0.9, y + 0.55, p.z + sin(a) * 0.9)
-		st.rotation = Vector3(0, -a, 0.9)
-		st.visibility_range_end = 50.0
-		add_child(st)
-	main._add_solid([0, Vector3(p.x, y, p.z), Vector3.ZERO, 1.5, 1.2])
 
 ## Ближний хищник, опасный для зверя a.
 func nearest_predator(a: Node3D, r: float) -> Node3D:

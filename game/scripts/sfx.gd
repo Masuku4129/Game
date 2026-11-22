@@ -13,6 +13,8 @@ var land_s: AudioStream
 var howl: AudioStreamWAV
 var river3d: AudioStreamPlayer3D
 var _one: Array = []
+## Синтезированные звуки бобров и падающих деревьев.
+var synth := {}
 var _bird_t := 4.0
 var _howl_t := 60.0
 var _bush_t := 0.0
@@ -45,6 +47,7 @@ func _ready() -> void:
 		bushes.append(_ogg("bush%d" % (i + 1)))
 	land_s = _ogg("land")
 	howl = _howl()
+	synth = {"crack": _crack(), "thud": _thud(), "slap": _slap(), "gnaw": _gnaw()}
 	for i in 6:
 		var p := AudioStreamPlayer3D.new()
 		p.unit_size = 10.0
@@ -79,6 +82,103 @@ func _howl() -> AudioStreamWAV:
 	w.mix_rate = rate
 	w.data = b
 	return w
+
+func _wav(b: PackedByteArray, rate: int) -> AudioStreamWAV:
+	var w := AudioStreamWAV.new()
+	w.format = AudioStreamWAV.FORMAT_16_BITS
+	w.mix_rate = rate
+	w.data = b
+	return w
+
+## Треск ломающегося ствола: редкие щелчки учащаются, скрип волокон, в конце — громкий излом.
+func _crack() -> AudioStreamWAV:
+	var rate := 22050
+	var n := int(1.9 * rate)
+	var b := PackedByteArray()
+	b.resize(n * 2)
+	var r := RandomNumberGenerator.new()
+	r.seed = 5
+	var click := 0.0
+	var lp := 0.0
+	var ph := 0.0
+	for i in n:
+		var t := float(i) / n
+		# щелчки: вероятность растёт к концу
+		if r.randf() < 0.0008 + t * t * 0.006:
+			click = r.randf_range(0.4, 1.0)
+		var snap := 0.0
+		if t > 0.78 and t < 0.86:
+			snap = (1.0 - (t - 0.78) / 0.08) * r.randf_range(-1.0, 1.0)
+		var nz := r.randf_range(-1.0, 1.0)
+		lp += (nz - lp) * 0.35
+		var c := click * nz
+		click *= 0.93
+		# скрип: низкий пилообразный тон с дрожью
+		ph += TAU * (70.0 + sin(t * 40.0) * 12.0 + r.randf() * 8.0) / rate
+		var creak := (fmod(ph, TAU) / TAU - 0.5) * smoothstep(0.1, 0.5, t) * (1.0 - smoothstep(0.75, 0.8, t)) * 0.25
+		var v := c * 0.8 + creak * (0.5 + 0.5 * absf(lp)) + snap * 0.9 + lp * 0.05 * (1.0 - t)
+		b.encode_s16(i * 2, int(clampf(v, -1.0, 1.0) * 30000.0))
+	return _wav(b, rate)
+
+## Удар ствола о землю: глухой низкий удар и шорох кроны.
+func _thud() -> AudioStreamWAV:
+	var rate := 22050
+	var n := int(1.4 * rate)
+	var b := PackedByteArray()
+	b.resize(n * 2)
+	var r := RandomNumberGenerator.new()
+	r.seed = 6
+	var lp := 0.0
+	var lp2 := 0.0
+	for i in n:
+		var t := float(i) / rate
+		var nz := r.randf_range(-1.0, 1.0)
+		lp += (nz - lp) * 0.04
+		lp2 += (nz - lp2) * 0.5
+		var boom := (sin(TAU * 48.0 * t) * 0.6 + lp * 3.0) * exp(-t * 6.0)
+		var rustle := (nz - lp2) * 0.25 * exp(-t * 2.5) * smoothstep(0.0, 0.05, t)
+		b.encode_s16(i * 2, int(clampf(boom + rustle, -1.0, 1.0) * 30000.0))
+	return _wav(b, rate)
+
+## Шлепок хвостом по воде.
+func _slap() -> AudioStreamWAV:
+	var rate := 22050
+	var n := int(0.6 * rate)
+	var b := PackedByteArray()
+	b.resize(n * 2)
+	var r := RandomNumberGenerator.new()
+	r.seed = 7
+	var lp := 0.0
+	for i in n:
+		var t := float(i) / rate
+		var nz := r.randf_range(-1.0, 1.0)
+		lp += (nz - lp) * 0.2
+		var v := nz * exp(-t * 60.0) * 0.9 + lp * exp(-t * 7.0) * 0.8 + sin(TAU * 110.0 * t) * exp(-t * 30.0) * 0.4
+		b.encode_s16(i * 2, int(clampf(v, -1.0, 1.0) * 30000.0))
+	return _wav(b, rate)
+
+## Грызёт: короткие сухие поскрёбывания.
+func _gnaw() -> AudioStreamWAV:
+	var rate := 22050
+	var n := int(0.7 * rate)
+	var b := PackedByteArray()
+	b.resize(n * 2)
+	var r := RandomNumberGenerator.new()
+	r.seed = 8
+	var lp := 0.0
+	for i in n:
+		var t := float(i) / rate
+		var nz := r.randf_range(-1.0, 1.0)
+		lp += (nz - lp) * 0.6
+		var burst := maxf(0.0, sin(t * TAU * 9.0)) * (0.6 + 0.4 * sin(t * 170.0))
+		var v := (nz - lp) * burst * 0.5
+		b.encode_s16(i * 2, int(clampf(v, -1.0, 1.0) * 30000.0))
+	return _wav(b, rate)
+
+## Звук в точке мира (бобры, деревья).
+func play_at(name_s: String, p: Vector3, db: float, pitch: float = 1.0) -> void:
+	if synth.has(name_s):
+		_play3d(synth[name_s], p, db, pitch)
 
 func _play3d(s: AudioStream, p: Vector3, db: float, pitch: float = 1.0) -> void:
 	for pl in _one:
