@@ -428,9 +428,27 @@ var _sky_timer := 0.0
 const GCELL := 16.0
 const GRADIUS := 2
 
+var _shot_n := 0
+## Режим кадров для проверки в облаке: SHOTS=папка — снять несколько ракурсов и выйти.
+func _shots() -> void:
+	_shot_n += 1
+	var dir := OS.get_environment("SHOTS")
+	var plan := [[40, 0.0, 14.0], [60, 2.2, 14.0], [80, 4.0, 22.0]]
+	for p in plan:
+		if _shot_n == p[0] - 12:
+			rig.rotation.y = p[1]
+			rig.distance = p[2]
+		if _shot_n == p[0]:
+			get_viewport().get_texture().get_image().save_png(dir + "/game_%d.png" % p[0])
+			print("shot game ", p[0], " tris ", Performance.get_monitor(Performance.RENDER_TOTAL_PRIMITIVES_IN_FRAME), " draws ", Performance.get_monitor(Performance.RENDER_TOTAL_DRAW_CALLS_IN_FRAME))
+	if _shot_n > 82:
+		get_tree().quit()
+
 func _process(delta: float) -> void:
 	if hero == null or joy == null:
 		return
+	if OS.get_environment("SHOTS") != "":
+		_shots()
 	var hp: Vector3 = hero.position + Vector3(0, 1.0, 0)
 	var cp: Vector3 = rig.cam.global_position
 	for m in veg.fade_list:
@@ -533,18 +551,19 @@ func _update_stats(dt: float) -> void:
 	var target_w := clampf(0.55 + tc * 0.025 - soak * 0.35 - weather.wind * 0.05 - (0.25 if hero.swimb > 0.5 else 0.0), 0.02, 0.95)
 	warmth = lerpf(warmth, target_w, 0.01 * dt * 4.0)
 	if hero.moving:
-		var drain := 0.012
+		# шаг почти не утомляет; бег, лазание и плавание — заметно
+		var drain := 0.0015
 		if hero.running:
-			drain = 0.05
+			drain = 0.018
 		if hero.climbing > 0.5:
-			drain = 0.04
+			drain = 0.02
 		if hero.state == "climb":
-			drain = 0.07
-		if hero.swimb > 0.5:
 			drain = 0.035
+		if hero.swimb > 0.5:
+			drain = 0.012
 		stamina = maxf(0.0, stamina - drain * dt)
 	else:
-		stamina = minf(1.0, stamina + (0.11 if hero.state == "sit" else 0.05) * dt)
+		stamina = minf(1.0, stamina + (0.14 if hero.state == "sit" else 0.07) * dt)
 	var hh := int(t_hours)
 	var mm := int((t_hours - hh) * 60.0)
 	var temp := int(round(tc))
