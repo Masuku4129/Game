@@ -33,6 +33,6 @@ else:
         if "gltf" in files:
             j = json.load(open(os.path.join(d, aid + ".gltf")))
             tris = sum(j["accessors"][pr["indices"]]["count"] // 3 for m in j["meshes"] for pr in m["primitives"] if "indices" in pr)
-            print("ok", aid, "meshes", len(j["meshes"]), "nodes", [n.get("name") for n in j["nodes"]][:12], "tris", tris)
+            print("ok", aid, "MB", round(sum(os.path.getsize(os.path.join(r,f)) for r,_,fs in os.walk(d) for f in fs)/1e6,1), "meshes", len(j["meshes"]), "nodes", [n.get("name") for n in j["nodes"]][:12], "tris", tris)
         else:
             print("ok", aid, os.listdir(d))
