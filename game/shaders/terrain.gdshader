@@ -1,11 +1,14 @@
 shader_type spatial;
 render_mode diffuse_burley;
-// Земля без текстур: лесная подстилка, трава, хвоя, грязь у воды и скала на крутых склонах.
-uniform vec3 forest_col : source_color = vec3(0.27, 0.26, 0.17);
-uniform vec3 grass_col : source_color = vec3(0.36, 0.42, 0.20);
-uniform vec3 needle_col : source_color = vec3(0.33, 0.24, 0.15);
-uniform vec3 mud_col : source_color = vec3(0.22, 0.19, 0.14);
-uniform vec3 rock_col : source_color = vec3(0.47, 0.46, 0.42);
+// Земля: лесная подстилка и плотная трава (текстуры в двух масштабах), грязь у воды,
+// скала на крутых склонах. Рельеф мелочей берётся из альфа-канала текстур (высота).
+uniform sampler2D forest : source_color, filter_linear_mipmap_anisotropic, repeat_enable;
+uniform sampler2D grass : source_color, filter_linear_mipmap_anisotropic, repeat_enable;
+uniform sampler2D rock : source_color, filter_linear_mipmap_anisotropic, repeat_enable;
+uniform float tile_forest = 0.28;
+uniform float tile_grass = 0.45;
+uniform float tile_rock = 0.16;
+uniform float bump = 1.1;
 varying vec3 wpos;
 varying vec3 wnor;
 
@@ -22,18 +25,46 @@ void vertex() {
 	wnor = NORMAL;
 }
 
+vec4 two_scale(sampler2D t, vec2 uv) {
+	return mix(texture(t, uv), texture(t, uv * 0.21 + vec2(0.37, 0.11)), 0.42);
+}
+
 void fragment() {
-	float n1 = noise(wpos * 0.15), n2 = noise(wpos * 1.3), n3 = noise(wpos * 6.0);
-	vec3 base = mix(forest_col, grass_col, COLOR.r);
-	base = mix(base, needle_col, COLOR.b * smoothstep(0.35, 0.7, n1) * 0.7);
-	base *= 0.78 + n2 * 0.3 + n3 * 0.14;
-	base = mix(base, mud_col * (0.8 + n2 * 0.3), COLOR.g);
+	vec2 xz = wpos.xz;
+	float macro = noise(wpos * 0.05) * 0.5 + noise(wpos * 0.17) * 0.35 + noise(wpos * 0.6) * 0.15;
+	// --- слой подстилки и слой травы
+	vec4 f = two_scale(forest, xz * tile_forest);
+	vec4 g = two_scale(grass, xz * tile_grass);
+	float gw = smoothstep(0.38, 0.62, COLOR.r + (macro - 0.5) * 0.7);
+	vec3 col = mix(f.rgb, g.rgb, gw);
+	float hgt = mix(f.a, g.a, gw);
+	// крупные пятна: суше / влажнее / мох
+	col *= 0.78 + macro * 0.5;
+	col = mix(col, col * vec3(0.8, 1.05, 0.7), smoothstep(0.55, 0.8, noise(wpos * 0.11)) * (1.0 - gw) * 0.6);
+	// у воды: мокрая тёмная грязь и камешки
+	float mud = COLOR.g;
+	col = mix(col, col * vec3(0.45, 0.42, 0.38), mud);
+	// --- скала по крутизне, трипланарно
 	float slope = 1.0 - wnor.y;
-	float rk = smoothstep(0.22, 0.38, slope + (n2 - 0.5) * 0.1);
-	float strata = noise(vec3(wpos.x * 0.3, wpos.y * 2.2, wpos.z * 0.3));
-	vec3 rock = rock_col * (0.65 + strata * 0.35 + n3 * 0.15);
-	rock = mix(rock, vec3(0.3, 0.36, 0.2), smoothstep(0.6, 0.9, n2) * (1.0 - slope) * 0.8);
-	ALBEDO = mix(base, rock, rk);
-	ROUGHNESS = 0.95;
-	SPECULAR = 0.2;
+	float rk = smoothstep(0.2, 0.36, slope + (macro - 0.5) * 0.12);
+	vec3 bw = pow(abs(wnor), vec3(4.0));
+	bw /= (bw.x + bw.y + bw.z);
+	vec4 r = texture(rock, wpos.zy * tile_rock) * bw.x + texture(rock, wpos.xz * tile_rock) * bw.y + texture(rock, wpos.xy * tile_rock) * bw.z;
+	col = mix(col, r.rgb * (0.85 + macro * 0.3), rk);
+	hgt = mix(hgt, r.a, rk);
+	// --- мнимый рельеф: градиент высоты текстуры, без карт нормалей
+	float e = 0.004;
+	vec2 uvf = xz * tile_forest;
+	vec2 uvg = xz * tile_grass;
+	vec2 uv = mix(uvf, uvg, gw);
+	vec2 d = vec2(texture(forest, uvf + vec2(e, 0.0)).a - texture(forest, uvf - vec2(e, 0.0)).a, texture(forest, uvf + vec2(0.0, e)).a - texture(forest, uvf - vec2(0.0, e)).a);
+	vec2 dg = vec2(texture(grass, uvg + vec2(e, 0.0)).a - texture(grass, uvg - vec2(e, 0.0)).a, texture(grass, uvg + vec2(0.0, e)).a - texture(grass, uvg - vec2(0.0, e)).a);
+	d = mix(d, dg, gw) * (1.0 - rk * 0.8);
+	vec3 nw = normalize(wnor + vec3(-d.x, 0.0, -d.y) * bump * 6.0);
+	NORMAL = normalize((VIEW_MATRIX * vec4(nw, 0.0)).xyz);
+	// каверны темнее
+	col *= 0.7 + hgt * 0.5;
+	ALBEDO = col;
+	ROUGHNESS = mix(0.95, 0.55, mud);
+	SPECULAR = 0.25;
 }

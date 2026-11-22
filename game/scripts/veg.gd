@@ -3,6 +3,7 @@ extends RefCounted
 ## Каждый build_* возвращает ArrayMesh (поверхности: кора, карточки, [сердцевина]) и высоту.
 
 const CARD_SHADER := preload("res://shaders/card.gdshader")
+const BLADE_SHADER := preload("res://shaders/grass_blade.gdshader")
 
 var rng := RandomNumberGenerator.new()
 var mats := {}
@@ -19,6 +20,10 @@ func _init() -> void:
 	_card("broad_leaf", Color(0.78, 0.84, 0.66), 0.05)
 	_card("fern", Color(0.72, 0.80, 0.62), 0.08)
 	_card("grass", Color(0.86, 0.88, 0.70), 0.12)
+	_card("reed", Color(0.9, 0.95, 0.8), 0.07)
+	var blade := ShaderMaterial.new()
+	blade.shader = BLADE_SHADER
+	mats["blade"] = blade
 	var core := StandardMaterial3D.new()
 	core.albedo_color = Color(0.07, 0.13, 0.08)
 	core.roughness = 1.0
@@ -315,3 +320,57 @@ func log_fallen(seed_v: int) -> Array:
 		var x := R(-L * 0.4, L * 0.4)
 		tube(bark, Vector3(x, 0.4, 0), Vector3(x + R(-0.3, 0.3), 0.8, R(0.2, 0.4)), Vector3(x + R(-0.5, 0.5), 1.1, R(0.5, 0.9)), 0.06, 0.015, 4, 5)
 	return [_commit([bark], ["bark_dead"]), 0.6]
+
+## Клочок травы из ~30 отдельных травинок с цветом по высоте. Клочки в сетке 1 м сливаются в ковёр.
+func grass_patch(seed_v: int) -> Array:
+	rng.seed = seed_v
+	var s := Surf.new()
+	var tone := R(0.85, 1.1)
+	for i in 34:
+		var a := R(0, TAU)
+		var r := sqrt(R(0.0, 1.0)) * 0.7
+		var base := Vector3(cos(a) * r, 0, sin(a) * r)
+		var h := R(0.28, 0.62)
+		var w := R(0.028, 0.05)
+		var dir := R(0, TAU)
+		var lean := Vector3(cos(dir), 0, sin(dir)) * R(0.05, 0.28) * h
+		var side := Vector3(cos(dir + PI * 0.5), 0, sin(dir + PI * 0.5)) * w
+		var c0 := Color(0.07, 0.12, 0.04) * tone
+		var c1 := Color(0.20, 0.30, 0.09).lerp(Color(0.31, 0.37, 0.12), R(0, 1)) * tone
+		var c2 := Color(0.34, 0.44, 0.16).lerp(Color(0.45, 0.46, 0.17), R(0, 1) * R(0, 1)) * tone
+		var p0 := base
+		var p1 := base + lean * 0.35 + Vector3(0, h * 0.55, 0)
+		var p2 := base + lean + Vector3(0, h, 0)
+		var n := Vector3.UP
+		var b := s.n
+		s.v(p0 - side, n, Vector2.ZERO, c0)
+		s.v(p0 + side, n, Vector2.ZERO, c0)
+		s.v(p1 - side * 0.75, n, Vector2.ZERO, c1)
+		s.v(p1 + side * 0.75, n, Vector2.ZERO, c1)
+		s.v(p2, n, Vector2.ZERO, c2)
+		s.tri(b, b + 1, b + 2)
+		s.tri(b + 1, b + 3, b + 2)
+		s.tri(b + 2, b + 3, b + 4)
+	return [_commit([s], ["blade"]), 0.6]
+
+## Камыш: три скрещённые карточки.
+func reeds(seed_v: int) -> Array:
+	rng.seed = seed_v
+	var lf := Surf.new()
+	var a := R(0, PI)
+	for k in 3:
+		card(lf, Vector3.ZERO, Basis(Vector3.UP, a + k * PI / 3.0), 1.1, 1.6, R(0.85, 1.05))
+	return [_commit([lf], ["reed"]), 1.6]
+
+## Сухая ветка на земле.
+func twig(seed_v: int) -> Array:
+	rng.seed = seed_v
+	var bark := Surf.new()
+	var L := R(0.8, 1.8)
+	var d := Vector3(1, 0, R(-0.3, 0.3)).normalized()
+	tube(bark, -d * L * 0.5 + Vector3(0, 0.04, 0), Vector3(0, R(0.05, 0.14), 0), d * L * 0.5 + Vector3(0, 0.04, 0), 0.035, 0.012, 4, 5)
+	for i in rng.randi_range(1, 3):
+		var t := R(-0.3, 0.3) * L
+		var sd := Vector3(R(0.2, 0.8), 0, R(-1, 1)).normalized()
+		tube(bark, d * t + Vector3(0, 0.05, 0), d * t + sd * 0.2 + Vector3(0, 0.1, 0), d * t + sd * R(0.35, 0.6) + Vector3(0, 0.05, 0), 0.015, 0.006, 3, 4)
+	return [_commit([bark], ["bark_dead"]), 0.15]

@@ -22,6 +22,8 @@ func _ready() -> void:
 	rig.bounds = SIZE * 0.5 - 20.0
 	rig.height_func = height
 	add_child(rig)
+	player_rig = rig
+	grass_mesh_vars = [veg.grass_patch(1500), veg.grass_patch(1501), veg.grass_patch(1502), veg.grass_patch(1503), veg.grass_patch(1504)]
 
 func _setup_noise() -> void:
 	n_hill.seed = 1640; n_hill.frequency = 0.006; n_hill.fractal_octaves = 4
@@ -113,6 +115,9 @@ func _make_terrain() -> void:
 	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arr)
 	var mat := ShaderMaterial.new()
 	mat.shader = preload("res://shaders/terrain.gdshader")
+	mat.set_shader_parameter("forest", load("res://textures/ground_forest.png"))
+	mat.set_shader_parameter("grass", load("res://textures/ground_grass.png"))
+	mat.set_shader_parameter("rock", load("res://textures/ground_rock.png"))
 	mesh.surface_set_material(0, mat)
 	var mi := MeshInstance3D.new()
 	mi.mesh = mesh
@@ -121,11 +126,11 @@ func _make_terrain() -> void:
 func _make_water() -> void:
 	var plane := PlaneMesh.new()
 	plane.size = Vector2(SIZE, SIZE)
-	var mat := StandardMaterial3D.new()
-	mat.albedo_color = Color(0.16, 0.24, 0.24, 0.88)
-	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	mat.roughness = 0.04
-	mat.metallic = 0.5
+	plane.subdivide_width = 2
+	plane.subdivide_depth = 2
+	var mat := ShaderMaterial.new()
+	mat.shader = preload("res://shaders/water.gdshader")
+	mat.set_shader_parameter("wave", load("res://textures/water_wave.png"))
 	plane.material = mat
 	var mi := MeshInstance3D.new()
 	mi.mesh = plane
@@ -136,6 +141,88 @@ func _make_water() -> void:
 # ---------- растительность ----------
 
 var veg = preload("res://scripts/veg.gd").new()
+var player_rig: Node3D
+var grass_mesh_vars: Array = []
+var grass_cells := {}
+var grass_timer := 0.0
+const GCELL := 16.0
+const GRADIUS := 3
+
+func _process(delta: float) -> void:
+	if player_rig == null:
+		return
+	grass_timer -= delta
+	if grass_timer > 0.0:
+		return
+	grass_timer = 0.12
+	var c := Vector2i(floori((player_rig.position.x + SIZE * 0.5) / GCELL), floori((player_rig.position.z + SIZE * 0.5) / GCELL))
+	# удалить далёкие клетки
+	for k in grass_cells.keys():
+		if absi(k.x - c.x) > GRADIUS + 1 or absi(k.y - c.y) > GRADIUS + 1:
+			grass_cells[k].queue_free()
+			grass_cells.erase(k)
+	# построить одну ближайшую недостающую клетку за раз
+	var best := Vector2i.ZERO
+	var best_d := 1e9
+	for dz in range(-GRADIUS, GRADIUS + 1):
+		for dx in range(-GRADIUS, GRADIUS + 1):
+			var k := Vector2i(c.x + dx, c.y + dz)
+			if grass_cells.has(k) or k.x < 0 or k.y < 0 or k.x >= int(SIZE / GCELL) or k.y >= int(SIZE / GCELL):
+				continue
+			var d := float(dx * dx + dz * dz)
+			if d < best_d:
+				best_d = d
+				best = k
+	if best_d < 1e9:
+		_build_grass_cell(best)
+
+func _build_grass_cell(k: Vector2i) -> void:
+	var rng := RandomNumberGenerator.new()
+	rng.seed = k.y * 7919 + k.x * 104729 + 13
+	var x0 := k.x * GCELL - SIZE * 0.5
+	var z0 := k.y * GCELL - SIZE * 0.5
+	var per_var := []
+	for v in grass_mesh_vars:
+		per_var.append([])
+	var step := 0.95
+	var z := 0.0
+	while z < GCELL:
+		var x := 0.0
+		while x < GCELL:
+			var px := x0 + x + rng.randf_range(-0.4, 0.4)
+			var pz := z0 + z + rng.randf_range(-0.4, 0.4)
+			x += step
+			var y := height(px, pz)
+			if y < WATER_Y + 0.15:
+				continue
+			var fd := forest_density(px, pz)
+			var slope := 1.0 - normal_at(px, pz).y
+			if slope > 0.3 or rng.randf() > (1.0 - fd) * 0.85 + 0.22:
+				continue
+			var s := rng.randf_range(0.9, 1.5)
+			var b := Basis(Vector3.UP, rng.randf() * TAU).scaled(Vector3(s, s * rng.randf_range(0.8, 1.3), s))
+			per_var[rng.randi() % grass_mesh_vars.size()].append(Transform3D(b, Vector3(px, y - 0.03, pz)))
+		z += step
+	var holder := Node3D.new()
+	for vi in grass_mesh_vars.size():
+		var xs: Array = per_var[vi]
+		if xs.is_empty():
+			continue
+		var mm := MultiMesh.new()
+		mm.transform_format = MultiMesh.TRANSFORM_3D
+		mm.mesh = grass_mesh_vars[vi][0]
+		mm.instance_count = xs.size()
+		for i in xs.size():
+			mm.set_instance_transform(i, xs[i])
+		var mmi := MultiMeshInstance3D.new()
+		mmi.multimesh = mm
+		mmi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		mmi.visibility_range_end = (GRADIUS + 0.7) * GCELL
+		mmi.visibility_range_end_margin = 8.0
+		mmi.visibility_range_fade_mode = GeometryInstance3D.VISIBILITY_RANGE_FADE_SELF
+		holder.add_child(mmi)
+	add_child(holder)
+	grass_cells[k] = holder
 
 ## Варианты: [mesh, высота]. Несколько вариантов на породу, чтобы лес не повторялся.
 func _variants(kind: String) -> Array:
@@ -160,6 +247,12 @@ func _variants(kind: String) -> Array:
 			for i in 4: out.append(veg.grass(800 + i))
 		"rock":
 			for i in 4: out.append(veg.rock(900 + i))
+		"pebble":
+			for i in 3: out.append(veg.rock(950 + i))
+		"reeds":
+			for i in 3: out.append(veg.reeds(1200 + i))
+		"twig":
+			for i in 4: out.append(veg.twig(1300 + i))
 		"stump":
 			out.append(veg.stump(1000))
 		"log":
@@ -177,7 +270,9 @@ func _scatter_all() -> void:
 		["spruce", 8, Vector2(0.18, 0.35), 60.0, true, "under"],
 		["bush", 20, Vector2(0.8, 1.5), 60.0, false, "under"],
 		["fern", 70, Vector2(0.7, 1.2), 45.0, false, "fern"],
-		["grass", 900, Vector2(0.35, 0.6), 36.0, false, "grass"],
+		["reeds", 14, Vector2(0.8, 1.4), 80.0, false, "reed"],
+		["twig", 40, Vector2(0.8, 1.3), 40.0, false, "under"],
+		["pebble", 40, Vector2(0.15, 0.45), 40.0, false, "pebble"],
 		["rock", 10, Vector2(0.5, 2.2), 100.0, true, "rock"],
 		["stump", 2, Vector2(0.8, 1.2), 60.0, true, "under"],
 		["log", 1, Vector2(0.9, 1.1), 70.0, true, "under"],
@@ -228,6 +323,10 @@ func _scatter_all() -> void:
 
 func _accept(kind: String, x: float, z: float, rng: RandomNumberGenerator) -> bool:
 	var y := height(x, z)
+	if kind == "reed":
+		return y > WATER_Y - 0.5 and y < WATER_Y + 0.35 and rng.randf() < 0.9
+	if kind == "pebble":
+		return y > WATER_Y - 0.6 and y < WATER_Y + 1.2 or rng.randf() < 0.15
 	if y < WATER_Y + 0.3:
 		return kind == "rock" and y > WATER_Y - 0.8 and rng.randf() < 0.3
 	var slope := 1.0 - normal_at(x, z).y
