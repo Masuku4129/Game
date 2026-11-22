@@ -29,6 +29,13 @@ var sliding := 0.0
 var lean := 0.0
 var tilt := 0.0
 var last_sw := 0.0
+var skirt_l := Node3D.new()
+var skirt_r := Node3D.new()
+var last_yaw := 0.0
+var turn := 0.0
+var arm_lx := 0.0
+var arm_rx := 0.0
+var cloth_tex: Texture2D
 var torch := OmniLight3D.new()
 
 func _mat(c: Color, rough: float = 0.9) -> StandardMaterial3D:
@@ -36,6 +43,80 @@ func _mat(c: Color, rough: float = 0.9) -> StandardMaterial3D:
 	m.albedo_color = c
 	m.roughness = rough
 	return m
+
+## Материал ткани: цвет + шумовая фактура (переплетение, потёртости).
+func _cloth(c: Color, sc: float = 7.0) -> StandardMaterial3D:
+	if cloth_tex == null:
+		var nz := FastNoiseLite.new()
+		nz.frequency = 0.09
+		nz.fractal_octaves = 4
+		var g := Gradient.new()
+		g.set_color(0, Color(0.72, 0.72, 0.72))
+		g.set_color(1, Color(1.0, 1.0, 1.0))
+		var nt := NoiseTexture2D.new()
+		nt.width = 128
+		nt.height = 128
+		nt.seamless = true
+		nt.noise = nz
+		nt.color_ramp = g
+		nt.generate_mipmaps = true
+		cloth_tex = nt
+	var m := _mat(c, 0.95)
+	m.albedo_texture = cloth_tex
+	m.uv1_scale = Vector3(sc, sc, sc)
+	return m
+
+## Лофт: гладкое тело вращения по сечениям-эллипсам [y, rx, rz, смещение z]. Ось вдоль Y.
+func _loft(rings: Array, seg: int = 20, cap_top: bool = true, cap_bot: bool = true) -> ArrayMesh:
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	var n := rings.size()
+	for i in n:
+		var r: Array = rings[i]
+		for j in seg + 1:
+			var a := TAU * j / seg
+			st.set_uv(Vector2(float(j) / seg, float(i) / (n - 1)))
+			st.add_vertex(Vector3(cos(a) * r[1], r[0], sin(a) * r[2] + r[3]))
+	for i in n - 1:
+		for j in seg:
+			var k := i * (seg + 1) + j
+			st.add_index(k)
+			st.add_index(k + 1)
+			st.add_index(k + seg + 1)
+			st.add_index(k + 1)
+			st.add_index(k + seg + 2)
+			st.add_index(k + seg + 1)
+	var base := n * (seg + 1)
+	if cap_bot:
+		var r0: Array = rings[0]
+		st.set_uv(Vector2(0.5, 0.0))
+		st.add_vertex(Vector3(0, r0[0], r0[3]))
+		for j in seg:
+			st.add_index(base)
+			st.add_index(j + 1)
+			st.add_index(j)
+		base += 1
+	if cap_top:
+		var r1: Array = rings[n - 1]
+		st.set_uv(Vector2(0.5, 1.0))
+		st.add_vertex(Vector3(0, r1[0], r1[3]))
+		var o := (n - 1) * (seg + 1)
+		for j in seg:
+			st.add_index(base)
+			st.add_index(o + j)
+			st.add_index(o + j + 1)
+	st.generate_normals()
+	return st.commit()
+
+func _lpart(parent: Node3D, mesh: Mesh, m: Material, pos: Vector3 = Vector3.ZERO, rot: Vector3 = Vector3.ZERO, sc: Vector3 = Vector3.ONE) -> MeshInstance3D:
+	var mi := MeshInstance3D.new()
+	mi.mesh = mesh
+	mi.material_override = m
+	mi.position = pos
+	mi.rotation = rot
+	mi.scale = sc
+	parent.add_child(mi)
+	return mi
 
 func _part(parent: Node3D, mesh: Mesh, c: Color, pos: Vector3, rot: Vector3 = Vector3.ZERO) -> MeshInstance3D:
 	var mi := MeshInstance3D.new()
@@ -86,69 +167,81 @@ func _ready() -> void:
 	add_child(body)
 	body.add_child(torso)
 	torso.position = Vector3(0, 0.97, 0)
-	var kaftan := Color(0.17, 0.26, 0.31)
-	var kaftan2 := Color(0.13, 0.21, 0.26)
-	var pants := Color(0.24, 0.2, 0.16)
-	var skin := Color(0.76, 0.58, 0.45)
-	var fur := Color(0.62, 0.56, 0.47)
-	var leather := Color(0.34, 0.22, 0.12)
-	var boot_c := Color(0.16, 0.10, 0.07)
-	var sash := Color(0.62, 0.15, 0.12)
-	# ноги: штаны, высокие сапоги, голеностоп
+	var kaftan := _cloth(Color(0.2, 0.29, 0.34), 6.0)
+	var trim := _cloth(Color(0.14, 0.2, 0.24), 6.0)
+	var pants := _cloth(Color(0.27, 0.23, 0.18), 8.0)
+	var fur := _cloth(Color(0.55, 0.47, 0.37), 14.0)
+	var sash := _cloth(Color(0.6, 0.15, 0.12), 9.0)
+	var leather := _cloth(Color(0.33, 0.21, 0.12), 5.0)
+	var boot := _cloth(Color(0.17, 0.11, 0.08), 5.0)
+	boot.roughness = 0.6
+	var skin := _mat(Color(0.66, 0.48, 0.37), 0.75)
+	var hair := _cloth(Color(0.2, 0.14, 0.1), 16.0)
+	var roll := _cloth(Color(0.36, 0.37, 0.28), 10.0)
+	# --- ноги: штанина, голенище сапога, стопа; полы кафтана висят на бедре
 	for side in [-1.0, 1.0]:
 		var leg: Node3D = leg_l if side < 0.0 else leg_r
 		var knee: Node3D = knee_l if side < 0.0 else knee_r
 		var ank: Node3D = ank_l if side < 0.0 else ank_r
+		var sk: Node3D = skirt_l if side < 0.0 else skirt_r
 		leg.position = Vector3(side * 0.1, 0.97, 0)
 		body.add_child(leg)
-		_part(leg, _capsule(0.092, 0.54), pants, Vector3(0, -0.23, 0))
+		_lpart(leg, _loft([[-0.5, 0.068, 0.072, 0.0], [-0.3, 0.08, 0.085, 0.005], [-0.1, 0.095, 0.1, 0.0], [0.04, 0.1, 0.1, 0.0]]), pants)
 		knee.position = Vector3(0, -0.46, 0)
 		leg.add_child(knee)
-		_part(knee, _capsule(0.072, 0.4), pants, Vector3(0, -0.16, 0))
-		_part(knee, _capsule(0.082, 0.42), boot_c, Vector3(0, -0.3, 0.005))
-		_part(knee, _cyl(0.1, 0.085, 0.04), fur, Vector3(0, -0.1, 0))
-		ank.position = Vector3(0, -0.5, 0)
+		_lpart(knee, _loft([[-0.47, 0.06, 0.065, 0.0], [-0.3, 0.068, 0.075, -0.01], [-0.15, 0.078, 0.085, -0.015], [0.02, 0.085, 0.09, 0.0], [0.04, 0.09, 0.095, 0.0]]), boot)
+		ank.position = Vector3(0, -0.48, 0)
 		knee.add_child(ank)
-		_ell(ank, _sph(), boot_c, Vector3(0, -0.02, 0.07), Vector3(0.17, 0.12, 0.34))
-	# кафтан: подол с меховой оторочкой, красный кушак, пуговицы
-	_ell(torso, _cyl(0.2, 0.33, 0.5), kaftan, Vector3(0, -0.02, 0), Vector3(1.0, 1.0, 0.95))
-	_ell(torso, _tor(0.3, 0.35), fur, Vector3(0, -0.27, 0), Vector3(1.0, 1.0, 0.95))
-	_ell(torso, _capsule(0.5, 1.0), kaftan, Vector3(0, 0.36, 0), Vector3(0.46, 0.8, 0.34))
-	_part(torso, BoxMesh.new(), kaftan2, Vector3(0, 0.2, 0.15)).scale = Vector3(0.035, 0.9, 0.02)
+		_lpart(ank, _sph(), boot, Vector3(0, -0.015, 0.06), Vector3.ZERO, Vector3(0.11, 0.085, 0.27))
+		_lpart(ank, BoxMesh.new(), _mat(Color(0.1, 0.07, 0.05), 0.8), Vector3(0, -0.05, 0.06), Vector3.ZERO, Vector3(0.1, 0.02, 0.26))
+		# полы: половина подола на каждой ноге, качается с ней наполовину
+		sk.position = Vector3(side * 0.1, 0.97, 0)
+		body.add_child(sk)
+		_lpart(sk, _loft([[-0.56, 0.19, 0.2, 0.0], [-0.35, 0.165, 0.18, 0.0], [-0.12, 0.14, 0.155, 0.0], [0.04, 0.13, 0.15, 0.0]], 18, false, false), kaftan, Vector3(side * 0.035, 0, 0))
+		_lpart(sk, _tor(0.17, 0.215), fur, Vector3(side * 0.035, -0.55, 0), Vector3.ZERO, Vector3(1.0, 1.0, 1.05))
+	# --- торс: таз, талия, грудь, плечи (кафтан), кушак
+	_lpart(torso, _loft([[-0.12, 0.215, 0.17, 0.0], [0.0, 0.2, 0.15, 0.0], [0.1, 0.175, 0.13, 0.0], [0.25, 0.19, 0.14, 0.015], [0.4, 0.205, 0.145, 0.02], [0.53, 0.21, 0.13, 0.0], [0.6, 0.18, 0.11, -0.01], [0.66, 0.09, 0.08, 0.0]], 22), kaftan)
+	_lpart(torso, BoxMesh.new(), trim, Vector3(0.03, 0.3, 0.155), Vector3(0, 0, 0.02), Vector3(0.05, 0.6, 0.015))
 	for i in 5:
-		_ell(torso, _sph(), Color(0.7, 0.58, 0.28), Vector3(0, 0.0 + i * 0.12, 0.162), Vector3(0.03, 0.03, 0.03))
-	_ell(torso, _cyl(0.215, 0.22, 0.1), sash, Vector3(0, 0.08, 0), Vector3(1.0, 1.0, 0.84))
-	_part(torso, BoxMesh.new(), sash, Vector3(0.1, -0.12, 0.17), Vector3(0, 0, 0.1)).scale = Vector3(0.06, 0.3, 0.02)
-	_ell(torso, _tor(0.1, 0.17), fur, Vector3(0, 0.71, 0.01), Vector3(1.0, 1.2, 1.0))
-	# голова: лицо, борода, нос, глаза; меховая шапка с суконным верхом
-	var neck := _cyl(0.055, 0.065, 0.12)
-	_part(torso, neck, skin, Vector3(0, 0.76, 0))
+		_ell(torso, _sph(), Color(0.62, 0.5, 0.25), Vector3(0.03, 0.16 + i * 0.09, 0.168), Vector3(0.025, 0.025, 0.02))
+	_lpart(torso, _loft([[0.03, 0.19, 0.145, 0.0], [0.08, 0.185, 0.14, 0.0], [0.13, 0.18, 0.135, 0.0]], 20, false, false), sash)
+	_lpart(torso, BoxMesh.new(), sash, Vector3(0.12, -0.04, 0.13), Vector3(0.1, 0.3, 0.12), Vector3(0.06, 0.22, 0.015))
+	_lpart(torso, _tor(0.075, 0.13), fur, Vector3(0, 0.67, 0.0), Vector3(0.15, 0, 0), Vector3(1.05, 1.5, 1.0))
+	# --- голова: шея, череп, нос, уши, брови, глаза, волосы, борода, усы; шапка
+	_lpart(torso, _cyl(0.05, 0.06, 0.1), skin, Vector3(0, 0.73, 0.0))
 	torso.add_child(head_n)
-	head_n.position = Vector3(0, 0.9, 0.01)
-	_ell(head_n, _sph(), skin, Vector3.ZERO, Vector3(0.27, 0.32, 0.3))
-	_ell(head_n, _sph(), Color(0.28, 0.2, 0.14), Vector3(0, -0.1, 0.05), Vector3(0.24, 0.2, 0.22))
-	_ell(head_n, _sph(), skin, Vector3(0, -0.01, 0.15), Vector3(0.045, 0.05, 0.05))
+	head_n.position = Vector3(0, 0.87, 0.01)
+	_lpart(head_n, _sph(), skin, Vector3.ZERO, Vector3.ZERO, Vector3(0.2, 0.25, 0.23))
+	_lpart(head_n, _sph(), skin, Vector3(0, -0.005, 0.118), Vector3(0.35, 0, 0), Vector3(0.035, 0.06, 0.04))
 	for sd in [-1.0, 1.0]:
-		_ell(head_n, _sph(), Color(0.08, 0.06, 0.05), Vector3(sd * 0.055, 0.04, 0.135), Vector3(0.025, 0.025, 0.02))
-	_ell(head_n, _cyl(0.15, 0.19, 0.12), fur, Vector3(0, 0.11, 0), Vector3(1.0, 1.0, 1.0))
-	_ell(head_n, _sph(), sash, Vector3(0, 0.19, 0), Vector3(0.3, 0.14, 0.3))
-	# рюкзак с подсумками, скатка, пищаль за спиной
-	_ell(torso, _capsule(0.5, 1.0), leather, Vector3(0, 0.34, -0.25), Vector3(0.36, 0.52, 0.2))
-	_ell(torso, _sph(), Color(0.28, 0.2, 0.12), Vector3(0.14, 0.12, -0.31), Vector3(0.14, 0.16, 0.1))
-	_part(torso, _cyl(0.085, 0.085, 0.5), Color(0.38, 0.4, 0.3), Vector3(0, 0.66, -0.28), Vector3(0, 0, PI * 0.5))
-	# руки: плечо, локоть, предплечье, кисть, меховая манжета
+		_lpart(head_n, _sph(), skin, Vector3(sd * 0.1, 0.0, 0.0), Vector3.ZERO, Vector3(0.03, 0.06, 0.045))
+		_lpart(head_n, _sph(), _mat(Color(0.95, 0.93, 0.9), 0.4), Vector3(sd * 0.04, 0.03, 0.098), Vector3.ZERO, Vector3(0.028, 0.018, 0.015))
+		_lpart(head_n, _sph(), _mat(Color(0.12, 0.08, 0.05), 0.3), Vector3(sd * 0.04, 0.03, 0.105), Vector3.ZERO, Vector3(0.012, 0.014, 0.008))
+		_lpart(head_n, BoxMesh.new(), hair, Vector3(sd * 0.042, 0.058, 0.1), Vector3(0, 0, -sd * 0.15), Vector3(0.045, 0.01, 0.012))
+	_lpart(head_n, _sph(), hair, Vector3(0, 0.03, -0.03), Vector3.ZERO, Vector3(0.21, 0.2, 0.22))
+	_lpart(head_n, _sph(), hair, Vector3(0, -0.075, 0.055), Vector3(0.25, 0, 0), Vector3(0.17, 0.15, 0.13))
+	_lpart(head_n, _sph(), hair, Vector3(0, -0.035, 0.112), Vector3.ZERO, Vector3(0.07, 0.018, 0.02))
+	_lpart(head_n, _loft([[0.0, 0.115, 0.125, -0.005], [0.07, 0.12, 0.13, -0.005], [0.1, 0.115, 0.125, -0.005]], 20), fur, Vector3(0, 0.075, 0))
+	_lpart(head_n, _loft([[0.0, 0.1, 0.11, 0.0], [0.06, 0.095, 0.1, -0.01], [0.11, 0.06, 0.065, -0.03], [0.13, 0.01, 0.01, -0.04]], 18), sash, Vector3(0, 0.16, 0))
+	# --- спина: заплечный мешок с ремнями и скатка
+	_lpart(torso, _loft([[0.0, 0.15, 0.08, 0.0], [0.15, 0.17, 0.1, 0.0], [0.38, 0.16, 0.095, 0.0], [0.45, 0.1, 0.06, 0.0]], 16), leather, Vector3(0, 0.12, -0.23))
+	for sd in [-1.0, 1.0]:
+		_lpart(torso, BoxMesh.new(), leather, Vector3(sd * 0.11, 0.45, 0.02), Vector3(0.0, 0, 0), Vector3(0.04, 0.42, 0.3))
+	_lpart(torso, _cyl(0.075, 0.075, 0.46), roll, Vector3(0, 0.6, -0.24), Vector3(0, 0, PI * 0.5))
+	# --- руки: плечо, рукав, локоть, обшлаг, рукавица
 	for side in [-1.0, 1.0]:
 		var arm: Node3D = arm_l if side < 0.0 else arm_r
 		var elb: Node3D = elb_l if side < 0.0 else elb_r
-		arm.position = Vector3(side * 0.28, 0.63, 0)
+		arm.position = Vector3(side * 0.24, 0.6, 0)
 		torso.add_child(arm)
-		_ell(arm, _sph(), kaftan, Vector3.ZERO, Vector3(0.17, 0.17, 0.17))
-		_part(arm, _capsule(0.066, 0.38), kaftan, Vector3(0, -0.16, 0))
-		elb.position = Vector3(0, -0.32, 0)
+		_lpart(arm, _sph(), kaftan, Vector3(side * 0.01, -0.01, 0), Vector3.ZERO, Vector3(0.15, 0.14, 0.14))
+		_lpart(arm, _loft([[-0.32, 0.05, 0.055, 0.0], [-0.15, 0.06, 0.065, 0.0], [0.0, 0.07, 0.07, 0.0]]), kaftan)
+		elb.position = Vector3(0, -0.3, 0)
 		arm.add_child(elb)
-		_part(elb, _capsule(0.056, 0.36), kaftan, Vector3(0, -0.15, 0))
-		_part(elb, _cyl(0.07, 0.065, 0.05), fur, Vector3(0, -0.29, 0))
-		_ell(elb, _sph(), skin, Vector3(0, -0.35, 0), Vector3(0.1, 0.13, 0.1))
+		_lpart(elb, _loft([[-0.27, 0.06, 0.06, 0.0], [-0.12, 0.055, 0.058, 0.0], [0.02, 0.055, 0.058, 0.0]]), kaftan)
+		_lpart(elb, _tor(0.05, 0.075), fur, Vector3(0, -0.26, 0))
+		_lpart(elb, _sph(), leather, Vector3(0, -0.33, 0.01), Vector3.ZERO, Vector3(0.085, 0.12, 0.06))
+		_lpart(elb, _sph(), leather, Vector3(side * -0.035, -0.31, 0.03), Vector3(0, 0, side * 0.6), Vector3(0.03, 0.06, 0.03))
 	# факел-свет (ночью)
 	torch.light_color = Color(1.0, 0.7, 0.4)
 	torch.light_energy = 0.0
@@ -256,8 +349,11 @@ func _process(delta: float) -> void:
 	knee_r.rotation.x = maxf(0.0, cw) * amp * 1.5 * up + 0.04
 	ank_l.rotation.x = -(leg_l.rotation.x + knee_l.rotation.x) * 0.7 + maxf(0.0, sw) * amp * 0.5
 	ank_r.rotation.x = -(leg_r.rotation.x + knee_r.rotation.x) * 0.7 + maxf(0.0, -sw) * amp * 0.5
-	arm_l.rotation.x = -sw * amp * 0.75
-	arm_r.rotation.x = sw * amp * 0.75
+	# руки с инерцией: догоняют нужный угол, а не прыгают
+	arm_lx = lerpf(arm_lx, -sw * amp * 0.8, minf(1.0, 12.0 * get_process_delta_time()))
+	arm_rx = lerpf(arm_rx, sw * amp * 0.8, minf(1.0, 12.0 * get_process_delta_time()))
+	arm_l.rotation.x = arm_lx
+	arm_r.rotation.x = arm_rx
 	arm_l.rotation.z = 0.05
 	arm_r.rotation.z = -0.05
 	elb_l.rotation.x = -0.2 - maxf(0.0, sw) * amp * 0.5
@@ -274,7 +370,18 @@ func _process(delta: float) -> void:
 		knee_l.rotation.x = lerpf(knee_l.rotation.x, 0.6 + maxf(0.0, -cw) * 0.6, cl)
 		knee_r.rotation.x = lerpf(knee_r.rotation.x, 0.6 + maxf(0.0, cw) * 0.6, cl)
 	torso.rotation.x = lean + br + cl * 0.45
+	# полы кафтана идут за ногой наполовину
+	skirt_l.rotation.x = leg_l.rotation.x * 0.5
+	skirt_r.rotation.x = leg_r.rotation.x * 0.5
+	# крен в повороте, покачивание таза, голова держит горизонт
+	var yaw_rate := wrapf(body.rotation.y - last_yaw, -PI, PI) / maxf(delta, 0.001)
+	last_yaw = body.rotation.y
+	turn = lerpf(turn, clampf(yaw_rate * 0.04 * run_mag, -0.18, 0.18), minf(1.0, 6.0 * delta))
+	var idle := 1.0 - minf(run_mag * 2.0, 1.0)
+	var t_ms := Time.get_ticks_msec() * 0.001
+	torso.position.x = sw * 0.025 * run_mag + sin(t_ms * 0.4) * 0.015 * idle
+	head_n.rotation.x = -(torso.rotation.x) * 0.6
 	torso.rotation.y = -sw * 0.09 * run_mag
-	torso.rotation.z = sw * 0.03 * run_mag
+	torso.rotation.z = sw * 0.03 * run_mag - turn
 	head_n.rotation.y = sw * 0.05 * run_mag
 	body.position.y = (absf(cw) - 0.6) * 0.05 * run_mag + minf(slope, 1.0) * 0.08 - cl * 0.15
