@@ -3,8 +3,8 @@ render_mode cull_disabled;
 #include "res://shaders/paint/paint.gdshaderinc"
 // Пучок травы мазками: перекрещенные карточки с текстурой штрихов, без одиночных волосков.
 uniform sampler2D strokes_tex : filter_linear_mipmap, repeat_disable;
-uniform vec3 col_root = vec3(0.17, 0.26, 0.09);
-uniform vec3 col_tip = vec3(0.45, 0.54, 0.2);
+uniform vec3 col_root = vec3(0.28, 0.38, 0.13);
+uniform vec3 col_tip = vec3(0.5, 0.56, 0.22);
 uniform float wind = 0.5;
 uniform float snow = 0.0;
 uniform float dry = 0.0;

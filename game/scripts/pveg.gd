@@ -17,7 +17,7 @@ func _init() -> void:
 	var fol := load("res://shaders/paint/foliage.gdshader")
 	var brk := load("res://shaders/paint/bark.gdshader")
 	for f in [
-		["spruce", Color(0.08, 0.17, 0.13), Color(0.2, 0.34, 0.22), Color(0.46, 0.58, 0.3), 0.0],
+		["spruce", Color(0.1, 0.19, 0.1), Color(0.23, 0.37, 0.18), Color(0.5, 0.6, 0.27), 0.0],
 		["pine", Color(0.1, 0.19, 0.11), Color(0.24, 0.38, 0.18), Color(0.55, 0.62, 0.26), 0.3],
 		["birch", Color(0.14, 0.25, 0.11), Color(0.36, 0.5, 0.18), Color(0.7, 0.74, 0.3), 1.0],
 		["leaf", Color(0.12, 0.22, 0.1), Color(0.3, 0.45, 0.17), Color(0.62, 0.68, 0.27), 1.0],

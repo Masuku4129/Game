@@ -13,8 +13,12 @@ void light() {
 }
 
 // Мазки: вытянутый шум для живописной неровности цвета.
+// хеш без sin(): на мобильных GPU sin больших чисел неточен и даёт квадраты
 float h21(vec2 p) {
-	return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453);
+	p = mod(p, 1024.0);
+	vec3 p3 = fract(vec3(p.xyx) * 0.1031);
+	p3 += dot(p3, p3.yzx + 33.33);
+	return fract((p3.x + p3.y) * p3.z);
 }
 float vnoise(vec2 p) {
 	vec2 i = floor(p);

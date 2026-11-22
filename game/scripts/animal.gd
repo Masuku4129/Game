@@ -343,6 +343,10 @@ func kill() -> void:
 	respawn_at = float(main.t_hours) + float(main.day_count) * 24.0 + 24.0
 
 ## Походка: фазы ног по виду аллюра, наклон по склону, голова, хвост, отдых.
+var goffs := [0.0, 0.5, 0.75, 0.25]
+var r_s := 0.0
+var _breath := 0.0
+
 func _animate(delta: float) -> void:
 	var body: Node3D = parts["body"]
 	var head: Node3D = parts["head"]
@@ -362,6 +366,14 @@ func _animate(delta: float) -> void:
 		offs = [0.0, 0.5, 0.5, 0.0]
 	if gait == "bound" and r > 0.02:
 		offs = [0.0, 0.05, 0.5, 0.55]
+	# фазы ног меняются плавно, без рывка при смене аллюра
+	var gk := minf(1.0, delta * 3.0)
+	for i in 4:
+		var dd := wrapf(float(offs[i]) - float(goffs[i]), -0.5, 0.5)
+		goffs[i] = float(goffs[i]) + dd * gk
+	offs = goffs
+	r_s = lerpf(r_s, r, minf(1.0, delta * 4.0))
+	r = r_s
 	var stride := H * (1.4 + r * 2.6)
 	phase += speed / maxf(stride, 0.05) * TAU * delta
 	var amp := 0.3 + r * 0.55
@@ -384,7 +396,11 @@ func _animate(delta: float) -> void:
 	var pitch := -atan2(hf - hb, L * 0.8)
 	var bob := absf(sin(phase * (1.0 if gait != "bound" else 1.0))) * H * (0.03 + r * (0.18 if gait == "bound" else 0.06)) * mv
 	body.position.y = lerpf(H + bob, H * 0.45, rest_k)
-	body.rotation.x = pitch + (sin(phase) * 0.18 * r if gait == "bound" else 0.0)
+	_breath += delta * (1.4 + r * 4.0)
+	body.rotation.x = lerpf(body.rotation.x, pitch + (sin(phase) * 0.18 * r if gait == "bound" else 0.0), minf(1.0, delta * 8.0))
+	# покачивание корпуса с шагом и дыхание в покое
+	body.rotation.z = sin(phase) * 0.035 * mv * (1.0 - r * 0.5)
+	body.scale = Vector3(1.0 + sin(_breath) * 0.012 * (1.0 - mv), 1.0 + sin(_breath) * 0.018 * (1.0 - mv), 1.0)
 	if kind == "squirrel" and climb_h > 0.0:
 		body.rotation.x = -1.45
 		body.position.y = H + 0.1

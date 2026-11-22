@@ -5,7 +5,7 @@ uniform float autumn = 0.0;
 uniform float leaf_drop = 0.0;
 uniform float wind = 0.5;
 
-float whash(vec3 p) { return fract(sin(dot(p, vec3(12.9898, 78.233, 37.719))) * 43758.5453); }
+float whash(vec3 p) { p = mod(p, 1024.0); p = fract(p * 0.1031); p += dot(p, p.zyx + 31.32); return fract((p.x + p.y) * p.z); }
 
 // Доля снега на поверхности с нормалью ny (мировой), с пятнами.
 float snow_cover(float ny, vec3 wp) {

@@ -31,6 +31,7 @@ var act_btn: Button
 var fps_lbl: Label
 var _fps_t := 0.0
 var weather
+var sfx
 var feet
 var terrain_mat: ShaderMaterial
 var health := 1.0
@@ -68,6 +69,9 @@ func _ready() -> void:
 	animals.main = self
 	add_child(animals)
 	animals.populate()
+	sfx = preload("res://scripts/sfx.gd").new()
+	sfx.main = self
+	add_child(sfx)
 	rig = preload("res://scripts/camera_rig.gd").new()
 	rig.target = hero
 	add_child(rig)
@@ -350,6 +354,8 @@ func _update_sky() -> void:
 		hero.torch.light_energy = 2.2 * (1.0 - d)
 	day_factor = d
 
+var hmap_tex: ImageTexture
+
 func _make_terrain() -> void:
 	var n := SEG + 1
 	var step := SIZE / SEG
@@ -379,27 +385,44 @@ func _make_terrain() -> void:
 			var mud := clampf((WATER_Y + 1.2 - y) / 1.5, 0.0, 1.0)
 			var leaves := clampf(n_detail.get_noise_2d(x * 2.0, z * 2.0) * 0.8 + fd * 0.5, 0.0, 1.0)
 			cols[i] = Color(fd, mud, leaves)
-	var idx := PackedInt32Array()
-	for iz in SEG:
-		for ix in SEG:
-			var a := iz * n + ix
-			idx.append_array([a, a + 1, a + n, a + 1, a + n + 1, a + n])
-	var arr := []
-	arr.resize(Mesh.ARRAY_MAX)
-	arr[Mesh.ARRAY_VERTEX] = verts
-	arr[Mesh.ARRAY_NORMAL] = norms
-	arr[Mesh.ARRAY_COLOR] = cols
-	arr[Mesh.ARRAY_INDEX] = idx
-	var mesh := ArrayMesh.new()
-	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arr)
+	var himg := Image.create_from_data(n, n, false, Image.FORMAT_RF, hs.to_byte_array())
+	hmap_tex = ImageTexture.create_from_image(himg)
 	var mat := ShaderMaterial.new()
 	mat.shader = preload("res://shaders/paint/ground.gdshader")
 	mat.set_shader_parameter("water_y", WATER_Y)
-	mesh.surface_set_material(0, mat)
 	terrain_mat = mat
-	var mi := MeshInstance3D.new()
-	mi.mesh = mesh
-	add_child(mi)
+	# земля кусками 32×32 клетки: камера отсекает невидимые куски
+	var CH := 32
+	for cz in SEG / CH:
+		for cx in SEG / CH:
+			var m := CH + 1
+			var v2 := PackedVector3Array(); v2.resize(m * m)
+			var n2 := PackedVector3Array(); n2.resize(m * m)
+			var c2 := PackedColorArray(); c2.resize(m * m)
+			for jz in m:
+				for jx in m:
+					var i := (cz * CH + jz) * n + cx * CH + jx
+					v2[jz * m + jx] = verts[i]
+					n2[jz * m + jx] = norms[i]
+					c2[jz * m + jx] = cols[i]
+			var idx := PackedInt32Array()
+			for iz in CH:
+				for ix in CH:
+					var a := iz * m + ix
+					idx.append_array([a, a + 1, a + m, a + 1, a + m + 1, a + m])
+			var arr := []
+			arr.resize(Mesh.ARRAY_MAX)
+			arr[Mesh.ARRAY_VERTEX] = v2
+			arr[Mesh.ARRAY_NORMAL] = n2
+			arr[Mesh.ARRAY_COLOR] = c2
+			arr[Mesh.ARRAY_INDEX] = idx
+			var mesh := ArrayMesh.new()
+			mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arr)
+			mesh.surface_set_material(0, mat)
+			var mi := MeshInstance3D.new()
+			mi.mesh = mesh
+			mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+			add_child(mi)
 
 func _make_water() -> void:
 	var plane := PlaneMesh.new()
@@ -408,6 +431,8 @@ func _make_water() -> void:
 	plane.subdivide_depth = 2
 	var mat := ShaderMaterial.new()
 	mat.shader = preload("res://shaders/paint/water.gdshader")
+	mat.set_shader_parameter("hmap", hmap_tex)
+	mat.set_shader_parameter("hsize", SIZE)
 	plane.material = mat
 	water_mat = mat
 	var mi := MeshInstance3D.new()
@@ -590,7 +615,7 @@ func _build_grass_cell(k: Vector2i) -> void:
 	var per_var := []
 	for v in grass_mesh_vars:
 		per_var.append([])
-	var step := 1.25
+	var step := 0.9
 	var z := 0.0
 	while z < GCELL:
 		var x := 0.0
@@ -603,7 +628,9 @@ func _build_grass_cell(k: Vector2i) -> void:
 				continue
 			var fd := forest_density(px, pz)
 			var slope := 1.0 - normal_at(px, pz).y
-			if slope > 0.1 or rng.randf() > (1.0 - fd) * 0.85 + 0.22:
+			# трава куртинами: густо в пятнах, между ними чистая земля-луг
+			var patch := n_detail.get_noise_2d(px * 3.0, pz * 3.0) + n_forest.get_noise_2d(px * 6.0, pz * 6.0) * 0.5
+			if slope > 0.1 or patch < 0.05 or rng.randf() > (1.0 - fd) * 0.9 + 0.1:
 				continue
 			var h1 := height(px + 1.0, pz)
 			var h2 := height(px - 1.0, pz)
@@ -901,7 +928,7 @@ const BLOCK_R := {"spruce": 0.4, "pine": 0.32, "birch": 0.28, "bare": 0.3, "spru
 func _scatter_all() -> void:
 	# вид, попыток на клетку 32 м, масштаб, дальность видимости, тень, правило
 	var rules := [
-		["spruce", 30, Vector2(0.75, 1.15), 80.0, true, "spruce_t"],
+		["spruce", 30, Vector2(0.75, 1.15), 75.0, true, "spruce_t"],
 		["pine", 14, Vector2(0.85, 1.15), 80.0, true, "pine_t"],
 		["birch", 16, Vector2(0.8, 1.15), 80.0, true, "birch_t"],
 		["birch", 5, Vector2(0.8, 1.15), 80.0, true, "edge"],

@@ -48,12 +48,29 @@ static func fur_tex(stripes: bool) -> Texture2D:
 	_tex[key] = t
 	return t
 
-static func material(sp: Dictionary) -> StandardMaterial3D:
-	var m := StandardMaterial3D.new()
-	m.vertex_color_use_as_albedo = true
-	m.albedo_texture = fur_tex(sp.has("stripes"))
-	m.uv1_scale = Vector3(3, 3, 3)
-	m.roughness = 0.95
+static var _fur_sh: Shader = null
+static var _flat := {}
+
+static func material(sp: Dictionary) -> ShaderMaterial:
+	if _fur_sh == null:
+		_fur_sh = load("res://shaders/paint/fur.gdshader")
+	var m := ShaderMaterial.new()
+	m.shader = _fur_sh
+	m.set_shader_parameter("stripes", 1.0 if sp.has("stripes") else 0.0)
+	return m
+
+## Однотонный живописный материал (нос, глаза, рога, клыки).
+static func flat(c: Color) -> ShaderMaterial:
+	var key := c.to_html()
+	if _flat.has(key):
+		return _flat[key]
+	if _fur_sh == null:
+		_fur_sh = load("res://shaders/paint/fur.gdshader")
+	var m := ShaderMaterial.new()
+	m.shader = _fur_sh
+	m.set_shader_parameter("use_vc", false)
+	m.set_shader_parameter("tint", Vector3(c.r, c.g, c.b))
+	_flat[key] = m
 	return m
 
 ## Лофт вдоль оси Z: кольца [z, rx, ry, сдвиг y]; цвет — спина col, брюхо belly.
@@ -134,15 +151,21 @@ static func build(root: Node3D, kind: String, scale_k: float, male: bool, winter
 	out["body"] = body
 	# туловище: от крупа к груди; у кабана и медведя перёд массивнее
 	var front_k := 1.15 if kind in ["boar", "bear", "tiger"] else 1.0
+	# профиль: круп, впадина за рёбрами, грудная клетка, холка, переход к шее
+	var hk := 1.08 if kind in ["hare", "squirrel"] else 1.0
 	var bm := loft_z([
-		[-L * 0.55, gw * 0.35, gh * 0.4, gh * 0.05],
-		[-L * 0.45, gw * 0.85, gh * 0.85, 0.0],
-		[-L * 0.2, gw * 0.95, gh, -gh * 0.05],
-		[L * 0.05, gw * 0.9, gh * 0.95, -gh * 0.08],
-		[L * 0.3, gw * front_k, gh * front_k, 0.0],
-		[L * 0.47, gw * 0.85 * front_k, gh * 0.9 * front_k, gh * 0.1],
-		[L * 0.55, gw * 0.4, gh * 0.45, gh * 0.25],
-	], col, belly, 14)
+		[-L * 0.56, gw * 0.25, gh * 0.3, gh * 0.08],
+		[-L * 0.52, gw * 0.62, gh * 0.68, gh * 0.04],
+		[-L * 0.44, gw * 0.88 * hk, gh * 0.9 * hk, gh * 0.02],
+		[-L * 0.32, gw * 0.95 * hk, gh * 0.98 * hk, 0.0],
+		[-L * 0.16, gw * 0.88, gh * 0.92, -gh * 0.06],
+		[L * 0.0, gw * 0.9, gh * 0.96, -gh * 0.1],
+		[L * 0.16, gw * 0.98 * front_k, gh * 1.02 * front_k, -gh * 0.08],
+		[L * 0.3, gw * 1.0 * front_k, gh * 1.04 * front_k, -gh * 0.02],
+		[L * 0.42, gw * 0.9 * front_k, gh * 0.95 * front_k, gh * 0.08],
+		[L * 0.5, gw * 0.7 * front_k, gh * 0.72 * front_k, gh * 0.18],
+		[L * 0.56, gw * 0.42, gh * 0.45, gh * 0.26],
+	], col, belly, 16)
 	_mi(body, bm, m)
 	# шея и голова
 	var neck_len: float = sp["neck"] * scale_k
@@ -167,9 +190,7 @@ static func build(root: Node3D, kind: String, scale_k: float, male: bool, winter
 		[hs * 0.42 + sn, hs * 0.08, hs * 0.08, -hs * 0.28],
 	], col, belly, 12)
 	_mi(head, hm, m)
-	var dark := StandardMaterial3D.new()
-	dark.albedo_color = Color(0.05, 0.04, 0.035)
-	dark.roughness = 0.35
+	var dark := flat(Color(0.05, 0.04, 0.035))
 	# нос и глаза
 	var ns := SphereMesh.new()
 	ns.radius = hs * 0.17
@@ -192,9 +213,7 @@ static func build(root: Node3D, kind: String, scale_k: float, male: bool, winter
 		_mi(head, em, m, Vector3(sd * hs * 0.5, hs * 0.6, -hs * 0.35), Vector3(-0.3, 0, -sd * (0.5 if kind != "hare" else 0.15)))
 	# рога
 	if sp.has("antler") and male:
-		var am := StandardMaterial3D.new()
-		am.albedo_color = Color(0.55, 0.47, 0.36)
-		am.roughness = 0.8
+		var am := flat(Color(0.55, 0.47, 0.36))
 		var al: float = sp["antler"] * scale_k
 		var tm := loft_y([[0.0, 0.025 * scale_k], [al, 0.008 * scale_k]], Color.WHITE, 5)
 		for sd in [-1.0, 1.0]:
@@ -210,8 +229,7 @@ static func build(root: Node3D, kind: String, scale_k: float, male: bool, winter
 				tine.scale = Vector3(0.7, 0.35, 0.7)
 	# клыки кабана
 	if sp.has("tusk"):
-		var tm2 := StandardMaterial3D.new()
-		tm2.albedo_color = Color(0.9, 0.86, 0.76)
+		var tm2 := flat(Color(0.9, 0.86, 0.76))
 		var tk := loft_y([[0.0, 0.012 * scale_k], [0.07 * scale_k, 0.003]], Color.WHITE, 5)
 		for sd in [-1.0, 1.0]:
 			_mi(head, tk, tm2, Vector3(sd * hs * 0.32, -hs * 0.3, hs * 0.3 + sn * 0.8), Vector3(0.3, 0, sd * 0.6))

@@ -18,16 +18,25 @@ func populate() -> void:
 	rng.seed = 7741
 	var start: Vector3 = main.hero.position
 	# заяц: опушки и поляны
-	for i in 14:
+	for i in 22:
 		_spawn("hare", _spot(func(x, z): return main.forest_density(x, z) < 0.55, start, 25.0), 1.0, -1)
 	# белка: у деревьев
-	for i in 15:
+	for i in 20:
 		var p := _spot(func(x, z): return main.nearest_tree(Vector3(x, 0, z), 6.0) != Vector3.INF, start, 15.0)
 		_spawn("squirrel", p, 1.0, -1)
-	for i in 3:
-		_spawn("fox", _spot(func(x, z): return true, start, 60.0), 1.0, -1)
+	for i in 5:
+		_spawn("fox", _spot(func(x, z): return main.forest_density(x, z) < 0.6, start, 50.0), 1.0, -1)
+	# первая встреча: пара косуль на опушке недалеко от старта
+	var c0 := _spot(func(x, z): return main.forest_density(x, z) < 0.5 and Vector2(x - start.x, z - start.z).length() < 70.0, start, 35.0)
+	for k in 2:
+		_spawn("roe", _near(c0, 4.0), rng.randf_range(0.9, 1.05), 99)
+	# водопои: звери держатся у реки
+	for gi in 2:
+		var c := _spot(func(x, z): return main.river_dist(x, z) < 14.0 and main.river_dist(x, z) > 4.0, start, 50.0)
+		for k in rng.randi_range(2, 3):
+			_spawn("roe", _near(c, 5.0), rng.randf_range(0.9, 1.05), 110 + gi)
 	# косули — группы по 2–3, олени — стада 4–5
-	for gi in 3:
+	for gi in 4:
 		var c := _spot(func(x, z): return main.forest_density(x, z) < 0.7, start, 60.0)
 		for k in rng.randi_range(2, 3):
 			_spawn("roe", _near(c, 6.0), rng.randf_range(0.9, 1.05), 100 + gi)
@@ -36,7 +45,7 @@ func populate() -> void:
 		for k in rng.randi_range(4, 5):
 			_spawn("deer", _near(c, 8.0), rng.randf_range(0.85, 1.05), 200 + gi)
 	# кабаны с поросятами
-	for gi in 2:
+	for gi in 3:
 		var c := _spot(func(x, z): return main.forest_density(x, z) > 0.4, start, 70.0)
 		_spawn("boar", c, 1.0, 300 + gi)
 		_spawn("boar", _near(c, 4.0), 0.85, 300 + gi)
