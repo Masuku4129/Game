@@ -29,13 +29,17 @@ jobs:
           mkdir -p ../preview
           timeout 900 xvfb-run -a -s "-screen 0 1920x864x24" godot --rendering-driver vulkan --write-movie ../preview/f.png --fixed-fps 10 --quit-after 220 2>&1 | grep -iE "error|shader|warning" | head -40 || true
           ls ../preview | tail -3
-      - uses: actions/upload-artifact@v4
-        with:
-          name: preview
-          path: |
-            preview/f00000100.png
-            preview/f00000219.png
-          if-no-files-found: warn
+      - name: Publish preview frames to branch
+        run: |
+          mkdir -p /tmp/pv && cp preview/f00000100.png preview/f00000219.png /tmp/pv/ || true
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout --orphan preview
+          git rm -rf -q . || true
+          cp /tmp/pv/*.png . && git add *.png
+          git commit -q -m "Кадры предпросмотра"
+          git push -f origin preview
   export:
     runs-on: ubuntu-latest
     timeout-minutes: 30
