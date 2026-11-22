@@ -269,8 +269,8 @@ func grass(seed_v: int) -> Array:
 func rock(seed_v: int) -> Array:
 	rng.seed = seed_v
 	var sph := SphereMesh.new()
-	sph.radial_segments = 20
-	sph.rings = 12
+	sph.radial_segments = 28
+	sph.rings = 18
 	var arr := sph.get_mesh_arrays()
 	var verts: PackedVector3Array = arr[Mesh.ARRAY_VERTEX]
 	var idx: PackedInt32Array = arr[Mesh.ARRAY_INDEX]
@@ -283,11 +283,12 @@ func rock(seed_v: int) -> Array:
 	var sz := R(0.9, 1.4)
 	for i in verts.size():
 		var v := verts[i]
-		var k := 1.0 + noise.get_noise_3dv(v * 1.5) * 0.35 + noise.get_noise_3dv(v * 5.0) * 0.06
+		var rn := 1.0 - absf(noise.get_noise_3dv(v * 2.2))
+		var k := 1.0 + (rn - 0.6) * 0.55 + noise.get_noise_3dv(v * 1.4) * 0.22 + noise.get_noise_3dv(v * 7.0) * 0.05
 		v = Vector3(v.x * sx, v.y * 0.6, v.z * sz) * k
 		var moss := clampf((v.y + 0.05) * 3.0, 0.0, 1.0) * clampf(noise.get_noise_3dv(v * 3.0) + 0.6, 0.0, 1.0)
-		var c := Color(0.50, 0.49, 0.45).lerp(Color(0.30, 0.37, 0.18), moss)
-		c = c.darkened(R(0.0, 0.08))
+		var c := Color(0.82, 0.80, 0.76).lerp(Color(0.55, 0.68, 0.36), moss)
+		c = c.darkened(R(0.0, 0.12))
 		st.set_color(c)
 		st.add_vertex(v)
 	for i in idx:
@@ -295,6 +296,11 @@ func rock(seed_v: int) -> Array:
 	st.generate_normals()
 	var m := StandardMaterial3D.new()
 	m.vertex_color_use_as_albedo = true
+	m.vertex_color_is_srgb = true
+	m.albedo_texture = load("res://textures/ground_rock.png")
+	m.uv1_triplanar = true
+	m.uv1_world_triplanar = true
+	m.uv1_scale = Vector3.ONE * 0.7
 	m.roughness = 0.95
 	st.set_material(m)
 	return [st.commit(), 0.6]

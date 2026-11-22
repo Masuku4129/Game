@@ -7,7 +7,7 @@ uniform sampler2D grass : source_color, filter_linear_mipmap_anisotropic, repeat
 uniform sampler2D rock : source_color, filter_linear_mipmap_anisotropic, repeat_enable;
 uniform float tile_forest = 0.28;
 uniform float tile_grass = 0.45;
-uniform float tile_rock = 0.16;
+uniform float tile_rock = 0.5;
 uniform float bump = 1.1;
 varying vec3 wpos;
 varying vec3 wnor;
@@ -18,6 +18,10 @@ float noise(vec3 p) {
 	f = f * f * (3.0 - 2.0 * f);
 	return mix(mix(mix(hash(i), hash(i + vec3(1,0,0)), f.x), mix(hash(i + vec3(0,1,0)), hash(i + vec3(1,1,0)), f.x), f.y),
 		mix(mix(hash(i + vec3(0,0,1)), hash(i + vec3(1,0,1)), f.x), mix(hash(i + vec3(0,1,1)), hash(i + vec3(1,1,1)), f.x), f.y), f.z);
+}
+
+vec4 tri(sampler2D t, vec3 p, vec3 bw, float sc) {
+	return texture(t, p.zy * sc) * bw.x + texture(t, p.xz * sc) * bw.y + texture(t, p.xy * sc) * bw.z;
 }
 
 void vertex() {
@@ -49,8 +53,9 @@ void fragment() {
 	float rk = smoothstep(0.2, 0.36, slope + (macro - 0.5) * 0.12);
 	vec3 bw = pow(abs(wnor), vec3(4.0));
 	bw /= (bw.x + bw.y + bw.z);
-	vec4 r = texture(rock, wpos.zy * tile_rock) * bw.x + texture(rock, wpos.xz * tile_rock) * bw.y + texture(rock, wpos.xy * tile_rock) * bw.z;
-	col = mix(col, r.rgb * (0.85 + macro * 0.3), rk);
+	vec4 r = mix(tri(rock, wpos, bw, tile_rock), tri(rock, wpos, bw, tile_rock * 0.23), 0.4);
+	float rd = noise(wpos * 2.7) * 0.5 + noise(wpos * 8.0) * 0.5;
+	col = mix(col, r.rgb * (0.8 + macro * 0.3) * (0.75 + rd * 0.5), rk);
 	hgt = mix(hgt, r.a, rk);
 	// --- мнимый рельеф: градиент высоты текстуры, без карт нормалей
 	float e = 0.004;

@@ -3,7 +3,7 @@ extends Node3D
 ## деревья с ветками-геометрией и хвоей/листвой из текстур.
 
 const SIZE := 512.0
-const SEG := 256
+const SEG := 384
 const WATER_Y := -2.0
 const CELL := 32.0
 
@@ -11,6 +11,7 @@ var n_hill := FastNoiseLite.new()
 var n_cliff := FastNoiseLite.new()
 var n_detail := FastNoiseLite.new()
 var n_forest := FastNoiseLite.new()
+var n_crag := FastNoiseLite.new()
 
 func _ready() -> void:
 	_setup_noise()
@@ -29,6 +30,7 @@ func _setup_noise() -> void:
 	n_hill.seed = 1640; n_hill.frequency = 0.006; n_hill.fractal_octaves = 4
 	n_cliff.seed = 77; n_cliff.frequency = 0.009; n_cliff.fractal_octaves = 2
 	n_detail.seed = 5; n_detail.frequency = 0.05; n_detail.fractal_octaves = 3
+	n_crag.seed = 31; n_crag.frequency = 0.16; n_crag.fractal_octaves = 4
 	n_forest.seed = 909; n_forest.frequency = 0.02; n_forest.fractal_octaves = 3
 
 func river_dist(x: float, z: float) -> float:
@@ -38,7 +40,12 @@ func height(x: float, z: float) -> float:
 	var h := n_hill.get_noise_2d(x, z) * 12.0 + n_detail.get_noise_2d(x, z) * 1.0 + 3.0
 	var c := n_cliff.get_noise_2d(x, z)
 	# ступени-обрывы: резкий подъём на узкой полосе шума
-	h += smoothstep(0.10, 0.15, c) * 8.0 + smoothstep(0.32, 0.36, c) * 7.0
+	var t1 := smoothstep(0.10, 0.125, c)
+	var t2 := smoothstep(0.32, 0.345, c)
+	h += t1 * 8.0 + t2 * 7.0
+	# рваная, скалистая поверхность обрывов: шум усиливается только на самом уступе
+	var face := (t1 * (1.0 - t1) + t2 * (1.0 - t2)) * 4.0
+	h += n_crag.get_noise_2d(x, z) * 2.2 * face
 	var r := 1.0 - smoothstep(7.0, 32.0, river_dist(x, z))
 	return lerpf(h, WATER_Y - 2.5, r)
 
@@ -87,14 +94,22 @@ func _make_terrain() -> void:
 	var verts := PackedVector3Array(); verts.resize(n * n)
 	var norms := PackedVector3Array(); norms.resize(n * n)
 	var cols := PackedColorArray(); cols.resize(n * n)
+	var hs := PackedFloat32Array(); hs.resize(n * n)
+	for iz in n:
+		for ix in n:
+			hs[iz * n + ix] = height(ix * step - half, iz * step - half)
 	for iz in n:
 		for ix in n:
 			var x := ix * step - half
 			var z := iz * step - half
-			var y := height(x, z)
 			var i := iz * n + ix
+			var y := hs[i]
 			verts[i] = Vector3(x, y, z)
-			norms[i] = normal_at(x, z)
+			var hl := hs[iz * n + maxi(ix - 1, 0)]
+			var hr := hs[iz * n + mini(ix + 1, n - 1)]
+			var hd := hs[maxi(iz - 1, 0) * n + ix]
+			var hu := hs[mini(iz + 1, n - 1) * n + ix]
+			norms[i] = Vector3(hl - hr, 2.0 * step, hd - hu).normalized()
 			var fd := forest_density(x, z)
 			var grass := clampf(1.0 - fd * 1.4, 0.0, 1.0)
 			var mud := clampf((WATER_Y + 1.2 - y) / 1.5, 0.0, 1.0)
