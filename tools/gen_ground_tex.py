@@ -86,17 +86,41 @@ def blade(d, h, x, y):
 stamp(img, hgt, 9000, blade)
 save_rgba(img, np.asarray(hgt.filter(ImageFilter.GaussianBlur(0.8))), "ground_grass.png")
 
-# ---------- скала: слои, трещины, лишайник ----------
-yy = np.linspace(0, 1, N)[:, None]
-st = np.sin(yy * 6.28 * 7 + fbm(beta=2.6) * 9) * .5 + .5
-n1, n2 = fbm(beta=1.8), fbm(beta=1.2)
-v = 0.38 + 0.3 * st * 0.5 + 0.3 * n1 + 0.12 * n2
-rock = np.dstack([v * 150, v * 145, v * 132])
-crack = (np.abs(fbm(beta=2.4, seed=21) - 0.5) < 0.006) | (np.abs(fbm(beta=2.4, seed=22) - 0.5) < 0.005)
-rock[crack] *= 0.4
-lich = np.clip((fbm(beta=2.0) - 0.7) * 8, 0, 1)[..., None]
-rock = rock * (1 - lich * .6) + np.array([110, 120, 60]) * lich * .6
-save_rgba(rock, (v * 255 * 0.9 + crack * -60).clip(0, 255), "ground_rock.png")
+# ---------- скала: блоки (Вороной), трещины, слои, зерно, лишайник ----------
+def voronoi(n, count, seed):
+    r = np.random.default_rng(seed)
+    pts = r.uniform(0, n, (count, 2))
+    ys, xs = np.mgrid[0:n, 0:n].astype(np.float32)
+    xs = (xs + (fbm(n, 2.0, seed + 100) - .5) * 90 + (fbm(n, 1.0, seed + 101) - .5) * 26) % n
+    ys = (ys + (fbm(n, 2.0, seed + 102) - .5) * 90 + (fbm(n, 1.0, seed + 103) - .5) * 26) % n
+    f1 = np.full((n, n), 1e9, np.float32); f2 = np.full((n, n), 1e9, np.float32); idx = np.zeros((n, n), np.int32)
+    for i, (px, py) in enumerate(pts):
+        dx = np.abs(xs - px); dx = np.minimum(dx, n - dx)
+        dy = np.abs(ys - py); dy = np.minimum(dy, n - dy)
+        d = np.sqrt(dx * dx + dy * dy)
+        m = d < f1
+        f2 = np.where(m, f1, np.minimum(f2, d)); idx = np.where(m, i, idx); f1 = np.where(m, d, f1)
+    return f1, f2, idx, r
+f1, f2, idx, r = voronoi(N, 70, 5)
+edge = f2 - f1
+cell_v = r.uniform(0.8, 1.12, 70)[idx]
+warp = fbm(beta=2.2, seed=31)
+bands = np.sin((np.linspace(0, 1, N)[:, None] * 9 + warp * 4.0) * 6.28) * 0.5 + 0.5
+grain = fbm(beta=0.6, seed=32)
+n1 = fbm(beta=2.0, seed=33)
+v = (0.5 + 0.18 * cell_v - 0.18 + 0.12 * (bands - .5) + 0.22 * (n1 - .5) + 0.2 * (grain - .5) + 0.1 * (fbm(beta=0.3, seed=36) - .5))
+v *= np.clip(edge / 9.0, 0.55, 1.0)
+rock = np.dstack([v * 168, v * 160, v * 146])
+warm = fbm(beta=2.6, seed=34)[..., None]
+rock = rock * (0.9 + 0.2 * warm) + (np.array([14, 4, -10]) * (warm - .5))
+crack = edge < 0.9
+rock[crack] *= 0.5
+lich = np.clip((fbm(beta=1.6, seed=35) - 0.68) * 7, 0, 1) * np.clip((grain - 0.35) * 3, 0, 1)
+lich = lich[..., None]
+rock = rock * (1 - lich * .7) + np.array([112, 126, 58]) * lich * .7
+hr = np.clip(0.55 * (cell_v - 0.7) + 0.5 * np.clip(edge / 9.0, 0, 1) + 0.3 * grain + 0.15 * bands, 0, 1)
+hr[crack] *= 0.2
+save_rgba(rock.clip(0, 255), (hr * 255), "ground_rock.png")
 
 # ---------- нормали воды (бесшовные волны) + пена в альфа ----------
 h = fbm(beta=2.6, seed=3) * 0.7 + fbm(beta=1.8, seed=4) * 0.3

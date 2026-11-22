@@ -64,8 +64,21 @@ void fragment() {
 	vec2 uv = mix(uvf, uvg, gw);
 	vec2 d = vec2(texture(forest, uvf + vec2(e, 0.0)).a - texture(forest, uvf - vec2(e, 0.0)).a, texture(forest, uvf + vec2(0.0, e)).a - texture(forest, uvf - vec2(0.0, e)).a);
 	vec2 dg = vec2(texture(grass, uvg + vec2(e, 0.0)).a - texture(grass, uvg - vec2(e, 0.0)).a, texture(grass, uvg + vec2(0.0, e)).a - texture(grass, uvg - vec2(0.0, e)).a);
-	d = mix(d, dg, gw) * (1.0 - rk * 0.8);
-	vec3 nw = normalize(wnor + vec3(-d.x, 0.0, -d.y) * bump * 6.0);
+	d = mix(d, dg, gw) * (1.0 - rk);
+	// рельеф скалы по доминирующей плоскости
+	float re = 0.005;
+	vec3 rg;
+	if (bw.y > bw.x && bw.y > bw.z) {
+		vec2 u = wpos.xz * tile_rock;
+		rg = vec3(texture(rock, u + vec2(re, 0)).a - texture(rock, u - vec2(re, 0)).a, 0.0, texture(rock, u + vec2(0, re)).a - texture(rock, u - vec2(0, re)).a);
+	} else if (bw.x > bw.z) {
+		vec2 u = wpos.zy * tile_rock;
+		rg = vec3(0.0, texture(rock, u + vec2(0, re)).a - texture(rock, u - vec2(0, re)).a, texture(rock, u + vec2(re, 0)).a - texture(rock, u - vec2(re, 0)).a);
+	} else {
+		vec2 u = wpos.xy * tile_rock;
+		rg = vec3(texture(rock, u + vec2(re, 0)).a - texture(rock, u - vec2(re, 0)).a, texture(rock, u + vec2(0, re)).a - texture(rock, u - vec2(0, re)).a, 0.0);
+	}
+	vec3 nw = normalize(wnor + vec3(-d.x, 0.0, -d.y) * bump * 6.0 - rg * rk * 11.0);
 	NORMAL = normalize((VIEW_MATRIX * vec4(nw, 0.0)).xyz);
 	// каверны темнее
 	col *= 0.7 + hgt * 0.5;

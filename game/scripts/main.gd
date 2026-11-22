@@ -12,6 +12,19 @@ var n_cliff := FastNoiseLite.new()
 var n_detail := FastNoiseLite.new()
 var n_forest := FastNoiseLite.new()
 var n_crag := FastNoiseLite.new()
+var n_crag2 := FastNoiseLite.new()
+
+var t_hours := 9.0
+var day_count := 1
+var day_factor := 1.0
+var hero
+var rig
+var joy
+var hud
+var hunger := 0.85
+var warmth := 0.8
+var stamina := 1.0
+var blockers := {}
 
 func _ready() -> void:
 	_setup_noise()
@@ -19,18 +32,70 @@ func _ready() -> void:
 	_make_terrain()
 	_make_water()
 	_scatter_all()
-	var rig := preload("res://scripts/camera_rig.gd").new()
-	rig.bounds = SIZE * 0.5 - 20.0
-	rig.height_func = height
-	add_child(rig)
-	player_rig = rig
 	grass_mesh_vars = [veg.grass_patch(1500), veg.grass_patch(1501), veg.grass_patch(1502), veg.grass_patch(1503), veg.grass_patch(1504)]
+	hero = preload("res://scripts/hero.gd").new()
+	hero.main = self
+	add_child(hero)
+	hero.position = _find_start()
+	rig = preload("res://scripts/camera_rig.gd").new()
+	rig.target = hero
+	add_child(rig)
+	rig.position = hero.position
+	player_rig = hero
+	var ui := CanvasLayer.new()
+	add_child(ui)
+	hud = preload("res://scripts/hud.gd").new()
+	hud.anchor_right = 1.0
+	hud.anchor_bottom = 1.0
+	ui.add_child(hud)
+	joy = preload("res://scripts/joystick.gd").new()
+	joy.anchor_top = 1.0
+	joy.anchor_bottom = 1.0
+	joy.offset_left = 40.0
+	joy.offset_right = 400.0
+	joy.offset_top = -400.0
+	joy.offset_bottom = -40.0
+	ui.add_child(joy)
+	_update_sky()
+
+func _find_start() -> Vector3:
+	for r in range(0, 120, 3):
+		for k in 16:
+			var a := TAU * k / 16.0
+			var x := cos(a) * r
+			var z := sin(a) * r
+			var y := height(x, z)
+			if y > WATER_Y + 0.8 and normal_at(x, z).y > 0.93 and not blocked(x, z, 1.5):
+				return Vector3(x, y, z)
+	return Vector3(0, height(0, 0), 0)
+
+func _add_blocker(x: float, z: float, r: float) -> void:
+	var k := Vector2i(floori(x / 8.0), floori(z / 8.0))
+	if not blockers.has(k):
+		blockers[k] = []
+	blockers[k].append(Vector3(x, z, r))
+
+func blocked(x: float, z: float, rad: float) -> bool:
+	var c := Vector2i(floori(x / 8.0), floori(z / 8.0))
+	for dz in range(-1, 2):
+		for dx in range(-1, 2):
+			var k := Vector2i(c.x + dx, c.y + dz)
+			if not blockers.has(k):
+				continue
+			for b in blockers[k]:
+				var ddx: float = b.x - x
+				var ddz: float = b.y - z
+				var rr: float = b.z + rad
+				if ddx * ddx + ddz * ddz < rr * rr:
+					return true
+	return false
 
 func _setup_noise() -> void:
 	n_hill.seed = 1640; n_hill.frequency = 0.006; n_hill.fractal_octaves = 4
 	n_cliff.seed = 77; n_cliff.frequency = 0.009; n_cliff.fractal_octaves = 2
 	n_detail.seed = 5; n_detail.frequency = 0.05; n_detail.fractal_octaves = 3
 	n_crag.seed = 31; n_crag.frequency = 0.16; n_crag.fractal_octaves = 4
+	n_crag2.seed = 32; n_crag2.frequency = 0.55; n_crag2.fractal_octaves = 2
 	n_forest.seed = 909; n_forest.frequency = 0.02; n_forest.fractal_octaves = 3
 
 func river_dist(x: float, z: float) -> float:
@@ -40,12 +105,12 @@ func height(x: float, z: float) -> float:
 	var h := n_hill.get_noise_2d(x, z) * 12.0 + n_detail.get_noise_2d(x, z) * 1.0 + 3.0
 	var c := n_cliff.get_noise_2d(x, z)
 	# ступени-обрывы: резкий подъём на узкой полосе шума
-	var t1 := smoothstep(0.10, 0.125, c)
-	var t2 := smoothstep(0.32, 0.345, c)
+	var t1 := smoothstep(0.09, 0.16, c)
+	var t2 := smoothstep(0.31, 0.37, c)
 	h += t1 * 8.0 + t2 * 7.0
-	# рваная, скалистая поверхность обрывов: шум усиливается только на самом уступе
+	# рваная скалистая поверхность обрывов: крупные и мелкие сколы только на самом уступе
 	var face := (t1 * (1.0 - t1) + t2 * (1.0 - t2)) * 4.0
-	h += n_crag.get_noise_2d(x, z) * 2.2 * face
+	h += n_crag.get_noise_2d(x, z) * 3.2 * face + n_crag2.get_noise_2d(x, z) * 1.1 * face
 	var r := 1.0 - smoothstep(7.0, 32.0, river_dist(x, z))
 	return lerpf(h, WATER_Y - 2.5, r)
 
@@ -56,36 +121,65 @@ func normal_at(x: float, z: float) -> Vector3:
 func forest_density(x: float, z: float) -> float:
 	return clampf(n_forest.get_noise_2d(x, z) * 1.6 + 0.55, 0.0, 1.0)
 
+var sky_mat: ProceduralSkyMaterial
+var env: Environment
+var sun: DirectionalLight3D
+var moon: DirectionalLight3D
+
 func _make_environment() -> void:
-	var sky_mat := ProceduralSkyMaterial.new()
-	sky_mat.sky_top_color = Color(0.50, 0.58, 0.66)
-	sky_mat.sky_horizon_color = Color(0.72, 0.75, 0.74)
-	sky_mat.ground_horizon_color = Color(0.60, 0.62, 0.58)
-	sky_mat.ground_bottom_color = Color(0.25, 0.27, 0.23)
+	sky_mat = ProceduralSkyMaterial.new()
 	var sky := Sky.new()
 	sky.sky_material = sky_mat
-	var env := Environment.new()
+	env = Environment.new()
 	env.background_mode = Environment.BG_SKY
 	env.sky = sky
 	env.ambient_light_source = Environment.AMBIENT_SOURCE_SKY
-	env.ambient_light_energy = 0.7
 	env.tonemap_mode = Environment.TONE_MAPPER_FILMIC
 	env.tonemap_exposure = 1.05
 	env.fog_enabled = true
-	env.fog_light_color = Color(0.66, 0.70, 0.69)
 	env.fog_density = 0.004
 	env.fog_sky_affect = 0.5
 	var we := WorldEnvironment.new()
 	we.environment = env
 	add_child(we)
-	var sun := DirectionalLight3D.new()
-	sun.light_color = Color(1.0, 0.93, 0.82)
-	sun.light_energy = 1.5
-	sun.rotation_degrees = Vector3(-42, 40, 0)
+	sun = DirectionalLight3D.new()
 	sun.shadow_enabled = true
 	sun.directional_shadow_max_distance = 70.0
 	sun.directional_shadow_mode = DirectionalLight3D.SHADOW_PARALLEL_2_SPLITS
 	add_child(sun)
+	moon = DirectionalLight3D.new()
+	moon.light_color = Color(0.55, 0.66, 0.95)
+	moon.rotation_degrees = Vector3(-48, 200, 0)
+	add_child(moon)
+	_update_sky()
+
+## Время суток: sun/moon, цвета неба, туман, свет факела у героя.
+func _update_sky() -> void:
+	var e := sin((t_hours / 24.0) * TAU - PI * 0.5)
+	var d := smoothstep(-0.05, 0.25, e)
+	var dusk := clampf(1.0 - absf(e) * 4.0, 0.0, 1.0)
+	var elev := clampf(e, 0.0, 1.0) * 60.0 + 5.0
+	sun.rotation_degrees = Vector3(-elev, 40.0 + (t_hours - 12.0) * 15.0, 0)
+	sun.light_energy = 1.6 * smoothstep(0.0, 0.3, e)
+	sun.light_color = Color(1.0, 0.55, 0.30).lerp(Color(1.0, 0.93, 0.82), smoothstep(0.0, 0.45, e))
+	sun.visible = e > -0.02
+	moon.light_energy = 0.3 * (1.0 - d)
+	moon.visible = d < 0.98
+	var day_top := Color(0.50, 0.58, 0.66)
+	var day_hor := Color(0.72, 0.75, 0.74)
+	var night_top := Color(0.015, 0.025, 0.06)
+	var night_hor := Color(0.05, 0.07, 0.12)
+	var top := night_top.lerp(day_top, d).lerp(Color(0.30, 0.32, 0.46), dusk * 0.55)
+	var hor := night_hor.lerp(day_hor, d).lerp(Color(0.88, 0.52, 0.34), dusk * 0.7)
+	sky_mat.sky_top_color = top
+	sky_mat.sky_horizon_color = hor
+	sky_mat.ground_horizon_color = hor.darkened(0.15)
+	sky_mat.ground_bottom_color = hor.darkened(0.6)
+	env.fog_light_color = hor.darkened(0.08)
+	env.ambient_light_energy = lerpf(0.22, 0.7, d)
+	if hero != null:
+		hero.torch.light_energy = 2.2 * (1.0 - d)
+	day_factor = d
 
 func _make_terrain() -> void:
 	var n := SEG + 1
@@ -112,6 +206,7 @@ func _make_terrain() -> void:
 			norms[i] = Vector3(hl - hr, 2.0 * step, hd - hu).normalized()
 			var fd := forest_density(x, z)
 			var grass := clampf(1.0 - fd * 1.4, 0.0, 1.0)
+			grass *= 1.0 - smoothstep(0.08, 0.22, 1.0 - norms[i].y)
 			var mud := clampf((WATER_Y + 1.2 - y) / 1.5, 0.0, 1.0)
 			var leaves := clampf(n_detail.get_noise_2d(x * 2.0, z * 2.0) * 0.8 + fd * 0.5, 0.0, 1.0)
 			cols[i] = Color(grass, mud, leaves)
@@ -160,10 +255,25 @@ var player_rig: Node3D
 var grass_mesh_vars: Array = []
 var grass_cells := {}
 var grass_timer := 0.0
+var _sky_timer := 0.0
 const GCELL := 16.0
-const GRADIUS := 3
+const GRADIUS := 2
 
 func _process(delta: float) -> void:
+	if hero == null or joy == null:
+		return
+	hero.move_vec = joy.value
+	hero.cam_yaw = rig.rotation.y
+	# время суток: 1 игровой час за 75 секунд
+	t_hours += delta / 75.0
+	if t_hours >= 24.0:
+		t_hours -= 24.0
+		day_count += 1
+	_sky_timer -= delta
+	if _sky_timer <= 0.0:
+		_sky_timer = 0.25
+		_update_sky()
+		_update_stats(0.25)
 	if player_rig == null:
 		return
 	grass_timer -= delta
@@ -191,6 +301,19 @@ func _process(delta: float) -> void:
 	if best_d < 1e9:
 		_build_grass_cell(best)
 
+func _update_stats(dt: float) -> void:
+	hunger = maxf(0.0, hunger - 0.0004 * dt)
+	var target_w := 0.28 + 0.55 * day_factor
+	warmth = lerpf(warmth, target_w, 0.01 * dt * 4.0)
+	if hero.moving:
+		stamina = maxf(0.0, stamina - 0.012 * dt)
+	else:
+		stamina = minf(1.0, stamina + 0.05 * dt)
+	var hh := int(t_hours)
+	var mm := int((t_hours - hh) * 60.0)
+	var temp := int(round(lerpf(-9.0, 7.0, day_factor)))
+	hud.set_state(hunger, warmth, stamina, "День %d · %02d:%02d · %d°C" % [day_count, hh, mm, temp])
+
 func _build_grass_cell(k: Vector2i) -> void:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = k.y * 7919 + k.x * 104729 + 13
@@ -199,7 +322,7 @@ func _build_grass_cell(k: Vector2i) -> void:
 	var per_var := []
 	for v in grass_mesh_vars:
 		per_var.append([])
-	var step := 0.95
+	var step := 1.15
 	var z := 0.0
 	while z < GCELL:
 		var x := 0.0
@@ -212,7 +335,13 @@ func _build_grass_cell(k: Vector2i) -> void:
 				continue
 			var fd := forest_density(px, pz)
 			var slope := 1.0 - normal_at(px, pz).y
-			if slope > 0.3 or rng.randf() > (1.0 - fd) * 0.85 + 0.22:
+			if slope > 0.1 or rng.randf() > (1.0 - fd) * 0.85 + 0.22:
+				continue
+			var h1 := height(px + 1.0, pz)
+			var h2 := height(px - 1.0, pz)
+			var h3 := height(px, pz + 1.0)
+			var h4 := height(px, pz - 1.0)
+			if maxf(maxf(h1, h2), maxf(h3, h4)) - minf(minf(h1, h2), minf(h3, h4)) > 0.7:
 				continue
 			var s := rng.randf_range(0.9, 1.5)
 			var b := Basis(Vector3.UP, rng.randf() * TAU).scaled(Vector3(s, s * rng.randf_range(0.8, 1.3), s))
@@ -232,7 +361,7 @@ func _build_grass_cell(k: Vector2i) -> void:
 		var mmi := MultiMeshInstance3D.new()
 		mmi.multimesh = mm
 		mmi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-		mmi.visibility_range_end = (GRADIUS + 0.7) * GCELL
+		mmi.visibility_range_end = (GRADIUS + 0.55) * GCELL
 		mmi.visibility_range_end_margin = 8.0
 		mmi.visibility_range_fade_mode = GeometryInstance3D.VISIBILITY_RANGE_FADE_SELF
 		holder.add_child(mmi)
@@ -289,6 +418,7 @@ func _scatter_all() -> void:
 		["twig", 40, Vector2(0.8, 1.3), 40.0, false, "under"],
 		["pebble", 40, Vector2(0.15, 0.45), 40.0, false, "pebble"],
 		["rock", 10, Vector2(0.5, 2.2), 100.0, true, "rock"],
+		["rock", 14, Vector2(1.8, 4.6), 140.0, true, "boulder"],
 		["stump", 2, Vector2(0.8, 1.2), 60.0, true, "under"],
 		["log", 1, Vector2(0.9, 1.1), 70.0, true, "under"],
 	]
@@ -338,6 +468,8 @@ func _scatter_all() -> void:
 
 func _accept(kind: String, x: float, z: float, rng: RandomNumberGenerator) -> bool:
 	var y := height(x, z)
+	if kind == "boulder":
+		return (1.0 - normal_at(x, z).y) > 0.3 and y > WATER_Y + 0.5 and rng.randf() < 0.35
 	if kind == "reed":
 		return y > WATER_Y - 0.5 and y < WATER_Y + 0.35 and rng.randf() < 0.9
 	if kind == "pebble":
@@ -359,4 +491,6 @@ func _accept(kind: String, x: float, z: float, rng: RandomNumberGenerator) -> bo
 			return slope < 0.32 and rng.randf() < (1.0 - fd) * 0.9 + 0.15
 		"rock":
 			return slope > 0.15 or rng.randf() < 0.15
+		"boulder":
+			return slope > 0.3 and rng.randf() < 0.3
 	return true

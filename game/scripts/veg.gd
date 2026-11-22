@@ -4,6 +4,7 @@ extends RefCounted
 
 const CARD_SHADER := preload("res://shaders/card.gdshader")
 const BLADE_SHADER := preload("res://shaders/grass_blade.gdshader")
+const ROCK_SHADER := preload("res://shaders/rock.gdshader")
 
 var rng := RandomNumberGenerator.new()
 var mats := {}
@@ -265,43 +266,42 @@ func grass(seed_v: int) -> Array:
 		card(lf, Vector3.ZERO, Basis(Vector3.UP, a + k * PI * 0.5), 1.0, 0.8, R(0.85, 1.05))
 	return [_commit([lf], ["grass"]), 0.8]
 
-## Камень: искажённая сфера, мох сверху (цвет вершин).
+## Камень: угловатая глыба (ячеистый шум + хребтовый шум), мох сверху, трипланарная текстура скалы.
 func rock(seed_v: int) -> Array:
 	rng.seed = seed_v
 	var sph := SphereMesh.new()
-	sph.radial_segments = 28
-	sph.rings = 18
+	sph.radial_segments = 44
+	sph.rings = 26
 	var arr := sph.get_mesh_arrays()
 	var verts: PackedVector3Array = arr[Mesh.ARRAY_VERTEX]
 	var idx: PackedInt32Array = arr[Mesh.ARRAY_INDEX]
-	var noise := FastNoiseLite.new()
-	noise.seed = seed_v
-	noise.frequency = 1.3
+	var cell := FastNoiseLite.new()
+	cell.seed = seed_v
+	cell.noise_type = FastNoiseLite.TYPE_CELLULAR
+	cell.cellular_return_type = FastNoiseLite.RETURN_DISTANCE2_SUB
+	cell.frequency = 1.1
+	var ridge := FastNoiseLite.new()
+	ridge.seed = seed_v + 7
+	ridge.frequency = 1.6
+	ridge.fractal_octaves = 3
 	var st := SurfaceTool.new()
 	st.begin(Mesh.PRIMITIVE_TRIANGLES)
 	var sx := R(1.0, 1.6)
 	var sz := R(0.9, 1.4)
 	for i in verts.size():
 		var v := verts[i]
-		var rn := 1.0 - absf(noise.get_noise_3dv(v * 2.2))
-		var k := 1.0 + (rn - 0.6) * 0.55 + noise.get_noise_3dv(v * 1.4) * 0.22 + noise.get_noise_3dv(v * 7.0) * 0.05
-		v = Vector3(v.x * sx, v.y * 0.6, v.z * sz) * k
-		var moss := clampf((v.y + 0.05) * 3.0, 0.0, 1.0) * clampf(noise.get_noise_3dv(v * 3.0) + 0.6, 0.0, 1.0)
-		var c := Color(0.82, 0.80, 0.76).lerp(Color(0.55, 0.68, 0.36), moss)
-		c = c.darkened(R(0.0, 0.12))
+		var k := 1.0 + cell.get_noise_3dv(v * 1.7) * 0.34 + (1.0 - absf(ridge.get_noise_3dv(v * 2.0)) - 0.6) * 0.3 + ridge.get_noise_3dv(v * 9.0) * 0.035
+		v = Vector3(v.x * sx, v.y * 0.62, v.z * sz) * k
+		var moss := clampf((v.y - 0.05) * 3.2, 0.0, 1.0) * clampf(ridge.get_noise_3dv(v * 3.0) + 0.65, 0.0, 1.0)
+		var c := Color(1.0, 1.0, 0.98).lerp(Color(0.52, 0.66, 0.32), moss).darkened(R(0.0, 0.1))
 		st.set_color(c)
 		st.add_vertex(v)
 	for i in idx:
 		st.add_index(i)
 	st.generate_normals()
-	var m := StandardMaterial3D.new()
-	m.vertex_color_use_as_albedo = true
-	m.vertex_color_is_srgb = true
-	m.albedo_texture = load("res://textures/ground_rock.png")
-	m.uv1_triplanar = true
-	m.uv1_world_triplanar = true
-	m.uv1_scale = Vector3.ONE * 0.7
-	m.roughness = 0.95
+	var m := ShaderMaterial.new()
+	m.shader = ROCK_SHADER
+	m.set_shader_parameter("rock", load("res://textures/ground_rock.png"))
 	st.set_material(m)
 	return [st.commit(), 0.6]
 
@@ -327,23 +327,23 @@ func log_fallen(seed_v: int) -> Array:
 		tube(bark, Vector3(x, 0.4, 0), Vector3(x + R(-0.3, 0.3), 0.8, R(0.2, 0.4)), Vector3(x + R(-0.5, 0.5), 1.1, R(0.5, 0.9)), 0.06, 0.015, 4, 5)
 	return [_commit([bark], ["bark_dead"]), 0.6]
 
-## Клочок травы из ~30 отдельных травинок с цветом по высоте. Клочки в сетке 1 м сливаются в ковёр.
+## Клочок травы из ~50 тонких травинок с цветом по высоте. Клочки в сетке ~1 м сливаются в ковёр.
 func grass_patch(seed_v: int) -> Array:
 	rng.seed = seed_v
 	var s := Surf.new()
 	var tone := R(0.85, 1.1)
-	for i in 34:
+	for i in 50:
 		var a := R(0, TAU)
-		var r := sqrt(R(0.0, 1.0)) * 0.7
+		var r := sqrt(R(0.0, 1.0)) * 0.75
 		var base := Vector3(cos(a) * r, 0, sin(a) * r)
-		var h := R(0.28, 0.62)
-		var w := R(0.028, 0.05)
+		var h := R(0.2, 0.46)
+		var w := R(0.013, 0.026)
 		var dir := R(0, TAU)
-		var lean := Vector3(cos(dir), 0, sin(dir)) * R(0.05, 0.28) * h
+		var lean := Vector3(cos(dir), 0, sin(dir)) * R(0.05, 0.3) * h
 		var side := Vector3(cos(dir + PI * 0.5), 0, sin(dir + PI * 0.5)) * w
-		var c0 := Color(0.07, 0.12, 0.04) * tone
-		var c1 := Color(0.20, 0.30, 0.09).lerp(Color(0.31, 0.37, 0.12), R(0, 1)) * tone
-		var c2 := Color(0.34, 0.44, 0.16).lerp(Color(0.45, 0.46, 0.17), R(0, 1) * R(0, 1)) * tone
+		var c0 := Color(0.05, 0.09, 0.03) * tone
+		var c1 := Color(0.13, 0.21, 0.06).lerp(Color(0.2, 0.26, 0.08), R(0, 1)) * tone
+		var c2 := Color(0.22, 0.3, 0.1).lerp(Color(0.32, 0.34, 0.12), R(0, 1) * R(0, 1)) * tone
 		var p0 := base
 		var p1 := base + lean * 0.35 + Vector3(0, h * 0.55, 0)
 		var p2 := base + lean + Vector3(0, h, 0)
@@ -351,13 +351,13 @@ func grass_patch(seed_v: int) -> Array:
 		var b := s.n
 		s.v(p0 - side, n, Vector2.ZERO, c0)
 		s.v(p0 + side, n, Vector2.ZERO, c0)
-		s.v(p1 - side * 0.75, n, Vector2.ZERO, c1)
-		s.v(p1 + side * 0.75, n, Vector2.ZERO, c1)
+		s.v(p1 - side * 0.7, n, Vector2.ZERO, c1)
+		s.v(p1 + side * 0.7, n, Vector2.ZERO, c1)
 		s.v(p2, n, Vector2.ZERO, c2)
 		s.tri(b, b + 1, b + 2)
 		s.tri(b + 1, b + 3, b + 2)
 		s.tri(b + 2, b + 3, b + 4)
-	return [_commit([s], ["blade"]), 0.6]
+	return [_commit([s], ["blade"]), 0.5]
 
 ## Камыш: три скрещённые карточки.
 func reeds(seed_v: int) -> Array:

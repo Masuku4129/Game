@@ -1,10 +1,10 @@
 extends Node3D
-## Изометрическая камера под 60°: один палец двигает, два пальца приближают и вращают.
+## Изометрическая камера под 60°: следует за героем; палец вне джойстика вращает,
+## два пальца приближают и вращают.
 
 var pitch := 60.0
-var distance := 32.0
-var bounds := 200.0
-var height_func: Callable
+var distance := 30.0
+var target: Node3D
 var touches := {}
 var last_pinch := 0.0
 var last_angle := 0.0
@@ -13,17 +13,18 @@ var cam := Camera3D.new()
 func _ready() -> void:
 	cam.fov = 40.0
 	cam.near = 0.5
-	cam.far = 400.0
+	cam.far = 420.0
 	add_child(cam)
 	_update()
 
+func _process(delta: float) -> void:
+	if target != null:
+		position = position.lerp(target.position, 1.0 - exp(-9.0 * delta))
+	_update()
+
 func _update() -> void:
-	position.x = clampf(position.x, -bounds, bounds)
-	position.z = clampf(position.z, -bounds, bounds)
-	if height_func.is_valid():
-		position.y = height_func.call(position.x, position.z)
 	cam.position = Vector3(0, sin(deg_to_rad(pitch)) * distance, cos(deg_to_rad(pitch)) * distance)
-	cam.look_at(global_position, Vector3.UP)
+	cam.look_at(global_position + Vector3(0, 1.0, 0), Vector3.UP)
 
 func _unhandled_input(e: InputEvent) -> void:
 	if e is InputEventScreenTouch:
@@ -38,10 +39,7 @@ func _unhandled_input(e: InputEvent) -> void:
 	elif e is InputEventScreenDrag:
 		touches[e.index] = e.position
 		if touches.size() == 1:
-			var k := distance * 0.0015
-			var move := Vector3(-e.relative.x, 0, -e.relative.y) * k
-			position += move.rotated(Vector3.UP, rotation.y)
-			_update()
+			rotation.y -= e.relative.x * 0.006
 		elif touches.size() == 2:
 			var p: Array = touches.values()
 			var d: float = p[0].distance_to(p[1])
@@ -51,10 +49,8 @@ func _unhandled_input(e: InputEvent) -> void:
 			rotation.y -= a - last_angle
 			last_pinch = d
 			last_angle = a
-			_update()
 	elif e is InputEventMouseButton and e.pressed:
 		if e.button_index == MOUSE_BUTTON_WHEEL_UP:
 			distance = maxf(8.0, distance * 0.9)
 		elif e.button_index == MOUSE_BUTTON_WHEEL_DOWN:
 			distance = minf(70.0, distance * 1.1)
-		_update()
