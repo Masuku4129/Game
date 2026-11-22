@@ -12,7 +12,7 @@ func _input(e: InputEvent) -> void:
 	if e is InputEventScreenTouch:
 		if e.pressed and touch_id == -1 and get_global_rect().has_point(e.position):
 			touch_id = e.index
-			_set(e.position)
+			_update_value(e.position)
 			get_viewport().set_input_as_handled()
 		elif not e.pressed and e.index == touch_id:
 			touch_id = -1
@@ -20,10 +20,10 @@ func _input(e: InputEvent) -> void:
 			queue_redraw()
 			get_viewport().set_input_as_handled()
 	elif e is InputEventScreenDrag and e.index == touch_id:
-		_set(e.position)
+		_update_value(e.position)
 		get_viewport().set_input_as_handled()
 
-func _set(pos: Vector2) -> void:
+func _update_value(pos: Vector2) -> void:
 	var v := (pos - _center()) / RADIUS
 	value = v.limit_length(1.0)
 	queue_redraw()
