@@ -137,10 +137,14 @@ void fragment() {
 	c = mix(c, fl, smoothstep(0.35, 0.65, fd + (s - 0.5) * 0.3));
 	float slope = 1.0 - wn.y;
 	c = mix(c, lin(stone) * (0.85 + fine * 0.3), smoothstep(0.28, 0.42, slope + (s - 0.5) * 0.12));
-	// отвесная скала: серый камень с горизонтальными пластами и трещинами
-	float strata = sin(wp.y * 2.6 + vnoise(wp.xz * 0.4) * 4.0) * 0.5 + 0.5;
-	float crack = smoothstep(0.08, 0.0, abs(fract(wp.y * 0.7 + vnoise(wp.xz * 0.8) * 1.5) - 0.5) - 0.42);
-	vec3 cliff = lin(vec3(0.42, 0.41, 0.38)) * (0.75 + strata * 0.3 + fine * 0.15) * (1.0 - crack * 0.45);
+	// отвесная скала: серый камень, пятна лишайника, вертикальные потёки и тёмные расщелины
+	vec2 cuv = vec2(wp.x + wp.z, wp.y);
+	float blocks = vnoise(cuv * vec2(0.9, 0.35)) * 0.6 + vnoise(cuv * vec2(2.3, 0.8)) * 0.4;
+	float streak = vnoise(vec2(cuv.x * 3.0, cuv.y * 0.15));
+	float crev = smoothstep(0.72, 0.82, vnoise(cuv * vec2(1.6, 0.25)));
+	vec3 cliff = lin(vec3(0.43, 0.42, 0.39)) * (0.72 + blocks * 0.35) * (0.9 + streak * 0.15);
+	cliff = mix(cliff, lin(vec3(0.5, 0.54, 0.4)), smoothstep(0.62, 0.8, vnoise(cuv * 0.5 + 7.0)) * 0.45);
+	cliff *= 1.0 - crev * 0.5;
 	c = mix(c, cliff, smoothstep(0.5, 0.7, slope));
 	// особые участки: гарь, болото, курумник, бурелом (края рваные от шума)
 	float ze = (s - 0.5) * 0.5 + (big - 0.5) * 0.3;

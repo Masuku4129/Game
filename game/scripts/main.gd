@@ -391,8 +391,10 @@ func _update_sky() -> void:
 	if weather != null:
 		# глубинная дымка: в тумане и дождь начинается ближе и гуще
 		env.fog_density = minf(1.0, 0.85 + weather.fogv * 0.15)
-		env.fog_depth_begin = 45.0 - weather.fogv * 38.0 - weather.precip * 15.0
-		env.fog_depth_end = 115.0 - weather.fogv * 75.0 - weather.precip * 30.0
+		# камера ниже — видно дальше: дымка ближе, чтобы дальний край мира не появлялся на глазах
+		var low: float = clampf((45.0 - float(rig.pitch)) / 20.0, 0.0, 1.0) if rig != null else 0.0
+		env.fog_depth_begin = 45.0 - low * 15.0 - weather.fogv * 38.0 - weather.precip * 15.0
+		env.fog_depth_end = 115.0 - low * 30.0 - weather.fogv * 75.0 - weather.precip * 30.0
 	if hero != null:
 		hero.torch.light_energy = 2.2 * (1.0 - d)
 	day_factor = d
@@ -1084,9 +1086,9 @@ func _scatter_all() -> void:
 		["spruce_dead", 2, Vector2(0.9, 1.3), 110.0, true, "tree"],
 		["spruce", 8, Vector2(0.18, 0.35), 75.0, true, "under"],
 		["bush", 30, Vector2(0.8, 1.5), 75.0, false, "under"],
-		["fern", 60, Vector2(0.7, 1.2), 50.0, false, "fern"],
+		["fern", 60, Vector2(0.7, 1.2), 62.0, false, "fern"],
 		["reeds", 14, Vector2(0.8, 1.4), 110.0, false, "reed"],
-		["twig", 60, Vector2(0.8, 1.3), 55.0, false, "under"],
+		["twig", 60, Vector2(0.8, 1.3), 45.0, false, "under"],
 		["pebble", 40, Vector2(0.15, 0.45), 55.0, false, "pebble"],
 		["rock", 12, Vector2(0.5, 2.2), 115.0, true, "rock"],
 		["rock", 14, Vector2(1.8, 4.6), 125.0, true, "boulder"],
@@ -1103,13 +1105,13 @@ func _scatter_all() -> void:
 		["snag", 8, Vector2(0.9, 1.3), 100.0, true, "windfall_z"],
 		["snag_b", 26, Vector2(0.9, 1.4), 105.0, true, "burnt_z"],
 		["fallen1", 4, Vector2(0.9, 1.2), 100.0, true, "burnt_z"],
-		["fireweed", 60, Vector2(0.8, 1.3), 55.0, false, "burnt_z"],
+		["fireweed", 60, Vector2(0.8, 1.3), 70.0, false, "burnt_z"],
 		["fireweed", 8, Vector2(0.8, 1.2), 70.0, false, "meadow"],
 		["larch", 8, Vector2(1.05, 1.45), 115.0, true, "larch_t"],
 		["aspen", 8, Vector2(1.0, 1.4), 115.0, true, "edge"],
 		["berry", 25, Vector2(0.7, 1.3), 55.0, false, "under"],
-		["bilberry", 35, Vector2(0.9, 1.5), 42.0, false, "under"],
-		["mushroom", 14, Vector2(0.8, 1.4), 45.0, false, "under"],
+		["bilberry", 35, Vector2(0.9, 1.5), 55.0, false, "under"],
+		["mushroom", 14, Vector2(0.8, 1.4), 40.0, false, "under"],
 		["fir", 12, Vector2(1.05, 1.45), 110.0, true, "fir_t"],
 		["cedar", 6, Vector2(1.05, 1.5), 110.0, true, "cedar_t"],
 		["willow", 18, Vector2(0.8, 1.3), 75.0, true, "river"],
@@ -1187,7 +1189,7 @@ func _scatter_all() -> void:
 					if kind == "rock" or kind == "slab":
 						# камень — твёрдый купол: на него можно встать или залезть
 						var rsc: Vector3 = vars[vi][2]
-						var hr2: float = (rsc.x + rsc.z) * 0.45 * s
+						var hr2: float = (rsc.x + rsc.z) * 0.6 * s
 						var ht2: float = rsc.y * 0.9 * b.y.length()
 						if ht2 > 0.12:
 							_add_solid([0, o, Vector3.ZERO, hr2, ht2])
@@ -1260,7 +1262,7 @@ func _occ_radius(kind: String, v: Array, s: float) -> float:
 		return (0.5 if s > 0.5 else 0.0) * s
 	if kind == "rock" or kind == "slab":
 		var rsc: Vector3 = v[2]
-		return (rsc.x + rsc.z) * 0.45 * s
+		return (rsc.x + rsc.z) * 0.62 * s
 	match kind:
 		"stump", "anthill":
 			return 0.6 * s
@@ -1335,7 +1337,7 @@ func _cliff_rocks(vars: Array) -> void:
 					var b := Basis(Vector3.UP, atan2(up.x, up.y) + rng.randf_range(-0.5, 0.5)).scaled(Vector3(sxz, sy, sxz * 0.8))
 					var o := Vector3(px - up.x * 0.6, hb - 0.4, pz - up.y * 0.6)
 					per_var[vi].append(Transform3D(b, o))
-					_add_blocker(o.x, o.z, sxz * 0.7)
+					_add_blocker(o.x, o.z, sxz * 0.4)
 					_occ_add(o.x, o.z, sxz * 0.9)
 					# осыпь у подножия
 					for k in 2:

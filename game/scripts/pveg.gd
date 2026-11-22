@@ -577,14 +577,25 @@ func fallen(seed_v: int, mode: int) -> Array:
 	var x0 := 0.0
 	if mode == 0:
 		# корневая тарелка: стоящий на ребре диск земли и корни веером
-		var rp := R(1.2, 1.6)
-		for i in 3:
-			blob(soil, Vector3(-0.15 - i * 0.08, rp * 0.55, R(-0.2, 0.2)), Vector3(0.22, rp * R(0.75, 0.95), rp * R(0.8, 1.0)), R(0.3, 0.8))
-		for i in 11:
-			var a := TAU * i / 11.0 + R(-0.2, 0.2)
+		# корневой ком: толстая неровная лепёшка земли с комьями по краю, корни торчат во все стороны
+		var rp := R(1.1, 1.5)
+		var c0 := Vector3(-0.25, rp * 0.6, 0)
+		blob(soil, c0, Vector3(0.45, rp * 0.85, rp * 0.9), R(0.3, 0.7))
+		blob(soil, c0 + Vector3(-0.2, -rp * 0.15, R(-0.2, 0.2)), Vector3(0.35, rp * 0.6, rp * 0.7), R(0.2, 0.6))
+		for i in 7:
+			var a := TAU * i / 7.0 + R(-0.3, 0.3)
 			var d := Vector3(0, cos(a), sin(a))
-			var c := Vector3(-0.1, rp * 0.55, 0)
-			trunk(dr, c + d * 0.2, c + d * rp * 0.7 + Vector3(R(-0.3, 0.1), 0, 0), c + d * rp * R(1.0, 1.35) + Vector3(R(-0.5, 0.0), 0, 0), 0.08, 0.015, 2, 4)
+			blob(soil, c0 + d * rp * R(0.65, 0.85) + Vector3(R(-0.3, 0.1), 0, 0), Vector3(0.25, 0.25, 0.25) * R(0.7, 1.3), R(0.2, 0.8))
+		for i in 18:
+			var a := TAU * i / 18.0 + R(-0.15, 0.15)
+			var d := Vector3(R(-0.5, 0.2), cos(a), sin(a)).normalized()
+			var e := c0 + d * rp * R(1.1, 1.7)
+			e.y = maxf(e.y, 0.0)
+			trunk(dr, c0 + d * rp * 0.5, c0 + d * rp * 0.9 + Vector3(R(-0.3, 0.2), R(-0.2, 0.1), 0), e, R(0.05, 0.1), 0.01, 2, 4)
+		# в земле под комлем — яма, у края свисают тонкие корешки
+		for i in 6:
+			var p := c0 + Vector3(-0.3, R(-rp * 0.6, rp * 0.4), R(-rp * 0.7, rp * 0.7))
+			trunk(dr, p, p + Vector3(-0.1, -0.25, 0), p + Vector3(-0.15, -R(0.4, 0.7), R(-0.1, 0.1)), 0.025, 0.006, 2, 3)
 		x0 = 0.2
 	else:
 		# обломок: пень 1–2 м со щепой по краю

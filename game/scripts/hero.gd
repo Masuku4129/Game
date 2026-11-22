@@ -311,7 +311,7 @@ func _can_walk(p: Vector3) -> bool:
 	if absf(p.x) > half or absf(p.z) > half:
 		return false
 	var y: float = main.ground_at(p.x, p.z)
-	if y - position.y > 1.1:
+	if y - position.y > 0.7:
 		return false
 	# обрыв вниз: шагнуть можно — дальше герой падает
 	if y < position.y - 0.6 or airborne:
