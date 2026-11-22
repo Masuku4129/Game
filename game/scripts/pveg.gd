@@ -84,7 +84,7 @@ func _init() -> void:
 	# мазки листвы: те же цвета, что у сплошных крон
 	var bt := _brush_tex()
 	var lc := load("res://shaders/paint/leafcard.gdshader")
-	for k in ["spruce", "pine", "birch", "leaf", "bush", "larch", "fern", "fir", "cedar", "willow", "rowan", "juniper", "alder", "rose", "cherry", "raspberry", "currant", "ernik"]:
+	for k in ["spruce", "pine", "birch", "leaf", "bush", "larch", "fern", "fir", "cedar", "willow", "rowan", "juniper", "alder", "rose", "cherry", "raspberry", "currant", "ernik", "bilberry", "ledum", "moss"]:
 		var m := ShaderMaterial.new()
 		m.shader = lc
 		m.set_shader_parameter("brush", bt)
@@ -419,11 +419,12 @@ func rock(seed_v: int) -> Array:
 	var faces: Array = _ico[1]
 	var sc := Vector3(R(0.8, 1.3), R(0.45, 0.8), R(0.8, 1.3))
 	var off := R(0, 50)
+	var cuts := _cuts()
 	var pts: Array = []
 	for p in verts:
 		var q: Vector3 = p
-		var n := 1.0 + 0.25 * sin(q.x * 2.3 + off) * sin(q.z * 1.9 + off) + R(-0.08, 0.08)
-		var w := q * sc * n
+		var n := 1.0 + 0.18 * sin(q.x * 2.3 + off) * sin(q.z * 1.9 + off) + R(-0.05, 0.05)
+		var w := _chisel(q * n, cuts) * sc
 		if w.y < -0.1:
 			w.y = -0.1 + (w.y + 0.1) * 0.3
 		pts.append(w)
@@ -720,27 +721,23 @@ func cherry(seed_v: int) -> Array:
 
 ## Черничник-брусничник: низкая плотная куртинка с ягодами.
 func bilberry(seed_v: int) -> Array:
-	rng.seed = seed_v
-	var fl := _st()
-	var bs := _st()
-	for i in rng.randi_range(4, 6):
-		var a := R(0, TAU)
-		var d := R(0.0, 0.9)
-		blob(fl, Vector3(cos(a) * d, 0.08, sin(a) * d), Vector3(R(0.25, 0.4), R(0.12, 0.2), R(0.25, 0.4)), R(0.2, 1.0))
-	for i in 16:
-		var a := R(0, TAU)
-		var d := R(0.0, 1.0)
-		dot(bs, Vector3(cos(a) * d, R(0.12, 0.25), sin(a) * d), Vector3.ONE * 0.03, R(0.4, 1.0))
-	return [_mesh([[fl, "bilberry"], [bs, "berry"]]), 0.25]
+	return leafy_patch(seed_v, "bilberry", "berry", 14, 0.28)
 
 ## Моховая кочка (на болоте — с пучком осоки сверху).
 func hummock(seed_v: int) -> Array:
 	rng.seed = seed_v
-	var st := _st()
-	blob(st, Vector3(0, 0.05, 0), Vector3(R(0.4, 0.7), R(0.25, 0.45), R(0.4, 0.7)), R(0.3, 1.0))
-	if rng.randf() < 0.6:
-		blob(st, Vector3(R(-0.3, 0.3), 0.1, R(-0.3, 0.3)), Vector3(0.3, 0.2, 0.3), R(0.3, 1.0))
-	return [_mesh([[st, "moss"]]), 0.4]
+	var core := _st()
+	var cd: SurfaceTool = null if lod else _st()
+	var g := _st()
+	var w := R(0.35, 0.55)
+	moss_pad(core, cd, Vector3(0, 0.12, 0), Vector3(w, R(0.4, 0.6), w))
+	# пучок осоки из макушки
+	for k in 7:
+		var a := TAU * k / 7.0 + R(-0.3, 0.3)
+		var o := Vector3(cos(a), 0, sin(a))
+		var b := o * 0.08 + Vector3(0, 0.2, 0)
+		trunk(g, b, b + o * 0.12 + Vector3(0, 0.22, 0), b + o * 0.3 + Vector3(0, 0.38, 0), 0.012, 0.003, 2, 3)
+	return [_mesh([[core, "moss"], [cd, "moss_card"], [g, "horsetail"]]), 0.4]
 
 ## Хвощ: пучок тонких зелёных стеблей с мутовками.
 func horsetail(seed_v: int) -> Array:
@@ -792,6 +789,53 @@ func stlanik(seed_v: int) -> Array:
 	return [_mesh([[bk, "bark"], [fl, "cedar"], [cards, "cedar_card"]]), 1.2]
 
 
+## Сколы камня: 7–10 случайных плоскостей срезают сферу — грани и рёбра вместо «пластилина».
+func _cuts() -> Array:
+	var out: Array = []
+	for i in rng.randi_range(7, 10):
+		var n := Vector3(R(-1, 1), R(-0.3, 1), R(-1, 1)).normalized()
+		out.append([n, R(0.62, 0.85)])
+	return out
+
+func _chisel(p: Vector3, cuts: Array) -> Vector3:
+	var w := p
+	for c in cuts:
+		var n: Vector3 = c[0]
+		var d: float = c[1]
+		var e := w.dot(n)
+		if e > d:
+			w -= n * (e - d)
+	return w
+
+## Низкая куртина кустарничков: прутики и листва мазками (не гладкие капли).
+func leafy_patch(seed_v: int, kind: String, berry: String, n_dots: int, h: float) -> Array:
+	rng.seed = seed_v
+	var fl := _st()
+	var bk := _st()
+	var ds := _st()
+	cards = null if lod else _st()
+	for i in rng.randi_range(4, 7):
+		var a := R(0, TAU)
+		var d := R(0.0, 0.8)
+		var c := Vector3(cos(a) * d, h * R(0.55, 0.8), sin(a) * d)
+		trunk(bk, Vector3(c.x, 0, c.z), Vector3(c.x, h * 0.3, c.z), c, 0.012, 0.006, 1, 3)
+		leafblob(fl, cards, c, Vector3(R(0.18, 0.3), h * 0.45, R(0.18, 0.3)), R(0.2, 1.0))
+	for i in n_dots:
+		var a := R(0, TAU)
+		var d := R(0.0, 0.9)
+		dot(ds, Vector3(cos(a) * d, h * R(0.6, 1.0), sin(a) * d), Vector3.ONE * 0.035, R(0.4, 1.0))
+	var parts: Array = [[fl, kind], [cards, kind + "_card"], [bk, "bark_dead"]]
+	if n_dots > 0:
+		parts.append([ds, berry])
+	return [_mesh(parts), h]
+
+## Подушка мха на камне, колоде или пне: мазки, а не гладкий наплыв.
+func moss_pad(core: SurfaceTool, cd: SurfaceTool, c: Vector3, sc: Vector3) -> void:
+	var was := cards
+	cards = cd
+	leafblob(core, cards, c, Vector3(sc.x, sc.y * 0.5, sc.z), R(0.3, 1.0))
+	cards = was
+
 # ---------- ещё 25 элементов тайги ----------
 
 ## Мшистый валун: глыба с подушками мха и пятнами лишайника сверху.
@@ -799,19 +843,17 @@ func mossrock(seed_v: int) -> Array:
 	var r: Array = rock(seed_v)
 	var mesh: ArrayMesh = r[0]
 	var sc: Vector3 = r[2]
-	var ms := _st()
-	for i in rng.randi_range(3, 5):
+	var core := _st()
+	var cd: SurfaceTool = null if lod else _st()
+	for i in rng.randi_range(2, 3):
 		var a := R(0, TAU)
-		var d := R(0.0, 0.6)
-		dot(ms, Vector3(cos(a) * d * sc.x, sc.y * R(0.75, 0.95), sin(a) * d * sc.z), Vector3(R(0.3, 0.5), 0.12, R(0.3, 0.5)), R(0.3, 1.0))
-	var lc := _st()
-	for i in 4:
-		var a := R(0, TAU)
-		dot(lc, Vector3(cos(a) * sc.x * 0.8, sc.y * R(0.3, 0.6), sin(a) * sc.z * 0.8), Vector3(0.2, 0.15, 0.2), R(0.3, 1.0))
-	ms.commit(mesh)
+		var d := R(0.0, 0.4)
+		moss_pad(core, cd, Vector3(cos(a) * d * sc.x, sc.y * 0.8, sin(a) * d * sc.z), Vector3(R(0.25, 0.4), 0.12, R(0.25, 0.4)))
+	core.commit(mesh)
 	mesh.surface_set_material(mesh.get_surface_count() - 1, mats["moss"])
-	lc.commit(mesh)
-	mesh.surface_set_material(mesh.get_surface_count() - 1, mats["lichen"])
+	if cd != null:
+		cd.commit(mesh)
+		mesh.surface_set_material(mesh.get_surface_count() - 1, mats["moss_card"])
 	return r
 
 ## Расколотый валун: две половины с щелью.
@@ -822,12 +864,13 @@ func split_rock(seed_v: int) -> Array:
 	var faces: Array = _ico[1]
 	var sc := Vector3(R(1.0, 1.4), R(0.6, 0.9), R(0.9, 1.2))
 	var off := R(0, 50)
+	var cuts := _cuts()
 	for half in [-1.0, 1.0]:
 		var pts: Array = []
 		for p in verts:
 			var q: Vector3 = p
 			var n := 1.0 + 0.2 * sin(q.x * 2.3 + off) * sin(q.z * 1.9 + off)
-			var w := q * sc * n
+			var w := _chisel(q * n, cuts) * sc
 			w.x = w.x * 0.5 + half * 0.5 * sc.x * 0.55
 			if w.y < -0.1:
 				w.y = -0.1 + (w.y + 0.1) * 0.3
@@ -863,42 +906,37 @@ func scree(seed_v: int) -> Array:
 
 ## Скальный выход: широкая плоская плита коренной породы в траве, с мхом.
 func outcrop(seed_v: int) -> Array:
-	var r: Array = rock(seed_v)
-	var mesh: ArrayMesh = r[0]
-	var ms := _st()
-	for i in 6:
-		dot(ms, Vector3(R(-0.8, 0.8), R(0.3, 0.5), R(-0.8, 0.8)), Vector3(R(0.3, 0.6), 0.1, R(0.3, 0.6)), R(0.3, 1.0))
-	ms.commit(mesh)
-	mesh.surface_set_material(mesh.get_surface_count() - 1, mats["moss"])
-	return r
+	return rock(seed_v)
 
 ## Пень: старый трухлявый (с дуплом-провалом) или с опятами.
 func stump2(seed_v: int, mush: bool) -> Array:
 	rng.seed = seed_v
 	var st := _st()
-	var top := _st()
+	var cut := _st()
 	var fu := _st()
-	var h := R(0.4, 0.9)
-	trunk(st, Vector3(0, -0.1, 0), Vector3(0, h * 0.5, 0), Vector3(0, h, 0), R(0.35, 0.5), 0.3, 2, 9)
+	var top := _st()
+	var h := R(0.4, 0.8)
+	trunk(st, Vector3(0, -0.1, 0), Vector3(0, h * 0.5, 0), Vector3(0, h, 0), R(0.35, 0.45), 0.3, 2, 9)
 	for i in 4:
 		var a := TAU * i / 4 + R(-0.4, 0.4)
 		var d := Vector3(cos(a), 0, sin(a))
-		trunk(st, d * 0.25 + Vector3(0, 0.25, 0), d * 0.6 + Vector3(0, 0.05, 0), d * R(0.9, 1.2) + Vector3(0, -0.1, 0), 0.13, 0.04, 2, 5)
+		trunk(st, d * 0.25 + Vector3(0, 0.25, 0), d * 0.6 + Vector3(0, 0.05, 0), d * R(0.9, 1.2) + Vector3(0, -0.12, 0), 0.13, 0.04, 2, 5)
+	# неровный слом сверху: зубцы щепы
+	disc(cut, Vector3(0, h - 0.04, 0), Vector3.UP, 0.29)
+	for i in 6:
+		var a := TAU * i / 6.0 + R(-0.2, 0.2)
+		var p := Vector3(cos(a) * 0.24, h - 0.05, sin(a) * 0.24)
+		trunk(st, p, p + Vector3(0, R(0.05, 0.15), 0), p + Vector3(0, R(0.1, 0.25), 0), 0.06, 0.005, 1, 3)
 	if mush:
-		var cut := _st()
-		disc(cut, Vector3(0, h, 0), Vector3.UP, 0.3)
 		for i in rng.randi_range(10, 16):
 			var a := R(0, TAU)
 			var y := R(0.05, h * 0.8)
-			var p := Vector3(cos(a) * 0.38, y, sin(a) * 0.38)
+			var p := Vector3(cos(a) * 0.36, y, sin(a) * 0.36)
 			trunk(fu, p, p + Vector3(cos(a) * 0.03, 0.04, sin(a) * 0.03), p + Vector3(cos(a) * 0.05, 0.08, sin(a) * 0.05), 0.012, 0.01, 1, 3)
-			dot(top, p + Vector3(cos(a) * 0.05, 0.09, sin(a) * 0.05), Vector3(0.05, 0.02, 0.05), R(0.4, 1.0))
+			disc(top, p + Vector3(cos(a) * 0.05, 0.09, sin(a) * 0.05), Vector3.UP, 0.045, 7)
+			disc(top, p + Vector3(cos(a) * 0.05, 0.088, sin(a) * 0.05), Vector3.DOWN, 0.045, 7)
 		return [_mesh([[st, "bark_dead"], [cut, "log"], [fu, "stem"], [top, "cap_brown"]]), h]
-	# трухлявый: светлая труха и мох поверх
-	for i in 4:
-		dot(top, Vector3(R(-0.2, 0.2), h + 0.02, R(-0.2, 0.2)), Vector3(0.22, 0.08, 0.22), R(0.2, 0.8))
-	dot(fu, Vector3(0.2, h * 0.6, 0.3), Vector3(0.25, 0.2, 0.15), 0.5)
-	return [_mesh([[st, "bark_dead"], [top, "moss"], [fu, "anthill"]]), h]
+	return [_mesh([[st, "bark_dead"], [cut, "log"]]), h]
 
 ## Сухая берёза или сухостой с грибами-трутовиками.
 func fungus_snag(seed_v: int, birch_bark: bool) -> Array:
@@ -924,32 +962,22 @@ func fungus_snag(seed_v: int, birch_bark: bool) -> Array:
 func mosslog(seed_v: int) -> Array:
 	rng.seed = seed_v
 	var st := _st()
-	var ms := _st()
+	var ends := _st()
+	var core := _st()
+	var cd: SurfaceTool = null if lod else _st()
 	var L := R(4.0, 7.0)
 	var r := R(0.22, 0.34)
 	trunk(st, Vector3(-L * 0.5, r * 0.8, 0), Vector3(0, r * 0.85, R(-0.2, 0.2)), Vector3(L * 0.5, r * 0.7, 0), r, r * 0.8, 4, 8)
-	for i in rng.randi_range(5, 8):
-		var x := R(-L * 0.45, L * 0.45)
-		dot(ms, Vector3(x, r * 1.55, R(-0.1, 0.1)), Vector3(R(0.4, 0.8), 0.12, r * 1.1), R(0.3, 1.0))
-	return [_mesh([[st, "log"], [ms, "moss"]]), L, r]
+	disc(ends, Vector3(-L * 0.5, r * 0.8, 0), Vector3.LEFT, r)
+	disc(ends, Vector3(L * 0.5, r * 0.7, 0), Vector3.RIGHT, r * 0.8)
+	for i in rng.randi_range(2, 4):
+		var x := R(-L * 0.4, L * 0.4)
+		moss_pad(core, cd, Vector3(x, r * 1.6, 0), Vector3(R(0.3, 0.5), 0.1, r * 0.8))
+	return [_mesh([[st, "log"], [ends, "cut"], [core, "moss"], [cd, "moss_card"]]), L, r]
 
 ## Низкая куртина: багульник, морошка, ягель, сфагнум, черника, брусника (вид — материал и точки).
 func low_patch(seed_v: int, mat: String, dots_mat: String, n_dots: int, h: float) -> Array:
-	rng.seed = seed_v
-	var fl := _st()
-	var ds := _st()
-	for i in rng.randi_range(4, 7):
-		var a := R(0, TAU)
-		var d := R(0.0, 0.9)
-		blob(fl, Vector3(cos(a) * d, h * 0.4, sin(a) * d), Vector3(R(0.25, 0.45), h * R(0.5, 0.8), R(0.25, 0.45)), R(0.2, 1.0))
-	for i in n_dots:
-		var a := R(0, TAU)
-		var d := R(0.0, 1.0)
-		dot(ds, Vector3(cos(a) * d, h * R(0.7, 1.1), sin(a) * d), Vector3.ONE * 0.04, R(0.4, 1.0))
-	var parts := [[fl, mat]]
-	if n_dots > 0:
-		parts.append([ds, dots_mat])
-	return [_mesh(parts), h]
+	return leafy_patch(seed_v, mat, dots_mat, n_dots, maxf(h, 0.18))
 
 ## Пушица: пучки с белыми ватными головками.
 func cotton(seed_v: int) -> Array:

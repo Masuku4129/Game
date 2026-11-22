@@ -265,7 +265,7 @@ func _setup_noise() -> void:
 	n_crag2.seed = 32; n_crag2.frequency = 0.55; n_crag2.fractal_octaves = 2
 	n_biome.seed = 4242; n_biome.frequency = 0.0042; n_biome.fractal_octaves = 2
 	n_forest.seed = 909; n_forest.frequency = 0.02; n_forest.fractal_octaves = 3
-	n_zone.seed = 2024; n_zone.noise_type = FastNoiseLite.TYPE_CELLULAR; n_zone.frequency = 0.011
+	n_zone.seed = 2024; n_zone.noise_type = FastNoiseLite.TYPE_CELLULAR; n_zone.frequency = 0.018
 	n_zone.cellular_return_type = FastNoiseLite.RETURN_CELL_VALUE; n_zone.fractal_type = FastNoiseLite.FRACTAL_NONE
 
 ## Уровень воды в точке: у бобровых плотин выше (пруд) или ниже (после плотины).
@@ -281,13 +281,14 @@ func zone(x: float, z: float) -> int:
 	var jz := z + n_detail.get_noise_2d(z * 0.7 + 50.0, x * 0.7) * 9.0
 	var v := n_zone.get_noise_2d(jx, jz)
 	var y := height(x, z)
-	if v < -0.7:
+	# зоны редкие и небольшие: ~1/3 прежней площади
+	if v < -0.86:
 		return 1
-	if v < -0.35 and y < WATER_Y + 4.0:
+	if v < -0.7 and y < WATER_Y + 4.0:
 		return 2
-	if v > 0.72 or (v > 0.45 and biome(x, z) > 0.2):
+	if v > 0.88 or (v > 0.76 and biome(x, z) > 0.2):
 		return 3
-	if v > 0.2 and v < 0.42:
+	if v > 0.2 and v < 0.3:
 		return 4
 	return 0
 
@@ -988,7 +989,7 @@ func _variants(kind: String) -> Array:
 		"lingon":
 			for i in 2: out.append(pv.low_patch(6300 + i, "moss", "berry", 16, 0.12))
 		"cranberry":
-			for i in 2: out.append(pv.low_patch(6400 + i, "sphag", "berry", 12, 0.08))
+			for i in 2: out.append(pv.low_patch(6400 + i, "moss", "berry", 12, 0.08))
 		"ernik":
 			for i in 3: out.append(pv.shrub(6500 + i, "ernik"))
 		"raspberry":
@@ -1300,10 +1301,7 @@ func _scatter_all() -> void:
 		["ledum", 6, Vector2(0.8, 1.2), 45.0, false, "under"],
 		["cloudberry", 30, Vector2(0.8, 1.3), 40.0, false, "bog_z"],
 		["cranberry", 25, Vector2(0.8, 1.3), 40.0, false, "bog_z"],
-		["sphagnum", 40, Vector2(0.9, 1.6), 45.0, false, "bog_z"],
 		["cotton", 25, Vector2(0.8, 1.3), 45.0, false, "bog_z"],
-		["yagel", 40, Vector2(0.9, 1.6), 45.0, false, "rocky_z"],
-		["yagel", 10, Vector2(0.8, 1.4), 45.0, false, "rocky"],
 		["lingon", 25, Vector2(0.8, 1.4), 40.0, false, "under"],
 		["ernik", 25, Vector2(0.7, 1.2), 55.0, false, "bog_z"],
 		["raspberry", 30, Vector2(0.8, 1.2), 60.0, false, "burnt_z"],
@@ -1356,6 +1354,22 @@ func _scatter_all() -> void:
 					var occ_r := _occ_radius(kind, vars[vi], s)
 					var by: float = height(x, z) - 0.05
 					var o := Vector3(x, by, z)
+					# широкие вещи не висят над склоном: опора — самая низкая точка под ними
+					var foot: float = FOOT_R.get(kind, 0.0) * s
+					if kind in ROCKISH:
+						var rv: Vector3 = vars[vi][2]
+						foot = (rv.x + rv.z) * 0.35 * s
+					if foot > 0.0:
+						var hm := by + 0.05
+						for k2 in 6:
+							var a2 := TAU * k2 / 6.0
+							hm = minf(hm, height(x + cos(a2) * foot, z + sin(a2) * foot))
+						o.y = hm - 0.05
+					# плоские мелочи ложатся по склону
+					if kind in HUG:
+						var nrm := normal_at(x, z)
+						if nrm.y < 0.999:
+							b = Basis(Quaternion(Vector3.UP, nrm)) * b
 					var fall_len := 0.0
 					if kind == "fallen0" or kind == "fallen1":
 						var fv: Array = vars[vi]
@@ -1511,6 +1525,8 @@ func _place_cell_records(mm: MultiMesh, xs: Array, r: Array, vi: int, vars: Arra
 
 # ---------- занятость места: стволы, камни и поваленные деревья не пересекаются ----------
 var occ := {}
+const FOOT_R := {"scree": 1.2, "brushpile": 0.9, "bones": 0.8, "cones": 0.9, "windfall": 1.5, "stump": 0.4, "stump_rot": 0.5, "stump_mush": 0.45, "anthill": 0.6, "hummock": 0.4, "berry": 0.3, "bilberry": 0.6, "ledum": 0.6, "cloudberry": 0.6, "cranberry": 0.6, "lingon": 0.6, "bush": 0.4, "juniper": 0.5, "stlanik": 0.8}
+const HUG := ["scree", "brushpile", "bones", "cones", "chanterelle", "twig", "pebble", "bilberry", "ledum", "cloudberry", "cranberry", "lingon", "hummock", "mushroom"]
 const ROCKISH := ["rock", "slab", "mossrock", "split_rock", "outcrop"]
 var cliff_mmi: Array = []
 

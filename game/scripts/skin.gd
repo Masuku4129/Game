@@ -80,9 +80,13 @@ static func loop_anims(ap: AnimationPlayer, names: Array) -> void:
 
 ## Находит анимацию по одному из вариантов имени (без учёта префикса «Armature|»).
 static func find_anim(ap: AnimationPlayer, opts: Array) -> String:
+	# сначала точное имя: иначе "Idle" находил "Crouch_Idle" (присед при остановке)
+	for o in opts:
+		if ap.has_animation(o):
+			return o
 	for o in opts:
 		for n in ap.get_animation_list():
-			if String(n) == o or String(n).ends_with("|" + o) or String(n).ends_with("_" + o):
+			if String(n).ends_with("|" + o) or String(n).ends_with("_" + o):
 				return n
 	return ""
 
