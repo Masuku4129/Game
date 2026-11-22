@@ -786,45 +786,38 @@ func _process_climb(delta: float) -> void:
 
 # ---------- готовая модель с анимациями (Quaternius, CC0) ----------
 const SK = preload("res://scripts/skin.gd")
+const HS = preload("res://scripts/hero_skin.gd")
 var model: Node3D
 var m_ap: AnimationPlayer
 var m_cur := ""
 var _last_pos := Vector3.ZERO
 var _hspeed := 0.0
+var m_sk: Skeleton3D
+
+## Высота таза в текущем кадре анимации (в метрах модели).
+func _pelvis_y() -> float:
+	return m_sk.get_bone_global_pose(m_sk.find_bone("pelvis")).origin.y
 
 func _build_model() -> void:
-	model = load("res://models/hero/man.fbx").instantiate()
-	model.scale = Vector3.ONE * 0.36
-	add_child(model)
-	SK.repaint(model, {"Shirt": Color(0.47, 0.34, 0.22), "Pants": Color(0.24, 0.26, 0.24), "Hair": Color(0.22, 0.15, 0.1), "Skin": Color(0.74, 0.54, 0.42)})
-	m_ap = model.find_children("*", "AnimationPlayer", true, false)[0]
-	SK.loop_anims(m_ap, ["Man_Idle", "Man_Walk", "Man_Run", "Man_Sitting"])
-	m_ap.playback_default_blend_time = 0.25
+	var r := HS.build(self)
+	model = r["model"]
+	m_ap = r["ap"]
 	body.visible = false
-	var sk: Skeleton3D = model.find_children("*", "Skeleton3D", true, false)[0]
-	var tsk: Transform3D = model.transform * (sk.get_parent() as Node3D).transform * sk.transform
-	var coat := _paint(Color(0.47, 0.34, 0.22))
-	var shear := _paint(Color(0.86, 0.8, 0.68))
-	var belt := _paint(Color(0.2, 0.13, 0.08))
-	var hair := _paint(Color(0.22, 0.15, 0.1))
-	var wood := _paint(Color(0.5, 0.38, 0.24))
-	var roll := _paint(Color(0.42, 0.18, 0.13))
-	var metal := _paint(Color(0.3, 0.3, 0.3))
-	var hy: float = (tsk * sk.get_bone_global_rest(sk.find_bone("Head"))).origin.y
-	var ty: float = (tsk * sk.get_bone_global_rest(sk.find_bone("Torso"))).origin.y
-	var hipy: float = (tsk * sk.get_bone_global_rest(sk.find_bone("Hips"))).origin.y
-	# борода, меховой ворот, пояс с ножом, полы полушубка, короб со скаткой и котелком
-	_attach(sk, tsk, "Head", _loft([[-0.12, 0.04, 0.03, 0.06], [-0.08, 0.075, 0.05, 0.06], [-0.035, 0.09, 0.07, 0.045], [0.0, 0.088, 0.08, 0.02], [0.02, 0.085, 0.075, 0.0]], 16), hair, Vector3(0, hy + 0.05, 0.0))
-	_attach(sk, tsk, "Neck", _tor(0.07, 0.11), shear, Vector3(0, hy - 0.06, -0.03), Vector3(0.3, 0, 0), Vector3(1.1, 1.3, 1.0))
-	_attach(sk, tsk, "Hips", _loft([[0.0, 0.17, 0.13, 0.0], [0.07, 0.165, 0.128, 0.0]], 22, false, false), belt, Vector3(0, hipy + 0.08, 0.02))
-	_attach(sk, tsk, "Hips", _loft([[-0.32, 0.22, 0.19, 0.0], [-0.15, 0.19, 0.16, 0.0], [0.0, 0.17, 0.135, 0.0]], 20, false, false), coat, Vector3(0, hipy + 0.08, 0.02))
-	_attach(sk, tsk, "Hips", _tor(0.19, 0.235), shear, Vector3(0, hipy - 0.24, 0.02), Vector3.ZERO, Vector3(1.0, 0.7, 0.85))
-	_attach(sk, tsk, "Hips", _cyl(0.014, 0.018, 0.22), belt, Vector3(0.17, hipy + 0.0, 0.07), Vector3(0, 0, 0.15))
-	_attach(sk, tsk, "Torso", _loft([[0.0, 0.16, 0.085, 0.0], [0.42, 0.165, 0.09, 0.0], [0.45, 0.15, 0.08, 0.0]], 4), wood, Vector3(0, ty - 0.22, -0.24), Vector3(0, PI * 0.25, 0))
-	_attach(sk, tsk, "Torso", _cyl(0.07, 0.07, 0.48), roll, Vector3(0, ty + 0.27, -0.25), Vector3(0, 0, PI * 0.5))
-	_attach(sk, tsk, "Torso", _cyl(0.06, 0.055, 0.1), metal, Vector3(0.2, ty - 0.1, -0.23))
-	for sd in [-1.0, 1.0]:
-		_attach(sk, tsk, "Torso", BoxMesh.new(), belt, Vector3(sd * 0.1, ty + 0.05, -0.02), Vector3.ZERO, Vector3(0.04, 0.4, 0.3))
+	var sk: Skeleton3D = r["sk"]
+	m_sk = sk
+	var tsk := Transform3D()
+	var belt := HS.mat(Color(0.2, 0.13, 0.08))
+	var wood := HS.mat(Color(0.5, 0.38, 0.24))
+	var roll := HS.mat(Color(0.42, 0.18, 0.13))
+	var metal := HS.mat(Color(0.3, 0.3, 0.3))
+	var ty: float = sk.get_bone_global_rest(sk.find_bone("spine_02")).origin.y
+	var hipy: float = sk.get_bone_global_rest(sk.find_bone("pelvis")).origin.y
+	# пояс с ножом, короб за спиной со скаткой и котелком
+	_attach(sk, tsk, "pelvis", _loft([[0.0, 0.2, 0.165, 0.0], [0.07, 0.195, 0.16, 0.0]], 22, false, false), belt, Vector3(0, hipy + 0.07, 0.0))
+	_attach(sk, tsk, "pelvis", _cyl(0.014, 0.018, 0.22), belt, Vector3(0.21, hipy - 0.02, 0.07), Vector3(0, 0, 0.15))
+	_attach(sk, tsk, "spine_03", _loft([[0.0, 0.16, 0.085, 0.0], [0.42, 0.165, 0.09, 0.0], [0.45, 0.15, 0.08, 0.0]], 4), wood, Vector3(0, ty - 0.12, -0.27), Vector3(0, PI * 0.25, 0))
+	_attach(sk, tsk, "spine_03", _cyl(0.07, 0.07, 0.48), roll, Vector3(0, ty + 0.22, -0.33), Vector3(0, 0, PI * 0.5))
+	_attach(sk, tsk, "spine_03", _cyl(0.06, 0.055, 0.1), metal, Vector3(0.21, ty, -0.26))
 
 ## Прикрепить меш к кости так, чтобы в позе покоя он стоял в точке pos (в метрах героя).
 func _attach(sk: Skeleton3D, tsk: Transform3D, bone: String, mesh: Mesh, m: Material, pos: Vector3, rot: Vector3 = Vector3.ZERO, sc: Vector3 = Vector3.ONE) -> void:
@@ -855,28 +848,31 @@ func _animate_model(delta: float) -> void:
 	model.rotation = Vector3(body.rotation.x, body.rotation.y, body.rotation.z)
 	model.position = Vector3.ZERO
 	if state == "dead":
-		_play("Man_Death", 1.0, 0.2)
+		_play("Death01", 1.0, 0.2)
 		return
 	if state == "sit":
-		_play("Man_Sitting", 1.0, 0.4)
-		model.position = body.position
+		_play("Sitting_Idle", 1.0, 0.4)
+		model.rotation = Vector3(0, body.rotation.y, 0)
+		model.position = Vector3(0, 1.03 - _pelvis_y(), 0)
 		return
 	if swimb > 0.5:
-		model.position = body.position
+		# поза плавания уже в анимации: только поворот и высота над водой
+		model.rotation = Vector3(0, body.rotation.y, 0)
+		model.position = Vector3(0, main.WATER_Y - 0.12 - position.y - _pelvis_y(), 0)
 		if _hspeed > 0.3:
-			_play("Man_Run", clampf(_hspeed / 2.5, 0.4, 0.9))
+			_play("Swim_Fwd", clampf(_hspeed / 1.6, 0.6, 1.3))
 		else:
-			_play("Man_Idle", 0.7)
+			_play("Swim_Idle")
 		return
 	if state == "climb":
-		_play("Man_Walk", 0.6)
+		_play("Walk", 0.6)
 		return
 	if airborne and vy < -2.5:
-		_play("Man_Jump", 0.4, 0.15)
+		_play("Jump", 1.0, 0.15)
 		return
 	if _hspeed > 3.6:
-		_play("Man_Run", clampf(_hspeed / 4.6, 0.6, 1.4))
+		_play("Sprint" if _hspeed > 5.5 else "Jog_Fwd", clampf(_hspeed / (6.0 if _hspeed > 5.5 else 3.8), 0.7, 1.3))
 	elif _hspeed > 0.25:
-		_play("Man_Walk", clampf(_hspeed / 1.6, 0.5, 1.9))
+		_play("Walk", clampf(_hspeed / 1.5, 0.5, 1.6))
 	else:
-		_play("Man_Idle")
+		_play("Idle")
