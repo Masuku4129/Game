@@ -478,9 +478,17 @@ func _shots() -> void:
 				var ang := 0.6 + k * 0.9
 				a.position = hero.position + Vector3(cos(ang), 0, sin(ang)) * (3.0 + k * 1.2)
 				a.home = a.position
-				a.state = "graze"
-				a.state_t = 100.0
+				a.state = "graze" if k % 2 == 0 else "wander"
+				a.position.y = ground_at(a.position.x, a.position.z)
+				a.rotation.y = ang + PI * 0.5
+				a.visible = true
+				if a.parts.has("ap"):
+					a.parts["ap"].active = true
+					a.speed = 0.0
+					a._animate_model(0.016)
 				k += 1
+		# звери замирают на месте, чтобы попасть в кадр (анимации идут)
+		animals.set_process(false)
 	for p in plan:
 		if _shot_n == p[0] - 12:
 			rig.rotation.y = p[1]

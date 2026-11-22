@@ -41,7 +41,7 @@ func _init() -> void:
 		m.set_shader_parameter("col_light", f[3])
 		m.set_shader_parameter("autumn_k", f[4])
 		mats[f[0]] = m
-	for b in [["cut", Color(0.78, 0.64, 0.44), Color(0.6, 0.46, 0.3), 0.0], ["stem", Color(0.9, 0.86, 0.76), Color(0.75, 0.7, 0.6), 0.0], ["log", Color(0.42, 0.34, 0.26), Color(0.24, 0.19, 0.15), 0.0], ["bark", Color(0.36, 0.27, 0.2), Color(0.2, 0.15, 0.11), 0.0], ["bark_pine", Color(0.52, 0.36, 0.24), Color(0.32, 0.22, 0.16), 0.0], ["bark_birch", Color(0.9, 0.88, 0.82), Color(0.72, 0.7, 0.66), 1.0], ["bark_dead", Color(0.48, 0.44, 0.38), Color(0.3, 0.27, 0.24), 0.0], ["bark_aspen", Color(0.62, 0.66, 0.56), Color(0.42, 0.45, 0.38), 0.0]]:
+	for b in [["cut", Color(0.78, 0.64, 0.44), Color(0.6, 0.46, 0.3), 0.0], ["stem", Color(0.9, 0.86, 0.76), Color(0.75, 0.7, 0.6), 0.0], ["log", Color(0.42, 0.34, 0.26), Color(0.24, 0.19, 0.15), 0.0], ["bark", Color(0.36, 0.27, 0.2), Color(0.2, 0.15, 0.11), 0.0], ["bark_pine", Color(0.52, 0.36, 0.24), Color(0.32, 0.22, 0.16), 0.0], ["bark_birch", Color(0.9, 0.88, 0.82), Color(0.72, 0.7, 0.66), 1.0], ["bark_dead", Color(0.48, 0.44, 0.38), Color(0.3, 0.27, 0.24), 0.0], ["bark_aspen", Color(0.66, 0.67, 0.6), Color(0.44, 0.45, 0.4), 0.0]]:
 		var m := ShaderMaterial.new()
 		m.shader = brk
 		m.set_shader_parameter("col", b[1])
