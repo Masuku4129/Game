@@ -13,12 +13,20 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Fetch
-        run: |
-          if [ -z "${{ inputs.ids }}" ]; then python3 tools/fetch_polyhaven.py catalog; else python3 tools/fetch_polyhaven.py get ${{ inputs.ids }}; fi
-      - name: Commit
+      - name: Fetch and commit one by one
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -A tools; [ -d game/assets ] && git add -A game/assets || true
-          git diff --cached --quiet || (git commit -m "Ассеты Poly Haven: ${{ inputs.ids || 'каталог' }}" && git push)
+          git config http.postBuffer 524288000
+          if [ -z "${{ inputs.ids }}" ]; then
+            python3 tools/fetch_polyhaven.py catalog
+            git add -A tools; git diff --cached --quiet || (git commit -m "Каталог Poly Haven" && git push)
+          else
+            for id in ${{ inputs.ids }}; do
+              python3 tools/fetch_polyhaven.py get $id
+              du -sh game/assets/ph/$id
+              git add -A game/assets
+              git commit -q -m "Ассет Poly Haven: $id" || continue
+              for t in 1 2 3; do git push && break; sleep 10; git pull --rebase; done
+            done
+          fi
