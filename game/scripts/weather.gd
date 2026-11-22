@@ -169,8 +169,8 @@ func step(dh: float) -> void:
 	else:
 		wet = maxf(0.0, wet - dh * (0.08 + main.day_factor * 0.12) * clampf(temp / 10.0, 0.1, 1.0))
 	# река замерзает после нескольких дней мороза
-	if temp < -6.0:
-		ice = minf(1.0, ice + dh * 0.012)
+	if temp < -1.5:
+		ice = minf(1.0, ice + dh * 0.006 * clampf(-temp / 3.0, 0.5, 4.0))
 	elif temp > 0.0:
 		ice = maxf(0.0, ice - dh * 0.01 * (1.0 + temp * 0.2))
 	# листва: желтеет в первой половине осени, опадает во второй, распускается в конце весны

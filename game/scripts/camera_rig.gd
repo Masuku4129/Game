@@ -1,9 +1,9 @@
 extends Node3D
-## Изометрическая камера под 60°: следует за героем; палец вне джойстика вращает,
+## Изометрическая камера под 45°: следует за героем; палец вне джойстика вращает,
 ## два пальца приближают и вращают.
 
-var pitch := 60.0
-var distance := 13.0
+var pitch := 45.0
+var distance := 12.0
 var target: Node3D
 var touches := {}
 var last_pinch := 0.0
@@ -19,7 +19,11 @@ func _ready() -> void:
 
 func _process(delta: float) -> void:
 	if target != null:
-		position = position.lerp(target.position, 1.0 - exp(-9.0 * delta))
+		# по горизонтали — плотно за героем, по высоте — мягко, чтобы не дёргало на кочках и прыжках
+		var tp: Vector3 = target.position
+		position.x = lerpf(position.x, tp.x, 1.0 - exp(-9.0 * delta))
+		position.z = lerpf(position.z, tp.z, 1.0 - exp(-9.0 * delta))
+		position.y = lerpf(position.y, tp.y, 1.0 - exp(-3.0 * delta))
 	_update()
 
 func _update() -> void:
@@ -45,12 +49,12 @@ func _unhandled_input(e: InputEvent) -> void:
 			var d: float = p[0].distance_to(p[1])
 			var a: float = (p[1] - p[0]).angle()
 			if last_pinch > 0.0:
-				distance = clampf(distance * last_pinch / d, 5.0, 22.0)
+				distance = clampf(distance * last_pinch / d, 6.0, 16.0)
 			rotation.y -= a - last_angle
 			last_pinch = d
 			last_angle = a
 	elif e is InputEventMouseButton and e.pressed:
 		if e.button_index == MOUSE_BUTTON_WHEEL_UP:
-			distance = maxf(5.0, distance * 0.9)
+			distance = maxf(6.0, distance * 0.9)
 		elif e.button_index == MOUSE_BUTTON_WHEEL_DOWN:
-			distance = minf(22.0, distance * 1.1)
+			distance = minf(16.0, distance * 1.1)

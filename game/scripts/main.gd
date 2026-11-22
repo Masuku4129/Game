@@ -304,7 +304,12 @@ func _make_environment() -> void:
 	env.tonemap_mode = Environment.TONE_MAPPER_FILMIC
 	env.tonemap_exposure = 1.05
 	env.fog_enabled = true
-	env.fog_density = 0.006
+	env.fog_density = 0.85
+	# дымка по глубине: дальний лес растворяется раньше, чем кончается дальность видимости
+	env.fog_mode = Environment.FOG_MODE_DEPTH
+	env.fog_depth_begin = 45.0
+	env.fog_depth_end = 115.0
+	env.fog_depth_curve = 1.6
 	env.fog_sky_affect = 0.5
 	var we := WorldEnvironment.new()
 	we.environment = env
@@ -349,7 +354,10 @@ func _update_sky() -> void:
 	env.fog_light_color = hor.darkened(0.08)
 	env.ambient_light_energy = lerpf(0.22, 0.7, d) * (1.0 + cl * 0.25)
 	if weather != null:
-		env.fog_density = 0.006 + weather.fogv * 0.03 + weather.precip * 0.008 + weather.snow * 0.0
+		# глубинная дымка: в тумане и дождь начинается ближе и гуще
+		env.fog_density = minf(1.0, 0.85 + weather.fogv * 0.15)
+		env.fog_depth_begin = 45.0 - weather.fogv * 38.0 - weather.precip * 15.0
+		env.fog_depth_end = 115.0 - weather.fogv * 75.0 - weather.precip * 30.0
 	if hero != null:
 		hero.torch.light_energy = 2.2 * (1.0 - d)
 	day_factor = d
@@ -455,10 +463,24 @@ const GRADIUS := 2
 
 var _shot_n := 0
 ## Режим кадров для проверки в облаке: SHOTS=папка — снять несколько ракурсов и выйти.
+var _shot_kinds: Array = []
+
 func _shots() -> void:
 	_shot_n += 1
 	var dir := OS.get_environment("SHOTS")
-	var plan := [[40, 0.0, 14.0], [60, 2.2, 14.0], [80, 4.0, 22.0]]
+	var plan := [[20, 0.6, 7.5], [40, 0.0, 12.0], [60, 2.2, 12.0], [80, 4.0, 16.0]]
+	if _shot_n == 2:
+		# крупный план: по одному зверю каждого вида с готовой моделью рядом с героем
+		var k := 0
+		for a in animals.list:
+			if a.kind in ["roe", "deer", "wolf", "fox"] and k < 4 and not (a.kind in _shot_kinds):
+				_shot_kinds.append(a.kind)
+				var ang := 0.6 + k * 0.9
+				a.position = hero.position + Vector3(cos(ang), 0, sin(ang)) * (3.0 + k * 1.2)
+				a.home = a.position
+				a.state = "graze"
+				a.state_t = 100.0
+				k += 1
 	for p in plan:
 		if _shot_n == p[0] - 12:
 			rig.rotation.y = p[1]
@@ -483,6 +505,9 @@ func _process(delta: float) -> void:
 		m.set_shader_parameter("hero_pos", hp)
 		m.set_shader_parameter("cam_pos", cp)
 	pv.mats["tuft"].set_shader_parameter("hero_pos", hp)
+	water_mat.set_shader_parameter("hero_pos", hero.position)
+	water_mat.set_shader_parameter("swim", hero.swimb)
+	water_mat.set_shader_parameter("swim_move", clampf(hero.run_mag, 0.0, 1.0))
 	_fps_t -= delta
 	if _fps_t <= 0.0:
 		_fps_t = 0.5
@@ -690,6 +715,16 @@ func _variants(kind: String) -> Array:
 			for i in 3: out.append(pv.mushroom(1710 + i, false))
 		"anthill":
 			out.append(pv.anthill(1800))
+		"fir":
+			for i in 3: out.append(pv.spruce(1900 + i, "fir"))
+		"cedar":
+			for i in 3: out.append(pv.pine(2000 + i, "cedar"))
+		"willow":
+			for i in 3: out.append(pv.bush(2100 + i, "willow"))
+		"juniper":
+			for i in 3: out.append(pv.bush(2200 + i, "juniper"))
+		"rowan":
+			for i in 2: out.append(pv.birch(2300 + i, "rowan"))
 		"fern":
 			for i in 3: out.append(pv.fern(700 + i))
 		"grass":
@@ -708,8 +743,8 @@ func _variants(kind: String) -> Array:
 			for i in 2: out.append(pv.log_fallen(1100 + i))
 	return out
 
-const TREE_KINDS := ["spruce", "pine", "birch", "larch", "aspen"]
-const NEAR_R := 30.0
+const TREE_KINDS := ["spruce", "pine", "birch", "larch", "aspen", "fir", "cedar", "rowan"]
+const NEAR_R := 36.0
 var tree_grid := {}
 var near_mesh := {}
 var near_mmi := {}
@@ -923,32 +958,37 @@ func move_factor() -> float:
 		f = 0.78
 	return f * (0.6 + 0.4 * clampf(health * 2.0, 0.0, 1.0))
 
-const BLOCK_R := {"spruce": 0.4, "pine": 0.32, "birch": 0.28, "bare": 0.3, "spruce_dead": 0.3, "stump": 0.45, "rock": 0.5, "boulder": 0.6, "larch": 0.32, "aspen": 0.26}
+const BLOCK_R := {"fir": 0.36, "cedar": 0.38, "rowan": 0.2, "spruce": 0.4, "pine": 0.32, "birch": 0.28, "bare": 0.3, "spruce_dead": 0.3, "stump": 0.45, "rock": 0.5, "boulder": 0.6, "larch": 0.32, "aspen": 0.26}
 
 func _scatter_all() -> void:
 	# вид, попыток на клетку 32 м, масштаб, дальность видимости, тень, правило
 	var rules := [
-		["spruce", 30, Vector2(0.75, 1.15), 75.0, true, "spruce_t"],
-		["pine", 14, Vector2(0.85, 1.15), 80.0, true, "pine_t"],
-		["birch", 16, Vector2(0.8, 1.15), 80.0, true, "birch_t"],
-		["birch", 5, Vector2(0.8, 1.15), 80.0, true, "edge"],
-		["bare", 3, Vector2(0.8, 1.2), 80.0, true, "edge"],
-		["spruce_dead", 2, Vector2(0.7, 1.0), 80.0, true, "tree"],
-		["spruce", 8, Vector2(0.18, 0.35), 60.0, true, "under"],
-		["bush", 30, Vector2(0.8, 1.5), 60.0, false, "under"],
-		["fern", 70, Vector2(0.7, 1.2), 45.0, false, "fern"],
-		["reeds", 14, Vector2(0.8, 1.4), 80.0, false, "reed"],
-		["twig", 60, Vector2(0.8, 1.3), 40.0, false, "under"],
-		["pebble", 40, Vector2(0.15, 0.45), 40.0, false, "pebble"],
-		["rock", 12, Vector2(0.5, 2.2), 85.0, true, "rock"],
-		["rock", 14, Vector2(1.8, 4.6), 95.0, true, "boulder"],
-		["stump", 3, Vector2(0.8, 1.2), 60.0, true, "under"],
-		["log", 2, Vector2(0.9, 1.1), 70.0, true, "under"],
-		["larch", 8, Vector2(0.85, 1.15), 80.0, true, "larch_t"],
-		["aspen", 8, Vector2(0.8, 1.15), 80.0, true, "edge"],
-		["berry", 25, Vector2(0.7, 1.3), 40.0, false, "under"],
-		["mushroom", 14, Vector2(0.8, 1.4), 30.0, false, "under"],
-		["anthill", 1, Vector2(0.8, 1.2), 50.0, true, "under"],
+		["spruce", 30, Vector2(0.75, 1.15), 105.0, true, "spruce_t"],
+		["pine", 14, Vector2(0.85, 1.15), 110.0, true, "pine_t"],
+		["birch", 16, Vector2(0.8, 1.15), 110.0, true, "birch_t"],
+		["birch", 5, Vector2(0.8, 1.15), 110.0, true, "edge"],
+		["bare", 3, Vector2(0.8, 1.2), 110.0, true, "edge"],
+		["spruce_dead", 2, Vector2(0.7, 1.0), 110.0, true, "tree"],
+		["spruce", 8, Vector2(0.18, 0.35), 75.0, true, "under"],
+		["bush", 30, Vector2(0.8, 1.5), 75.0, false, "under"],
+		["fern", 70, Vector2(0.7, 1.2), 60.0, false, "fern"],
+		["reeds", 14, Vector2(0.8, 1.4), 110.0, false, "reed"],
+		["twig", 60, Vector2(0.8, 1.3), 55.0, false, "under"],
+		["pebble", 40, Vector2(0.15, 0.45), 55.0, false, "pebble"],
+		["rock", 12, Vector2(0.5, 2.2), 115.0, true, "rock"],
+		["rock", 14, Vector2(1.8, 4.6), 125.0, true, "boulder"],
+		["stump", 3, Vector2(0.8, 1.2), 75.0, true, "under"],
+		["log", 2, Vector2(0.9, 1.1), 85.0, true, "under"],
+		["larch", 8, Vector2(0.85, 1.15), 110.0, true, "larch_t"],
+		["aspen", 8, Vector2(0.8, 1.15), 110.0, true, "edge"],
+		["berry", 25, Vector2(0.7, 1.3), 55.0, false, "under"],
+		["mushroom", 14, Vector2(0.8, 1.4), 45.0, false, "under"],
+		["fir", 12, Vector2(0.85, 1.15), 105.0, true, "fir_t"],
+		["cedar", 6, Vector2(0.85, 1.2), 105.0, true, "cedar_t"],
+		["willow", 18, Vector2(0.8, 1.3), 75.0, true, "river"],
+		["juniper", 10, Vector2(0.7, 1.2), 60.0, false, "rocky"],
+		["rowan", 4, Vector2(0.8, 1.1), 90.0, true, "edge"],
+		["anthill", 1, Vector2(0.8, 1.2), 65.0, true, "under"],
 	]
 	var cache := {}
 	var cache_lod := {}
@@ -1071,6 +1111,16 @@ func _accept(kind: String, x: float, z: float, rng: RandomNumberGenerator) -> bo
 			return slope < 0.25 and rng.randf() < fd * clampf(0.3 + bio * 0.8, 0.05, 1.0)
 		"birch_t":
 			return slope < 0.25 and rng.randf() < fd * clampf(0.15 - bio * 0.9, 0.0, 1.0)
+		"fir_t":
+			# пихтач: тёмные сырые низины
+			return slope < 0.25 and y < WATER_Y + 6.0 and rng.randf() < fd * fd * clampf(0.5 - bio * 0.8, 0.0, 1.0)
+		"cedar_t":
+			# кедрач: возвышенности
+			return slope < 0.3 and y > WATER_Y + 6.0 and rng.randf() < fd * clampf(0.15 + bio * 0.5, 0.0, 0.6)
+		"river":
+			return slope < 0.35 and river_dist(x, z) < 16.0 and rng.randf() < 0.6
+		"rocky":
+			return rng.randf() < clampf(bio, 0.0, 1.0) * 0.8 + slope * 0.5
 		"larch_t":
 			return slope < 0.3 and rng.randf() < fd * clampf(0.2 + bio * 0.6, 0.05, 0.8)
 		"tree":

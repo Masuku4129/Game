@@ -251,6 +251,8 @@ func _process(delta: float) -> void:
 		if was_far and not a.far:
 			a._acc = 0.0
 		a.visible = d < SHOW_R and not a.dead and a.state != "sleep"
+		if a.parts.has("ap"):
+			a.parts["ap"].active = a.visible
 	var per := maxi(1, n / 20)
 	for k in per:
 		if n == 0:

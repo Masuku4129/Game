@@ -3,6 +3,7 @@ extends Node3D
 ## поведение-автомат: отдых, пастьба, бродит, настороже, бегство, выслеживание, погоня, нападение.
 
 const AM = preload("res://scripts/animal_model.gd")
+const SK = preload("res://scripts/skin.gd")
 
 # чутьё на человека (м), время активности, роль
 const SENSE := {"hare": 14.0, "squirrel": 10.0, "fox": 26.0, "roe": 36.0, "deer": 45.0, "boar": 22.0, "wolf": 55.0, "bear": 26.0, "tiger": 40.0, "beaver": 12.0}
@@ -64,7 +65,10 @@ func setup(k: String, m: Node3D, mg: Node, pos: Vector3, seed_v: int, sc: float 
 func _build(winter: bool) -> void:
 	for c in get_children():
 		c.queue_free()
-	parts = AM.build(self, kind, scale_k, male, winter)
+	if SK.has(kind):
+		parts = SK.build_animal(self, kind, scale_k, winter)
+	else:
+		parts = AM.build(self, kind, scale_k, male, winter)
 	winter_skin = winter
 
 ## Активен ли вид сейчас (по времени суток).
@@ -323,6 +327,7 @@ func _strike(tg: Node3D) -> void:
 	if attack_cd > 0.0:
 		return
 	attack_cd = 1.3
+	_attack_t = 0.8
 	if tg == main.hero:
 		main.hurt(DAMAGE.get(kind, 0.1), position, kind)
 		bites += 1
@@ -347,7 +352,47 @@ var goffs := [0.0, 0.5, 0.75, 0.25]
 var r_s := 0.0
 var _breath := 0.0
 
+var _attack_t := 0.0
+
+## Готовая модель: выбор анимации по состоянию и скорости, темп шага по реальной скорости.
+func _animate_model(delta: float) -> void:
+	var ap: AnimationPlayer = parts["ap"]
+	_attack_t -= delta
+	var walk: float = sp["walk"]
+	var want_a := ""
+	var sc := 1.0
+	if _attack_t > 0.0:
+		want_a = SK.find_anim(ap, ["Attack", "Attack_Headbutt"])
+	elif speed > walk * 1.7:
+		want_a = SK.find_anim(ap, ["Gallop"])
+		sc = clampf(speed / (float(sp["run"]) * 0.75), 0.6, 1.6)
+	elif speed > 0.08:
+		want_a = SK.find_anim(ap, ["Walk"])
+		sc = clampf(speed / walk, 0.4, 1.8)
+	elif state == "graze":
+		want_a = SK.find_anim(ap, ["Eating"])
+	elif state in ["rest", "sleep"]:
+		want_a = SK.find_anim(ap, ["Idle_Headlow", "Idle_2_HeadLow", "Idle"])
+	elif state == "alert":
+		want_a = SK.find_anim(ap, ["Idle_2", "Idle"])
+	else:
+		want_a = SK.find_anim(ap, ["Idle"])
+	if want_a != "" and want_a != parts["cur"]:
+		ap.play(want_a, 0.35)
+		parts["cur"] = want_a
+	ap.speed_scale = sc
+	# наклон по склону
+	var L: float = parts["L"]
+	var fwd := Vector3(sin(heading), 0, cos(heading))
+	var hf: float = main.ground_at(position.x + fwd.x * L * 0.4, position.z + fwd.z * L * 0.4)
+	var hb: float = main.ground_at(position.x - fwd.x * L * 0.4, position.z - fwd.z * L * 0.4)
+	var m: Node3D = parts["model"]
+	m.rotation.x = lerpf(m.rotation.x, -atan2(hf - hb, L * 0.8), minf(1.0, delta * 6.0))
+
 func _animate(delta: float) -> void:
+	if parts.has("ap"):
+		_animate_model(delta)
+		return
 	var body: Node3D = parts["body"]
 	var head: Node3D = parts["head"]
 	var legs: Array = parts["legs"]
