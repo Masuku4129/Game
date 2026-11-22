@@ -540,10 +540,12 @@ func _shots() -> void:
 		hero.visible = false
 	if _shot_n == 85:
 		print("shot no-hero tris ", Performance.get_monitor(Performance.RENDER_TOTAL_PRIMITIVES_IN_FRAME))
+		for k in grass_cells:
+			grass_cells[k].visible = false
 		for m in cliff_mmi:
 			m.visible = false
 	if _shot_n == 87:
-		print("shot no-cliff tris ", Performance.get_monitor(Performance.RENDER_TOTAL_PRIMITIVES_IN_FRAME))
+		print("shot no-cliff-no-grass tris ", Performance.get_monitor(Performance.RENDER_TOTAL_PRIMITIVES_IN_FRAME))
 		sun.shadow_enabled = false
 	if _shot_n == 89:
 		print("shot no-shadow tris ", Performance.get_monitor(Performance.RENDER_TOTAL_PRIMITIVES_IN_FRAME))
@@ -699,7 +701,7 @@ func _build_grass_cell(k: Vector2i) -> void:
 	var per_var := []
 	for v in grass_mesh_vars:
 		per_var.append([])
-	var step := 0.8
+	var step := 0.92
 	var z := 0.0
 	while z < GCELL:
 		var x := 0.0
@@ -1060,7 +1062,7 @@ func _scatter_all() -> void:
 		["spruce_dead", 2, Vector2(0.9, 1.3), 110.0, true, "tree"],
 		["spruce", 8, Vector2(0.18, 0.35), 75.0, true, "under"],
 		["bush", 30, Vector2(0.8, 1.5), 75.0, false, "under"],
-		["fern", 70, Vector2(0.7, 1.2), 60.0, false, "fern"],
+		["fern", 60, Vector2(0.7, 1.2), 50.0, false, "fern"],
 		["reeds", 14, Vector2(0.8, 1.4), 110.0, false, "reed"],
 		["twig", 60, Vector2(0.8, 1.3), 55.0, false, "under"],
 		["pebble", 40, Vector2(0.15, 0.45), 55.0, false, "pebble"],
@@ -1079,12 +1081,12 @@ func _scatter_all() -> void:
 		["snag", 8, Vector2(0.9, 1.3), 100.0, true, "windfall_z"],
 		["snag_b", 26, Vector2(0.9, 1.4), 105.0, true, "burnt_z"],
 		["fallen1", 4, Vector2(0.9, 1.2), 100.0, true, "burnt_z"],
-		["fireweed", 70, Vector2(0.8, 1.3), 70.0, false, "burnt_z"],
+		["fireweed", 60, Vector2(0.8, 1.3), 55.0, false, "burnt_z"],
 		["fireweed", 8, Vector2(0.8, 1.2), 70.0, false, "meadow"],
 		["larch", 8, Vector2(1.05, 1.45), 115.0, true, "larch_t"],
 		["aspen", 8, Vector2(1.0, 1.4), 115.0, true, "edge"],
 		["berry", 25, Vector2(0.7, 1.3), 55.0, false, "under"],
-		["bilberry", 45, Vector2(0.8, 1.4), 55.0, false, "under"],
+		["bilberry", 35, Vector2(0.9, 1.5), 42.0, false, "under"],
 		["mushroom", 14, Vector2(0.8, 1.4), 45.0, false, "under"],
 		["fir", 12, Vector2(1.05, 1.45), 110.0, true, "fir_t"],
 		["cedar", 6, Vector2(1.05, 1.5), 110.0, true, "cedar_t"],
@@ -1093,10 +1095,10 @@ func _scatter_all() -> void:
 		["cherry", 4, Vector2(0.9, 1.3), 90.0, true, "river"],
 		["cherry", 2, Vector2(0.9, 1.3), 90.0, true, "edge"],
 		["rose", 12, Vector2(0.8, 1.2), 65.0, false, "edge"],
-		["horsetail", 30, Vector2(0.8, 1.3), 55.0, false, "bank"],
-		["horsetail", 30, Vector2(0.8, 1.3), 55.0, false, "bog_z"],
-		["hummock", 70, Vector2(0.8, 1.6), 65.0, false, "bog_z"],
-		["sedge", 50, Vector2(0.9, 1.4), 60.0, false, "bog_z"],
+		["horsetail", 30, Vector2(0.8, 1.3), 45.0, false, "bank"],
+		["horsetail", 30, Vector2(0.8, 1.3), 45.0, false, "bog_z"],
+		["hummock", 55, Vector2(0.9, 1.7), 50.0, false, "bog_z"],
+		["sedge", 40, Vector2(0.9, 1.4), 45.0, false, "bog_z"],
 		["juniper", 10, Vector2(0.7, 1.2), 60.0, false, "rocky"],
 		["stlanik", 16, Vector2(0.8, 1.3), 80.0, true, "rocky_z"],
 		["rowan", 4, Vector2(0.9, 1.3), 90.0, true, "edge"],
