@@ -337,7 +337,7 @@ func _land(impact: float) -> void:
 
 ## Подпись кнопки действия по обстановке ("" — кнопку скрыть).
 func action_label() -> String:
-	if state == "dead" or state == "climb":
+	if state == "dead" or state == "climb" or state == "pack":
 		return ""
 	if state == "sit":
 		return "Встать"
@@ -398,6 +398,7 @@ func _process_dead(delta: float) -> void:
 	torso.rotation.x = lerpf(torso.rotation.x, 0.3, delta * 3.0)
 
 func revive(p: Vector3) -> void:
+	pack_abort()
 	state = "walk"
 	deadb = 0.0
 	body.rotation.z = 0.0
@@ -419,11 +420,17 @@ func _process_main(delta: float) -> void:
 		return
 	soaked = maxf(0.0, soaked - delta * 0.004 * (1.0 + maxf(float(main.weather.temp), 0.0) * 0.1))
 	if state == "dead":
+		pack_abort()
 		_process_dead(delta)
 		return
 	if state == "sit":
 		_process_sit(delta)
 		return
+	if state == "pack":
+		_process_pack(delta)
+		return
+	if pack_stage != "":
+		pack_abort()
 	if state == "climb":
 		_process_climb(delta)
 		return
@@ -832,9 +839,7 @@ func _build_model() -> void:
 	# пояс с ножом, короб за спиной со скаткой и котелком
 	_attach(sk, tsk, "pelvis", _loft([[0.0, 0.2, 0.165, 0.0], [0.07, 0.195, 0.16, 0.0]], 22, false, false), belt, Vector3(0, hipy + 0.07, 0.0))
 	_attach(sk, tsk, "pelvis", _cyl(0.014, 0.018, 0.22), belt, Vector3(0.21, hipy - 0.02, 0.07), Vector3(0, 0, 0.15))
-	_attach(sk, tsk, "spine_03", _loft([[0.0, 0.16, 0.085, 0.0], [0.42, 0.165, 0.09, 0.0], [0.45, 0.15, 0.08, 0.0]], 4), wood, Vector3(0, ty - 0.12, -0.27), Vector3(0, PI * 0.25, 0))
-	_attach(sk, tsk, "spine_03", _cyl(0.07, 0.07, 0.48), roll, Vector3(0, ty + 0.22, -0.33), Vector3(0, 0, PI * 0.5))
-	_attach(sk, tsk, "spine_03", _cyl(0.06, 0.055, 0.1), metal, Vector3(0.21, ty, -0.26))
+	_build_pack(sk, ty, wood, roll, metal, belt)
 
 ## Прикрепить меш к кости так, чтобы в позе покоя он стоял в точке pos (в метрах героя).
 func _attach(sk: Skeleton3D, tsk: Transform3D, bone: String, mesh: Mesh, m: Material, pos: Vector3, rot: Vector3 = Vector3.ZERO, sc: Vector3 = Vector3.ONE) -> void:
@@ -867,6 +872,11 @@ func _animate_model(delta: float) -> void:
 	if state == "dead":
 		_play("Death01", 1.0, 0.2)
 		return
+	if state == "pack":
+		# опускание на колено ведём сами по времени последовательности; руки — модификатор
+		_play("Fixing_Kneeling", 0.0, 0.0)
+		m_ap.seek(_pk_anim_time(), true)
+		return
 	if state == "sit":
 		_play("Sitting_Idle", 1.0, 0.4)
 		model.rotation = Vector3(0, body.rotation.y, 0)
@@ -895,3 +905,380 @@ func _animate_model(delta: float) -> void:
 		_play("Walk", clampf(_hspeed / 1.5, 0.5, 1.6))
 	else:
 		_play("Idle")
+
+
+# ---------- короб: снять со спины, поставить перед собой, открыть; обратно — закинуть на плечи ----------
+# Как это делают люди: выскользнуть левым плечом из лямки, правой рукой перехватить лямку,
+# перекинуть короб вокруг правого бока вперёд, подхватить второй рукой, опуститься на колено
+# и поставить на землю; открыть крышку. Надевают обратно в обратном порядке: закрыть,
+# поднять, закинуть за правое плечо, просунуть левую руку в лямку, подбросить и встать ровно.
+# Основа позы — анимация Fixing_Kneeling (опускание на колено), руки, корпус и голова
+# дорабатываются поверх неё модификатором скелета (двухзвенная ИК к точкам хвата на коробе).
+
+const PK_OPEN_T := 2.8
+const PK_CLOSE_T := 2.7
+const PK_KNEEL_T := 1.15        # кадр Fixing_Kneeling, где герой уже стоит на колене
+var pack: Node3D                # весь короб, начало координат — середина дна
+var pack_lid: Node3D            # крышка на петлях у дальней от спины стенки
+var pack_straps: Array = []     # [левая, правая] лямки-петли
+var pack_back: BoneAttachment3D # крепление к spine_03, пока короб на спине
+var pack_stage := ""            # "", opening, open, closing
+var pack_t := 0.0
+var pack_eat_t := 0.0           # жест «в рот» при еде из короба
+var _pk_off := Transform3D()    # короб относительно spine_03
+var _pk_gy := 0.0               # высота земли перед героем (в осях скелета)
+var _pk_mod: PackMod
+var _pk_u := 0.0
+var _pk_bones := {}
+var _pk_head_fwd := Vector3.FORWARD
+
+## Модификатор скелета: вызывается после применения анимации.
+class PackMod extends SkeletonModifier3D:
+	var hero: Node3D
+	func _process_modification() -> void:
+		hero._pk_modify(get_skeleton())
+
+func _ss(a: float, b: float, x: float) -> float:
+	return smoothstep(a, b, x)
+
+## Берестяная фактура: косое плетение из полос коры с тёмными чечевичками.
+func _bark_tex() -> ImageTexture:
+	var img := Image.create(64, 64, false, Image.FORMAT_RGB8)
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 77
+	for y in 64:
+		for x in 64:
+			var a := ((x + y) / 8) % 2
+			var b := ((x - y + 64) / 8) % 2
+			var over := (a + b) % 2 == 0
+			var t := float((x + y) % 8 if over else (x - y + 64) % 8) / 8.0
+			var c := Color(0.8, 0.66, 0.44) if over else Color(0.7, 0.55, 0.34)
+			c = c.darkened(0.25 * absf(t - 0.5) * 2.0 * 0.6)
+			if rng.randf() < 0.04:
+				c = c.darkened(0.45)
+			img.set_pixel(x, y, c)
+	return ImageTexture.create_from_image(img)
+
+## Лента-петля лямки: полуэллипс в плоскости YZ (ширина по X), двусторонняя.
+func _strap_mesh(ry: float, rz: float, w: float) -> ArrayMesh:
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	var n := 14
+	for i in n + 1:
+		var f := PI * float(i) / n
+		# петля «коробкой»: сверху сразу уходит вперёд через плечо, вниз по груди, под мышку
+		var sz := pow(sin(f), 0.4)
+		var p := Vector3(0, cos(f) * ry, sz * rz)
+		var nr := Vector3(0, cos(f) / ry, sz / rz).normalized()
+		st.set_normal(nr)
+		st.add_vertex(p + Vector3(-w * 0.5, 0, 0))
+		st.set_normal(nr)
+		st.add_vertex(p + Vector3(w * 0.5, 0, 0))
+	for i in n:
+		var k := i * 2
+		for tri in [[k, k + 1, k + 2], [k + 1, k + 3, k + 2]]:
+			st.add_index(tri[0]); st.add_index(tri[1]); st.add_index(tri[2])
+			st.add_index(tri[0]); st.add_index(tri[2]); st.add_index(tri[1])
+	return st.commit()
+
+func _pk_part(parent: Node3D, mesh: Mesh, m: Material, pos: Vector3, rot: Vector3 = Vector3.ZERO, sc: Vector3 = Vector3.ONE) -> MeshInstance3D:
+	var mi := MeshInstance3D.new()
+	mi.mesh = mesh
+	mi.material_override = m
+	mi.transform = Transform3D(Basis.from_euler(rot).scaled(sc), pos)
+	parent.add_child(mi)
+	return mi
+
+## Короб: корпус 34×40×20 см, крышка со скаткой, котелок сбоку, две лямки.
+func _build_pack(sk: Skeleton3D, ty: float, wood: Material, roll: Material, metal: Material, belt: Material) -> void:
+	var bark := HS.mat(Color(1, 1, 1), _bark_tex())
+	var rim := HS.mat(Color(0.42, 0.3, 0.18))
+	var inner := HS.mat(Color(0.12, 0.08, 0.05))
+	pack = Node3D.new()
+	pack.name = "Pack"
+	var body_m := BoxMesh.new()
+	body_m.size = Vector3(0.34, 0.4, 0.2)
+	_pk_part(pack, body_m, bark, Vector3(0, 0.2, 0))
+	# обвязка: обод сверху и снизу, планки по углам
+	for yy in [0.015, 0.385]:
+		var rb := BoxMesh.new()
+		rb.size = Vector3(0.355, 0.03, 0.215)
+		_pk_part(pack, rb, rim, Vector3(0, yy, 0))
+	for sx in [-1.0, 1.0]:
+		for sz in [-1.0, 1.0]:
+			var cb := BoxMesh.new()
+			cb.size = Vector3(0.02, 0.38, 0.02)
+			_pk_part(pack, cb, rim, Vector3(sx * 0.17, 0.2, sz * 0.1))
+	# нутро: тёмное дно у верха и пара вещей (видны, когда крышка открыта)
+	var im := BoxMesh.new()
+	im.size = Vector3(0.31, 0.01, 0.17)
+	_pk_part(pack, im, inner, Vector3(0, 0.392, 0))
+	_pk_part(pack, _cyl(0.012, 0.012, 0.22), wood, Vector3(0.05, 0.4, 0.02), Vector3(0, 0.4, PI * 0.5))
+	_pk_part(pack, _sph(), HS.mat(Color(0.5, 0.5, 0.48)), Vector3(-0.08, 0.398, -0.03), Vector3.ZERO, Vector3(0.07, 0.04, 0.06))
+	_pk_part(pack, _sph(), HS.mat(Color(0.55, 0.12, 0.14)), Vector3(-0.1, 0.4, 0.04), Vector3.ZERO, Vector3(0.05, 0.04, 0.05))
+	# котелок на ремешке сбоку
+	_pk_part(pack, _cyl(0.06, 0.055, 0.1), metal, Vector3(0.23, 0.2, 0.0))
+	_pk_part(pack, _tor(0.055, 0.065), belt, Vector3(0.23, 0.26, 0.0), Vector3(0, 0, PI * 0.5), Vector3(1, 1, 0.6))
+	# крышка: петли у дальней стенки (−Z), край к спине (+Z); на ней приторочена скатка
+	pack_lid = Node3D.new()
+	pack_lid.position = Vector3(0, 0.4, -0.105)
+	pack.add_child(pack_lid)
+	var lm := BoxMesh.new()
+	lm.size = Vector3(0.36, 0.035, 0.225)
+	_pk_part(pack_lid, lm, bark, Vector3(0, 0.017, 0.11))
+	var lr := BoxMesh.new()
+	lr.size = Vector3(0.37, 0.02, 0.03)
+	_pk_part(pack_lid, lr, rim, Vector3(0, 0.02, 0.215))
+	_pk_part(pack_lid, _cyl(0.07, 0.07, 0.46), roll, Vector3(0, 0.1, 0.1), Vector3(0, 0, PI * 0.5))
+	for sx in [-1.0, 1.0]:
+		_pk_part(pack_lid, _tor(0.068, 0.08), belt, Vector3(sx * 0.14, 0.1, 0.1), Vector3(0, 0, PI * 0.5))
+	# лямки: петли со стороны спины (+Z); снятая лямка повисает и прижимается к коробу
+	var sm := _strap_mesh(0.26, 0.36, 0.05)
+	for sx in [-1.0, 1.0]:
+		var sn := Node3D.new()
+		sn.position = Vector3(-sx * 0.12, 0.2, 0.1)
+		pack.add_child(sn)
+		_pk_part(sn, sm, belt, Vector3.ZERO)
+		pack_straps.append(sn)
+	pack_straps.reverse()  # [левая (+X), правая (−X)]
+	# крепление к спине
+	var bi := sk.find_bone("spine_03")
+	pack_back = BoneAttachment3D.new()
+	pack_back.bone_name = "spine_03"
+	sk.add_child(pack_back)
+	var want := Transform3D(Basis(), Vector3(0, ty - 0.14, -0.28))
+	_pk_off = sk.get_bone_global_rest(bi).affine_inverse() * want
+	pack.transform = _pk_off
+	pack_back.add_child(pack)
+	for bn in ["spine_01", "spine_02", "spine_03", "clavicle_l", "clavicle_r", "upperarm_l", "lowerarm_l", "hand_l", "upperarm_r", "lowerarm_r", "hand_r", "Head", "neck_01"]:
+		_pk_bones[bn] = sk.find_bone(bn)
+	var hb: int = _pk_bones["Head"]
+	_pk_head_fwd = (sk.get_bone_global_rest(hb).basis.inverse() * Vector3(0, 0, 1)).normalized()
+	_pk_mod = PackMod.new()
+	_pk_mod.hero = self
+	sk.add_child(_pk_mod)
+
+## Можно ли сейчас снять короб.
+func can_open_pack() -> bool:
+	return state == "walk" and pack != null and not airborne and swimb < 0.2 and depth < 0.3 and land_t <= 0.0
+
+func pack_open() -> bool:
+	if not can_open_pack():
+		return false
+	state = "pack"
+	pack_stage = "opening"
+	pack_t = 0.0
+	vel = Vector3.ZERO
+	# земля перед героем: короб ставится на неё, а не в воздух/в склон
+	_pk_gy = 0.0
+	if main != null:
+		var f := Vector3(sin(body.rotation.y), 0, cos(body.rotation.y))
+		var gp := position + f * 0.78
+		_pk_gy = clampf(float(main.ground_at(gp.x, gp.z)) - position.y, -0.25, 0.25) + mud_sink
+	pack.reparent(m_sk, true)
+	_play("Fixing_Kneeling", 0.0, 0.0)
+	return true
+
+func pack_close() -> void:
+	if pack_stage == "open" or pack_stage == "opening":
+		# закрываем с того же места, где остановились
+		var u := pack_t / PK_OPEN_T if pack_stage == "opening" else 1.0
+		pack_stage = "closing"
+		pack_t = (1.0 - u) * PK_CLOSE_T
+
+func pack_eat() -> void:
+	if pack_stage == "open":
+		pack_eat_t = 1.3
+
+## Сбросить сразу (удар зверя, гибель): короб снова на спине.
+func pack_abort() -> void:
+	if pack_stage == "":
+		return
+	pack_stage = ""
+	pack_eat_t = 0.0
+	pack.reparent(pack_back, false)
+	pack.transform = _pk_off
+	pack_lid.rotation = Vector3.ZERO
+	for s: Node3D in pack_straps:
+		s.scale = Vector3.ONE
+	if state == "pack":
+		state = "walk"
+	m_cur = ""
+
+func _process_pack(delta: float) -> void:
+	moving = false
+	running = false
+	run_mag = 0.0
+	climbing = 0.0
+	vel = Vector3.ZERO
+	pack_t += delta
+	pack_eat_t = maxf(0.0, pack_eat_t - delta)
+	if pack_stage == "opening":
+		_pk_u = clampf(pack_t / PK_OPEN_T, 0.0, 1.0)
+		if pack_t >= PK_OPEN_T:
+			pack_stage = "open"
+			pack_t = 0.0
+	elif pack_stage == "open":
+		_pk_u = 1.0
+	elif pack_stage == "closing":
+		_pk_u = clampf(1.0 - pack_t / PK_CLOSE_T, 0.0, 1.0)
+		if pack_t >= PK_CLOSE_T:
+			pack_abort()
+			_play("Idle", 1.0, 0.3)
+			return
+	if main != null:
+		position.y = lerpf(position.y, float(main.ground_at(position.x, position.z)), minf(1.0, 8.0 * delta))
+
+## Время в Fixing_Kneeling: опускание на колено, пока короб идёт вниз.
+func _pk_anim_time() -> float:
+	return PK_KNEEL_T * _ss(0.45, 0.84, _pk_u)
+
+## Короб в осях скелета для прогресса u (0 — на спине, 1 — стоит открытый перед героем).
+func _pk_xf(u: float, k_back: Transform3D) -> Transform3D:
+	var s1 := _ss(0.0, 0.2, u)
+	var s2 := _ss(0.18, 0.48, u)
+	var s3 := _ss(0.5, 0.82, u)
+	# 1) левая лямка слетает: короб виснет на правом плече и заваливается влево-вниз
+	var piv := Vector3(-0.16, 1.44, -0.06)
+	var roll := 0.5 * s1 * (1.0 - s2)
+	var rb := Basis(Vector3(0, 0, 1), -roll) * Basis(Vector3(0, 1, 0), -0.25 * s1 * (1.0 - s2))
+	var t := Transform3D(rb, piv - rb * piv) * k_back
+	# 2) перекидывает вокруг правого бока вперёд: оборот вокруг вертикали через героя
+	var th := PI * s2
+	var ob := Basis(Vector3.UP, th)
+	t = Transform3D(ob, Vector3.ZERO) * t
+	var dir := ob * Vector3(0, 0, -1)
+	t.origin += dir * (0.09 * sin(th) + 0.1 * s2) + Vector3(0, -0.38 * s2 - 0.08 * sin(th), 0)
+	# выравниваем наклон спины и ставим ровно
+	var up_b := Basis(Vector3.UP, PI)
+	t.basis = t.basis.slerp(up_b, s2 * s2)
+	# 3) опускает на землю перед собой
+	if s3 > 0.0:
+		var g := Transform3D(up_b, Vector3(-0.03, _pk_gy, 0.78))
+		var mid := t.interpolate_with(g, s3)
+		# сначала вниз у живота, вперёд — вместе с шагом на колено
+		mid.origin.z = lerpf(t.origin.z, g.origin.z, _ss(0.55, 0.74, u))
+		t = mid
+	return t
+
+## Повернуть кость в осях скелета вокруг её начала.
+func _pk_rot(sk: Skeleton3D, b: int, q: Quaternion) -> void:
+	var par := sk.get_bone_parent(b)
+	var gp := sk.get_bone_global_pose(par)
+	var lp := sk.get_bone_pose_rotation(b)
+	var g := gp.basis.get_rotation_quaternion() * lp
+	sk.set_bone_pose_rotation(b, (gp.basis.get_rotation_quaternion().inverse() * (q * g)).normalized())
+
+## Двухзвенная ИК руки: кисть в target, локоть в сторону pole; w — доля.
+func _pk_ik(sk: Skeleton3D, side: String, target: Vector3, pole: Vector3, w: float) -> void:
+	if w <= 0.001:
+		return
+	var bu: int = _pk_bones["upperarm_" + side]
+	var bl: int = _pk_bones["lowerarm_" + side]
+	var bh: int = _pk_bones["hand_" + side]
+	var gp := sk.get_bone_global_pose(sk.get_bone_parent(bu))
+	var lu := sk.get_bone_pose(bu)
+	var ll := sk.get_bone_pose(bl)
+	var lh := sk.get_bone_pose(bh)
+	var gu := gp * lu
+	var gl := gu * ll
+	var gh := gl * lh
+	var s := gu.origin
+	var e := gl.origin
+	var h := gh.origin
+	var a := s.distance_to(e)
+	var b := e.distance_to(h)
+	var tv := target - s
+	var c := clampf(tv.length(), absf(a - b) + 0.02, (a + b) * 0.995)
+	var d := tv.normalized()
+	var x := (a * a - b * b + c * c) / (2.0 * c)
+	var hh := sqrt(maxf(a * a - x * x, 0.0))
+	var pv := pole - s
+	var perp := pv - d * pv.dot(d)
+	if perp.length() < 0.0001:
+		perp = Vector3(0, -1, 0)
+	perp = perp.normalized()
+	var e2 := s + d * x + perp * hh
+	var t2 := s + d * c
+	var q1 := Quaternion((e - s).normalized(), (e2 - s).normalized())
+	var gu2 := Transform3D(Basis(q1) * gu.basis, s)
+	var gl2 := gu2 * ll
+	var wc := (gl2 * lh).origin
+	var q2 := Quaternion((wc - gl2.origin).normalized(), (t2 - gl2.origin).normalized())
+	var gl3 := Transform3D(Basis(q2) * gl2.basis, gl2.origin)
+	var nu := (gp.basis.inverse() * gu2.basis).get_rotation_quaternion()
+	var nl := (gu2.basis.inverse() * gl3.basis).get_rotation_quaternion()
+	sk.set_bone_pose_rotation(bu, lu.basis.get_rotation_quaternion().slerp(nu, w))
+	sk.set_bone_pose_rotation(bl, ll.basis.get_rotation_quaternion().slerp(nl, w))
+
+func _pk_modify(sk: Skeleton3D) -> void:
+	if pack_stage == "" or pack == null:
+		return
+	var u := _pk_u
+	var closing := pack_stage == "closing"
+	var tm := Time.get_ticks_msec() * 0.001
+	# корпус: при снятии плечо уходит назад, при перекидывании — поворот вправо за коробом
+	var s2b := sin(PI * _ss(0.15, 0.5, u))
+	var twist := -0.38 * s2b
+	var shrug := 0.0
+	if closing and u < 0.14:
+		# подбросить короб на спине, чтобы сел: короткий рывок плечами вверх
+		shrug = sin(PI * u / 0.14) * 0.25
+	var breathe := sin(tm * 1.6) * 0.02 * _ss(0.9, 1.0, u)
+	_pk_rot(sk, _pk_bones["spine_02"], Quaternion(Vector3.UP, twist * 0.5))
+	_pk_rot(sk, _pk_bones["spine_03"], Quaternion(Vector3.UP, twist * 0.5) * Quaternion(Vector3.RIGHT, breathe - shrug * 0.3))
+	var lb := sin(PI * _ss(0.0, 0.24, u))  # левое плечо выкручивается из лямки
+	_pk_rot(sk, _pk_bones["clavicle_l"], Quaternion(Vector3.RIGHT, -0.25 * lb) * Quaternion(Vector3.FORWARD, -0.2 * shrug))
+	_pk_rot(sk, _pk_bones["clavicle_r"], Quaternion(Vector3.FORWARD, 0.2 * shrug))
+	# короб
+	var k_back := sk.get_bone_global_pose(_pk_bones["spine_03"]) * _pk_off
+	var p := _pk_xf(u, k_back)
+	pack.transform = p
+	var lid_open := _ss(0.84, 0.99, u)
+	pack_lid.rotation = Vector3(-2.05 * lid_open, 0, 0)
+	# лямки: на плечах — петли, снятые — прижаты к коробу
+	(pack_straps[0] as Node3D).scale = Vector3(1, lerpf(1.0, 0.85, _ss(0.02, 0.18, u)), lerpf(1.0, 0.2, _ss(0.02, 0.18, u)))
+	(pack_straps[1] as Node3D).scale = Vector3(1, lerpf(1.0, 0.85, _ss(0.3, 0.5, u)), lerpf(1.0, 0.2, _ss(0.3, 0.5, u)))
+	var lid_g := p * pack_lid.transform
+	# правая рука: лямка у груди → корень лямки (держит короб на весу) → бок короба → край крышки → обод
+	var hr := sk.get_bone_global_pose(_pk_bones["hand_r"]).origin
+	var strap_f := p * Vector3(-0.1, 0.3, 0.38)
+	var strap_top := p * Vector3(-0.1, 0.43, 0.1)
+	var side_r := p * Vector3(0.2, 0.26, 0.03)
+	var lid_edge := lid_g * Vector3(0.0, 0.03, 0.22)
+	var rim_r := p * Vector3(0.12, 0.42, 0.13)
+	var tr := strap_f.lerp(strap_top, _ss(0.17, 0.3, u))
+	tr = tr.lerp(side_r, _ss(0.44, 0.56, u))
+	tr = tr.lerp(lid_edge, _ss(0.8, 0.86, u))
+	tr = tr.lerp(rim_r, _ss(0.95, 1.0, u))
+	# еда: горсть ко рту и обратно
+	if pack_eat_t > 0.0:
+		var hp := sk.get_bone_global_pose(_pk_bones["Head"])
+		var mouth := hp.origin + Vector3(-0.02, -0.02, 0.14)
+		tr = tr.lerp(mouth, sin(PI * clampf(1.0 - pack_eat_t / 1.3, 0.0, 1.0)))
+	var wr := _ss(0.0, 0.12, u)
+	tr = hr.lerp(tr, minf(1.0, wr * 2.0))
+	var sr := sk.get_bone_global_pose(_pk_bones["upperarm_r"]).origin
+	_pk_ik(sk, "r", tr, sr + Vector3(-0.45, -0.35, -0.25 + 0.3 * _ss(0.5, 0.8, u)), wr)
+	# левая рука: выскальзывает из лямки назад → ловит короб спереди → держит бок → обод
+	var hl := sk.get_bone_global_pose(_pk_bones["hand_l"]).origin
+	var back_l := Vector3(0.3, 1.02, -0.2)
+	var side_l := p * Vector3(-0.2, 0.26, 0.03)
+	var rim_l := p * Vector3(-0.13, 0.42, 0.12)
+	var e := sin(PI * _ss(0.0, 0.3, u))
+	var tl := hl.lerp(back_l, e)
+	var f := _ss(0.3, 0.46, u)
+	tl = tl.lerp(side_l, f)
+	tl = tl.lerp(rim_l, _ss(0.93, 1.0, u))
+	var wl := maxf(e, f)
+	var sl := sk.get_bone_global_pose(_pk_bones["upperarm_l"]).origin
+	_pk_ik(sk, "l", tl, sl + Vector3(0.45, -0.35, -0.3 + 0.3 * _ss(0.5, 0.8, u)), wl)
+	# голова смотрит на короб
+	var hb: int = _pk_bones["Head"]
+	var hg := sk.get_bone_global_pose(hb)
+	var look := (p * Vector3(0, 0.3, 0) - hg.origin).normalized()
+	var fwd := (hg.basis * _pk_head_fwd).normalized()
+	var wlook := 0.5 * _ss(0.38, 0.55, u)
+	if wlook > 0.01 and fwd.dot(look) > -0.5:
+		var q := Quaternion(fwd, look)
+		_pk_rot(sk, hb, Quaternion.IDENTITY.slerp(q, wlook))

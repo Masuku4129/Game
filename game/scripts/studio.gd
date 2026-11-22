@@ -37,6 +37,8 @@ func _ready() -> void:
 
 	elif who == "beaver":
 		_beaver()
+	elif who == "pack":
+		_pack()
 
 ## Бобр: ракурсы и позы (шаг, плавание, грызёт, хлопок хвостом). STUDIO=beaver
 var bv: Node3D
@@ -120,6 +122,36 @@ func _hero() -> void:
 			["Sitting_Idle", 0.5, "сидит"], ["TreeChopping", 0.4, "рубит"], ["PickUp_Table", 0.5, "поднимает"], ["Death01", 3.0, "гибель"]]:
 		tiles.append(["hero_anims", 60, 8, 4.6, 0.85, a[0], a[1], a[2]])
 
+## Короб: кадры снятия (opening) и надевания (closing). STUDIO=pack
+var pk_mode := false
+
+func _pack() -> void:
+	_hero()
+	tiles.clear()
+	pk_mode = true
+	subj.pack_open()
+	var views := [[35, 14, 3.4, 0.8], [-80, 10, 3.4, 0.8]]
+	var vi := OS.get_environment("PKVIEW")
+	for v: Array in ([views[int(vi)]] if vi != "" else views):
+		for u in [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0]:
+			tiles.append(["pack_open_%d" % int(v[0]), v[0], v[1], v[2], v[3], "opening", u, "u %.2f" % u])
+		for u in [0.9, 0.5, 0.3, 0.15, 0.07, 0.0]:
+			tiles.append(["pack_close_%d" % int(v[0]), v[0], v[1], v[2], v[3], "closing", u, "u %.2f" % u])
+
+func _pack_pose(t: Array) -> void:
+	var u: float = t[6]
+	if t[5] == "opening":
+		subj.pack_stage = "opening"
+		subj.pack_t = u * subj.PK_OPEN_T
+	else:
+		subj.pack_stage = "closing"
+		subj.pack_t = (1.0 - u) * subj.PK_CLOSE_T
+	subj.state = "pack"
+	subj._process_pack(0.0)
+	subj.state = "pack"
+	subj._animate_model(0.016)
+	subj.position = Vector3.ZERO
+
 func _env() -> void:
 	var sky_mat := ProceduralSkyMaterial.new()
 	sky_mat.sky_top_color = Color(0.36, 0.55, 0.78)
@@ -152,7 +184,9 @@ func _process(_d: float) -> void:
 		get_tree().quit()
 		return
 	var t: Array = tiles[ti]
-	if wait == 0 and bv != null:
+	if pk_mode:
+		_pack_pose(t)
+	elif wait == 0 and bv != null:
 		_beaver_pose(t[5], float(t[6]))
 	elif wait == 0:
 		var an: String = t[5]
