@@ -47,7 +47,7 @@ func _ready() -> void:
 		bushes.append(_ogg("bush%d" % (i + 1)))
 	land_s = _ogg("land")
 	howl = _howl()
-	synth = {"crack": _crack(), "thud": _thud(), "slap": _slap(), "gnaw": _gnaw()}
+	synth = {"crack": _crack(), "thud": _thud(), "slap": _slap(), "gnaw": _gnaw(), "splash": _splash()}
 	for i in 6:
 		var p := AudioStreamPlayer3D.new()
 		p.unit_size = 10.0
@@ -155,6 +155,26 @@ func _slap() -> AudioStreamWAV:
 		lp += (nz - lp) * 0.2
 		var v := nz * exp(-t * 60.0) * 0.9 + lp * exp(-t * 7.0) * 0.8 + sin(TAU * 110.0 * t) * exp(-t * 30.0) * 0.4
 		b.encode_s16(i * 2, int(clampf(v, -1.0, 1.0) * 30000.0))
+	return _wav(b, rate)
+
+## Всплеск: рыба выпрыгнула или медведь ударил лапой по воде — шипящий шлепок с капелью.
+func _splash() -> AudioStreamWAV:
+	var rate := 22050
+	var n := int(0.5 * rate)
+	var b := PackedByteArray()
+	b.resize(n * 2)
+	var r := RandomNumberGenerator.new()
+	r.seed = 11
+	var lp := 0.0
+	var hp := 0.0
+	for i in n:
+		var t := float(i) / rate
+		var nz := r.randf_range(-1.0, 1.0)
+		lp += (nz - lp) * 0.35
+		hp = nz - lp
+		var drip := sin(TAU * (900.0 + 600.0 * exp(-t * 20.0)) * t) * exp(-t * 25.0) * 0.25
+		var v := lp * exp(-t * 14.0) * 0.9 + hp * exp(-t * 9.0) * 0.35 + drip
+		b.encode_s16(i * 2, int(clampf(v, -1.0, 1.0) * 26000.0))
 	return _wav(b, rate)
 
 ## Грызёт: короткие сухие поскрёбывания.
