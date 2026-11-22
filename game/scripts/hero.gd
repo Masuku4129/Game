@@ -349,12 +349,20 @@ func action_label() -> String:
 		return "Встать"
 	if swimb > 0.3:
 		return ""
+	if state == "butcher":
+		return "Прервать"
 	if tools != null:
 		var tl: String = tools.action_label()
 		if tl != "":
 			return tl
 	if main.bleed > 0.02:
 		return "Перевязать"
+	# --- hunt: туши (подобрать, разделать), вещи на земле (hunt.gd) ---
+	if main.get("hunt") != null:
+		var hl: String = main.hunt.action_label()
+		if hl != "":
+			return hl
+	# --- /hunt ---
 	var it: Array = main.find_pick(position)
 	if not it.is_empty():
 		return "Собрать: " + main.PICK_NAME[it[1]]
@@ -374,6 +382,10 @@ func do_action() -> void:
 		tools.do_action()
 		return
 	var lbl := action_label()
+	# --- hunt ---
+	if main.get("hunt") != null and main.hunt.do_action(lbl):
+		return
+	# --- /hunt ---
 	if lbl == "Перевязать":
 		main.bandage()
 		land_t = 1.0
@@ -444,6 +456,11 @@ func _process_main(delta: float) -> void:
 	if state == "pack":
 		_process_pack(delta)
 		return
+	# --- hunt: разделка туши на коленях (hunt.gd) ---
+	if state == "butcher":
+		main.hunt.hero_tick(delta)
+		return
+	# --- /hunt ---
 	if pack_stage != "":
 		pack_abort()
 	if state == "climb":
@@ -895,6 +912,12 @@ func _animate_model(delta: float) -> void:
 		return
 	if tools != null and state == "walk" and swimb < 0.5 and tools.anim_override():
 		return
+	# --- hunt: разделка — на колене, руки работают (время кадра считает hunt.gd) ---
+	if state == "butcher":
+		_play("Fixing_Kneeling", 0.0, 0.0)
+		m_ap.seek(main.hunt.kneel_time(), true)
+		return
+	# --- /hunt ---
 	if state == "pack":
 		# опускание на колено ведём сами по времени последовательности; руки — модификатор
 		_play("Fixing_Kneeling", 0.0, 0.0)

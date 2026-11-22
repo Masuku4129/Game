@@ -670,9 +670,17 @@ func _modify(s: Skeleton3D) -> void:
 		return
 	var tm := Time.get_ticks_msec() * 0.001
 	var u := act_t / maxf(act_dur, 0.001)
-	# --- нож и топор в правой руке: кулак сжат
+	# --- нож и топор в правой руке: кулак сжат; в покое — лезвием вперёд-вниз, у бедра
 	if (held in ["knife", "axe"] or act == "draw") and not hidden:
 		_curl(curl_r, 1.0 if held != "" else _ss(0.3, 0.5, u))
+		if held in ["knife", "axe"] and not (act in ["chop", "trunk", "split", "cut", "draw", "holster"]):
+			# кратчайший поворот кисти от позы анимации: рукоять ложится вперёд-вниз, без выворота запястья
+			var ax := Vector3(-0.12, -0.55, 1.0) if held == "knife" else Vector3(-0.1, -0.6, 0.8)
+			var hg := _gpose("hand_r")
+			var hq := hg.basis.get_rotation_quaternion()
+			var cur_a := (hq * G_r.basis.orthonormalized().y).normalized()
+			var Hd := Basis(Quaternion(cur_a, ax.normalized()) * hq)
+			_set_grot(bones["hand_r"], Hd.get_rotation_quaternion(), 1.0)
 	# --- достать/убрать: кисть к поясу и обратно
 	if act in ["draw", "holster"]:
 		var id: String = act_data["id"]
@@ -708,15 +716,16 @@ func _pose_long(tm: float, u: float) -> void:
 	var rw := 1.0
 	if act == "stab":
 		# к бою: древко горизонтально у пояса, левая рука впереди; выпад вперёд и назад
-		var ready_g := pel + Vector3(-0.17, 0.12, -0.02)
-		var ready_a := Vector3(0.06, 0.12, 1.0).normalized()
+		var ready_g := pel + Vector3(-0.1, 0.17, 0.04)
+		var ready_a := Vector3(0.45, 0.24, 0.88).normalized()
 		var k := _ss(0.0, 0.3, u) * (1.0 - _ss(0.75, 1.0, u))
 		var thrust := _ss(0.3, 0.42, u) * (1.0 - _ss(0.55, 0.8, u))
-		grip = grip.lerp(ready_g + ready_a * 0.42 * thrust, k)
+		grip = grip.lerp(ready_g + ready_a * 0.3 * thrust, k)
 		axis = axis.slerp(ready_a, k)
 		eref = eref.lerp(Vector3(0.7, -0.6, 0.0), k)
 		lw = k
-		lgrip = grip + axis * (0.5 - 0.15 * thrust)
+		# задняя рука толкает, передняя направляет древко
+		lgrip = ready_g + ready_a * (0.33 + 0.1 * thrust)
 		leref = Vector3(-0.6, -0.6, 0.0)
 		hero._pk_rot(sk, bones["spine_02"], Quaternion(Vector3.UP, 0.25 * k - 0.2 * thrust))
 	elif act == "stick":
@@ -768,7 +777,7 @@ func _long_basis(grip: Vector3, axis: Vector3) -> Transform3D:
 func _pose_log(u: float) -> void:
 	var s3 := _gpose("spine_03")
 	var cl := _gpose("clavicle_r").origin
-	var on := Transform3D(Basis(Vector3(1, 0, 0), Vector3(0, 0.25, 1).normalized(), Vector3.ZERO), cl + Vector3(-0.13, 0.12, 0.05))
+	var on := Transform3D(Basis(Vector3(1, 0, 0), Vector3(0, 0.08, 1).normalized(), Vector3.ZERO), cl + Vector3(-0.25, 0.15, 0.0))
 	on.basis.z = on.basis.x.cross(on.basis.y).normalized()
 	var k := 1.0
 	if act == "take_log":

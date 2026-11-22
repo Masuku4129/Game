@@ -54,6 +54,7 @@ var inventory  # короб: inventory.gd
 var tools_world
 var res_spots := {}      # клетка 8 м → [[позиция, вид]] — кусты, ягодники (нож, руки)
 var fallen_spots := {}   # клетка 16 м → [{kind, mm, i, xf, a, b, r}] — бурелом под топор
+var hunt  # --- hunt: туши, разделка, кровь, запах крови (hunt.gd) ---
 
 func _ready() -> void:
 	_setup_noise()
@@ -128,6 +129,12 @@ func _ready() -> void:
 	inventory.main = self
 	ui.add_child(inventory)
 	hud.setup(self)
+	# --- hunt: разделка туш, кровь, запах крови (hunt.gd) ---
+	hunt = preload("res://scripts/hunt.gd").new()
+	hunt.main = self
+	add_child(hunt)
+	hunt.setup()
+	# --- /hunt ---
 	fps_lbl = Label.new()
 	fps_lbl.anchor_left = 0.5
 	fps_lbl.anchor_right = 0.5
@@ -1148,6 +1155,10 @@ func drink() -> void:
 	_say("Напился")
 
 func bandage() -> void:
+	# --- hunt: повязка из короба; без неё — только зажать рану (hunt.gd) ---
+	if hunt != null and hunt.bandage():
+		return
+	# --- /hunt ---
 	bleed = 0.0
 	for k in injuries.keys():
 		if k != "перелом ноги":
@@ -1196,6 +1207,10 @@ func hurt(amount: float, from: Vector3, kind: String) -> void:
 		inventory.abort()
 	health = maxf(0.0, health - dmg)
 	bleed = minf(1.0, bleed + dmg * 0.6)
+	# --- hunt: брызги крови, кровь на одежде, разделка прерывается ---
+	if hunt != null:
+		hunt.on_hero_hurt(dmg, part, from)
+	# --- /hunt ---
 	var key := "рана: " + part
 	injuries[key] = float(injuries.get(key, 0.0)) + 24.0 + dmg * 80.0
 	if part == "нога" and (big or kind == "boar") and randf() < 0.35:

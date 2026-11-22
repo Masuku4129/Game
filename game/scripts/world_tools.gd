@@ -1113,17 +1113,21 @@ func _test(delta: float) -> void:
 			hero.do_action()
 		"split":
 			print("TT after drop held=", hero.held, " items=", items.size())
-			T.take("axe")
+			T.act = ""
+			T.belt.erase("axe")
+			T.held = "axe"
+			T._refresh()
 			print("TT split label=", T.use_label())
 			T.use()
 		"spear":
 			print("TT firewood=", main.inv.get("firewood", 0))
 			main.inv["spear"] = 1
+			T.act = ""
 			T.give_long("spear")
 			# зверь перед героем
 			var an: Node3D = null
 			for x: Node3D in main.animals.list:
-				if not x.dead and x.kind in ["roe", "hare", "deer", "moose", "boar"]:
+				if not x.dead and x.kind in ["roe", "deer", "moose", "boar"] and x.position.y > main.WATER_Y + 0.5:
 					an = x
 					break
 			if an != null:
@@ -1136,7 +1140,8 @@ func _test(delta: float) -> void:
 			if dir.length() > 1:
 				_shot(dir, "spear_carry")
 		"throw":
-			print("TT can_throw=", T.can_throw())
+			T.act = ""
+			print("TT can_throw=", T.can_throw(), " state=", hero.state, " swim=", hero.swimb)
 			T.throw()
 		"craft":
 			for it: Dictionary in items:
