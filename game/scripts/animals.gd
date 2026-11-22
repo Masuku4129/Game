@@ -87,6 +87,8 @@ func populate() -> void:
 			add_child(b)
 			birds.append(b)
 
+	_populate_taiga(start)
+
 func _spot(cond: Callable, start: Vector3, min_d: float) -> Vector3:
 	var half: float = main.SIZE * 0.5 - 20.0
 	for t in 400:
@@ -189,7 +191,7 @@ func _lodge(p: Vector3) -> void:
 
 ## Ближний хищник, опасный для зверя a.
 func nearest_predator(a: Node3D, r: float) -> Node3D:
-	var preds: Array = {"hare": ["fox", "wolf", "tiger"], "squirrel": ["fox"], "roe": ["wolf", "tiger", "bear"], "deer": ["wolf", "tiger", "bear"], "beaver": ["wolf", "fox"], "fox": ["wolf", "tiger"], "boar": ["tiger"]}.get(a.kind, [])
+	var preds: Array = {"hare": ["fox", "wolf", "tiger"], "squirrel": ["fox"], "roe": ["wolf", "tiger", "bear"], "deer": ["wolf", "tiger", "bear"], "beaver": ["wolf", "fox"], "fox": ["wolf", "tiger"], "boar": ["tiger"]}.get(a.kind, []) + TAIGA_PREDS.get(a.kind, [])
 	if preds.is_empty():
 		return null
 	var best: Node3D = null
@@ -422,3 +424,73 @@ class Bird extends Node3D:
 		fly_t = 0.0
 		fly_d = a.distance_to(b) / 7.0
 		state = "fly"
+
+# ---------- Новые звери тайги: лось, рысь, росомаха, кабарга, глухарь ----------
+# Каждого вида — несколько групп по всей карте и хотя бы одна группа в 60–120 м от старта,
+# чтобы их можно было найти. Места — по образу жизни вида.
+
+const TAIGA_PREDS := {"hare": ["lynx", "wolverine"], "roe": ["lynx"], "beaver": ["wolverine"], "moose": ["wolf", "tiger", "bear"],
+	"muskdeer": ["wolf", "lynx", "wolverine", "tiger"], "capercaillie": ["fox", "lynx", "wolverine"],
+	"lynx": ["wolf", "tiger"], "wolverine": ["wolf", "tiger", "bear"]}
+
+func _populate_taiga(start: Vector3) -> void:
+	# лоси: поймы, болотистые берега и редколесье; быки поодиночке, лосихи с лосятами
+	var mc := _spot_ring(func(x, z): return main.forest_density(x, z) < 0.65, start, 60.0, 110.0)
+	_taiga_moose(mc, 700)
+	for gi in 9:
+		var c := _spot(func(x, z): return main.river_dist(x, z) < 35.0 or main.forest_density(x, z) < 0.4, start, 80.0)
+		_taiga_moose(c, 701 + gi)
+	# рыси: густой лес, поодиночке
+	_spawn("lynx", _spot_ring(func(x, z): return main.forest_density(x, z) > 0.45, start, 70.0, 120.0), 1.0, -1)
+	for i in 5:
+		_spawn("lynx", _spot(func(x, z): return main.forest_density(x, z) > 0.55, start, 100.0), rng.randf_range(0.9, 1.05), -1)
+	# росомахи: каменистые гривы и глухая тайга, поодиночке, ходят далеко
+	_spawn("wolverine", _spot_ring(func(x, z): return main.biome(x, z) > 0.0 or main.forest_density(x, z) > 0.55, start, 80.0, 120.0), 1.0, -1)
+	for i in 4:
+		_spawn("wolverine", _spot(func(x, z): return main.biome(x, z) > 0.15, start, 120.0), rng.randf_range(0.9, 1.05), -1)
+	# кабарга: крутые каменистые склоны и скалы, по одной-две
+	var kc := _spot_ring(func(x, z): return main.biome(x, z) > 0.1 or main.normal_at(x, z).y < 0.93, start, 60.0, 120.0)
+	_spawn_sex("muskdeer", kc, 1.0, 900, true)
+	_spawn_sex("muskdeer", _near(kc, 5.0), 0.95, 900, false)
+	for gi in 6:
+		var c := _spot(func(x, z): return main.biome(x, z) > 0.2 and main.normal_at(x, z).y < 0.96, start, 60.0)
+		for k in rng.randi_range(1, 2):
+			_spawn_sex("muskdeer", _near(c, 5.0), rng.randf_range(0.92, 1.05), 901 + gi, k == 0)
+	# глухари: токовища в хвойном лесу — петух и 2–3 глухарки
+	for gi in 9:
+		var c := _spot_ring(func(x, z): return main.forest_density(x, z) > 0.45, start, 60.0, 110.0) if gi < 2 else _spot(func(x, z): return main.forest_density(x, z) > 0.5, start, 50.0)
+		_spawn_sex("capercaillie", c, rng.randf_range(0.95, 1.05), 800 + gi, true)
+		for k in rng.randi_range(2, 3):
+			_spawn_sex("capercaillie", _near(c, 6.0), rng.randf_range(0.68, 0.76), 800 + gi, false)
+
+## Лосиная группа: бык-одиночка, лосиха с лосёнком или все трое.
+func _taiga_moose(c: Vector3, grp: int) -> void:
+	var t := rng.randi() % 3
+	if t != 1:
+		_spawn_sex("moose", c, rng.randf_range(0.95, 1.05), grp, true)
+	if t != 0:
+		_spawn_sex("moose", _near(c, 6.0), rng.randf_range(0.85, 0.92), grp, false)
+		_spawn_sex("moose", _near(c, 4.0), rng.randf_range(0.5, 0.6), grp, false)
+
+func _spawn_sex(k: String, p: Vector3, sc: float, grp: int, is_male: bool) -> Node3D:
+	var a = _spawn(k, p, sc, grp)
+	if a.male != is_male:
+		a.male = is_male
+		a._build(false)
+	return a
+
+## Место в кольце r0..r1 от старта (для встреч недалеко от начала игры).
+func _spot_ring(cond: Callable, start: Vector3, r0: float, r1: float) -> Vector3:
+	for t in 400:
+		var ang := rng.randf() * TAU
+		var r := rng.randf_range(r0, r1)
+		var x := start.x + cos(ang) * r
+		var z := start.z + sin(ang) * r
+		var half: float = main.SIZE * 0.5 - 20.0
+		if absf(x) > half or absf(z) > half:
+			continue
+		if main.height(x, z) < main.WATER_Y + 0.2 or main.normal_at(x, z).y < 0.75 or main.blocked(x, z, 0.8):
+			continue
+		if cond.call(x, z):
+			return Vector3(x, main.height(x, z), z)
+	return _spot(cond, start, r0)

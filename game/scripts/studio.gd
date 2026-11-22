@@ -32,6 +32,8 @@ func _ready() -> void:
 	var who := OS.get_environment("STUDIO")
 	if who == "" or who == "hero":
 		_hero()
+	elif who == "species":
+		_species()
 
 func _hero() -> void:
 	subj = HERO.new()
@@ -80,6 +82,9 @@ func _env() -> void:
 	add_child(sun)
 
 func _process(_d: float) -> void:
+	if sp_mode:
+		_species_step()
+		return
 	if ti >= tiles.size():
 		_save()
 		get_tree().quit()
@@ -122,6 +127,119 @@ func _process(_d: float) -> void:
 	sheets[key].append(crop)
 	print("studio ", key, " ", t[7])
 	ti += 1
+
+# ---------- STUDIO=species: новые звери тайги ----------
+# Каждый вид — лист: ракурсы в покое, кадры шага и бега, кормёжка, нападение/взлёт.
+# KINDS=через,запятую — какие виды снять (по умолчанию все новые).
+
+const ANIMAL := preload("res://scripts/animal.gd")
+var sp_mode := false
+var sp_a: Node3D
+var sp_kind := ""
+var fake: FakeMain
+
+## Заглушка мира для зверя: ровная земля, полдень.
+class FakeMain extends Node3D:
+	const SIZE := 512.0
+	const WATER_Y := -100.0
+	var t_hours := 12.0
+	var day_count := 1
+	var day_factor := 1.0
+	var hero: Node3D = null
+	var weather = null
+	func ground_at(_x: float, _z: float) -> float:
+		return 0.0
+	func height(_x: float, _z: float) -> float:
+		return 0.0
+
+func _species() -> void:
+	sp_mode = true
+	fake = FakeMain.new()
+	add_child(fake)
+	fake.hero = Node3D.new()
+	fake.hero.position = Vector3(0, 0, 30)
+	fake.add_child(fake.hero)
+	var kinds := ["moose", "lynx", "wolverine", "capercaillie", "muskdeer"]
+	var ke := OS.get_environment("KINDS")
+	if ke != "":
+		kinds = Array(ke.split(","))
+	for k: String in kinds:
+		var bird := k == "capercaillie"
+		# [лист, вид, самец, ракурс, наклон, состояние, скорость (доля бега), время, подпись]
+		for v: Array in [[90, 6, "сбоку"], [35, 10, "три четверти"], [0, 6, "спереди"], [150, 14, "сзади, 3/4"]]:
+			tiles.append([k, k, true, v[0], v[1], "idle", 0.0, 1.0, v[2]])
+		for f in 3:
+			tiles.append([k, k, true, 90, 4, "walk", 0.0, 2.0 + f * 0.27, "шаг %d" % (f + 1)])
+		for f in 3:
+			tiles.append([k, k, true, 55 if bird else 90, 25 if bird else 4, "run", 1.0, 2.0 + f * 0.11, ("полёт %d" if bird else "бег %d") % (f + 1)])
+		tiles.append([k, k, true, 60, 10, "graze", 0.0, 3.0, "кормится"])
+		tiles.append([k, k, true, 60, 8, "attack", 0.0, 0.35, "токует" if bird else ("угроза" if k in ["moose", "muskdeer"] else "нападение")])
+		tiles.append([k, k, true, 60, 10, "rest", 0.0, 4.0, "отдыхает"])
+		tiles.append([k, k, false, 40, 8, "idle", 0.0, 1.0, "самка" if k in ["moose", "capercaillie", "muskdeer"] else "молодой"])
+
+func _species_step() -> void:
+	if ti >= tiles.size():
+		_save()
+		get_tree().quit()
+		return
+	var t: Array = tiles[ti]
+	if wait == 0:
+		if sp_a != null:
+			sp_a.queue_free()
+		var a = ANIMAL.new()
+		add_child(a)
+		var male: bool = t[2]
+		var sc := 1.0 if male or t[1] in ["moose", "capercaillie", "muskdeer"] else 0.6
+		a.setup(t[1], fake, null, Vector3.ZERO, 5, sc)
+		a.male = male
+		a._build(false)
+		a.heading = 0.0
+		var st: String = t[5]
+		var run: float = a.sp["run"]
+		var walk: float = a.sp["walk"]
+		a.state = {"idle": "wander", "walk": "wander", "run": "flee", "graze": "graze", "attack": "wander", "rest": "rest"}[st]
+		a.speed = run if st == "run" else (walk if st == "walk" else 0.0)
+		a.want = a.speed
+		if st == "run" and t[1] == "capercaillie":
+			a.climb_h = 2.0
+		# прогон анимации до нужного момента
+		var steps := int(float(t[7]) * 60.0)
+		for i in steps:
+			if st == "attack" and i == steps - 20:
+				a._attack_t = 0.8
+			a._animate(1.0 / 60.0)
+		a.position = Vector3(0, a.climb_h, 0)
+		a.rotation.y = 0.0
+		sp_a = a
+	var L: float = sp_a.parts["L"]
+	var H: float = sp_a.parts["H"]
+	var size := maxf(L * 1.25, H * 2.1) + 0.3
+	var yaw := deg_to_rad(float(t[3]))
+	var pitch := deg_to_rad(float(t[4]))
+	var look := Vector3(0, H * 0.8 + sp_a.climb_h, 0)
+	cam.position = look + Vector3(sin(yaw) * cos(pitch), sin(pitch), cos(yaw) * cos(pitch)) * size * 2.2
+	cam.look_at(look, Vector3.UP)
+	wait += 1
+	if wait < 4:
+		return
+	wait = 0
+	var img := get_viewport().get_texture().get_image()
+	var w := img.get_width()
+	var h := img.get_height()
+	var cw := int(h * float(CW) / CH)
+	var crop := img.get_region(Rect2i((w - cw) / 2, 0, cw, h))
+	crop.resize(CW, CH, Image.INTERPOLATE_LANCZOS)
+	_label(crop, String(t[8]))
+	var key: String = t[0]
+	if not sheets.has(key):
+		sheets[key] = []
+	sheets[key].append(crop)
+	print("studio ", key, " ", t[8])
+	ti += 1
+
+## Подпись кадра: тёмная полоса внизу (текст не рисуем — достаточно порядка кадров).
+func _label(im: Image, _txt: String) -> void:
+	im.fill_rect(Rect2i(0, CH - 6, CW, 6), Color(0.1, 0.1, 0.1))
 
 func _save() -> void:
 	var dir := OS.get_environment("SHOTS")
