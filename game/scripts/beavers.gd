@@ -17,7 +17,7 @@ const TRUNK_R := 0.165     # радиус ствола (pveg.birch) на выс�
 const GNAW_T := 16.0
 const LOGS := 3
 const STEP := 0.05         # прирост плотины за чурку
-const STICKS := 360
+const STICKS := 1500
 const BOW := 1.2           # плотина выгнута против течения
 const LODGE_STICKS := 50
 # породы: лиственные — в первую очередь, хвойные — если рядом больше нечего (штраф к расстоянию)
@@ -27,12 +27,63 @@ const BARK_COL := {"birch": Color(0.86, 0.84, 0.78), "aspen": Color(0.6, 0.62, 0
 # радиус ствола у надгрыза (pveg: берёза 0.17, ель 0.24, сосна 0.28 у земли)
 const TRUNK_RS := {"spruce": 0.225, "fir": 0.225, "pine": 0.26, "cedar": 0.26}
 const WOOD := Color(0.93, 0.78, 0.52)
+const LOGS_MAX := 48
+# ветки: кора (серо-бурая, тёмная, серая, рыжеватая) и ошкуренные бобром — светлые
+const STICK_BARK := [Color(0.46, 0.4, 0.33), Color(0.34, 0.29, 0.23), Color(0.55, 0.52, 0.46), Color(0.5, 0.38, 0.28), Color(0.42, 0.37, 0.31), Color(0.6, 0.57, 0.5)]
+const STICK_PEEL := [Color(0.82, 0.74, 0.58), Color(0.74, 0.65, 0.5), Color(0.66, 0.59, 0.47)]
+const MUD_STICK := Color(0.3, 0.25, 0.19)
+
+const STICK_SHADER := """
+shader_type spatial;
+render_mode cull_disabled;
+#include "res://shaders/paint/paint.gdshaderinc"
+// ветка: цвет экземпляра (кора или ошкуренная древесина), продольные волокна, снег сверху
+uniform float snow = 0.0;
+varying vec3 wn;
+void vertex() {
+	wn = normalize((MODEL_MATRIX * vec4(NORMAL, 0.0)).xyz);
+}
+void fragment() {
+	float s = vnoise(vec2(UV.x * 5.0, UV.y * 9.0)) * 0.6 + vnoise(vec2(UV.x * 13.0, UV.y * 26.0)) * 0.4;
+	vec3 c = lin(COLOR.rgb) * mix(0.7, 1.15, s);
+	c = mix(c, vec3(0.9, 0.93, 0.97), smoothstep(0.6, 0.9, wn.y) * snow);
+	ALBEDO = c;
+	ROUGHNESS = 1.0;
+	SPECULAR = 0.0;
+}
+"""
+
+const SPILL_SHADER := """
+shader_type spatial;
+render_mode blend_mix, depth_draw_never, cull_disabled, unshaded, shadows_disabled;
+// вода переливается через низкие места гребня: белые струйки бегут вниз по низовому откосу
+uniform float ice = 0.0;
+float h21(vec2 p) {
+	p = mod(p, 1024.0);
+	vec3 p3 = fract(vec3(p.xyx) * 0.1031);
+	p3 += dot(p3, p3.yzx + 33.33);
+	return fract((p3.x + p3.y) * p3.z);
+}
+float vn(vec2 p) {
+	vec2 i = floor(p); vec2 f = fract(p); f = f * f * (3.0 - 2.0 * f);
+	return mix(mix(h21(i), h21(i + vec2(1, 0)), f.x), mix(h21(i + vec2(0, 1)), h21(i + vec2(1, 1)), f.x), f.y);
+}
+void fragment() {
+	float edge = smoothstep(0.0, 0.3, UV.x) * smoothstep(1.0, 0.7, UV.x);
+	float n = vn(vec2(UV.x * 7.0, UV.y * 2.5 - TIME * 2.4)) * 0.6 + vn(vec2(UV.x * 17.0, UV.y * 6.0 - TIME * 3.3)) * 0.4;
+	float a = smoothstep(0.3, 0.72, n) * edge * COLOR.a * (1.0 - ice);
+	ALBEDO = vec3(0.9, 0.95, 0.96);
+	ALPHA = a * 0.85;
+}
+"""
 
 var main: Node3D
 var colonies: Array = []
 var strip_mat: ShaderMaterial
 var mud_mat: ShaderMaterial
 var stick_mesh: CylinderMesh
+var stick_mat: ShaderMaterial
+var spill_mat: ShaderMaterial
 var chips: CPUParticles3D
 var rng := RandomNumberGenerator.new()
 var _sync_t := 0.0
@@ -52,7 +103,15 @@ func setup(start: Vector3) -> void:
 	stick_mesh.rings = 1
 	stick_mesh.cap_top = false
 	stick_mesh.cap_bottom = false
-	stick_mesh.material = main.pv.mats["bark_dead"]
+	var ssh := Shader.new()
+	ssh.code = STICK_SHADER
+	stick_mat = ShaderMaterial.new()
+	stick_mat.shader = ssh
+	stick_mesh.material = stick_mat
+	var psh := Shader.new()
+	psh.code = SPILL_SHADER
+	spill_mat = ShaderMaterial.new()
+	spill_mat.shader = psh
 	strip_mat = main.water_mat.duplicate()
 	strip_mat.set_shader_parameter("strip", 1.0)
 	for m: ShaderMaterial in [strip_mat, main.water_mat]:
@@ -160,6 +219,14 @@ func _colony(x: float, first: bool) -> void:
 	lp.y = gmin
 	c["lodge"] = lp
 	c["lodge_top"] = low + 1.25
+	# подводный лаз: у основания хатки со стороны русла (бобр ныряет здесь и пропадает внутри)
+	c["door"] = lp - across * side * 2.6
+	# низкие места гребня, где переливается вода; неровность гребня — своя у каждой плотины
+	var nn: Array = []
+	for k in rng.randi_range(3, 4):
+		nn.append([rng.randf_range(0.18, 0.82), rng.randf_range(0.025, 0.05)])
+	c["notches"] = nn
+	c["seed"] = rng.randf() * 100.0
 	main._add_solid([0, Vector3(lp.x, gmin, lp.z), Vector3.ZERO, 1.6, c["lodge_top"] - gmin])
 	# проход по гребню плотины: четыре отрезка по дуге
 	var sl: Array = []
@@ -259,9 +326,41 @@ static func _stick_xf(p: Vector3, dir: Vector3, r: float, len: float) -> Transfo
 	var zb := xb.cross(yb)
 	return Transform3D(Basis(xb * r, yb * len, zb * r), p)
 
+## Гребень плотины в точке s (0..1 от берега до берега) при постройке pr: неровный, с низкими
+## местами, через которые переливается вода (там гребень чуть ниже воды в пруду).
+func _crest_at(c: Dictionary, s: float, pr: float) -> float:
+	var sd: float = c["seed"]
+	var y := _crest(pr) + sin(s * 37.0 + sd) * 0.05 + sin(s * 13.0 + sd * 1.7) * 0.06 + sin(s * 83.0 + sd * 0.3) * 0.03
+	var pond: float = main.WATER_Y + RISE * pr
+	for nt: Array in c["notches"]:
+		var k := 1.0 - smoothstep(0.0, float(nt[1]), absf(s - float(nt[0])))
+		y = lerpf(y, pond - 0.04, k)
+	return y
+
+## Поперечный профиль (u — вниз по течению): верховой откос пологий, из ила;
+## гребень узкий; низовой откос круче — его закрывают ветки.
+const DAM_PROF := [[-3.0, -9.0], [-2.1, -0.78], [-1.2, -0.36], [-0.5, -0.09], [0.0, 0.0], [0.35, -0.05], [0.9, -0.38], [1.5, -0.85], [2.2, -9.0]]
+
+func _dam_surf(c: Dictionary, s: float, u: float, pr: float) -> float:
+	var p := _dam_pt(c, s)
+	var g: float = main.height(p.x, p.z) - 0.4
+	var cr := _crest_at(c, s, pr)
+	for j in DAM_PROF.size() - 1:
+		var a: Array = DAM_PROF[j]
+		var b: Array = DAM_PROF[j + 1]
+		if u <= float(b[0]) or j == DAM_PROF.size() - 2:
+			var k := clampf((u - float(a[0])) / (float(b[0]) - float(a[0])), 0.0, 1.0)
+			var ya: float = g if float(a[1]) < -5.0 else cr + float(a[1])
+			var yb: float = g if float(b[1]) < -5.0 else cr + float(b[1])
+			return maxf(lerpf(ya, yb, k), g)
+	return g
+
 ## Ветки и жерди: сначала хатка (видна всегда), потом плотина по слоям — видно столько, сколько построено.
+## Плотина: переплетённые ветки под разными углами (часть ошкурена — светлая), на низовом откосе
+## торчат комлями вниз по течению, на гребне — вверх; с верховой стороны — утоплены в ил.
 func _make_sticks(c: Dictionary) -> void:
 	var xs: Array[Transform3D] = []
+	var cols: Array[Color] = []
 	var lp: Vector3 = c["lodge"]
 	var top: float = c["lodge_top"]
 	var hh := top - lp.y
@@ -274,6 +373,7 @@ func _make_sticks(c: Dictionary) -> void:
 		tang = tang.rotated(n.normalized(), rng.randf_range(-1.2, 1.2))
 		var dir := (tang + n * rng.randf_range(-0.1, 0.35)).normalized()
 		xs.append(_stick_xf(p, dir, rng.randf_range(0.6, 1.3), rng.randf_range(0.9, 1.9)))
+		cols.append(_stick_col(0.25))
 	var a0: Vector3 = c["a"]
 	var b0: Vector3 = c["b"]
 	var t: Vector3 = c["t"]
@@ -282,30 +382,57 @@ func _make_sticks(c: Dictionary) -> void:
 	var prs: Array[float] = []
 	c["stick_pr"] = prs
 	for i in STICKS:
-		var pr := 0.2 + 0.8 * float(i) / STICKS
-		var s := rng.randf_range(0.08, 0.92)
-		var u := rng.randf_range(-1.1, 1.5)
-		var p := a0.lerp(b0, s) + t * (u - sin(s * PI) * BOW)
+		# первые слои — гуще: недостроенная плотина уже вся в ветках
+		var pr := 0.2 + 0.8 * pow(float(i) / STICKS, 1.5)
+		var s := rng.randf_range(0.03, 0.97)
+		var z := rng.randf()
+		var u: float
+		var dir: Vector3
+		var col: Color
+		var sink := 0.0
+		if z < 0.45:
+			# низовой откос: ветки лежат по склону, комлями вниз по течению, веером
+			u = rng.randf_range(0.05, 1.55)
+			var el := rng.randf_range(-0.55, 0.3)
+			dir = (t * cos(el) + Vector3.UP * sin(el)).rotated(Vector3.UP, rng.randf_range(-1.0, 1.0)).normalized()
+			col = _stick_col(0.12)
+		elif z < 0.75:
+			# тело и гребень: переплетены вдоль плотины, наискось
+			u = rng.randf_range(-0.35, 0.6)
+			dir = (along.rotated(Vector3.UP, rng.randf_range(-0.8, 0.8)) + Vector3.UP * rng.randf_range(-0.4, 0.4)).normalized()
+			col = _stick_col(0.1)
+			sink = rng.randf_range(0.0, 0.12)
+		elif z < 0.9:
+			# торчат из гребня круто вверх
+			u = rng.randf_range(-0.2, 0.9)
+			dir = (Vector3.UP * rng.randf_range(0.6, 1.3) + t * rng.randf_range(0.1, 0.8) + along * rng.randf_range(-0.6, 0.6)).normalized()
+			col = _stick_col(0.2)
+		else:
+			# верховой откос: утоплены в ил
+			u = rng.randf_range(-1.7, -0.3)
+			dir = (along.rotated(Vector3.UP, rng.randf_range(-1.2, 1.2)) + Vector3.UP * rng.randf_range(-0.15, 0.15)).normalized()
+			col = MUD_STICK.lerp(_stick_col(0.1), rng.randf_range(0.0, 0.5))
+			sink = 0.04
+		var p := _dam_pt(c, s) + t * u
 		var g: float = main.height(p.x, p.z)
-		var y := _crest(pr) - absf(u - 0.0) * 0.32 - rng.randf_range(0.0, 0.15)
-		if y < g - 0.1:
+		var y := _dam_surf(c, s, u, pr) + 0.03 - sink
+		if y < g - 0.15:
 			continue
 		p.y = y
-		var dir: Vector3
-		if rng.randf() < 0.45:
-			# жерди торчат вниз по течению
-			dir = (t + Vector3.UP * rng.randf_range(0.2, 0.7) + along * rng.randf_range(-0.4, 0.4)).normalized()
-		else:
-			dir = (along.rotated(Vector3.UP, rng.randf_range(-0.6, 0.6)) + Vector3.UP * rng.randf_range(-0.2, 0.2)).normalized()
-		var tr := _stick_xf(p, dir, rng.randf_range(0.9, 2.0), rng.randf_range(1.0, 2.6))
-		xs.append(tr)
+		var ln := rng.randf_range(0.6, 2.1)
+		# ветка лежит на откосе: середина приподнята по направлению ветки
+		p += dir * ln * 0.15 * rng.randf_range(-1.0, 1.0)
+		xs.append(_stick_xf(p, dir, rng.randf_range(0.6, 1.6), ln))
+		cols.append(col)
 		prs.append(pr)
 	var mm := MultiMesh.new()
 	mm.transform_format = MultiMesh.TRANSFORM_3D
+	mm.use_colors = true
 	mm.mesh = stick_mesh
 	mm.instance_count = xs.size()
 	for i in xs.size():
 		mm.set_instance_transform(i, xs[i])
+		mm.set_instance_color(i, cols[i])
 	var mmi := MultiMeshInstance3D.new()
 	mmi.multimesh = mm
 	mmi.visibility_range_end = 120.0
@@ -313,6 +440,46 @@ func _make_sticks(c: Dictionary) -> void:
 	add_child(mmi)
 	c["sticks"] = mm
 	_show_sticks(c)
+	# чурки, принесённые бобрами: толще веток, кладутся поперёк гребня (свои с начала — по прогрессу)
+	var lm := MultiMesh.new()
+	lm.transform_format = MultiMesh.TRANSFORM_3D
+	lm.use_colors = true
+	lm.mesh = stick_mesh
+	lm.instance_count = LOGS_MAX
+	lm.visible_instance_count = 0
+	var lmi := MultiMeshInstance3D.new()
+	lmi.multimesh = lm
+	lmi.visibility_range_end = 120.0
+	lmi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	add_child(lmi)
+	c["dam_logs"] = lm
+	for k in int(float(c["prog"]) / STEP * 0.4):
+		_add_dam_log(c, rng.randf_range(0.15, 0.85), STICK_BARK[rng.randi() % STICK_BARK.size()])
+
+func _stick_col(peel: float) -> Color:
+	if rng.randf() < peel:
+		return STICK_PEEL[rng.randi() % STICK_PEEL.size()]
+	var b: Color = STICK_BARK[rng.randi() % STICK_BARK.size()]
+	return b.darkened(rng.randf_range(0.0, 0.15))
+
+## Принесённая чурка ложится на гребень (чуть наискось, ошкуренная — светлее коры).
+func _add_dam_log(c: Dictionary, s: float, bark: Color) -> void:
+	var lm: MultiMesh = c["dam_logs"]
+	var n := lm.visible_instance_count
+	if n >= LOGS_MAX:
+		n = rng.randi() % LOGS_MAX
+	else:
+		lm.visible_instance_count = n + 1
+	var t: Vector3 = c["t"]
+	var a0: Vector3 = c["a"]
+	var b0: Vector3 = c["b"]
+	var along := (b0 - a0).normalized()
+	var u := rng.randf_range(-0.2, 0.7)
+	var p := _dam_pt(c, s) + t * u
+	p.y = _dam_surf(c, s, u, float(c["prog"])) + 0.05
+	var dir := (along.rotated(Vector3.UP, rng.randf_range(-0.7, 0.7)) + Vector3.UP * rng.randf_range(-0.2, 0.25)).normalized()
+	lm.set_instance_transform(n, _stick_xf(p, dir, rng.randf_range(1.8, 2.6), rng.randf_range(0.7, 0.95)))
+	lm.set_instance_color(n, bark.lerp(WOOD, rng.randf_range(0.2, 0.6)))
 
 func _show_sticks(c: Dictionary) -> void:
 	var n := LODGE_STICKS
@@ -359,40 +526,40 @@ func _rebuild_mud(c: Dictionary) -> void:
 	var a0: Vector3 = c["a"]
 	var b0: Vector3 = c["b"]
 	var t: Vector3 = c["t"]
-	var crest := _crest(c["prog"])
-	var lowy: float = main.WATER_Y - DROP * float(c["prog"])
+	var pr: float = c["prog"]
+	var pond: float = main.WATER_Y + RISE * pr
 	var len := a0.distance_to(b0)
-	var n := int(len / 0.8) + 1
-	var prof: Array = [[-2.6, -1.0], [-1.4, -0.5], [-0.6, -0.04], [0.0, 0.0], [0.5, -0.06], [1.3, -0.5], [2.4, -1.0]]
+	var n := int(len / 0.35) + 1
+	var us: Array[float] = [-3.0, -2.5, -2.1, -1.6, -1.2, -0.8, -0.5, -0.25, 0.0, 0.18, 0.35, 0.6, 0.9, 1.2, 1.5, 1.85, 2.2]
 	var base := b.v.size()
-	var mud_wet := Color(0.2, 0.17, 0.13)
-	var mud_dry := Color(0.33, 0.29, 0.23)
+	var mud_wet := Color(0.22, 0.18, 0.14)
+	var mud_dry := Color(0.4, 0.35, 0.28)
+	var twig_c := Color(0.5, 0.44, 0.35)
 	for i in n + 1:
 		var s := float(i) / n
-		var p := a0.lerp(b0, s) - t * sin(s * PI) * BOW
-		var g: float = main.height(p.x, p.z)
-		for j in prof.size():
-			var pj: Array = prof[j]
-			var u: float = pj[0]
-			var h: float = pj[1]
-			var nz := sin(float(i) * 2.3 + float(j) * 1.7) * 0.1 + sin(float(i) * 0.7) * 0.08 + sin(float(i) * 0.23 + 1.0) * 0.07
-			var y: float
-			if h <= -1.0:
-				y = g - 0.4
-			else:
-				y = crest + h * 1.1 + nz
-			y = maxf(y, g - 0.4)
-			var q := p + t * (u + nz)
+		var p := _dam_pt(c, s)
+		var g: float = main.height(p.x, p.z) - 0.4
+		for j in us.size():
+			var u: float = us[j]
+			var sl := s * len
+			var y := _dam_surf(c, s, u, pr)
+			# комья ила и выпирающие ветки: мелкие бугры
+			if y > g + 0.05:
+				y += sin(sl * 5.1 + u * 3.3) * 0.05 + sin(sl * 2.3 - u * 4.1) * 0.05 + sin(sl * 11.7 + u * 7.0) * 0.03
+			var q := p + t * (u + sin(sl * 1.3 + float(j)) * 0.08)
 			b.v.append(Vector3(q.x, y, q.z))
-			var wet := clampf((lowy + 0.15 - y) * 2.0, 0.0, 1.0)
-			var twig := clampf(h + 0.4, 0.0, 1.0) * (0.35 + 0.35 * sin(float(i) * 1.9 + float(j) * 2.9))
-			b.c.append(mud_dry.lerp(mud_wet, wet).lerp(Color(0.47, 0.41, 0.32), twig))
-			b.uv.append(Vector2(s * len * 0.6, u * 0.6))
-	var np := prof.size()
+			# верховой откос: мокрый блестящий ил у воды, выше — подсохший; гребень и низ — в ветках
+			var wet := clampf((pond + 0.12 - y) * 3.0, 0.0, 1.0) if u < 0.0 else 0.55
+			var twig := (0.25 + 0.3 * sin(sl * 1.9 + float(j) * 2.9) + 0.2 * sin(sl * 6.3 - float(j) * 1.3)) * smoothstep(-0.6, 0.2, u)
+			b.c.append(mud_dry.lerp(mud_wet, wet).lerp(twig_c, clampf(twig, 0.0, 1.0)))
+			b.uv.append(Vector2(sl * 0.6, u * 0.6))
+	var np := us.size()
 	for i in n:
 		for j in np - 1:
 			var k := base + i * np + j
 			b.idx.append_array([k, k + 1, k + np, k + 1, k + np + 1, k + np])
+	_rebuild_spill(c)
+	var mud_dry2 := Color(0.33, 0.29, 0.23)
 	# хатка: приплюснутый купол из ила с бугорками
 	var lp: Vector3 = c["lodge"]
 	var top: float = c["lodge_top"]
@@ -400,12 +567,72 @@ func _rebuild_mud(c: Dictionary) -> void:
 	var rings: Array = []
 	for i in 7:
 		var e := PI * 0.5 * float(i) / 6.0
-		rings.append([sin(e) * hh, cos(e) * 1.7, mud_dry.lerp(Color(0.3, 0.24, 0.17), float(i) / 6.0)])
+		rings.append([sin(e) * hh, cos(e) * 1.7, mud_dry2.lerp(Color(0.3, 0.24, 0.17), float(i) / 6.0)])
 	b.lathe(rings, 14, Transform3D(Basis(), lp), true)
 	# пни с надгрызом и россыпью щепы
 	for st: Array in c["stumps"]:
 		_stump_geo(b, st[0], 1.0, st[1], true, st[2])
 	c["mud"].mesh = b.commit()
+
+## Перелив: в низких местах гребня белые струйки сбегают по низовому откосу и расходятся пеной.
+func _rebuild_spill(c: Dictionary) -> void:
+	if not c.has("spill"):
+		var mi := MeshInstance3D.new()
+		mi.material_override = spill_mat
+		mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		mi.visibility_range_end = 90.0
+		add_child(mi)
+		c["spill"] = mi
+	var pr: float = c["prog"]
+	var lowy: float = main.WATER_Y - DROP * pr
+	var a0: Vector3 = c["a"]
+	var b0: Vector3 = c["b"]
+	var t: Vector3 = c["t"]
+	var along := (b0 - a0).normalized()
+	var len := a0.distance_to(b0)
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	var nv := 0
+	for nt: Array in c["notches"]:
+		var s0: float = nt[0]
+		var w0: float = maxf(0.3, len * float(nt[1]) * 0.9)
+		var pts: Array[Vector3] = []
+		var ws: Array[float] = []
+		var u := -0.4
+		var on_water := 0.0
+		while u < 3.6 and on_water < 1.2:
+			var p := _dam_pt(c, s0) + t * u
+			var y := _dam_surf(c, s0, u, pr)
+			if y <= lowy + 0.01 and u > 0.3:
+				y = lowy
+				on_water += 0.2
+			p.y = y + 0.035
+			pts.append(p)
+			ws.append(w0 * (0.75 + 0.35 * sin(u * 3.0 + s0 * 20.0)) * (1.0 + on_water * 1.4))
+			u += 0.2
+		var dist := 0.0
+		for k in pts.size():
+			if k > 0:
+				dist += pts[k].distance_to(pts[k - 1])
+			var a := clampf((float(k) + 0.5) / 2.0, 0.0, 1.0) * clampf((float(pts.size() - 1 - k)) / 3.0, 0.0, 1.0)
+			for sd in 2:
+				st.set_color(Color(1, 1, 1, a))
+				st.set_uv(Vector2(float(sd), dist))
+				st.add_vertex(pts[k] + along * ws[k] * (float(sd) - 0.5))
+			if k > 0:
+				var i0 := nv + (k - 1) * 2
+				st.add_index(i0)
+				st.add_index(i0 + 1)
+				st.add_index(i0 + 2)
+				st.add_index(i0 + 1)
+				st.add_index(i0 + 3)
+				st.add_index(i0 + 2)
+		nv += pts.size() * 2
+	var mi2: MeshInstance3D = c["spill"]
+	if nv > 0:
+		mi2.mesh = st.commit()
+	else:
+		mi2.mesh = null
 
 ## Пень (координаты модели дерева): кора до надгрыза, светлый конус «песочных часов», щепа вокруг.
 func _stump_geo(b: AM.MB, xf: Transform3D, k: float, bark: Color, chips_ring: bool, tr: float) -> void:
@@ -425,11 +652,19 @@ func _stump_geo(b: AM.MB, xf: Transform3D, k: float, bark: Color, chips_ring: bo
 
 # ---------- работа бобров ----------
 
+## Работник колонии: живой и не в хатке (прежний — пока может); работник днём в хатку не уходит.
 func _worker(c: Dictionary) -> Node3D:
+	var w: Node3D = c.get("w", null)
+	if w == null or w.dead or w.state in ["inlodge", "dive_in"]:
+		w = null
+		for b: Node3D in c["beavers"]:
+			if not b.dead and not (b.state in ["inlodge", "dive_in"]):
+				w = b
+				break
+		c["w"] = w
 	for b: Node3D in c["beavers"]:
-		if not b.dead:
-			return b
-	return null
+		b.lodge_ok = b != w
+	return w
 
 func _send(w: Node3D, p: Vector3) -> void:
 	w.job_p = p
@@ -477,6 +712,9 @@ func _process(delta: float) -> void:
 			c["mud_dirty"] = false
 			_rebuild_mud(c)
 	chips.emitting = any_gnaw
+	if _sync_t >= 0.29 and main.weather != null:
+		stick_mat.set_shader_parameter("snow", main.weather.snow)
+		spill_mat.set_shader_parameter("ice", main.weather.ice)
 
 ## Шаг работы колонии; true — сейчас грызёт дерево (летят щепки).
 func _tick_colony(c: Dictionary, delta: float) -> bool:
@@ -603,6 +841,11 @@ func _enter(c: Dictionary, w: Node3D, what: String) -> void:
 				w.carry.queue_free()
 				w.carry = null
 			c["prog"] = minf(1.0, float(c["prog"]) + STEP)
+			# чурка ложится на гребень там, куда её принесли
+			var a1: Vector3 = c["a"]
+			var b1: Vector3 = c["b"]
+			var sd := clampf((w.position - a1).dot(b1 - a1) / maxf(a1.distance_squared_to(b1), 0.01), 0.05, 0.95)
+			_add_dam_log(c, sd, c["fell"].get("bark", STICK_BARK[0]) if not c["fell"].is_empty() else STICK_BARK[0])
 			_update_solid(c)
 			_show_sticks(c)
 			_push_levels()
@@ -863,6 +1106,63 @@ func _shots() -> void:
 		_view(cp2 - t2 * 14.0, atan2(-t2.x, -t2.z), 16.0, 40.0)
 	if _shot_f == 490:
 		_snap("b_pond")
+		# рыба: ближний к плотине косяк сверху
+		var fsh: Node3D = main.animals.fish
+		var cp4: Vector3 = c["c"]
+		var best: Dictionary = fsh.schools[0]
+		for sc: Dictionary in fsh.schools:
+			if absf(float(sc["x"]) - cp4.x) < absf(float(best["x"]) - cp4.x):
+				best = sc
+		best["x"] = cp4.x + 40.0
+		var fx: float = best["x"]
+		var fp := Vector3(fx, 0.0, fsh._zc(fx) + float(best["l"]))
+		_view(fp, 0.6, 5.0, 50.0)
+	if _shot_f == 520:
+		_snap("b_fish")
+		# вплавь: лось и косуля переплывают реку ниже плотины
+		var cp5: Vector3 = c["c"]
+		var t5: Vector3 = c["t"]
+		var sw := cp5 + t5 * 48.0
+		var k := 0
+		for a: Node3D in main.animals.list:
+			if a.dead or not (a.kind in ["moose", "roe"]) or k >= 2:
+				continue
+			if a.kind == "roe" and k == 0:
+				continue
+			a.position = sw + Vector3(0, 0, -3.0 + float(k) * 4.0) + t5 * float(k) * 2.0
+			a.target = a.position + Vector3(0, 0, 30.0)
+			a.state = "wander"
+			a.state_t = 30.0
+			a.cross = true
+			k += 1
+		_view(sw, PI * 0.5, 7.0, 14.0)
+	if _shot_f > 521 and _shot_f < 560:
+		# камера следит за плывущим лосем
+		for a: Node3D in main.animals.list:
+			if a.kind == "moose" and a.cross and a.swim_k > 0.5:
+				main.rig.position = a.position
+				main.rig.rotation.y = a.heading + 1.9
+				main.rig.distance = 5.5
+				main.rig.pitch = 16.0
+				break
+	if _shot_f == 560:
+		_snap("b_swim")
+		# медведь рыбачит на мелководье
+		var fsh2: Node3D = main.animals.fish
+		var cp6: Vector3 = c["c"]
+		var bs: Vector3 = fsh2.spot_near(cp6 + Vector3(60, 0, 0), 200.0)
+		for a: Node3D in main.animals.list:
+			if a.kind == "bear" and bs != Vector3.INF:
+				main.weather.ice = 0.0
+				a.visible = true
+				a.position = bs
+				a.state = "fish"
+				a.state_t = 60.0
+				a.fish_cd = 0.6
+				_view(bs, 0.9, 6.0, 20.0)
+				break
+	if _shot_f == 590:
+		_snap("b_bear")
 		get_tree().quit()
 	if _shot_f > 2500:
 		_snap("b_timeout")

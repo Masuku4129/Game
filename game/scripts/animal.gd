@@ -17,8 +17,21 @@ const TAIGA_PREY := ["moose", "muskdeer", "capercaillie"]
 const TAIGA_DAMAGE := {"moose": 0.3, "wolverine": 0.15}
 const TAIGA_HOME := {"moose": 140.0, "lynx": 150.0, "wolverine": 200.0, "muskdeer": 60.0, "capercaillie": 50.0}
 # кого ловят рысь и росомаха; на кого бросаются, если подойти вплотную (м)
-const HUNTS := {"lynx": ["hare", "capercaillie", "muskdeer", "roe"], "wolverine": ["hare", "capercaillie", "muskdeer", "beaver"]}
+const HUNTS := {"lynx": ["hare", "capercaillie", "muskdeer", "roe"], "wolverine": ["hare", "capercaillie", "muskdeer", "beaver"],
+	"fox": ["hare", "squirrel", "capercaillie"]}
 const CHARGE := {"bear": 9.0, "boar": 6.0, "moose": 5.0, "wolverine": 3.5}
+# крупная добыча: волков/тигра (виды и сколько укусов выдерживает взрослый)
+const BIG_PREY := {"wolf": ["roe", "deer", "moose", "muskdeer", "boar"], "tiger": ["boar", "deer", "moose", "roe"]}
+const TOUGH := {"moose": 5, "deer": 3, "boar": 3, "roe": 2}
+# скорость вплавь (м/с): копытные ~1, хищники ~0,8, мелкие ~0,5; бобр — отдельно (2–2,5)
+const SWIM_V := {"moose": 1.2, "deer": 1.1, "roe": 1.0, "muskdeer": 0.9, "boar": 0.8, "wolf": 0.8, "bear": 0.8, "tiger": 1.0, "lynx": 0.7, "wolverine": 0.6, "fox": 0.6}
+# у туши: кто кого отгоняет; падальщики — кто ищет туши
+const RANK := {"tiger": 5.0, "bear": 4.0, "wolf": 3.0, "wolverine": 2.5, "lynx": 2.0, "fox": 1.0}
+const SCAVENGE := {"bear": 110.0, "wolverine": 90.0, "fox": 60.0, "wolf": 70.0, "tiger": 60.0, "lynx": 30.0}
+const DRINKERS := ["roe", "deer", "moose", "boar", "wolf", "bear", "fox", "lynx", "tiger", "wolverine"]
+const HERD := ["roe", "deer", "moose", "boar", "muskdeer"]
+# выносливость на бегу (с): кошки — короткий рывок, волк — долгая погоня
+const ENDURE := {"lynx": 6.0, "tiger": 8.0, "fox": 10.0, "wolf": 45.0, "bear": 14.0}
 
 var kind := ""
 var sp: Dictionary
@@ -66,6 +79,23 @@ var carry: Node3D = null
 var slap_t := 0.0
 var dive_k := 0.0
 var gnaw_k := 0.0
+# бобр: подводный вход в хатку (door — у основания со стороны русла); lodge_ok — может уйти в хатку
+var door := Vector3.INF
+var lodge_ok := true
+# взаимодействия: усталость на бегу, укусы до гибели, мясо туши, корм, сытость, водопой, рыбалка
+var tire := 0.0
+var hp_left := 1
+var meat := 0.0
+var food: Node3D = null
+var sated := 0.0
+var drink_slot := -1
+var cross := false
+var face := Vector3.INF
+var fish_cd := 0.0
+var fish_n: Node3D = null
+var fish_got := 0
+var slot_a := 0.0
+var _scan_t := 0.0
 
 func setup(k: String, m: Node3D, mg: Node, pos: Vector3, seed_v: int, sc: float = 1.0) -> void:
 	kind = k
@@ -79,6 +109,8 @@ func setup(k: String, m: Node3D, mg: Node, pos: Vector3, seed_v: int, sc: float 
 	position = pos
 	heading = rng.randf() * TAU
 	home_r = TAIGA_HOME[k] if TAIGA_HOME.has(k) else {"hare": 40.0, "squirrel": 25.0, "fox": 90.0, "roe": 70.0, "deer": 110.0, "boar": 80.0, "wolf": 160.0, "bear": 120.0, "tiger": 200.0, "beaver": 18.0}[k]
+	hp_left = int(TOUGH.get(k, 1)) if sc > 0.75 else 1
+	slot_a = rng.randf() * TAU
 	_build(false)
 	_new_wander()
 
@@ -110,11 +142,47 @@ func _new_wander() -> void:
 	if target.distance_to(home) > home_r:
 		target = home + (target - home).normalized() * home_r * 0.6
 	# цель на другом ярусе уступа или в реке (для тех, кто не плавает) — ближе к дому
+	# стадо держится вместе: не вожак — пасётся рядом с вожаком
+	if mgr != null and group >= 0 and kind in HERD:
+		var ld: Node3D = mgr.group_leader(group)
+		if ld != null and ld != self and ld.position.distance_to(position) < 70.0:
+			var a2 := rng.randf() * TAU
+			target = ld.position + Vector3(cos(a2), 0, sin(a2)) * rng.randf_range(2.5, 8.0)
+	# цель на другом ярусе уступа или в воде (воду обходят все, кроме бобра) — ближе к дому
 	var th: float = main.height(target.x, target.z)
-	if absf(th - main.height(position.x, position.z)) > 4.0 or (th < main.WATER_Y - 0.3 and not swimmer()):
+	if absf(th - main.height(position.x, position.z)) > 4.0 or (th < main.WATER_Y - 0.3 and kind != "beaver"):
 		target = home + Vector3(rng.randf_range(-8, 8), 0, rng.randf_range(-8, 8))
+	# на тот берег — редко и только вплавь (переправа); иначе цель зеркалится на свой берег
+	cross = false
+	if mgr != null and kind != "beaver" and _bank_side(target) != _bank_side(position) and main.river_dist(position.x, position.z) < 45.0:
+		if swimmer() and rng.randf() < 0.3:
+			cross = true
+		else:
+			var zc := _river_zc(target.x)
+			target.z = zc + (zc - target.z)
 	state = "wander"
 	state_t = rng.randf_range(8.0, 20.0)
+
+static func _river_zc(x: float) -> float:
+	return 70.0 * sin(x / 95.0) + 20.0
+
+func _bank_side(p: Vector3) -> float:
+	return signf(p.z - _river_zc(p.x))
+
+## Точка у кромки воды на своём берегу (напротив x), или INF.
+func _bank_spot(x: float, side: float) -> Vector3:
+	var zc := _river_zc(x)
+	var d := 30.0
+	var last := Vector3.INF
+	while d > 4.0:
+		var z := zc + side * d
+		var hh: float = main.height(x, z)
+		if hh < main.water_level(x, z) + 0.05:
+			return last
+		if not main.blocked(x, z, 0.4):
+			last = Vector3(x, hh, z)
+		d -= 0.7
+	return last
 
 func hero_dist() -> float:
 	return Vector2(position.x - main.hero.position.x, position.z - main.hero.position.z).length()
@@ -127,6 +195,9 @@ func think() -> void:
 	var sense: float = _sense() * (1.0 + float(hero.run_mag) * 0.6) * (0.6 + 0.4 * float(main.day_factor)) * (1.0 - float(w.precip) * 0.3)
 	if hero.state == "sit":
 		sense *= 0.5
+	# дозорный в стаде смотрит дальше
+	if state == "watch":
+		sense *= 1.4
 	var hero_alive: bool = main.health > 0.0
 	# смена шубки: заяц белеет, белка сереет
 	if kind in ["hare", "squirrel"] and not far:
@@ -135,61 +206,81 @@ func think() -> void:
 			_build(wint)
 	# спячка медведя: зимой его нет
 	if kind == "bear" and w.season_index() == 1:
+		_drop_fish()
 		visible = false
 		state = "sleep"
 		return
+	# в воде без нужды (не бегство, не погоня, не переправа) — к своему берегу
+	if swim_k > 0.5 and kind != "beaver" and not cross and state in ["wander", "graze", "rest", "watch", "alert", "to_drink", "drink", "feed", "wait", "retreat", "ambush"]:
+		var bs := _bank_spot(position.x, _bank_side(position))
+		if bs != Vector3.INF:
+			target = bs
+			state = "wander"
+			cross = true
+			state_t = 40.0
+			return
 	match state:
 		"sleep":
 			if not (kind == "bear" and w.season_index() == 1):
 				visible = true
 				_new_wander()
-		"wander", "graze", "rest", "alert", "job", "gnaw":
-			# хищник: охота на добычу или на человека
-			if (kind in ["fox", "wolf", "tiger"] or HUNTS.has(kind)) and (state != "rest" or rng.randf() < 0.05):
+		"inlodge":
+			# бобр в хатке: выходит, когда отдохнул (днём — реже)
+			if state_t <= 0.0 and dh > 8.0 and (is_active() or not lodge_ok or rng.randf() < 0.2):
+				_emerge()
+		"wander", "graze", "rest", "alert", "job", "gnaw", "watch":
+			# хищник: охота на добычу или на человека (сытый не охотится)
+			if (kind in ["wolf", "tiger"] or HUNTS.has(kind)) and sated <= 0.0 and (state != "rest" or rng.randf() < 0.05):
 				_hunt_choice(dh, sense, hero_alive)
-				if state == "stalk" or state == "chase":
+				if state == "stalk" or state == "chase" or state == "ambush":
 					return
 			if CHARGE.has(kind) and hero_alive and dh < float(CHARGE[kind]):
 				state = "charge"
 				state_t = 6.0
 				return
-			# добыча: бежит от человека и хищников
-			var pred = mgr.nearest_predator(self, 30.0) if kind in PREY or kind in TAIGA_PREY or kind in ["fox", "lynx", "wolverine"] else null
-			if pred != null:
-				threat = pred
-				state = "flee"
-				state_t = 6.0
-				return
 			var busy := state == "job" or state == "gnaw"
-			if dh < sense and not (kind in ["bear", "wolf", "tiger"] and hero_alive) and (not busy or dh < sense * 0.55):
-				if dh < sense * 0.55 or state == "alert":
-					threat = hero
-					state = "flee"
-					state_t = rng.randf_range(4.0, 7.0)
-					if kind == "squirrel":
-						var tp: Vector3 = main.nearest_tree(position, 15.0)
-						if tp != Vector3.INF:
-							tree = tp
-							state = "to_tree"
-					return
-				state = "alert"
-				state_t = 2.0
+			if _danger(dh, sense, hero_alive, busy):
 				return
+			# падальщики чуют тушу издалека
+			if SCAVENGE.has(kind) and sated <= 0.0 and not busy and rng.randf() < 0.12:
+				var cc: Node3D = mgr.carcass_near(position, float(SCAVENGE[kind]))
+				if cc != null:
+					food = cc
+					state = "feed"
+					state_t = rng.randf_range(40.0, 90.0)
+					return
 			if state_t <= 0.0 and not busy:
-				if not is_active():
-					state = "rest"
-					state_t = rng.randf_range(20.0, 60.0)
-				elif rng.randf() < (0.5 if kind in ["roe", "deer", "hare", "boar", "beaver", "moose", "muskdeer", "capercaillie"] else 0.2):
-					state = "graze"
-					state_t = rng.randf_range(6.0, 16.0)
-				else:
-					_new_wander()
+				_idle_choice()
+		"ambush":
+			# рысь в засаде: ждёт, пока добыча подойдёт на бросок
+			if _danger(dh, sense * 0.6, hero_alive, false):
+				return
+			var ap = mgr.nearest_of(self, HUNTS[kind], 13.0)
+			if ap != null:
+				prey = ap
+				state = "chase"
+				state_t = 6.0
+			elif state_t <= 0.0:
+				_new_wander()
 		"flee":
 			if state_t <= 0.0 and (threat == null or position.distance_to(threat.position) > _sense() * 1.3):
 				threat = null
 				_new_wander()
 		"stalk", "chase":
 			_update_hunt(dh, hero_alive)
+		"feed", "wait":
+			_think_feed(dh, hero_alive)
+		"to_drink", "drink":
+			if _danger(dh, sense, hero_alive, false):
+				return
+			if CHARGE.has(kind) and hero_alive and dh < float(CHARGE[kind]):
+				state = "charge"
+				state_t = 6.0
+		"to_fish", "fish", "fish_bank", "eat":
+			if hero_alive and dh < float(CHARGE.get(kind, 0.0)):
+				_drop_fish()
+				state = "charge"
+				state_t = 6.0
 		"attack":
 			pass
 		"retreat":
@@ -200,28 +291,102 @@ func think() -> void:
 				state = "retreat"
 				state_t = 8.0
 		"tree":
-			if state_t <= 0.0 and dh > 12.0:
+			if state_t <= 0.0 and dh > 12.0 and (mgr == null or mgr.nearest_predator(self, 20.0) == null):
 				state = "down_tree"
+
+## Опасность: хищник рядом или человек близко — бегство (белка — на дерево, бобр — в хатку).
+func _danger(dh: float, sense: float, hero_alive: bool, busy: bool) -> bool:
+	var pred: Node3D = mgr.nearest_predator(self, 30.0)
+	if pred != null:
+		_flee_from(pred, 6.0)
+		return true
+	if dh < sense and not (kind in ["bear", "wolf", "tiger"] and hero_alive) and (not busy or dh < sense * 0.55):
+		if dh < sense * 0.55 or state == "alert":
+			_flee_from(main.hero, rng.randf_range(4.0, 7.0))
+			return true
+		state = "alert"
+		state_t = 2.0
+		return true
+	return false
+
+func _flee_from(t: Node3D, tm: float) -> void:
+	_drop_fish()
+	food = null
+	threat = t
+	state = "flee"
+	state_t = tm
+	if kind == "squirrel":
+		var tp: Vector3 = main.nearest_tree(position, 15.0)
+		if tp != Vector3.INF:
+			tree = tp
+			state = "to_tree"
+
+## Чем заняться: спать/отдыхать, водопой на заре и закате, рыбалка, дозор, пастьба, бродить.
+func _idle_choice() -> void:
+	var t: float = main.t_hours
+	if kind == "beaver" and door != Vector3.INF and lodge_ok and (not is_active() or rng.randf() < 0.15):
+		state = "to_lodge"
+		state_t = 40.0
+		return
+	if not is_active():
+		state = "rest"
+		state_t = rng.randf_range(20.0, 60.0)
+		return
+	# водопой: на рассвете и в сумерках, раз за зарю; стадо идёт за вожаком
+	var slot: int = int(main.day_count) * 2 + (0 if t < 12.0 else 1)
+	var dawn := (t > 4.5 and t < 8.5) or (t > 17.5 and t < 21.5)
+	if dawn and kind in DRINKERS and drink_slot != slot and main.river_dist(position.x, position.z) < 140.0:
+		var ld: Node3D = mgr.group_leader(group) if group >= 0 else null
+		if ld == null or ld == self:
+			var sp2 := _bank_spot(position.x + rng.randf_range(-6.0, 6.0), _bank_side(position))
+			if sp2 != Vector3.INF:
+				_go_drink(sp2, slot)
+				if group >= 0:
+					mgr.group_drink(self, sp2, slot)
+				return
+	# медведь: летом и осенью — на перекат за рыбой
+	if kind == "bear" and sated <= 0.0 and rng.randf() < 0.35 and mgr.fish != null:
+		var fs: Vector3 = mgr.fish.spot_near(position, 150.0)
+		if fs != Vector3.INF:
+			target = fs
+			state = "to_fish"
+			state_t = 90.0
+			fish_got = 0
+			return
+	# рысь: засада у тропы
+	if kind == "lynx" and sated <= 0.0 and rng.randf() < 0.4:
+		state = "ambush"
+		state_t = rng.randf_range(30.0, 70.0)
+		return
+	# стадо: один стоит дозорным, пока другие пасутся
+	if kind in HERD and group >= 0 and rng.randf() < 0.5 and not mgr.group_has(group, "watch"):
+		state = "watch"
+		state_t = rng.randf_range(6.0, 14.0)
+		return
+	if rng.randf() < (0.5 if kind in ["roe", "deer", "hare", "boar", "beaver", "moose", "muskdeer", "capercaillie"] else 0.2):
+		state = "graze"
+		state_t = rng.randf_range(6.0, 16.0)
+	else:
+		_new_wander()
+
+func _go_drink(p: Vector3, slot: int) -> void:
+	target = p
+	drink_slot = slot
+	state = "to_drink"
+	state_t = 60.0
 
 func _hunt_choice(dh: float, sense: float, hero_alive: bool) -> void:
 	var w = main.weather
 	var hungry_night: bool = not float(main.day_factor) > 0.5 or w.season_index() == 1
 	if HUNTS.has(kind):
-		# рысь и росомаха: мелкая добыча, на человека не охотятся
+		# рысь, росомаха, лиса: мелкая добыча, на человека не охотятся
 		var hp = mgr.nearest_of(self, HUNTS[kind], 35.0)
 		if hp != null and (hp.kind != "roe" or hp.scale_k < 0.95) and rng.randf() < 0.5:
 			prey = hp
 			state = "stalk"
 			state_t = 20.0
 		return
-	if kind == "fox":
-		var h = mgr.nearest_of(self, ["hare"], 30.0)
-		if h != null:
-			prey = h
-			state = "stalk"
-			state_t = 20.0
-		return
-	# волки и тигр: на человека — ночью или зимой; иначе на оленей и косуль
+	# волки и тигр: на человека — ночью или зимой; иначе на копытных (слабых — охотнее)
 	if hero_alive and dh < sense and (hungry_night or kind == "tiger"):
 		prey = main.hero
 		state = "stalk"
@@ -229,41 +394,111 @@ func _hunt_choice(dh: float, sense: float, hero_alive: bool) -> void:
 		if kind == "wolf":
 			mgr.pack_hunt(self, main.hero)
 		return
-	var p = mgr.nearest_of(self, ["roe", "deer", "boar", "moose", "muskdeer"], 60.0)
-	if p != null and rng.randf() < 0.3:
+	var p = mgr.nearest_of(self, BIG_PREY[kind], 60.0)
+	if p != null and rng.randf() < (0.15 if p.scale_k > 0.8 and p.kind == "moose" else 0.3):
 		prey = p
 		state = "stalk"
-		state_t = 25.0
+		state_t = 30.0
 		if kind == "wolf":
 			mgr.pack_hunt(self, p)
 
 func _update_hunt(dh: float, hero_alive: bool) -> void:
-	if prey == null or (prey != main.hero and prey.dead) or (prey == main.hero and not hero_alive):
+	if prey != null and prey != main.hero and prey.dead:
+		# добыча убита (своим или стаей) — к туше
+		if prey.meat > 0.0 and position.distance_to(prey.position) < 40.0:
+			food = prey
+			prey = null
+			state = "feed"
+			state_t = rng.randf_range(40.0, 80.0)
+			return
+	if prey == null or (prey != main.hero and (prey.dead or prey.state == "inlodge" or prey.climb_h > 1.0)) or (prey == main.hero and not hero_alive):
 		prey = null
 		_new_wander()
 		return
 	var d := position.distance_to(prey.position)
-	if state_t <= 0.0 or d > 90.0:
+	# кошки бросаются коротко: выдохлись — отстают
+	if state_t <= 0.0 or d > 90.0 or (state == "chase" and tire > 0.9 and kind in ["lynx", "tiger", "fox"]):
+		var was_hero: bool = prey == main.hero
 		prey = null
-		state = "retreat"
+		if was_hero:
+			state = "retreat"
+			state_t = 6.0
+		else:
+			_new_wander()
+		return
+	if state == "stalk" and d < (9.0 if kind in ["tiger", "lynx"] else 14.0):
+		state = "chase"
+		state_t = 25.0 if kind == "wolf" else 12.0
+		if kind == "wolf":
+			mgr.pack_chase(self, prey)
+
+## У туши: ест, пока не сыт; сильный отгоняет слабого (медведь — волков, волки — лису и росомаху).
+func _think_feed(dh: float, hero_alive: bool) -> void:
+	if food == null or not food.dead or food.meat <= 0.0:
+		food = null
+		sated = 240.0
+		_new_wander()
+		return
+	# медведь защищает тушу от человека
+	if kind == "bear" and hero_alive and dh < 16.0:
+		state = "charge"
 		state_t = 6.0
 		return
-	if state == "stalk" and d < (9.0 if kind in ["tiger", "lynx"] else 12.0):
-		state = "chase"
-		state_t = 12.0
+	if dh < _sense() * 0.4 and not (kind in ["bear", "wolf", "tiger"] and hero_alive):
+		_flee_from(main.hero, 5.0)
+		return
+	var pred: Node3D = mgr.nearest_predator(self, 20.0)
+	if pred != null and pred.state != "feed":
+		_flee_from(pred, 6.0)
+		return
+	var rival: Node3D = mgr.rival_at(food, self)
+	if state == "feed":
+		if rival != null:
+			state = "wait"
+			state_t = rng.randf_range(15.0, 35.0)
+		elif state_t <= 0.0:
+			food = null
+			sated = 300.0
+			_new_wander()
+	elif rival == null:
+		state = "feed"
+		state_t = rng.randf_range(20.0, 50.0)
+	elif state_t <= 0.0:
+		food = null
+		_new_wander()
+
+## Бобр уходит в хатку: нырок у основания и подводный лаз.
+func _hide_in_lodge() -> void:
+	state = "inlodge"
+	state_t = rng.randf_range(40.0, 120.0) if not is_active() else rng.randf_range(12.0, 40.0)
+	visible = false
+	position = home
+	speed = 0.0
+	threat = null
+
+func _emerge() -> void:
+	position = Vector3(door.x, main.water_level(door.x, door.z) - 0.6, door.z)
+	dive_k = 1.0
+	visible = true
+	heading = atan2(door.x - home.x, door.z - home.z)
+	_new_wander()
+
+## Рыба в пасти медведя — бросить (испуган, ушёл в спячку).
+func _drop_fish() -> void:
+	if fish_n != null:
+		fish_n.queue_free()
+		fish_n = null
 
 ## Кадр: движение, высота, поворот, анимация.
 func tick(delta: float) -> void:
 	if dead:
 		if float(main.t_hours) + float(main.day_count) * 24.0 > respawn_at:
-			dead = false
-			visible = true
-			position = home
-			_new_wander()
+			_revive()
 		return
 	state_t -= delta
 	attack_cd -= delta
 	think_t -= delta
+	sated -= delta
 	if think_t <= 0.0:
 		think_t = 0.2 + rng.randf() * 0.1
 		var was := state
@@ -273,21 +508,27 @@ func tick(delta: float) -> void:
 			# бобр в воде бьёт хвостом по воде и уходит под воду
 			if kind == "beaver" and swim_k > 0.5 and slap_t <= 0.0:
 				slap_t = 0.7
-	if state == "sleep":
+	if state == "sleep" or state == "inlodge":
 		return
 	if state == "gnaw" and job_face != Vector3.ZERO:
 		heading = lerp_angle(heading, atan2(job_face.x - position.x, job_face.z - position.z), minf(1.0, delta * 5.0))
-	var run: float = sp["run"] * (1.0 if scale_k > 0.6 else 0.7)
 	var walk: float = sp["walk"]
+	# усталость: долгий бег на пределе замедляет (волки догоняют выдохшихся, кошки — только рывком)
+	if speed > walk * 2.5:
+		tire = minf(1.0, tire + delta / float(ENDURE.get(kind, 14.0)))
+	else:
+		tire = maxf(0.0, tire - delta / 25.0)
+	var run: float = sp["run"] * (1.0 if scale_k > 0.6 else 0.7) * (1.0 - 0.35 * tire)
 	var goal := target
 	want = 0.0
+	face = Vector3.INF
 	match state:
 		"wander":
 			want = walk
 			if Vector2(goal.x - position.x, goal.z - position.z).length() < 1.0:
 				state_t = 0.0
 				want = 0.0
-		"graze", "rest", "alert", "tree", "gnaw":
+		"graze", "rest", "alert", "tree", "gnaw", "watch", "ambush":
 			want = 0.0
 		"job":
 			goal = job_p
@@ -298,8 +539,11 @@ func tick(delta: float) -> void:
 				want = 0.0
 		"flee":
 			if kind == "beaver":
-				# бобр уходит к хатке
-				goal = home
+				# бобр уходит к хатке и ныряет в лаз
+				goal = door if door != Vector3.INF else home
+				if Vector2(goal.x - position.x, goal.z - position.z).length() < 1.3:
+					state = "dive_in"
+					state_t = 1.2
 			elif threat != null:
 				var away := (position - threat.position)
 				away.y = 0
@@ -308,6 +552,20 @@ func tick(delta: float) -> void:
 				if kind == "hare":
 					goal += Vector3(sin(Time.get_ticks_msec() * 0.004), 0, cos(Time.get_ticks_msec() * 0.003)) * 4.0
 			want = run
+		"to_lodge":
+			goal = door if door != Vector3.INF else home
+			want = walk
+			if Vector2(goal.x - position.x, goal.z - position.z).length() < 1.3:
+				state = "dive_in"
+				state_t = 1.2
+			elif state_t <= 0.0:
+				_new_wander()
+		"dive_in":
+			goal = home
+			want = walk * 0.8
+			if state_t <= 0.0:
+				_hide_in_lodge()
+				return
 		"stalk":
 			if prey != null:
 				goal = prey.position + Vector3(cos(pack_slot), 0, sin(pack_slot)) * (6.0 if kind == "wolf" else 0.0)
@@ -325,6 +583,67 @@ func tick(delta: float) -> void:
 			away2.y = 0
 			goal = position + away2.normalized() * 10.0
 			want = run * 0.6
+		"feed":
+			if food != null:
+				var fp := food.position
+				var reach: float = float(food.parts.get("L", 1.0)) * 0.4 + float(parts["L"]) * 0.45
+				goal = fp + Vector3(cos(slot_a), 0, sin(slot_a)) * reach
+				var df := Vector2(goal.x - position.x, goal.z - position.z).length()
+				if df > 0.45:
+					want = walk * (2.2 if df > 12.0 else 1.0)
+				else:
+					face = fp
+					food.meat -= delta
+		"wait":
+			if food != null:
+				var fp2 := food.position
+				var aw := Vector3(position.x - fp2.x, 0, position.z - fp2.z)
+				goal = fp2 + aw.normalized() * 14.0
+				if Vector2(goal.x - position.x, goal.z - position.z).length() > 1.5:
+					want = walk
+				else:
+					face = fp2
+		"to_drink", "to_fish", "fish_bank":
+			want = walk * (1.2 if state == "to_fish" else 1.0)
+			if Vector2(goal.x - position.x, goal.z - position.z).length() < 0.8:
+				want = 0.0
+				match state:
+					"to_drink":
+						state = "drink"
+						state_t = rng.randf_range(10.0, 22.0)
+					"to_fish":
+						state = "fish"
+						state_t = rng.randf_range(40.0, 90.0)
+						fish_cd = rng.randf_range(2.0, 5.0)
+					_:
+						_eat_fish()
+			elif state_t <= 0.0:
+				if state == "fish_bank":
+					_eat_fish()
+				else:
+					_new_wander()
+		"drink", "fish", "eat":
+			if state != "eat":
+				face = Vector3(position.x, position.y, _river_zc(position.x))
+			if state == "fish":
+				fish_cd -= delta
+				if fish_cd <= 0.0:
+					_swipe()
+			if state_t <= 0.0:
+				if state == "eat":
+					_drop_fish()
+					fish_got += 1
+					if fish_got < 3 and rng.randf() < 0.7:
+						state = "to_fish"
+						target = mgr.fish.spot_near(position, 40.0)
+						state_t = 60.0
+						if target == Vector3.INF:
+							_new_wander()
+					else:
+						sated = 400.0
+						_new_wander()
+				else:
+					_new_wander()
 		"to_tree":
 			goal = tree
 			want = run
@@ -336,6 +655,8 @@ func tick(delta: float) -> void:
 				state_t = rng.randf_range(15.0, 30.0)
 		"down_tree":
 			want = 0.0
+	if face != Vector3.INF and want <= 0.0:
+		heading = lerp_angle(heading, atan2(face.x - position.x, face.z - position.z), minf(1.0, delta * 4.0))
 	# беличье дерево: вверх по стволу и обратно
 	if kind == "squirrel":
 		if state == "tree":
@@ -349,24 +670,34 @@ func tick(delta: float) -> void:
 		var wet_below: bool = main.height(position.x, position.z) < main.WATER_Y - 0.2
 		var up: bool = (state == "flee" and speed > sp["walk"] * 4.0) or wet_below
 		climb_h = move_toward(climb_h, 4.5 if up else 0.0, delta * (3.0 if up else 1.6))
+	# вплавь: бобр быстр и вёрток (до 2,5 м/с); остальные плывут медленно (0,5–1,2 м/с)
+	var agile := 1.0
+	if kind == "beaver":
+		if swim_k > 0.5 and want > 0.0:
+			var bw: float = {"job": 1.8, "flee": 2.4, "to_lodge": 1.6, "dive_in": 1.2}.get(state, 1.0)
+			want = bw
+			agile = 2.5
+	elif swim_k > 0.05:
+		var sv: float = float(SWIM_V.get(kind, 0.5)) * (0.75 + 0.25 * minf(scale_k, 1.0))
+		want = minf(want, lerpf(want, sv, clampf(swim_k * 1.5, 0.0, 1.0)))
 	# поворот к цели и разгон
 	var to := goal - position
 	to.y = 0
 	if to.length() > 0.2 and want > 0.0:
 		var hd := atan2(to.x, to.z)
-		heading = lerp_angle(heading, hd, minf(1.0, delta * (3.0 + want * 0.4)))
-	if swim_k > 0.3 and kind != "beaver":
-		want *= 0.45
+		heading = lerp_angle(heading, hd, minf(1.0, delta * (3.0 + want * 0.4) * agile))
 	speed = move_toward(speed, want, delta * (4.0 + want * 0.8))
 	var flying: bool = kind == "capercaillie" and climb_h > 0.5
 	if (climb_h <= 0.0 or kind == "capercaillie") and speed > 0.01:
 		var dir := Vector3(sin(heading), 0, cos(heading))
 		var np := position + dir * speed * delta
-		# обход стволов и воды (кроме бобра)
-		# крупные звери плывут, мелкие обходят воду; отвесный уступ не одолеть
+		# обход стволов и воды; мелкие воду обходят всегда, крупные плывут только
+		# спасаясь, в погоне или на переправе; отвесный уступ не одолеть
 		var gy: float = main.height(np.x, np.z)
 		var g0: float = main.height(position.x, position.z)
 		var wet: bool = gy < main.WATER_Y - 0.3 and not swimmer() and not flying
+		if not wet and swimmer() and kind != "beaver" and not flying and swim_k < 0.2 and not cross and not (state in ["flee", "chase", "charge"]):
+			wet = main.water_level(np.x, np.z) - gy > 0.6
 		var steep: bool = (gy - g0) > maxf(0.35, speed * delta * 1.6) and gy > main.WATER_Y and not flying
 		if main.blocked(np.x, np.z, 0.2 * scale_k) or wet or steep or absf(np.x) > main.SIZE * 0.5 - 10.0 or absf(np.z) > main.SIZE * 0.5 - 10.0:
 			heading += _turn_dir * 0.9
@@ -376,17 +707,18 @@ func tick(delta: float) -> void:
 			position.x = np.x
 			position.z = np.z
 	_unstick(delta)
-	var g: float = main.ground_at(position.x, position.z)
+	# бобр у хатки ныряет под неё (купол хатки — опора только для человека)
+	var g: float = main.height(position.x, position.z) if state == "dive_in" else main.ground_at(position.x, position.z)
 	var wl: float = main.water_level(position.x, position.z)
 	swim_k = clampf((wl - 0.25 - g) / 0.6, 0.0, 1.0) if swimmer() else 0.0
 	if kind == "beaver":
 		# плывёт: над водой только голова и спина; испуганный ныряет у хатки
-		var hide := state == "flee" and slap_t <= 0.0 and swim_k > 0.8
-		dive_k = move_toward(dive_k, 1.0 if hide else 0.0, delta * 1.5)
-		g = lerpf(g, wl - 0.32 * scale_k - dive_k * 0.4, swim_k)
+		var hide := (state == "flee" and slap_t <= 0.0 and swim_k > 0.8) or state == "dive_in"
+		dive_k = move_toward(dive_k, 1.0 if hide else 0.0, delta * (2.0 if hide else 0.8))
+		g = lerpf(g, wl - 0.32 * scale_k - dive_k * 0.5, swim_k)
 	elif swim_k > 0.0:
-		# плывёт: над водой голова и спина
-		g = lerpf(g, wl - float(parts.get("H", 0.8)) * 0.55, swim_k)
+		# плывёт: тело под водой, над водой голова и верх спины
+		g = lerpf(g, wl - float(parts.get("H", 0.8)) * (1.0 if parts.has("rig") else 0.8), swim_k)
 	position.y = g + climb_h
 	# на снегу: лёгкие бегут поверху, тяжёлые проваливаются; в снегу и грязи — следы
 	if climb_h <= 0.0 and swim_k <= 0.0 and main.feet != null and g < main.height(position.x, position.z) + 0.1:
@@ -422,13 +754,21 @@ func _unstick(delta: float) -> void:
 		return
 	_turn_dir = -_turn_dir
 	var back := heading + PI + rng.randf_range(-0.8, 0.8)
-	target = position + Vector3(sin(back), 0, cos(back)) * rng.randf_range(8.0, 18.0)
 	heading = back
+	if state in ["to_drink", "to_fish", "fish_bank", "to_lodge", "feed", "wait"]:
+		# путь к цели не находится — бросить затею
+		if _bump > 12:
+			_drop_fish()
+			food = null
+			_new_wander()
+	else:
+		target = position + Vector3(sin(back), 0, cos(back)) * rng.randf_range(8.0, 18.0)
 	if state == "wander":
 		state_t = rng.randf_range(6.0, 12.0)
 	if _bump > 40:
 		_bump = 0
-		position = home + Vector3(rng.randf_range(-6, 6), 0, rng.randf_range(-6, 6))
+		var hp2 := door if door != Vector3.INF else home
+		position = hp2 + Vector3(rng.randf_range(-6, 6), 0, rng.randf_range(-6, 6)) * (0.2 if kind == "beaver" else 1.0)
 
 func _strike(tg: Node3D) -> void:
 	if attack_cd > 0.0:
@@ -444,15 +784,84 @@ func _strike(tg: Node3D) -> void:
 			state = "retreat"
 			state_t = rng.randf_range(5.0, 10.0)
 	else:
-		tg.kill()
-		state = "graze"
-		state_t = 30.0
-		prey = null
+		tg.bitten(self)
+		if tg.dead:
+			# добыча повалена — есть тут же; стая подтянется (_update_hunt)
+			food = tg
+			prey = null
+			state = "feed"
+			state_t = rng.randf_range(40.0, 80.0)
 
+## Укус хищника: крупного зверя валят не с первого раза.
+func bitten(by: Node3D) -> void:
+	hp_left -= 1
+	if hp_left <= 0:
+		kill()
+	elif state != "flee":
+		_flee_from(by, 6.0)
+
+## Гибель: туша остаётся лежать на боку, пока её не съедят (падальщики, вороны), через сутки — новый зверь.
 func kill() -> void:
 	dead = true
-	visible = false
+	_drop_fish()
+	if carry != null:
+		carry.queue_free()
+		carry = null
+	food = null
+	prey = null
+	speed = 0.0
+	state = "dead"
+	climb_h = 0.0
+	meat = clampf(float(parts.get("L", 0.5)), 0.25, 3.0) * 60.0
 	respawn_at = float(main.t_hours) + float(main.day_count) * 24.0 + 24.0
+	var side := 1.0 if rng.randf() < 0.5 else -1.0
+	position.y = main.ground_at(position.x, position.z) + float(parts.get("H", 0.5)) * 0.22
+	rotation = Vector3(0.0, heading, side * PI * 0.5)
+	if parts.has("ap"):
+		(parts["ap"] as AnimationPlayer).active = false
+	if mgr != null:
+		mgr.add_carcass(self)
+
+func _revive() -> void:
+	dead = false
+	meat = 0.0
+	tire = 0.0
+	hp_left = int(TOUGH.get(kind, 1)) if scale_k > 0.75 else 1
+	rotation = Vector3(0.0, heading, 0.0)
+	visible = true
+	position = door if door != Vector3.INF else home
+	if mgr != null:
+		mgr.carcasses.erase(self)
+	_new_wander()
+
+## Медведь бьёт лапой по воде; поймал — несёт рыбу на берег.
+func _swipe() -> void:
+	fish_cd = rng.randf_range(3.0, 7.0)
+	_attack_t = 0.8
+	var fwd := Vector3(sin(heading), 0, cos(heading))
+	var p := position + fwd * float(parts["L"]) * 0.6
+	if main.sfx != null and not far:
+		main.sfx.play_at("splash", p, 2.0, rng.randf_range(0.8, 1.1))
+	if mgr.fish == null or not mgr.fish.catch_at(p, 0.35):
+		return
+	fish_n = mgr.fish.make_fish()
+	add_child(fish_n)
+	var L: float = parts["L"]
+	var H: float = parts["H"]
+	fish_n.transform = Transform3D(Basis(Vector3.UP, PI * 0.5), Vector3(0, H * 1.05, L * 0.55))
+	var side := _bank_side(position)
+	var bs := _bank_spot(position.x, side)
+	target = (bs + Vector3(0, 0, side * 3.0)) if bs != Vector3.INF else position + Vector3(0, 0, side * 6.0)
+	state = "fish_bank"
+	state_t = 12.0
+
+## На берегу: рыба на земле перед мордой, медведь ест (поза кормёжки).
+func _eat_fish() -> void:
+	state = "eat"
+	state_t = rng.randf_range(9.0, 15.0)
+	if fish_n != null:
+		var L: float = parts["L"]
+		fish_n.transform = Transform3D(Basis(Vector3.FORWARD, PI * 0.5) * Basis(Vector3.UP, 0.6), Vector3(0, 0.04, L * 0.62))
 
 ## Походка: фазы ног по виду аллюра, наклон по склону, голова, хвост, отдых.
 var goffs := [0.0, 0.5, 0.75, 0.25]
@@ -471,19 +880,20 @@ func _animate_model(delta: float) -> void:
 	if _attack_t > 0.0:
 		want_a = SK.find_anim(ap, ["Attack", "Attack_Headbutt"])
 	elif swim_k > 0.5:
+		# вплавь: ноги гребут под водой в спокойном темпе
 		want_a = SK.find_anim(ap, ["Walk"])
-		sc = 0.7 if speed > 0.05 else 0.25
+		sc = 0.85 if speed > 0.05 else 0.5
 	elif speed > walk * 1.7:
 		want_a = SK.find_anim(ap, ["Gallop"])
 		sc = clampf(speed / (float(sp["run"]) * 0.75), 0.6, 1.6)
 	elif speed > 0.08:
 		want_a = SK.find_anim(ap, ["Walk"])
 		sc = clampf(speed / walk, 0.4, 1.8)
-	elif state == "graze":
+	elif state in ["graze", "feed", "drink", "eat"]:
 		want_a = SK.find_anim(ap, ["Eating"])
-	elif state in ["rest", "sleep"]:
+	elif state in ["rest", "sleep", "ambush"]:
 		want_a = SK.find_anim(ap, ["Idle_Headlow", "Idle_2_HeadLow", "Idle"])
-	elif state == "alert":
+	elif state in ["alert", "watch"]:
 		want_a = SK.find_anim(ap, ["Idle_2", "Idle"])
 	else:
 		want_a = SK.find_anim(ap, ["Idle"])
@@ -497,7 +907,7 @@ func _animate_model(delta: float) -> void:
 	var hf: float = main.ground_at(position.x + fwd.x * L * 0.4, position.z + fwd.z * L * 0.4)
 	var hb: float = main.ground_at(position.x - fwd.x * L * 0.4, position.z - fwd.z * L * 0.4)
 	var m: Node3D = parts["model"]
-	m.rotation.x = lerpf(m.rotation.x, -atan2(hf - hb, L * 0.8) * (1.0 - swim_k), minf(1.0, delta * 6.0))
+	m.rotation.x = lerpf(m.rotation.x, -atan2(hf - hb, L * 0.8) * (1.0 - swim_k) - 0.18 * swim_k, minf(1.0, delta * 6.0))
 
 func _animate(delta: float) -> void:
 	if parts.has("rig"):
@@ -594,6 +1004,7 @@ func _animate(delta: float) -> void:
 # нога сгибается (запястье, скакательный сустав), копыто/лапа держится вдоль земли.
 
 var _rig_t := 0.0
+var _swim_ph := 0.0
 var _gait_offs := [0.5, 0.0, 0.75, 0.25]
 var _lie_k := 0.0
 var _feed_k := 0.0
@@ -640,9 +1051,12 @@ func _animate_rig(delta: float) -> void:
 	var stride := leg_h * lerpf(float(sp.get("swalk", 1.3)), float(sp.get("srun", 4.0)), r)
 	phase += speed / maxf(stride, 0.05) * TAU * delta
 	var amp := (0.28 + r * float(d.get("arun", 0.3))) * mv
-	_lie_k = lerpf(_lie_k, 1.0 if state in ["rest", "sleep"] and speed < 0.1 else 0.0, minf(1.0, delta * 1.5))
-	_feed_k = lerpf(_feed_k, 1.0 if state == "graze" and speed < 0.1 else 0.0, minf(1.0, delta * 2.5))
-	_alert_k = lerpf(_alert_k, 1.0 if state == "alert" else 0.0, minf(1.0, delta * 4.0))
+	_lie_k = lerpf(_lie_k, 1.0 if state in ["rest", "sleep", "ambush"] and speed < 0.1 and swim_k < 0.1 else 0.0, minf(1.0, delta * 1.5))
+	_feed_k = lerpf(_feed_k, 1.0 if state in ["graze", "feed", "drink", "eat"] and speed < 0.1 and swim_k < 0.3 else 0.0, minf(1.0, delta * 2.5))
+	_alert_k = lerpf(_alert_k, 1.0 if state in ["alert", "watch"] else 0.0, minf(1.0, delta * 4.0))
+	# вплавь: «по-собачьи» — ноги гребут под водой в своём ритме, голова поднята, тело низко
+	var swm := smoothstep(0.3, 0.8, swim_k)
+	_swim_ph += delta * TAU * (0.8 + speed * 0.5) * swm
 	var atk := 0.0
 	if _attack_t > 0.0:
 		atk = sin(clampf(_attack_t / 0.8, 0.0, 1.0) * PI)
@@ -676,6 +1090,18 @@ func _animate_rig(delta: float) -> void:
 			d1 += lift * (0.55 + r * 0.3)
 			d2 -= lift * (0.7 + r * 0.3)
 			hsum += s * mv
+		if swm > 0.0:
+			var ps: float = _swim_ph + (0.0 if i == 0 or i == 3 else PI)
+			var reach := sin(ps)
+			var lf := maxf(0.0, -cos(ps))
+			if front:
+				d0 = lerpf(d0, -0.35 + reach * 0.75, swm)
+				d1 = lerpf(d1, -lf * 0.9, swm)
+				d2 = lerpf(d2, lf * 1.3, swm)
+			else:
+				d0 = lerpf(d0, 0.15 + reach * 0.6, swm)
+				d1 = lerpf(d1, lf * 0.8, swm)
+				d2 = lerpf(d2, -lf * 0.9, swm)
 		var T: Array = lie_f if front else lie_h
 		d0 = lerpf(d0, float(T[0]) - float(rel[0]), lie)
 		d1 = lerpf(d1, float(T[1]) - float(rel[1]), lie)
@@ -718,7 +1144,7 @@ func _animate_rig(delta: float) -> void:
 	else:
 		bounce = absf(sin(phase)) * (0.012 + 0.03 * r)
 	var dy := H0 * bounce * (1.0 - lie) - (H0 - float(d["lie_y"])) * lie
-	var pitch := rock
+	var pitch := rock - 0.14 * swm + sin(_swim_ph * 2.0) * 0.025 * swm
 	if atk > 0.0:
 		pitch -= atk * (0.3 if pred else (0.55 if rear else -0.1))
 		dy += atk * H0 * (0.12 if pred else 0.0)
@@ -740,8 +1166,8 @@ func _animate_rig(delta: float) -> void:
 	var G: Array = d.get("graze", [1.1, 0.35])
 	var nod := sin(phase * 2.0) * 0.06 * mv * (1.0 - r)
 	var chew := sin(_rig_t * 3.0 + float(rng.seed % 7)) * 0.06 * _feed_k
-	var nd := nod + float(G[0]) * _feed_k - 0.35 * _alert_k + 0.3 * r - 0.15 * lie + chew
-	var hd := -nod * 0.5 + float(G[1]) * _feed_k + 0.15 * _alert_k - 0.2 * r
+	var nd := nod + float(G[0]) * _feed_k - 0.35 * _alert_k + 0.3 * r - 0.15 * lie + chew - 0.45 * swm
+	var hd := -nod * 0.5 + float(G[1]) * _feed_k + 0.15 * _alert_k - 0.2 * r + 0.2 * swm
 	var jaw := maxf(0.0, sin(_rig_t * 6.0)) * 0.12 * _feed_k
 	if atk > 0.0:
 		nd += atk * (0.25 if pred else (0.9 if rear else 0.5))

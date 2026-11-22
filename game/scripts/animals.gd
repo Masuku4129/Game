@@ -13,6 +13,13 @@ var rng := RandomNumberGenerator.new()
 var _far_acc := 0.0
 var _far_i := 0
 var bird_mesh := {}
+# сетка зверей (ячейка GC м), перестраивается раз в 0,5 с: соседей ищем только в ближних ячейках
+const GC := 32.0
+var grid := {}
+var _grid_t := 0.0
+# туши: убитые звери, на которых ещё есть мясо
+var carcasses: Array = []
+var fish: Node3D
 
 func populate() -> void:
 	rng.seed = 7741
@@ -32,7 +39,7 @@ func populate() -> void:
 		_spawn("roe", _near(c0, 4.0), rng.randf_range(0.9, 1.05), 99)
 	# водопои: звери держатся у реки
 	for gi in 4:
-		var c := _spot(func(x, z): return main.river_dist(x, z) < 14.0 and main.river_dist(x, z) > 4.0, start, 50.0)
+		var c := _spot(func(x, z): return main.river_dist(x, z) < 32.0 and main.river_dist(x, z) > 20.0 and main.height(x, z) > main.WATER_Y + 0.4, start, 50.0)
 		for k in rng.randi_range(2, 3):
 			_spawn("roe", _near(c, 5.0), rng.randf_range(0.9, 1.05), 110 + gi)
 	# косули — группы по 2–3, олени — стада 4–5
@@ -78,6 +85,7 @@ func populate() -> void:
 		for k in 3:
 			var bv: Node3D = _spawn("beaver", _near(lp, 3.5), rng.randf_range(0.9, 1.05), 500 + ci)
 			bv.home = lp
+			bv.door = col.get("door", Vector3.INF)
 			col["beavers"].append(bv)
 	# птицы: стайки
 	_make_bird_mesh()
@@ -90,6 +98,12 @@ func populate() -> void:
 			birds.append(b)
 
 	_populate_taiga(start)
+	_rebuild_grid()
+	# рыба в реке
+	fish = preload("res://scripts/fish.gd").new()
+	fish.main = main
+	add_child(fish)
+	fish.setup()
 
 func _spot(cond: Callable, start: Vector3, min_d: float) -> Vector3:
 	var half: float = main.SIZE * 0.5 - 20.0
@@ -168,21 +182,31 @@ func nearest_predator(a: Node3D, r: float) -> Node3D:
 		return null
 	var best: Node3D = null
 	var bd := r
-	for o in list:
-		if o.dead or not (o.kind in preds) or o.state == "sleep":
+	for o in near(a.position, r):
+		if o.dead or not (o.kind in preds) or o.state == "sleep" or o.state == "inlodge":
 			continue
-		var hunting: bool = o.state in ["stalk", "chase"]
+		# в погоне хищник заметен издалека, подкрадывающийся — вполовину, в засаде — почти нет
+		var k := 0.4
+		match o.state:
+			"chase":
+				k = 1.0
+			"stalk":
+				k = 0.55
+			"ambush":
+				k = 0.15
 		var d: float = a.position.distance_to(o.position)
-		if d < (bd if hunting else bd * 0.4):
-			bd = d
+		if d < bd * k:
+			bd = d / k
 			best = o
 	return best
 
 func nearest_of(a: Node3D, kinds: Array, r: float) -> Node3D:
 	var best: Node3D = null
 	var bd := r
-	for o in list:
+	for o in near(a.position, r):
 		if o == a or o.dead or not (o.kind in kinds) or o.scale_k < 0.5 and a.kind == "fox":
+			continue
+		if o.state == "inlodge" or o.climb_h > 1.0:
 			continue
 		var d: float = a.position.distance_to(o.position)
 		if d < bd:
@@ -203,20 +227,117 @@ func pack_hunt(a: Node3D, prey: Node3D) -> void:
 		w.state_t = 25.0
 		w.pack_slot = TAU * float(i) / float(g.size())
 
+## Стая перешла на бег: все, кто подкрадывался к той же добыче, — в погоню.
+func pack_chase(a: Node3D, prey: Node3D) -> void:
+	if a.group < 0 or not groups.has(a.group):
+		return
+	for w in groups[a.group]:
+		if w != a and not w.dead and w.state == "stalk" and w.prey == prey:
+			w.state = "chase"
+			w.state_t = 25.0
+
+## Вожак группы: первый живой.
+func group_leader(g: int) -> Node3D:
+	if not groups.has(g):
+		return null
+	for o in groups[g]:
+		if not o.dead:
+			return o
+	return null
+
+func group_has(g: int, st: String) -> bool:
+	if not groups.has(g):
+		return false
+	for o in groups[g]:
+		if not o.dead and o.state == st:
+			return true
+	return false
+
+## Стадо идёт на водопой за вожаком: каждый — к своему месту у воды рядом.
+func group_drink(a: Node3D, spot: Vector3, slot: int) -> void:
+	var i := 0
+	for o in groups[a.group]:
+		if o == a or o.dead or not (o.state in ["wander", "graze", "rest", "watch"]):
+			continue
+		i += 1
+		var x: float = spot.x + (float(i) * 1.6 + 0.8) * (1.0 if i % 2 == 0 else -1.0)
+		var p: Vector3 = o._bank_spot(x, o._bank_side(spot))
+		if p != Vector3.INF:
+			o._go_drink(p, slot)
+
+## Туши.
+func add_carcass(a: Node3D) -> void:
+	if not carcasses.has(a):
+		carcasses.append(a)
+
+func carcass_near(p: Vector3, r: float) -> Node3D:
+	var best: Node3D = null
+	var bd := r
+	for c in carcasses:
+		if c.meat <= 0.0:
+			continue
+		var d: float = p.distance_to(c.position)
+		if d < bd:
+			bd = d
+			best = c
+	return best
+
+## Кто сильнее у этой туши (ест в 7 м от неё): медведь отгоняет волков, волки — лису и росомаху.
+func rival_at(food: Node3D, me: Node3D) -> Node3D:
+	var my: float = Animal.RANK.get(me.kind, 1.0)
+	for o in near(food.position, 8.0):
+		if o == me or o.dead or o.food != food or o.state != "feed":
+			continue
+		if float(Animal.RANK.get(o.kind, 1.0)) > my and o.position.distance_to(food.position) < 7.0:
+			return o
+	return null
+
+## Хищник на ходу рядом с точкой (птицы взлетают).
+func moving_predator_near(p: Vector3, r: float) -> Node3D:
+	for o in near(p, r):
+		if not o.dead and o.speed > 1.2 and Animal.RANK.has(o.kind) and Vector2(o.position.x - p.x, o.position.z - p.z).length() < r:
+			return o
+	return null
+
+func _rebuild_grid() -> void:
+	grid.clear()
+	for a in list:
+		if a.dead or a.state == "inlodge":
+			continue
+		var k := Vector2i(floori(a.position.x / GC), floori(a.position.z / GC))
+		if not grid.has(k):
+			grid[k] = []
+		grid[k].append(a)
+
+## Звери в ячейках, перекрывающих круг радиуса r (без точной проверки расстояния).
+func near(p: Vector3, r: float) -> Array:
+	var out: Array = []
+	for gz in range(floori((p.z - r) / GC), floori((p.z + r) / GC) + 1):
+		for gx in range(floori((p.x - r) / GC), floori((p.x + r) / GC) + 1):
+			var k := Vector2i(gx, gz)
+			if grid.has(k):
+				out.append_array(grid[k])
+	return out
+
 ## Тревога в стаде: все бегут вместе.
 func alarm(a: Node3D, threat: Node3D) -> void:
 	if a.group < 0 or not groups.has(a.group):
 		return
 	for o in groups[a.group]:
-		if o != a and not o.dead and o.state != "flee" and not (o.kind in ["wolf", "boar"] and o.scale_k > 0.6):
-			o.threat = threat
-			o.state = "flee"
-			o.state_t = 5.0
+		if o != a and not o.dead and o.state != "flee" and o.state != "inlodge" and not (o.kind in ["wolf", "boar"] and o.scale_k > 0.6):
+			o._flee_from(threat, 5.0)
 
 func _process(delta: float) -> void:
 	if main == null or main.hero == null:
 		return
 	var hp: Vector3 = main.rig.position
+	_grid_t -= delta
+	if _grid_t <= 0.0:
+		_grid_t = 0.5
+		_rebuild_grid()
+		for c in carcasses.duplicate():
+			if c.meat <= 0.0:
+				carcasses.erase(c)
 	# ближние — каждый кадр, дальние — по кругу, несколько за кадр
 	_far_acc += delta
 	var n := list.size()
@@ -231,9 +352,9 @@ func _process(delta: float) -> void:
 			a._acc += delta
 		if was_far and not a.far:
 			a._acc = 0.0
-		a.visible = d < (40.0 if a.kind in ["hare", "squirrel", "beaver"] else SHOW_R) and not a.dead and a.state != "sleep"
+		a.visible = d < (40.0 if a.kind in ["hare", "squirrel", "beaver"] else SHOW_R) and (not a.dead or a.meat > 0.0) and a.state != "sleep" and a.state != "inlodge"
 		if a.parts.has("ap"):
-			a.parts["ap"].active = a.visible
+			a.parts["ap"].active = a.visible and not a.dead
 	var per := maxi(1, n / 20)
 	for k in per:
 		if n == 0:
@@ -291,6 +412,8 @@ class Bird extends Node3D:
 	var body := Node3D.new()
 	var rng := RandomNumberGenerator.new()
 	var on_tree := false
+	var scan_t := 0.0
+	var from := Vector3.ZERO
 
 	func setup(m: Node3D, p: Vector3, s: int) -> void:
 		mgr = m
@@ -354,8 +477,18 @@ class Bird extends Node3D:
 			else:
 				body.rotation.x = 0.0
 			var scare := 9.0 * (1.0 + float(hero.run_mag))
-			if dh < scare or t <= 0.0:
-				_take_off(dh < scare)
+			from = hero.position
+			var scared := dh < scare
+			# хищник на ходу рядом — стайка срывается
+			scan_t -= delta
+			if not scared and scan_t <= 0.0:
+				scan_t = 0.4 + rng.randf() * 0.3
+				var pr: Node3D = mgr.moving_predator_near(position, 10.0)
+				if pr != null:
+					scared = true
+					from = pr.position
+			if scared or t <= 0.0:
+				_take_off(scared)
 		else:
 			fly_t += delta
 			var k := clampf(fly_t / fly_d, 0.0, 1.0)
@@ -374,8 +507,7 @@ class Bird extends Node3D:
 				t = rng.randf_range(6.0, 25.0)
 
 	func _take_off(scared: bool) -> void:
-		var hero: Node3D = main.hero
-		var away := (position - hero.position)
+		var away := (position - from)
 		away.y = 0
 		var ang := atan2(away.x, away.z) if scared else rng.randf() * TAU
 		ang += rng.randf_range(-0.6, 0.6)
@@ -386,7 +518,13 @@ class Bird extends Node3D:
 		tp.z = clampf(tp.z, -half, half)
 		on_tree = false
 		var tr: Vector3 = main.nearest_tree(tp, 8.0)
-		if tr != Vector3.INF and rng.randf() < 0.55:
+		# вороньё слетается к туше
+		var cc: Node3D = mgr.carcass_near(position, 60.0) if not scared and rng.randf() < 0.5 else null
+		if cc != null:
+			var ca := rng.randf() * TAU
+			tp = cc.position + Vector3(cos(ca), 0, sin(ca)) * rng.randf_range(0.8, 2.0)
+			tp.y = main.ground_at(tp.x, tp.z)
+		elif tr != Vector3.INF and rng.randf() < 0.55:
 			tp = Vector3(tr.x + 0.4, main.ground_at(tr.x, tr.z) + rng.randf_range(4.0, 7.0), tr.z)
 			on_tree = true
 		else:
