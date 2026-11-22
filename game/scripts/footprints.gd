@@ -3,19 +3,23 @@ extends MeshInstance3D
 ## Снег лежит неравномерно: сугробы на открытом месте и с подветренной стороны склонов,
 ## под густым ельником тонко. Грязь — в низинах у воды и пятнами на ровных местах, после
 ## дождя глубже. Глубина в точке — snow_depth()/mud_depth(); земля в шейдере поднята на
-## глубину снега. Следы рисуются в текстуру 640×640 (40×40 м вокруг героя, по кругу —
+## глубину снега. Следы рисуются в текстуру 960×960 (40×40 м вокруг героя, по кругу —
 ## края при сдвиге стираются), мелкая сетка-заплатка у героя продавливается по ней:
 ## мелкие отпечатки, ямы по колено, траншея по пояс. Следы засыпает снегом и замывает
 ## дождём (часы засыпания идут быстрее в осадки), пропадают, когда тает снег.
 
-const TS := 640                 # текселей по стороне карты следов
+const TS := 960                 # текселей по стороне карты следов
 const SPAN := 40.0              # метров по стороне карты следов и заплатки
-const TEX := SPAN / TS          # 0.0625 м на тексель
+const TEX := SPAN / TS          # ~4 см на тексель
 const CELLS := 128              # клеток сетки заплатки по стороне
 const SNAP := 5.0               # шаг сдвига заплатки, м
 const LIFE := 200.0             # «часов засыпания» до полного исчезновения следа
 const DEPTH_MAX := 1.25         # глубина, соответствующая байту 255
-const HERO_DELAY := 0.35        # след героя появляется позади него, а не под ногами
+const BEHIND := 0.45            # след героя появляется позади него, а не под ногами
+const FOOT_OFF := 0.12          # стопы — на столько в стороны от оси пути
+const TRENCH := 0.5             # глубже — сплошная траншея вместо отдельных ям
+const SHALLOW := 0.14           # мельче — отпечаток стопы, глубже — овальная яма
+const VIS_R := 13.0             # дальше от героя следы плавно тают
 const RING := 8192
 
 var main: Node3D
@@ -35,7 +39,13 @@ var center := Vector2(1e9, 1e9)
 var org := Vector2i(0, 0)       # мировой индекс текселя в углу окна
 var snow_m := 0.0
 var mud_m := 0.0
-var queue: Array = []           # отложенные следы героя: [время, x, z, yaw, сторона]
+var queue: Array = []           # отложенные следы героя: [время, x, z, dx, dz, сторона, y, x0, z0]
+var _hp_last := Vector3(1e9, 0, 0)
+var _dir := Vector2(0, 1)
+var _step_acc := 0.0
+var _side := 1.0
+var _seg_last := Vector2(1e9, 0)  # последняя точка траншеи
+var _animals := {}              # id зверя -> [последний след, сторона]
 var ring := PackedFloat32Array()  # для стирания: x, z, радиус, часы
 var ring_head := 0
 var ring_tail := 0
@@ -60,6 +70,8 @@ func _ready() -> void:
 	m.set_shader_parameter("track_life", LIFE)
 	m.set_shader_parameter("tsize", main.SIZE)
 	m.set_shader_parameter("tseg", float(main.SEG))
+	m.set_shader_parameter("track_res", TEX)
+	m.set_shader_parameter("track_r", VIS_R)
 	_test = OS.get_environment("TRACKS_TEST")
 	if main.pv.mats.has("tuft"):
 		tuft_mat = main.pv.mats["tuft"]
@@ -212,60 +224,161 @@ func slow(sk: Vector2) -> float:
 
 # ---------- следы ----------
 
-## Шаг героя в точке p (стопа), направление yaw. След рисуется с задержкой — позади.
-func stamp(p: Vector3, yaw: float) -> void:
-	queue.append([_now, p.x, p.z, yaw, p.y])
+## Вызов из hero.gd на каждом шаге анимации: следы теперь ставятся по пройденному пути
+## (ровная цепочка вдоль оси движения), поэтому здесь ничего не делаем.
+func stamp(_p: Vector3, _yaw: float) -> void:
+	pass
 
-func _hero_print(x: float, z: float, yaw: float, y: float) -> void:
-	var sd := snow_depth(x, z)
-	var md := mud_depth(x, z)
-	var w: float = main.weather.wet
-	var s := 0.0
+## Путь героя: каждые полшага — след левой или правой ноги, в траншее — отрезок оси.
+func _track_hero() -> void:
+	var hero = main.hero
+	var hp: Vector3 = hero.position
+	var ok: bool = hero.state == "walk" and float(hero.swimb) < 0.2 and float(hero.depth) < 0.6 and not hero.airborne
+	var mv := Vector2(hp.x - _hp_last.x, hp.z - _hp_last.z)
+	var dl := mv.length()
+	if not ok or dl > 2.5:
+		_hp_last = hp
+		_step_acc = 0.0
+		_seg_last = Vector2(1e9, 0)
+		return
+	if dl < 0.06:
+		return
+	# направление пути, сглаженное по пройденному расстоянию (не по повороту тела)
+	_dir = _dir.lerp(mv / dl, clampf(dl / 0.6, 0.0, 1.0)).normalized()
+	_hp_last = hp
+	_step_acc += dl
+	var sp: float = Vector2(hero.vel.x, hero.vel.z).length()
+	var stride := clampf(0.55 + sp * 0.1, 0.6, 1.0)
+	if _step_acc >= stride:
+		_step_acc = fmod(_step_acc, stride)
+		_side = -_side
+		queue.append([_now, hp.x, hp.z, _dir.x, _dir.y, _side, hp.y, _seg_last.x, _seg_last.y])
+		_seg_last = Vector2(hp.x, hp.z)
+
+## Глубина следа героя в точке (0 — следа нет).
+func _print_depth(x: float, z: float, y: float) -> float:
 	var h: float = main.height(x, z)
 	if y > h + 0.15:
-		return  # на камне, бревне, льду
+		return 0.0  # на камне, бревне, льду
+	var sd := snow_depth(x, z)
+	var md := mud_depth(x, z)
+	var s := 0.0
 	if sd > 0.01:
 		s = sd
 	if md > 0.01:
 		s = maxf(s, sd + md * 0.9)
+	var w: float = main.weather.wet
 	if s < 0.01 and w > 0.15 and float(main.weather.temp) > 0.0:
 		s = 0.02 * w
-	if s < 0.008:
-		return
-	# по щиколотку — отпечаток стопы, по колено — яма, по пояс — сплошная траншея
-	var k := smoothstep(0.08, 0.85, s)
-	var wid := lerpf(0.06, 0.3, k)
-	var ln := lerpf(0.15, 0.78, k)
-	_paint(x, z, yaw, wid, ln, s)
+	return s if s >= 0.008 else 0.0
 
-func _paint(x: float, z: float, yaw: float, hw: float, hl: float, depth: float) -> void:
-	if absf(x - center.x) > SPAN * 0.5 - 3.5 or absf(z - center.y) > SPAN * 0.5 - 3.5:
+func _hero_print(q: Array) -> void:
+	var x: float = q[1]
+	var z: float = q[2]
+	var dir := Vector2(q[3], q[4])
+	var side: float = q[5]
+	var s := _print_depth(x, z, q[6])
+	if s <= 0.0:
 		return
+	var yaw := atan2(dir.x, dir.y)
+	if s >= TRENCH:
+		# по пояс: сплошная траншея с отвесными стенками по оси пути
+		var x0: float = q[7]
+		var z0: float = q[8]
+		if x0 > 1e8 or Vector2(x - x0, z - z0).length() > 1.6:
+			x0 = x - dir.x * 0.3
+			z0 = z - dir.y * 0.3
+		_paint_seg(x0, z0, x, z, lerpf(0.26, 0.32, smoothstep(TRENCH, 1.0, s)), s)
+		return
+	# стопа в стороне от оси пути, носком по ходу
+	var px := x + dir.y * side * FOOT_OFF
+	var pz := z - dir.x * side * FOOT_OFF
+	if s < SHALLOW:
+		_paint_foot(px, pz, yaw, s, side)
+	else:
+		# по колено: ровная овальная яма, глубже — шире и длиннее
+		var k := smoothstep(SHALLOW, TRENCH, s)
+		_paint_oval(px, pz, yaw, lerpf(0.09, 0.14, k), lerpf(0.2, 0.32, k), s, 5.0)
+
+## Отпечаток стопы: носок и каблук.
+func _paint_foot(x: float, z: float, yaw: float, depth: float, side: float) -> void:
+	var fx := sin(yaw)
+	var fz := cos(yaw)
+	var r := 0.17
+	if not _in_window(x, z, r):
+		return
+	var cb := _cb()
+	for kz in range(floori((z - r) / TEX), floori((z + r) / TEX) + 1):
+		var wz := (kz + 0.5) * TEX - z
+		for kx in range(floori((x - r) / TEX), floori((x + r) / TEX) + 1):
+			var wx := (kx + 0.5) * TEX - x
+			var u := (wx * fz - wz * fx) * side  # поперёк, наружу от оси
+			var v := wx * fx + wz * fz            # вдоль, вперёд
+			var et := pow((u - 0.008) / 0.052, 2.0) + pow((v - 0.05) / 0.085, 2.0)
+			var eh := pow(u / 0.042, 2.0) + pow((v + 0.085) / 0.05, 2.0)
+			var e := minf(et, eh)
+			if e < 1.0:
+				_put(kx, kz, depth * clampf((1.0 - e) * 4.0, 0.0, 1.0), cb)
+	_note(x, z, r)
+
+## Овал (яма или след зверя); sharp — крутизна стенок.
+func _paint_oval(x: float, z: float, yaw: float, hw: float, hl: float, depth: float, sharp: float) -> void:
 	var fx := sin(yaw)
 	var fz := cos(yaw)
 	var r := maxf(hw, hl)
-	var k0x := floori((x - r) / TEX)
-	var k1x := floori((x + r) / TEX)
-	var k0z := floori((z - r) / TEX)
-	var k1z := floori((z + r) / TEX)
-	var cb := float(int(clock) % 256) / 255.0
-	for kz in range(k0z, k1z + 1):
+	if not _in_window(x, z, r):
+		return
+	var cb := _cb()
+	for kz in range(floori((z - r) / TEX), floori((z + r) / TEX) + 1):
 		var wz := (kz + 0.5) * TEX - z
-		var pz := posmod(kz, TS)
-		for kx in range(k0x, k1x + 1):
+		for kx in range(floori((x - r) / TEX), floori((x + r) / TEX) + 1):
 			var wx := (kx + 0.5) * TEX - x
 			var u := (wx * fz - wz * fx) / hw
 			var v := (wx * fx + wz * fz) / hl
 			var e := u * u + v * v
-			if e >= 1.0:
-				continue
-			# плоское дно и пологие стенки
-			var d := depth * clampf((1.0 - e) * 2.5, 0.0, 1.0)
-			var px := posmod(kx, TS)
-			var old := timg.get_pixel(px, pz)
-			var od := old.r * DEPTH_MAX * _fade(old.g)
-			if d > od + 0.004:
-				timg.set_pixel(px, pz, Color(minf(d / DEPTH_MAX, 1.0), cb, 0))
+			if e < 1.0:
+				_put(kx, kz, depth * clampf((1.0 - sqrt(e)) * sharp, 0.0, 1.0), cb)
+	_note(x, z, r)
+
+## Отрезок траншеи шириной 2·hw с плоским дном и почти отвесными стенками.
+func _paint_seg(x0: float, z0: float, x1: float, z1: float, hw: float, depth: float) -> void:
+	var cx := (x0 + x1) * 0.5
+	var cz := (z0 + z1) * 0.5
+	var ax := x1 - x0
+	var az := z1 - z0
+	var l2 := maxf(ax * ax + az * az, 1e-6)
+	var r := sqrt(l2) * 0.5 + hw
+	if not _in_window(cx, cz, r):
+		return
+	var cb := _cb()
+	for kz in range(floori((minf(z0, z1) - hw) / TEX), floori((maxf(z0, z1) + hw) / TEX) + 1):
+		var wz := (kz + 0.5) * TEX
+		for kx in range(floori((minf(x0, x1) - hw) / TEX), floori((maxf(x0, x1) + hw) / TEX) + 1):
+			var wx := (kx + 0.5) * TEX
+			var t := clampf(((wx - x0) * ax + (wz - z0) * az) / l2, 0.0, 1.0)
+			var dx := wx - (x0 + ax * t)
+			var dz := wz - (z0 + az * t)
+			var dd := sqrt(dx * dx + dz * dz)
+			if dd < hw:
+				_put(kx, kz, depth * clampf((1.0 - dd / hw) * 7.0, 0.0, 1.0), cb)
+	_note(cx, cz, r)
+
+func _in_window(x: float, z: float, r: float) -> bool:
+	return absf(x - center.x) + r < SPAN * 0.5 - 3.0 and absf(z - center.y) + r < SPAN * 0.5 - 3.0
+
+func _cb() -> float:
+	return float(int(clock) % 256) / 255.0
+
+## Записать глубину в тексель, если новая глубже видимой старой.
+func _put(kx: int, kz: int, d: float, cb: float) -> void:
+	var px := posmod(kx, TS)
+	var pz := posmod(kz, TS)
+	var old := timg.get_pixel(px, pz)
+	if d > old.r * DEPTH_MAX * _fade(old.g) + 0.004:
+		timg.set_pixel(px, pz, Color(minf(d / DEPTH_MAX, 1.0), cb, 0))
+
+## Запомнить след, чтобы стереть его, когда засыплет.
+func _note(x: float, z: float, r: float) -> void:
 	dirty = true
 	var j := ring_head * 4
 	ring[j] = x
@@ -276,8 +389,9 @@ func _paint(x: float, z: float, yaw: float, hw: float, hl: float, depth: float) 
 	if ring_head == ring_tail:
 		ring_tail = (ring_tail + 1) % RING
 
-## Зверь: высота над землёй (стоит на снегу, лёгкие почти не проваливаются) и следы.
-func animal_step(a: Node3D, dist: float) -> float:
+## Зверь: высота над землёй (стоит на снегу, лёгкие почти не проваливаются) и следы
+## ровной цепочкой вдоль его пути.
+func animal_step(a: Node3D, _dist: float) -> float:
 	var x := a.position.x
 	var z := a.position.z
 	var sd := snow_depth(x, z)
@@ -286,18 +400,28 @@ func animal_step(a: Node3D, dist: float) -> float:
 		return 0.0
 	var k: float = ANIMAL_SINK.get(a.kind, 0.5)
 	var sink := sd * k + md * k * 0.8
-	var L: float = float(a.parts.get("L", 1.0))
 	if not a.far:
-		a.trk += dist
-		var stride := clampf(L * 0.4, 0.22, 0.9)
-		if a.trk > stride:
-			a.trk = 0.0
-			a.trk_side = -a.trk_side
-			var yaw: float = a.rotation.y
-			var side: float = a.trk_side
-			var off := clampf(L * 0.1, 0.04, 0.16) * side
-			var w := clampf(L * 0.045, 0.03, 0.11) + sink * 0.25
-			_paint(x + cos(yaw) * off, z - sin(yaw) * off, yaw, w, w * 1.3, maxf(sink, 0.02))
+		var id := a.get_instance_id()
+		var st: Array = _animals.get(id, [])
+		var here := Vector2(x, z)
+		if st.is_empty():
+			_animals[id] = [here, 1.0]
+		else:
+			var last: Vector2 = st[0]
+			var dv := here - last
+			var dl := dv.length()
+			var L: float = float(a.parts.get("L", 1.0))
+			var stride := clampf(L * 0.4, 0.22, 0.9)
+			if dl > 3.0:
+				st[0] = here
+			elif dl >= stride:
+				var dir := dv / dl
+				var side: float = -float(st[1])
+				st[0] = here
+				st[1] = side
+				var off := clampf(L * 0.09, 0.04, 0.15) * side
+				var w := clampf(L * 0.045, 0.03, 0.11) + sink * 0.2
+				_paint_oval(x + dir.y * off, z - dir.x * off, atan2(dir.x, dir.y), w, w * 1.3, maxf(sink, 0.02), 4.0)
 	return sd - sink
 
 # ---------- обновление ----------
@@ -321,6 +445,7 @@ func _recenter(c: Vector2) -> void:
 	org = norg
 	center = c
 	dirty = true
+	_up_t = 0.0  # сразу: иначе пару кадров видна стёртая полоса со старым содержимым
 	position = Vector3(c.x, 0, c.y)
 	main.terrain_mat.set_shader_parameter("patch_c", c)
 	main.terrain_mat.set_shader_parameter("patch_h", SPAN * 0.5)
@@ -383,19 +508,27 @@ func _process(delta: float) -> void:
 	var rate := 0.33 * (1.0 + pr * 10.0 + maxf(temp - 1.0, 0.0) * 0.15 * cover)
 	clock += rate * delta
 	var hp: Vector3 = main.hero.position
-	var c := Vector2(snappedf(hp.x, SNAP), snappedf(hp.z, SNAP))
-	if c != center:
-		_recenter(c)
-	while not queue.is_empty() and _now - float(queue[0][0]) >= HERO_DELAY:
-		var q: Array = queue.pop_front()
-		_hero_print(q[1], q[2], q[3], q[4])
+	# заплатку сдвигаем с запасом, чтобы она не металась туда-сюда на границе
+	if absf(hp.x - center.x) > SNAP * 0.7 or absf(hp.z - center.y) > SNAP * 0.7:
+		_recenter(Vector2(snappedf(hp.x, SNAP), snappedf(hp.z, SNAP)))
+	_track_hero()
+	while not queue.is_empty():
+		var q: Array = queue[0]
+		var behind := Vector2(hp.x - float(q[1]), hp.z - float(q[2])).length()
+		if behind < BEHIND and _now - float(q[0]) < 1.0:
+			break
+		queue.pop_front()
+		_hero_print(q)
 	_expire()
+	if _animals.size() > 400:
+		_animals.clear()
 	var m: ShaderMaterial = main.terrain_mat
 	m.set_shader_parameter("snow_m", snow_m)
 	m.set_shader_parameter("mud_m", mud_m)
 	if tuft_mat != null:
 		tuft_mat.set_shader_parameter("mud_m", mud_m)
 	m.set_shader_parameter("track_clock", fposmod(clock, 256.0))
+	m.set_shader_parameter("track_eye", Vector2(hp.x, hp.z))
 	_up_t -= delta
 	if dirty and _up_t <= 0.0:
 		_up_t = 0.12
@@ -407,31 +540,31 @@ func _process(delta: float) -> void:
 func _run_test() -> void:
 	_test_f += 1
 	var w = main.weather
-	var winter := _test_f < 700
+	var ph := _test_f / 500
+	var f := _test_f % 500
+	var names := ["shallow", "knee", "waist", "mud"]
+	var winter := ph < 3
 	main.day_count = 20 if winter else 30
-	w.snow = 1.0 if winter else 0.0
+	w.snow = [0.15, 0.55, 1.0, 0.0][mini(ph, 3)]
 	w.wet = 0.0 if winter else 1.0
 	w.t_precip = 0.0
 	w.precip = 0.0
 	w.next_change = 100.0
 	main.t_hours = 12.0
-	var f := _test_f % 700
 	if f == 1:
 		_test_spot(1 if winter else 2, 0.75 if winter else 0.5)
 	var gone: float = Vector2(main.hero.position.x - _spot.x, main.hero.position.z - _spot.z).length()
-	main.joy.value = Vector2(0.0, -0.8) if f > 30 and gone < 9.0 else Vector2.ZERO
+	main.joy.value = Vector2(0.35 * sin(f * 0.03), -0.8) if f > 30 and gone < 9.0 else Vector2.ZERO
 	if f == 2:
 		main.rig.rotation.y = 0.0
-	if f == 600 or f == 680:
-		main.rig.rotation.y = 0.15 if f == 600 else PI * 0.5
-		main.rig.distance = 9.0
-	if f == 620 or f == 699:
-		var tag := "%s_%d" % ["snow" if winter else "mud", f]
+	if f == 410 or f == 480:
+		main.rig.rotation.y = 0.15 if f == 410 else PI * 0.5
+		main.rig.distance = 8.0
+	if f == 430 or f == 499:
+		var tag := "%d%s_%d" % [ph, names[mini(ph, 3)], f]
 		get_viewport().get_texture().get_image().save_png(_test + "/tracks_%s.png" % tag)
 		print("tracks shot ", tag, " sink ", sink_at(main.hero.position), " sd ", snow_depth(main.hero.position.x, main.hero.position.z), " md ", mud_depth(main.hero.position.x, main.hero.position.z), " fps ", Engine.get_frames_per_second(), " tris ", Performance.get_monitor(Performance.RENDER_TOTAL_PRIMITIVES_IN_FRAME))
-	if f % 100 == 50:
-		print("f ", f, " gone ", gone, " sink ", main.hero.sink, " mud ", main.hero.mud_sink, " slow ", slow(Vector2(main.hero.sink, main.hero.mud_sink)), " mud_m ", mud_m, " mf ", _field(main.hero.position.x, main.hero.position.z, 2))
-	if _test_f >= 1399:
+	if _test_f >= 1999:
 		get_tree().quit()
 
 ## Найти ровное место с сильным значением канала ch (сугроб или грязь) и поставить туда героя.

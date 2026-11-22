@@ -31,6 +31,9 @@ uniform sampler2D track_near : filter_nearest, repeat_enable;
 uniform float track_span = 40.0;
 uniform float track_clock = 0.0;
 uniform float track_life = 200.0;
+uniform float track_res = 0.041666;  // метров на тексель следов
+uniform vec2 track_eye = vec2(0.0);   // герой: следы плавно тают с расстоянием от него
+uniform float track_r = 13.0;
 uniform vec2 patch_c = vec2(0.0);
 uniform float patch_h = -100.0;
 varying vec3 wp;
@@ -66,8 +69,10 @@ float track_fade(vec2 uv) {
 }
 
 float track_edge(vec2 xz) {
+	// от героя, а не от центра заплатки: при её сдвиге ничего не «прыгает»
 	vec2 e = abs(xz - patch_c);
-	return 1.0 - smoothstep(patch_h - 6.0, patch_h - 3.5, max(e.x, e.y));
+	float box = 1.0 - smoothstep(patch_h - 5.0, patch_h - 3.2, max(e.x, e.y));
+	return box * (1.0 - smoothstep(track_r - 3.0, track_r, length(xz - track_eye)));
 }
 
 void vertex() {
@@ -90,7 +95,11 @@ void vertex() {
 		wn = normalize(vec3(h - hx, e, h - hz));
 		sn = normalize(vec3(h + v_sd - hx - k * sx, e, h + v_sd - hz - k * sz));
 		vec2 uv = wp.xz / track_span;
-		float t = texture(track_tex, uv).r * 1.25 * track_fade(uv) * track_edge(wp.xz);
+		// сетка реже карты следов: берём наибольшую глубину рядом, чтобы яма в сетке была
+		// не меньше нарисованной, а форму и стенки рисует фрагментный шейдер
+		float o = 0.5 * e / track_span;
+		float tr = max(texture(track_tex, uv).r, max(max(texture(track_tex, uv + vec2(o, 0.0)).r, texture(track_tex, uv - vec2(o, 0.0)).r), max(texture(track_tex, uv + vec2(0.0, o)).r, texture(track_tex, uv - vec2(0.0, o)).r)));
+		float t = tr * 1.25 * track_fade(uv) * track_edge(wp.xz);
 		t = min(t, v_sd + v_md + 0.03 * wet);
 		wp.y = h + v_sd - t + 0.015;
 		VERTEX.y = wp.y - MODEL_MATRIX[3].y;
@@ -176,17 +185,20 @@ void fragment() {
 	c = mix(c, lin(vec3(0.12, 0.11, 0.1)), puddle * 0.6);
 	// следы
 	float t = 0.0;
+	float wall = 0.0;
 	vec3 nw = sn;
 	if (v_patch > 0.5) {
 		vec2 uv = wp.xz / track_span;
 		float fade = track_fade(uv) * track_edge(wp.xz) * 1.25;
 		float cap = v_sd + v_md + 0.03 * wet;
-		float e = 0.0625;
+		float e = track_res;
 		t = min(texture(track_tex, uv).r * fade, cap);
 		float tx = min(texture(track_tex, uv + vec2(e / track_span, 0.0)).r * fade, cap) - min(texture(track_tex, uv - vec2(e / track_span, 0.0)).r * fade, cap);
 		float tz = min(texture(track_tex, uv + vec2(0.0, e / track_span)).r * fade, cap) - min(texture(track_tex, uv - vec2(0.0, e / track_span)).r * fade, cap);
 		vec3 g = sn / max(sn.y, 0.05);
 		nw = normalize(vec3(g.x + tx / (2.0 * e), 1.0, g.z + tz / (2.0 * e)));
+		// стенка следа: чёткий тонкий контур
+		wall = smoothstep(0.3, 1.5, length(vec2(tx, tz)) / (2.0 * e));
 	}
 	// снег: слой по глубине сугроба, на кручах не держится
 	float cover = smoothstep(0.012, 0.07, v_sd + (fine - 0.5) * 0.02) * smoothstep(0.35, 0.6, wn.y + (s - 0.5) * 0.1);
@@ -194,10 +206,12 @@ void fragment() {
 	float drift = clamp(v_sd / 0.8, 0.0, 1.0);
 	vec3 sc = vec3(0.7, 0.73, 0.8) * (0.94 + fine * 0.05 + drift * 0.04);
 	// в яме снег голубеет и темнеет, на дне грязного следа стоит вода
-	float hole = smoothstep(0.0, 0.4, t) * 0.75 + smoothstep(0.0, 0.05, t) * 0.25;
-	sc = mix(sc, sc * vec3(0.5, 0.6, 0.85), hole);
-	sc = mix(sc, c * 0.8 + sc * 0.2, smoothstep(0.85, 1.0, t / max(v_sd, 0.001)) * step(0.05, t));
-	vec3 mudt = c * (1.0 - smoothstep(0.0, 0.15, t) * 0.6);
+	// в яме — лёгкая прохладная тень, глубже чуть темнее; стенки рисует нормаль
+	float hole = smoothstep(0.0, 0.03, t) * 0.5 + smoothstep(0.05, 0.6, t) * 0.5;
+	sc = mix(sc, sc * vec3(0.8, 0.85, 0.94), hole);
+	sc *= 1.0 - wall * vec3(0.3, 0.26, 0.18);
+	sc = mix(sc, c * 0.6 + sc * 0.4, smoothstep(0.9, 1.0, t / max(v_sd, 0.001)) * step(0.05, t) * 0.6);
+	vec3 mudt = c * (1.0 - smoothstep(0.0, 0.15, t) * 0.6) * (1.0 - wall * 0.3);
 	c = mix(mudt, sc, cover);
 	c *= 1.0 - wet * 0.25 * (1.0 - cover);
 	ALBEDO = c;
