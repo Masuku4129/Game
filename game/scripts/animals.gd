@@ -151,7 +151,7 @@ func _lodge(p: Vector3) -> void:
 	cm.height = 1.4
 	cm.radial_segments = 10
 	mi.mesh = cm
-	mi.material_override = main.veg.mats["bark"]
+	mi.material_override = main.veg.mats["bark_dead"]
 	mi.position = Vector3(p.x, y + 0.5, p.z)
 	mi.visibility_range_end = 80.0
 	add_child(mi)
@@ -163,7 +163,7 @@ func _lodge(p: Vector3) -> void:
 		sc.height = 1.6
 		sc.radial_segments = 4
 		st.mesh = sc
-		st.material_override = main.veg.mats["bark"]
+		st.material_override = main.veg.mats["bark_dead"]
 		var a := TAU * i / 9.0
 		st.position = Vector3(p.x + cos(a) * 0.9, y + 0.55, p.z + sin(a) * 0.9)
 		st.rotation = Vector3(0, -a, 0.9)
