@@ -49,6 +49,7 @@ var msg_t := 0.0
 var msg := ""
 var water_mat: ShaderMaterial
 var beavers
+var inventory  # короб: inventory.gd
 
 func _ready() -> void:
 	_setup_noise()
@@ -112,6 +113,10 @@ func _ready() -> void:
 	act_btn.visible = false
 	act_btn.pressed.connect(func(): hero.do_action())
 	ui.add_child(act_btn)
+	# --- инвентарь (короб): кнопка «Рюкзак» на HUD, лист вещей, анимация снятия короба ---
+	inventory = preload("res://scripts/inventory.gd").new()
+	inventory.main = self
+	ui.add_child(inventory)
 	fps_lbl = Label.new()
 	fps_lbl.anchor_left = 0.5
 	fps_lbl.anchor_right = 0.5
@@ -1001,12 +1006,20 @@ func find_pick(p: Vector3) -> Array:
 	return best
 
 func take_pick(it: Array) -> void:
+	if inventory != null and not inventory.can_add(String(it[1])):
+		_say("Короб полон")
+		return
 	var q: Vector3 = it[0]
 	var k := Vector2i(floori(q.x / 8.0), floori(q.z / 8.0))
 	pickables[k].erase(it)
 	var mm: MultiMesh = it[2]
 	mm.set_instance_transform(it[3], Transform3D(Basis().scaled(Vector3(0.001, 0.001, 0.001)), q - Vector3(0, 5, 0)))
 	var kind: String = it[1]
+	# съедобное теперь кладём в короб (есть — из инвентаря), если хватает места
+	if inventory != null and kind in ["berry", "mushroom", "amanita"]:
+		inv[kind] = int(inv.get(kind, 0)) + 1
+		_say("+1 %s — в короб" % PICK_NAME[kind])
+		return
 	match kind:
 		"berry":
 			hunger = minf(1.0, hunger + 0.05)
@@ -1080,6 +1093,8 @@ func hurt(amount: float, from: Vector3, kind: String) -> void:
 	var dmg := amount * (1.7 if big and part in ["голова", "грудь"] else 1.0)
 	if hero.state == "sit":
 		hero._stand_up()
+	if inventory != null:
+		inventory.abort()
 	health = maxf(0.0, health - dmg)
 	bleed = minf(1.0, bleed + dmg * 0.6)
 	var key := "рана: " + part
