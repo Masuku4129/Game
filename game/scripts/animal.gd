@@ -54,6 +54,8 @@ var climb_h := 0.0
 var far := false
 var group := -1
 var _acc := 0.0
+var trk := 0.0       # путь с последнего следа
+var trk_side := 1.0
 var rng := RandomNumberGenerator.new()
 # бобр на работе (state "job" — идёт/плывёт к job_p, "gnaw" — грызёт, повернувшись к job_face)
 var job_p := Vector3.ZERO
@@ -386,6 +388,9 @@ func tick(delta: float) -> void:
 		# плывёт: над водой голова и спина
 		g = lerpf(g, wl - float(parts.get("H", 0.8)) * 0.55, swim_k)
 	position.y = g + climb_h
+	# на снегу: лёгкие бегут поверху, тяжёлые проваливаются; в снегу и грязи — следы
+	if climb_h <= 0.0 and swim_k <= 0.0 and main.feet != null and g < main.height(position.x, position.z) + 0.1:
+		position.y += main.feet.animal_step(self, speed * delta)
 	rotation.y = heading
 	if not far:
 		_animate(delta)

@@ -398,6 +398,8 @@ func _update_sky() -> void:
 	day_factor = d
 
 var hmap_tex: ImageTexture
+var terrain_hs := PackedFloat32Array()
+var terrain_cols := PackedColorArray()
 
 func _make_terrain() -> void:
 	var n := SEG + 1
@@ -435,9 +437,17 @@ func _make_terrain() -> void:
 			zuv2[i] = Vector2(1.0 if zn == 3 else 0.0, 1.0 if zn == 4 else 0.0)
 	var himg := Image.create_from_data(n, n, false, Image.FORMAT_RF, hs.to_byte_array())
 	hmap_tex = ImageTexture.create_from_image(himg)
+	var zb := PackedByteArray(); zb.resize(n * n * 4)
+	for i in n * n:
+		zb[i * 4] = int(zuv[i].x * 255.0); zb[i * 4 + 1] = int(zuv[i].y * 255.0)
+		zb[i * 4 + 2] = int(zuv2[i].x * 255.0); zb[i * 4 + 3] = int(zuv2[i].y * 255.0)
+	var zone_tex := ImageTexture.create_from_image(Image.create_from_data(n, n, false, Image.FORMAT_RGBA8, zb))
+	terrain_hs = hs
+	terrain_cols = cols
 	var mat := ShaderMaterial.new()
 	mat.shader = preload("res://shaders/paint/ground.gdshader")
 	mat.set_shader_parameter("water_y", WATER_Y)
+	mat.set_shader_parameter("zone_tex", zone_tex)
 	terrain_mat = mat
 	# земля кусками 32×32 клетки: камера отсекает невидимые куски
 	var CH := 32
@@ -467,8 +477,6 @@ func _make_terrain() -> void:
 			arr[Mesh.ARRAY_VERTEX] = v2
 			arr[Mesh.ARRAY_NORMAL] = n2
 			arr[Mesh.ARRAY_COLOR] = c2
-			arr[Mesh.ARRAY_TEX_UV] = u2
-			arr[Mesh.ARRAY_TEX_UV2] = u3
 			arr[Mesh.ARRAY_INDEX] = idx
 			var mesh := ArrayMesh.new()
 			mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arr)
@@ -476,6 +484,7 @@ func _make_terrain() -> void:
 			var mi := MeshInstance3D.new()
 			mi.mesh = mesh
 			mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+			mi.extra_cull_margin = 2.0  # снег поднимает поверхность в шейдере
 			add_child(mi)
 
 func _make_water() -> void:
@@ -682,6 +691,9 @@ func _update_stats(dt: float) -> void:
 			drain = 0.035
 		if hero.swimb > 0.5:
 			drain = 0.012
+		# по колено в снегу или грязи — тяжело, по пояс — очень тяжело
+		var sk: float = hero.sink + hero.mud_sink * 1.5
+		drain = drain * (1.0 + sk * 3.0) + sk * 0.01
 		stamina = maxf(0.0, stamina - drain * dt)
 	else:
 		stamina = minf(1.0, stamina + (0.14 if hero.state == "sit" else 0.07) * dt)
