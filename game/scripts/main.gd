@@ -855,6 +855,58 @@ func _variants(kind: String) -> Array:
 			for i in 2: out.append(pv.tuft(4300 + i, 2.2))
 		"slab":
 			for i in 4: out.append(pv.rock(4400 + i))
+		"mossrock":
+			for i in 4: out.append(pv.mossrock(5000 + i))
+		"split_rock":
+			for i in 2: out.append(pv.split_rock(5100 + i))
+		"outcrop":
+			for i in 3: out.append(pv.outcrop(5200 + i))
+		"scree":
+			for i in 3: out.append(pv.scree(5300 + i))
+		"stump_rot":
+			for i in 2: out.append(pv.stump2(5400 + i, false))
+		"stump_mush":
+			for i in 2: out.append(pv.stump2(5500 + i, true))
+		"fungus_snag":
+			for i in 3: out.append(pv.fungus_snag(5600 + i, false))
+		"birch_dead":
+			for i in 2: out.append(pv.fungus_snag(5700 + i, true))
+		"mosslog":
+			for i in 3: out.append(pv.mosslog(5800 + i))
+		"ledum":
+			for i in 2: out.append(pv.low_patch(5900 + i, "ledum", "white", 14, 0.45))
+		"cloudberry":
+			for i in 2: out.append(pv.low_patch(6000 + i, "bilberry", "orange", 10, 0.15))
+		"yagel":
+			for i in 3: out.append(pv.low_patch(6100 + i, "yagel", "", 0, 0.12))
+		"sphagnum":
+			for i in 3: out.append(pv.low_patch(6200 + i, "sphag", "", 0, 0.1))
+		"lingon":
+			for i in 2: out.append(pv.low_patch(6300 + i, "moss", "berry", 16, 0.12))
+		"cranberry":
+			for i in 2: out.append(pv.low_patch(6400 + i, "sphag", "berry", 12, 0.08))
+		"ernik":
+			for i in 3: out.append(pv.shrub(6500 + i, "ernik"))
+		"raspberry":
+			for i in 3: out.append(pv.shrub(6600 + i, "raspberry"))
+		"currant":
+			for i in 2: out.append(pv.shrub(6700 + i, "currant"))
+		"cotton":
+			for i in 2: out.append(pv.cotton(6800 + i))
+		"bells":
+			for i in 2: out.append(pv.flowers(6900 + i, "blue"))
+		"daisy":
+			for i in 2: out.append(pv.flowers(7000 + i, "white"))
+		"angelica":
+			for i in 2: out.append(pv.angelica(7100 + i))
+		"brushpile":
+			for i in 2: out.append(pv.brushpile(7200 + i))
+		"chanterelle":
+			for i in 2: out.append(pv.chanterelles(7300 + i))
+		"cones":
+			for i in 2: out.append(pv.cones(7400 + i))
+		"bones":
+			out.append(pv.bones(7500))
 	return out
 
 const TREE_KINDS := ["spruce", "pine", "birch", "larch", "aspen", "fir", "cedar", "rowan"]
@@ -1072,7 +1124,7 @@ func move_factor() -> float:
 		f = 0.78
 	return f * (0.6 + 0.4 * clampf(health * 2.0, 0.0, 1.0))
 
-const BLOCK_R := {"snag": 0.25, "snag_b": 0.25, "cherry": 0.15, "fir": 0.36, "cedar": 0.38, "rowan": 0.2, "spruce": 0.4, "pine": 0.32, "birch": 0.28, "bare": 0.3, "spruce_dead": 0.3, "stump": 0.45, "rock": 0.5, "boulder": 0.6, "larch": 0.32, "aspen": 0.26}
+const BLOCK_R := {"fungus_snag": 0.22, "birch_dead": 0.2, "snag": 0.25, "snag_b": 0.25, "cherry": 0.15, "fir": 0.36, "cedar": 0.38, "rowan": 0.2, "spruce": 0.4, "pine": 0.32, "birch": 0.28, "bare": 0.3, "spruce_dead": 0.3, "stump": 0.45, "rock": 0.5, "boulder": 0.6, "larch": 0.32, "aspen": 0.26}
 
 func _scatter_all() -> void:
 	# вид, попыток на клетку 32 м, масштаб, дальность видимости, тень, правило
@@ -1127,6 +1179,35 @@ func _scatter_all() -> void:
 		["stlanik", 16, Vector2(0.8, 1.3), 80.0, true, "rocky_z"],
 		["rowan", 4, Vector2(0.9, 1.3), 90.0, true, "edge"],
 		["anthill", 1, Vector2(0.8, 1.2), 65.0, true, "under"],
+		["mossrock", 6, Vector2(0.6, 1.6), 100.0, true, "under"],
+		["split_rock", 1, Vector2(1.2, 2.2), 110.0, true, "rock"],
+		["outcrop", 3, Vector2(1.5, 2.8), 110.0, true, "rocky"],
+		["scree", 10, Vector2(0.8, 1.4), 60.0, false, "rocky_z"],
+		["stump_rot", 3, Vector2(0.8, 1.2), 70.0, true, "under"],
+		["stump_mush", 2, Vector2(0.8, 1.1), 60.0, true, "under"],
+		["fungus_snag", 2, Vector2(0.9, 1.2), 100.0, true, "tree"],
+		["birch_dead", 2, Vector2(0.9, 1.2), 100.0, true, "edge"],
+		["mosslog", 3, Vector2(0.9, 1.2), 90.0, true, "under"],
+		["ledum", 30, Vector2(0.8, 1.3), 45.0, false, "bog_z"],
+		["ledum", 6, Vector2(0.8, 1.2), 45.0, false, "under"],
+		["cloudberry", 30, Vector2(0.8, 1.3), 40.0, false, "bog_z"],
+		["cranberry", 25, Vector2(0.8, 1.3), 40.0, false, "bog_z"],
+		["sphagnum", 40, Vector2(0.9, 1.6), 45.0, false, "bog_z"],
+		["cotton", 25, Vector2(0.8, 1.3), 45.0, false, "bog_z"],
+		["yagel", 40, Vector2(0.9, 1.6), 45.0, false, "rocky_z"],
+		["yagel", 10, Vector2(0.8, 1.4), 45.0, false, "rocky"],
+		["lingon", 25, Vector2(0.8, 1.4), 40.0, false, "under"],
+		["ernik", 25, Vector2(0.7, 1.2), 55.0, false, "bog_z"],
+		["raspberry", 30, Vector2(0.8, 1.2), 60.0, false, "burnt_z"],
+		["raspberry", 5, Vector2(0.8, 1.2), 60.0, false, "edge"],
+		["currant", 8, Vector2(0.8, 1.2), 60.0, false, "river"],
+		["bells", 14, Vector2(0.8, 1.2), 40.0, false, "meadow"],
+		["daisy", 14, Vector2(0.8, 1.2), 40.0, false, "meadow"],
+		["angelica", 10, Vector2(0.8, 1.2), 60.0, false, "bank"],
+		["brushpile", 4, Vector2(0.8, 1.2), 60.0, false, "burnt_z"],
+		["chanterelle", 8, Vector2(0.8, 1.3), 35.0, false, "under"],
+		["cones", 30, Vector2(0.8, 1.2), 30.0, false, "under"],
+		["bones", 1, Vector2(0.9, 1.1), 40.0, false, "under"],
 	]
 	var cache := {}
 	var cache_lod := {}
@@ -1181,12 +1262,21 @@ func _scatter_all() -> void:
 						var ht := height(pt.x, pt.z)
 						b = Basis(ax0.cross(Vector3.UP).normalized(), atan2(ht - hr, fall_len)) * b
 						o.y = hr - 0.05
+					elif kind == "mosslog":
+						var hl: float = float(vars[vi][1]) * 0.5 * s
+						var axm: Vector3 = b.x.normalized()
+						if not _occ_free_line(o - axm * hl, o + axm * hl, float(vars[vi][2]) * s + 0.3):
+							continue
+						var ha := height(o.x - axm.x * hl, o.z - axm.z * hl)
+						var hb2 := height(o.x + axm.x * hl, o.z + axm.z * hl)
+						b = Basis(axm.cross(Vector3.UP).normalized(), atan2(hb2 - ha, hl * 2.0)) * b
+						o.y = (ha + hb2) * 0.5 - 0.08
 					elif occ_r > 0.0:
 						if not _occ_free(x, z, occ_r):
 							continue
 						_occ_add(x, z, occ_r)
 					per_var[vi].append(Transform3D(b, o))
-					if kind == "rock" or kind == "slab":
+					if kind in ROCKISH:
 						# камень — твёрдый купол: на него можно встать или залезть
 						var rsc: Vector3 = vars[vi][2]
 						var hr2: float = (rsc.x + rsc.z) * 0.6 * s
@@ -1196,6 +1286,22 @@ func _scatter_all() -> void:
 					elif kind == "stump":
 						_add_solid([2, o, Vector3.ZERO, 0.45 * s, 0.75 * s])
 						_add_seat(Vector3(x, height(x, z) + 0.7 * s, z), rng.randf() * TAU)
+					elif kind == "stump_rot" or kind == "stump_mush":
+						var sh: float = float(vars[vi][1]) * s
+						_add_solid([2, o, Vector3.ZERO, 0.42 * s, sh])
+						_add_seat(Vector3(x, height(x, z) + sh - 0.05, z), rng.randf() * TAU)
+					elif kind == "mosslog":
+						# колода: по ней можно пройти и на неё сесть
+						var xl := Transform3D(b, o)
+						var hl2: float = float(vars[vi][1]) * 0.5
+						var rl: float = float(vars[vi][2])
+						var la := xl * Vector3(-hl2, rl * 0.8, 0)
+						var lb := xl * Vector3(hl2, rl * 0.7, 0)
+						_add_solid([1, la, lb, rl * s * 0.95, 0.0])
+						_occ_add_line(la, lb, rl * s + 0.2)
+						var lm := la.lerp(lb, 0.5)
+						var axl: Vector3 = b.x.normalized()
+						_add_seat(Vector3(lm.x, solid_top(lm.x, lm.z), lm.z), atan2(axl.z, -axl.x))
 					elif fall_len > 0.0:
 						# по стволу можно пройти: две капсулы (комель толще), сиденье у комля
 						var fv2: Array = vars[vi]
@@ -1255,20 +1361,25 @@ func _scatter_all() -> void:
 
 # ---------- занятость места: стволы, камни и поваленные деревья не пересекаются ----------
 var occ := {}
+const ROCKISH := ["rock", "slab", "mossrock", "split_rock", "outcrop"]
 var cliff_mmi: Array = []
 
 func _occ_radius(kind: String, v: Array, s: float) -> float:
 	if kind in TREE_KINDS or kind in ["bare", "spruce_dead", "snag", "snag_b"]:
 		return (0.5 if s > 0.5 else 0.0) * s
-	if kind == "rock" or kind == "slab":
+	if kind in ROCKISH:
 		var rsc: Vector3 = v[2]
 		return (rsc.x + rsc.z) * 0.62 * s
+	if kind in ["fungus_snag", "birch_dead"]:
+		return 0.4 * s
 	match kind:
-		"stump", "anthill":
+		"stump", "anthill", "stump_rot", "stump_mush", "brushpile":
 			return 0.6 * s
+		"scree":
+			return 1.3 * s
 		"windfall":
 			return 2.2 * s
-		"bush", "willow", "alder", "juniper", "stlanik", "rose", "berry", "cherry":
+		"bush", "willow", "alder", "juniper", "stlanik", "rose", "berry", "cherry", "raspberry", "currant", "ernik", "angelica":
 			return 0.35 * s
 	return 0.0
 
