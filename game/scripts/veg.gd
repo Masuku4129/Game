@@ -19,11 +19,11 @@ func _init() -> void:
 		fade_list.append(m)
 	_card("needle", Color(0.78, 0.86, 0.70), 0.03)
 	_card("pine", Color(0.80, 0.84, 0.68), 0.03)
-	_card("birch_leaf", Color(0.86, 0.90, 0.70), 0.06)
-	_card("broad_leaf", Color(0.78, 0.84, 0.66), 0.05)
-	_card("fern", Color(0.72, 0.80, 0.62), 0.08)
-	_card("grass", Color(0.86, 0.88, 0.70), 0.12)
-	_card("reed", Color(0.9, 0.95, 0.8), 0.07)
+	_card("birch_leaf", Color(0.86, 0.90, 0.70), 0.06, 1.0, 1.0)
+	_card("broad_leaf", Color(0.78, 0.84, 0.66), 0.05, 1.0, 1.0)
+	_card("fern", Color(0.72, 0.80, 0.62), 0.08, 0.9, 0.8)
+	_card("grass", Color(0.86, 0.88, 0.70), 0.12, 0.7, 0.0)
+	_card("reed", Color(0.9, 0.95, 0.8), 0.07, 0.6, 0.0)
 	var blade := ShaderMaterial.new()
 	blade.shader = BLADE_SHADER
 	mats["blade"] = blade
@@ -34,12 +34,14 @@ func _init() -> void:
 	mats["core"] = core
 	fade_list.append(core)
 
-func _card(k: String, tint: Color, sway: float) -> void:
+func _card(k: String, tint: Color, sway: float, yellow: float = 0.0, drop: float = 0.0) -> void:
 	var m := ShaderMaterial.new()
 	m.shader = CARD_SHADER
 	m.set_shader_parameter("tex", load("res://textures/%s.png" % k))
 	m.set_shader_parameter("tint", tint)
 	m.set_shader_parameter("sway", sway)
+	m.set_shader_parameter("yellow_k", yellow)
+	m.set_shader_parameter("drop_k", drop)
 	mats[k] = m
 	fade_list.append(m)
 

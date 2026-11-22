@@ -26,9 +26,15 @@ var hunger := 0.85
 var warmth := 0.8
 var stamina := 1.0
 var blockers := {}
+var weather
+var terrain_mat: ShaderMaterial
+var water_mat: ShaderMaterial
 
 func _ready() -> void:
 	_setup_noise()
+	weather = preload("res://scripts/weather.gd").new()
+	weather.main = self
+	add_child(weather)
 	_make_environment()
 	_make_terrain()
 	_make_water()
@@ -172,7 +178,8 @@ func _update_sky() -> void:
 	var dusk := clampf(1.0 - absf(e) * 4.0, 0.0, 1.0)
 	var elev := clampf(e, 0.0, 1.0) * 60.0 + 5.0
 	sun.rotation_degrees = Vector3(-elev, 40.0 + (t_hours - 12.0) * 15.0, 0)
-	sun.light_energy = 1.6 * smoothstep(0.0, 0.3, e)
+	var cl: float = weather.cloud if weather != null else 0.0
+	sun.light_energy = 1.6 * smoothstep(0.0, 0.3, e) * (1.0 - cl * 0.72)
 	sun.light_color = Color(1.0, 0.55, 0.30).lerp(Color(1.0, 0.93, 0.82), smoothstep(0.0, 0.45, e))
 	sun.visible = e > -0.02
 	moon.light_energy = 0.3 * (1.0 - d)
@@ -183,12 +190,17 @@ func _update_sky() -> void:
 	var night_hor := Color(0.05, 0.07, 0.12)
 	var top := night_top.lerp(day_top, d).lerp(Color(0.30, 0.32, 0.46), dusk * 0.55)
 	var hor := night_hor.lerp(day_hor, d).lerp(Color(0.88, 0.52, 0.34), dusk * 0.7)
+	var grey := Color(0.5, 0.53, 0.56) * (0.15 + d * 0.85)
+	top = top.lerp(grey, cl * 0.8)
+	hor = hor.lerp(grey.lightened(0.15), cl * 0.6)
 	sky_mat.sky_top_color = top
 	sky_mat.sky_horizon_color = hor
 	sky_mat.ground_horizon_color = hor.darkened(0.15)
 	sky_mat.ground_bottom_color = hor.darkened(0.6)
 	env.fog_light_color = hor.darkened(0.08)
-	env.ambient_light_energy = lerpf(0.22, 0.7, d)
+	env.ambient_light_energy = lerpf(0.22, 0.7, d) * (1.0 + cl * 0.25)
+	if weather != null:
+		env.fog_density = 0.004 + weather.fogv * 0.03 + weather.precip * 0.008 + weather.snow * 0.0
 	if hero != null:
 		hero.torch.light_energy = 2.2 * (1.0 - d)
 	day_factor = d
@@ -241,6 +253,7 @@ func _make_terrain() -> void:
 	mat.set_shader_parameter("grass", load("res://textures/ground_grass.png"))
 	mat.set_shader_parameter("rock", load("res://textures/ground_rock.png"))
 	mesh.surface_set_material(0, mat)
+	terrain_mat = mat
 	var mi := MeshInstance3D.new()
 	mi.mesh = mesh
 	add_child(mi)
@@ -254,6 +267,7 @@ func _make_water() -> void:
 	mat.shader = preload("res://shaders/water.gdshader")
 	mat.set_shader_parameter("wave", load("res://textures/water_wave.png"))
 	plane.material = mat
+	water_mat = mat
 	var mi := MeshInstance3D.new()
 	mi.mesh = plane
 	mi.position.y = WATER_Y
@@ -283,6 +297,8 @@ func _process(delta: float) -> void:
 	hero.cam_yaw = rig.rotation.y
 	# время суток: 1 игровой час за 75 секунд
 	t_hours += delta / 75.0
+	weather.step(delta / 75.0)
+	weather.update_visual(rig.position)
 	if t_hours >= 24.0:
 		t_hours -= 24.0
 		day_count += 1
@@ -291,6 +307,7 @@ func _process(delta: float) -> void:
 		_sky_timer = 0.25
 		_update_sky()
 		_update_stats(0.25)
+		weather.apply(veg.fade_list, terrain_mat, veg.mats["blade"], water_mat)
 	if player_rig == null:
 		return
 	grass_timer -= delta
@@ -318,9 +335,19 @@ func _process(delta: float) -> void:
 	if best_d < 1e9:
 		_build_grass_cell(best)
 
+## Проверка сезонов: тап по часам в правом верхнем углу перематывает время на 2 дня вперёд.
+func _unhandled_input(e: InputEvent) -> void:
+	if e is InputEventScreenTouch and e.pressed:
+		var vs := get_viewport().get_visible_rect().size
+		if e.position.x > vs.x - 520.0 and e.position.y < 90.0:
+			day_count += 2
+			weather.next_change = 0.0
+			get_viewport().set_input_as_handled()
+
 func _update_stats(dt: float) -> void:
 	hunger = maxf(0.0, hunger - 0.0004 * dt)
-	var target_w := 0.28 + 0.55 * day_factor
+	var tc: float = weather.temp
+	var target_w := clampf(0.55 + tc * 0.025 - weather.wet * 0.25 - weather.wind * 0.05, 0.05, 0.95)
 	warmth = lerpf(warmth, target_w, 0.01 * dt * 4.0)
 	if hero.moving:
 		stamina = maxf(0.0, stamina - 0.012 * dt)
@@ -328,8 +355,8 @@ func _update_stats(dt: float) -> void:
 		stamina = minf(1.0, stamina + 0.05 * dt)
 	var hh := int(t_hours)
 	var mm := int((t_hours - hh) * 60.0)
-	var temp := int(round(lerpf(-9.0, 7.0, day_factor)))
-	hud.set_state(hunger, warmth, stamina, "День %d · %02d:%02d · %d°C" % [day_count, hh, mm, temp])
+	var temp := int(round(tc))
+	hud.set_state(hunger, warmth, stamina, "%s, день %d · %02d:%02d · %d°C · %s" % [weather.season_name(), day_count, hh, mm, temp, weather.kind])
 
 func _build_grass_cell(k: Vector2i) -> void:
 	var rng := RandomNumberGenerator.new()

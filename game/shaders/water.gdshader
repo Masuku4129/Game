@@ -8,6 +8,8 @@ uniform vec3 shallow_col : source_color = vec3(0.30, 0.42, 0.34);
 uniform vec3 deep_col : source_color = vec3(0.05, 0.13, 0.15);
 uniform vec3 foam_col : source_color = vec3(0.86, 0.90, 0.88);
 uniform vec2 flow = vec2(0.05, 0.03);
+uniform float ice = 0.0;
+uniform float rain = 0.0;
 varying vec3 wp;
 
 void vertex() {
@@ -44,8 +46,17 @@ void fragment() {
 	float foam = clamp(shore + streak, 0.0, 1.0);
 	col = mix(col, foam_col, foam * 0.85);
 
+	// капли дождя: мелкие кольца-блики
+	vec2 cell = floor(wp.xz * 3.0);
+	float ph = fract(TIME * 1.3 + fract(sin(dot(cell, vec2(12.9, 78.2))) * 437.5));
+	float ring = 1.0 - smoothstep(0.0, 0.08, abs(length(fract(wp.xz * 3.0) - 0.5) - ph * 0.45));
+	col += vec3(0.18) * ring * (1.0 - ph) * rain;
+	// лёд: сначала у берега, потом вся река; матовый, с трещинами из текстуры волн
+	float ic = clamp(ice * 1.6 - t * 0.6 + (w1.a - 0.5) * 0.3, 0.0, 1.0);
+	vec3 ice_col = mix(vec3(0.62, 0.72, 0.78), vec3(0.85, 0.9, 0.93), w2.a);
+	col = mix(col, ice_col, ic);
 	ALBEDO = col;
-	ROUGHNESS = mix(0.04, 0.5, foam);
+	ROUGHNESS = mix(mix(0.04, 0.5, foam), 0.3, ic);
 	SPECULAR = 0.7;
 	METALLIC = 0.0;
 	ALPHA = 1.0;

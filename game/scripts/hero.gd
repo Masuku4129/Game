@@ -162,7 +162,7 @@ func _can_walk(p: Vector3) -> bool:
 	if absf(p.x) > half or absf(p.z) > half:
 		return false
 	var y: float = main.height(p.x, p.z)
-	if y < main.WATER_Y - 0.9:
+	if y < main.WATER_Y - 0.9 and main.weather.ice < 0.85:
 		return false
 	if y - position.y > 1.1:
 		return false
@@ -190,7 +190,7 @@ func _process(delta: float) -> void:
 			f = clampf(1.0 + along * slope * 1.7, 0.3, 1.0)
 		else:
 			f = minf(1.0 + along * slope * 0.25, 1.2)
-		target = d * speed * mag * f
+		target = d * speed * mag * f * (1.0 - main.weather.snow * 0.3)
 	# крутой склон: человека тянет вниз, он теряет управление и катится
 	var s := 0.0
 	sliding = lerpf(sliding, s, minf(1.0, 4.0 * delta))
@@ -218,7 +218,7 @@ func _process(delta: float) -> void:
 		var face: Vector3 = d if mag > 0.12 and sliding < 0.4 else vel.normalized()
 		body.rotation.y = lerp_angle(body.rotation.y, atan2(face.x, face.z), minf(1.0, 9.0 * delta))
 	var ground: float = main.height(position.x, position.z)
-	var ty := maxf(ground, main.WATER_Y - 0.35)
+	var ty := maxf(ground, main.WATER_Y if main.weather.ice >= 0.85 else main.WATER_Y - 0.35)
 	position.y = lerpf(position.y, ty, minf(1.0, 14.0 * delta))
 	# походка: фаза от пройденного пути, размах от скорости
 	var sn := clampf(sp / speed, 0.0, 1.3)

@@ -1,6 +1,7 @@
 shader_type spatial;
 render_mode diffuse_burley;
 #include "res://shaders/fade.gdshaderinc"
+#include "res://shaders/weather.gdshaderinc"
 // Камни и валуны: трипланарная текстура скалы в двух масштабах с рельефом из карты высот.
 uniform sampler2D rock : source_color, filter_linear_mipmap_anisotropic, repeat_enable;
 uniform float tile = 0.55;
@@ -45,7 +46,10 @@ void fragment() {
 	vec3 nw = normalize(wn - g * bump * 9.0);
 	NORMAL = normalize((VIEW_MATRIX * vec4(nw, 0.0)).xyz);
 	// мох сверху по цвету вершин
-	ALBEDO = col * COLOR.rgb * (0.65 + a.a * 0.6);
-	ROUGHNESS = 0.95;
+	vec3 alb = col * COLOR.rgb * (0.65 + a.a * 0.6);
+	alb *= 1.0 - wet * 0.35;
+	alb = mix(alb, vec3(0.88, 0.9, 0.94), snow_cover(nw.y, wp));
+	ALBEDO = alb;
+	ROUGHNESS = mix(0.95, 0.35, wet);
 	SPECULAR = 0.2;
 }

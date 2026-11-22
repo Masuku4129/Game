@@ -1,18 +1,23 @@
 shader_type spatial;
 render_mode diffuse_burley;
 #include "res://shaders/fade.gdshaderinc"
+#include "res://shaders/weather.gdshaderinc"
 uniform sampler2D tex : source_color, filter_linear_mipmap_anisotropic, repeat_enable;
 uniform vec4 tint : source_color = vec4(1.0);
 varying vec3 wpf;
+varying float upn;
 
 void vertex() {
 	wpf = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;
+	upn = normalize((MODEL_MATRIX * vec4(NORMAL, 0.0)).xyz).y;
 }
 
 void fragment() {
 	if (fade_discard(wpf, FRAGCOORD.xy)) {
 		discard;
 	}
-	ALBEDO = texture(tex, UV).rgb * tint.rgb * COLOR.rgb;
-	ROUGHNESS = 1.0;
+	vec3 col = texture(tex, UV).rgb * tint.rgb * COLOR.rgb * (1.0 - wet * 0.3);
+	col = mix(col, vec3(0.88, 0.9, 0.94), snow_cover(upn, wpf) * 0.9);
+	ALBEDO = col;
+	ROUGHNESS = mix(1.0, 0.6, wet);
 }
