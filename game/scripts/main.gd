@@ -50,6 +50,10 @@ var msg := ""
 var water_mat: ShaderMaterial
 var beavers
 var inventory  # короб: inventory.gd
+# --- tools: инструменты, валка, брёвна, копья (world_tools.gd) ---
+var tools_world
+var res_spots := {}      # клетка 8 м → [[позиция, вид]] — кусты, ягодники (нож, руки)
+var fallen_spots := {}   # клетка 16 м → [{kind, mm, i, xf, a, b, r}] — бурелом под топор
 var hunt  # --- hunt: туши, разделка, кровь, запах крови (hunt.gd) ---
 var camp  # --- build: лагерь и постройки (structures.gd) ---
 
@@ -82,6 +86,12 @@ func _ready() -> void:
 	sfx = preload("res://scripts/sfx.gd").new()
 	sfx.main = self
 	add_child(sfx)
+	tools_world = preload("res://scripts/world_tools.gd").new()
+	tools_world.main = self
+	add_child(tools_world)
+	# с собой только кремнёвый нож на поясе
+	inv["knife"] = 1
+	hero.tools.to_belt("knife")
 	rig = preload("res://scripts/camera_rig.gd").new()
 	rig.target = hero
 	add_child(rig)
@@ -119,6 +129,7 @@ func _ready() -> void:
 	inventory = preload("res://scripts/inventory.gd").new()
 	inventory.main = self
 	ui.add_child(inventory)
+	hud.setup(self)
 	# --- hunt: разделка туш, кровь, запах крови (hunt.gd) ---
 	hunt = preload("res://scripts/hunt.gd").new()
 	hunt.main = self
@@ -799,12 +810,6 @@ func _update_stats(dt: float) -> void:
 		info += "Кровотечение! "
 	if not injuries.is_empty():
 		info += ", ".join(PackedStringArray(injuries.keys())) + " "
-	var items := PackedStringArray()
-	for k in inv.keys():
-		if int(inv[k]) > 0:
-			items.append("%s %d" % [PICK_NAME.get(k, preload("res://scripts/items.gd").name_of(k).to_lower()), inv[k]])  # hunt: любые предметы из items.gd
-	if not items.is_empty():
-		info += "· " + ", ".join(items)
 	if msg_t > 0.0:
 		info = msg + "   " + info
 	hud.set_state([health, hunger, thirst, warmth, stamina], "%s, день %d · %02d:%02d · %d°C · %s" % [weather.season_name(), day_count, hh, mm, temp, weather.kind], info)
@@ -1092,7 +1097,7 @@ func _update_near(force: bool = false) -> void:
 		mi.visible = true
 
 const PICK := ["berry", "mushroom", "twig", "pebble"]
-const PICK_NAME := {"berry": "ягоды", "mushroom": "гриб", "amanita": "мухомор", "twig": "хворост", "pebble": "камень"}
+const PICK_NAME := {"berry": "ягоды", "mushroom": "гриб", "amanita": "мухомор", "twig": "хворост", "pebble": "камень", "flint": "кремень"}
 
 func _add_pick(p: Vector3, kind: String, mm: MultiMesh, i: int) -> void:
 	var k := Vector2i(floori(p.x / 8.0), floori(p.z / 8.0))
@@ -1248,7 +1253,8 @@ func _respawn() -> void:
 	warmth = maxf(warmth, 0.5)
 	stamina = 1.0
 	for k in inv.keys():
-		inv[k] = int(inv[k]) / 2
+		if not preload("res://scripts/items.gd").DEF.get(k, {}).has("tool"):
+			inv[k] = int(inv[k]) / 2
 	hero.revive(_find_start())
 
 ## Множитель скорости от ран: хромота при ранах ноги, сильнее при переломе.
@@ -1548,7 +1554,42 @@ func _place_cell_records(mm: MultiMesh, xs: Array, r: Array, vi: int, vars: Arra
 		if pk == "mushroom" and vi < 2:
 			pk = "amanita"
 		for i in xs.size():
-			_add_pick(xs[i].origin, pk, mm, i)
+			var po: Vector3 = xs[i].origin
+			# --- tools: среди камней на скалистом месте попадается кремень
+			var pki := pk
+			if pk == "pebble" and (cliff_k(po.x, po.z) > 0.15 or posmod(int(po.x * 7.3) + int(po.z * 3.1), 4) == 0):
+				pki = "flint"
+			_add_pick(po, pki, mm, i)
+	_tools_records(mm, xs, String(r[0]), vars[vi])
+
+## --- tools: места сбора (кусты, ягодники) и бурелом под топор.
+func _tools_records(mm: MultiMesh, xs: Array, kind: String, v: Array) -> void:
+	if kind in ["bush", "willow", "alder", "rose", "ernik", "cherry", "fireweed", "raspberry", "currant", "bilberry", "lingon", "cranberry", "cloudberry"]:
+		for t: Transform3D in xs:
+			var k := Vector2i(floori(t.origin.x / 8.0), floori(t.origin.z / 8.0))
+			if not res_spots.has(k):
+				res_spots[k] = []
+			res_spots[k].append([t.origin, kind])
+	elif kind in ["fallen0", "fallen1", "mosslog"]:
+		for i in xs.size():
+			var t: Transform3D = xs[i]
+			var s := t.basis.x.length()
+			var a := Vector3.ZERO
+			var b := Vector3.ZERO
+			var r := 0.3
+			if kind == "mosslog":
+				var hl: float = float(v[1]) * 0.5
+				r = float(v[2]) * s
+				a = t * Vector3(-hl, float(v[2]) * 0.8, 0)
+				b = t * Vector3(hl, float(v[2]) * 0.7, 0)
+			else:
+				r = float(v[2]) * s
+				a = t * Vector3(float(v[4]), float(v[3]), 0)
+				b = t * Vector3(float(v[4]) + float(v[1]) * 0.85, 0.12, 0)
+			var k := Vector2i(floori((a.x + b.x) * 0.5 / 16.0), floori((a.z + b.z) * 0.5 / 16.0))
+			if not fallen_spots.has(k):
+				fallen_spots[k] = []
+			fallen_spots[k].append({"kind": kind, "mm": mm, "i": i, "xf": t, "a": a, "b": b, "r": r})
 
 # ---------- занятость места: стволы, камни и поваленные деревья не пересекаются ----------
 var occ := {}

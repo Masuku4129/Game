@@ -43,6 +43,8 @@ func _ready() -> void:
 		_hunt()
 	elif who == "build":
 		_build_studio()
+	elif who == "tools":
+		_tools()
 
 ## Бобр: ракурсы и позы (шаг, плавание, грызёт, хлопок хвостом). STUDIO=beaver
 var bv: Node3D
@@ -210,6 +212,8 @@ func _process(_d: float) -> void:
 		var m: Node3D = subj.model
 		m.position = Vector3.ZERO
 		seat.visible = an.begins_with("Sitting")
+		if t.size() > 8:
+			_tools_pose(t[8])
 	if wait == 1 and seat != null and seat.visible:
 		var py: float = sk.get_bone_global_pose(sk.find_bone("pelvis")).origin.y
 		seat.position = Vector3(0, (py - 0.1) * 0.5, -0.05)
@@ -694,3 +698,61 @@ func _build_step() -> void:
 	sheets[key].append(crop)
 	print("studio ", key, " ", t[5], " ", t[7])
 	ti += 1
+
+# ---------- STUDIO=tools: нож, топор, копьё в руке и на поясе; бревно на плече; падение дерева ----------
+var fell: Node3D
+
+func _tools() -> void:
+	_hero()
+	tiles.clear()
+	var v2 := [[25, 6, 1.6, 1.05, "3/4 справа"], [-70, 10, 1.6, 1.05, "слева"]]
+	# в руке: крупно с двух сторон
+	for id in ["knife", "axe"]:
+		for v: Array in v2:
+			tiles.append(["tools_hand", float(v[0]) - 60.0, v[1], 1.3, 1.0, "Idle", 0.3, id, {"held": id, "belt": []}])
+	# на поясе
+	for v: Array in [[-90, 8, 1.6, 0.95], [100, 8, 1.6, 0.95], [180, 8, 1.8, 0.95], [40, 8, 1.8, 0.95]]:
+		tiles.append(["tools_belt", v[0], v[1], v[2], v[3], "Idle", 0.3, "пояс", {"held": "", "belt": ["knife", "axe"]}])
+	tiles.append(["tools_belt", -90, 8, 1.8, 0.95, "Walk", 0.3, "шаг", {"held": "", "belt": ["knife", "axe"]}])
+	tiles.append(["tools_belt", 100, 8, 1.8, 0.95, "Walk", 0.95, "шаг", {"held": "", "belt": ["knife", "axe"]}])
+	tiles.append(["tools_belt", 30, 8, 3.0, 0.95, "Walk", 0.5, "нож в руке", {"held": "knife", "belt": ["axe"]}])
+	tiles.append(["tools_belt", 30, 8, 3.0, 0.95, "Walk", 0.5, "топор в руке", {"held": "axe", "belt": ["knife"]}])
+	# копьё и действия
+	for v: Array in [[40, 8, 3.4, 1.0], [-80, 8, 3.4, 1.0]]:
+		tiles.append(["tools_spear", v[0], v[1], v[2], v[3], "Idle", 0.3, "копьё", {"held": "spear", "belt": ["knife"]}])
+	tiles.append(["tools_spear", 70, 8, 3.4, 1.0, "Walk", 0.4, "копьё, шаг", {"held": "spear", "belt": ["knife"]}])
+	tiles.append(["tools_spear", 70, 8, 3.6, 1.0, "Idle", 0.3, "удар", {"held": "spear", "act": "stab", "u": 0.45}])
+	tiles.append(["tools_spear", 70, 8, 3.6, 1.1, "OverhandThrow", 0.2, "замах", {"held": "spear", "act": "throw", "t": 0.2}])
+	tiles.append(["tools_spear", 70, 8, 3.6, 1.0, "Idle", 0.3, "воткнуто", {"held": "spear", "act": "stick", "u": 0.6}])
+	tiles.append(["tools_spear", 70, 8, 3.4, 1.0, "TreeChopping", 0.05, "замах топором", {"held": "axe", "act": "chop"}])
+	tiles.append(["tools_spear", 70, 8, 3.4, 1.0, "TreeChopping", 0.18, "удар топором", {"held": "axe", "act": "chop"}])
+	tiles.append(["tools_log", 60, 8, 3.4, 1.1, "Walk", 0.4, "бревно", {"held": "log"}])
+	tiles.append(["tools_log", -60, 8, 3.4, 1.1, "Idle", 0.4, "бревно", {"held": "log"}])
+	# падение дерева
+	for th: float in [0.0, 0.35, 0.8, 1.2, 1.5]:
+		tiles.append(["tools_fall", 75, 12, 13.0, 3.0, "TreeChopping", 0.18, "падение %.2f" % th, {"held": "axe", "act": "chop", "fall": th}])
+
+func _tools_pose(cfg: Dictionary) -> void:
+	var T: Node = subj.tools
+	T.act = String(cfg.get("act", ""))
+	T.held = String(cfg.get("held", ""))
+	T.belt = cfg.get("belt", []).duplicate()
+	T.act_dur = 1.0 if T.act != "throw" else 1.2
+	T.act_t = float(cfg.get("u", 0.0)) * T.act_dur
+	if cfg.has("t"):
+		T.act_t = float(cfg["t"])
+	T.act_data = {}
+	T._refresh()
+	if cfg.has("fall"):
+		if fell == null:
+			var pv = load("res://scripts/pveg.gd").new()
+			var r: Array = pv.birch(401)
+			var WT = load("res://scripts/world_tools.gd")
+			fell = WT.FellTree.new()
+			add_child(fell)
+			fell.setup(r[0], Transform3D(Basis().scaled(Vector3(1.1, 1.1, 1.1)), Vector3(0, 0, 1.15)), "birch", null, Vector3.ZERO)
+			for i in 9:
+				fell.hit()
+		fell.phase = "fall"
+		fell.th = float(cfg["fall"])
+		fell.pivot.basis = Basis(fell.axis, fell.th)
