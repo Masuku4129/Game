@@ -11,6 +11,8 @@ const ANIMALS := {
 	"wolf": {"path": "res://models/animals/Wolf.gltf", "scale": 0.34,
 		"cols": {"Main": Color(0.47, 0.44, 0.4), "Main_Light": Color(0.76, 0.72, 0.66)},
 		"winter": {"Main": Color(0.56, 0.54, 0.5)}},
+	"boar": {"path": "res://models/animals/Pig.fbx", "scale": 0.22, "rig": true,
+		"cols": {"Material": Color(0.24, 0.19, 0.15), "Material.003": Color(0.2, 0.16, 0.13)}, "winter": {}},
 	"fox": {"path": "res://models/animals/Fox.gltf", "scale": 0.2,
 		"cols": {"Main": Color(0.8, 0.4, 0.15), "Main_Light": Color(0.92, 0.88, 0.82), "Black": Color(0.12, 0.09, 0.07)},
 		"winter": {}},
@@ -97,7 +99,52 @@ static func build_animal(root: Node3D, kind: String, scale_k: float, winter: boo
 		cols.merge(cfg["winter"], true)
 	repaint(n, cols)
 	var ap: AnimationPlayer = n.find_children("*", "AnimationPlayer", true, false)[0]
+	if cfg.get("rig", false):
+		return _rig_legs(n, ap, s, kind)
 	loop_anims(ap, ["Walk", "Gallop", "Idle", "Idle_2", "Eating", "Idle_Headlow", "Idle_2_HeadLow"])
 	ap.playback_default_blend_time = 0.3
 	ap.play(find_anim(ap, ["Idle"]))
 	return {"model": n, "ap": ap, "L": 4.4 * s, "H": 2.0 * s, "cur": ""}
+
+
+## Модель без анимации шага (кабан): ноги ведём сами — стопы по циклу шага, колени через IK.
+const LEGS := [["FrontUpLeg.L", "FrontLowLeg.L_end", "FrontFoot.L"], ["FrontUpLeg.R", "FrontLowLeg.R_end", "FrontFoot.R"], ["BackUpLeg.L", "BackLowLeg.L_end", "BackFoot.L"], ["BackUpLeg.R", "BackLowLeg.R_end", "BackFoot.R"]]
+
+static func _rig_legs(n: Node3D, ap: AnimationPlayer, s: float, kind: String) -> Dictionary:
+	ap.stop()
+	ap.active = false
+	var sk: Skeleton3D = n.find_children("*", "Skeleton3D", true, false)[0]
+	var legs := []
+	for l in LEGS:
+		var fi := sk.find_bone(l[2])
+		var ik := SkeletonIK3D.new()
+		ik.root_bone = l[0]
+		ik.tip_bone = l[1]
+		ik.override_tip_basis = false
+		ik.interpolation = 1.0
+		sk.add_child(ik)
+		var tg := Node3D.new()
+		sk.add_child(tg)
+		ik.target_node = ik.get_path_to(tg)
+		legs.append({"ik": ik, "tg": tg, "foot": fi, "rest": sk.get_bone_rest(fi).origin})
+	# головы и хвост остаются в позе покоя; модель: длина ~7.5 ед., голова на высоте ~3 ед.
+	return {"model": n, "rig": sk, "legs": legs, "L": 7.0 * s, "H": 3.0 * s, "cur": "", "ph": 0.0}
+
+## Цикл шага для модели с ногами на IK. ph — фаза, k — размах (0 — стоит).
+static func step_legs(parts: Dictionary, ph: float, k: float, gallop: bool) -> void:
+	var sk: Skeleton3D = parts["rig"]
+	var offs := [0.0, 0.5, 0.5, 0.0] if not gallop else [0.0, 0.1, 0.5, 0.6]
+	var i := 0
+	for lg in parts["legs"]:
+		var p: float = ph + float(offs[i]) * TAU
+		var rest: Vector3 = lg["rest"]
+		# скелет Z-вверх, вперёд — по -Y (как в Blender): шаг вдоль -Y, подъём вдоль +Z
+		var fwd := -sin(p) * 0.45 * k
+		var lift := maxf(0.0, cos(p)) * 0.35 * k
+		var pos := rest + Vector3(0, -fwd, lift) * 0.01
+		sk.set_bone_pose_position(lg["foot"], pos)
+		var tg: Node3D = lg["tg"]
+		tg.transform = Transform3D(Basis(), pos)
+		var ik: SkeletonIK3D = lg["ik"]
+		ik.start(true)
+		i += 1

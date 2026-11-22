@@ -473,7 +473,7 @@ func _shots() -> void:
 		# крупный план: по одному зверю каждого вида с готовой моделью рядом с героем
 		var k := 0
 		for a in animals.list:
-			if a.kind in ["roe", "deer", "wolf", "fox"] and k < 4 and not (a.kind in _shot_kinds):
+			if a.kind in ["roe", "deer", "wolf", "fox", "boar"] and k < 5 and not (a.kind in _shot_kinds):
 				_shot_kinds.append(a.kind)
 				var ang := 0.6 + k * 0.9
 				a.position = hero.position + Vector3(cos(ang), 0, sin(ang)) * (3.0 + k * 1.2)
@@ -482,7 +482,7 @@ func _shots() -> void:
 				a.position.y = ground_at(a.position.x, a.position.z)
 				a.rotation.y = ang + PI * 0.5
 				a.visible = true
-				if a.parts.has("ap"):
+				if a.parts.has("ap") and not a.parts.has("rig"):
 					a.parts["ap"].active = true
 					a.speed = 0.0
 					a._animate_model(0.016)

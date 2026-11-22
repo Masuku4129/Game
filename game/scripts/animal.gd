@@ -390,6 +390,13 @@ func _animate_model(delta: float) -> void:
 	m.rotation.x = lerpf(m.rotation.x, -atan2(hf - hb, L * 0.8), minf(1.0, delta * 6.0))
 
 func _animate(delta: float) -> void:
+	if parts.has("rig"):
+		var r := clampf(speed / float(sp["run"]), 0.0, 1.0)
+		parts["ph"] = float(parts["ph"]) + speed / maxf(float(parts["H"]) * 1.6, 0.05) * TAU * delta
+		SK.step_legs(parts, parts["ph"], clampf(speed * 2.0, 0.0, 1.0) * (1.0 + r * 0.8), r > 0.4)
+		var m: Node3D = parts["model"]
+		m.position.y = absf(sin(float(parts["ph"]))) * 0.03 * clampf(speed, 0.0, 1.0)
+		return
 	if parts.has("ap"):
 		_animate_model(delta)
 		return
