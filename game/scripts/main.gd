@@ -587,8 +587,8 @@ func _scatter_all() -> void:
 							_add_blocker(x + ax.x * t, z + ax.z * t, 0.4)
 						var yaw := atan2(ax.z, -ax.x)
 						for t in [-1.2, 1.2]:
-							var sx := x + ax.x * t
-							var sz := z + ax.z * t
+							var sx: float = x + ax.x * t
+							var sz: float = z + ax.z * t
 							_add_seat(Vector3(sx, height(sx, sz) + 0.62 * s, sz), yaw)
 					if r[0] == "stump":
 						_add_seat(Vector3(x, height(x, z) + 0.7 * s, z), rng.randf() * TAU)
