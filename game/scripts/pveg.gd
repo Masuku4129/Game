@@ -12,11 +12,11 @@ func _init() -> void:
 	var fol := load("res://shaders/paint/foliage.gdshader")
 	var brk := load("res://shaders/paint/bark.gdshader")
 	for f in [
-		["spruce", Color(0.08, 0.16, 0.12), Color(0.17, 0.3, 0.2), Color(0.4, 0.52, 0.28), 0.0],
-		["pine", Color(0.07, 0.15, 0.1), Color(0.18, 0.31, 0.16), Color(0.4, 0.5, 0.22), 0.3],
-		["birch", Color(0.12, 0.22, 0.1), Color(0.3, 0.44, 0.16), Color(0.58, 0.64, 0.24), 1.0],
-		["leaf", Color(0.1, 0.2, 0.1), Color(0.24, 0.38, 0.15), Color(0.5, 0.58, 0.22), 1.0],
-		["bush", Color(0.09, 0.18, 0.08), Color(0.22, 0.34, 0.13), Color(0.45, 0.52, 0.2), 0.8],
+		["spruce", Color(0.08, 0.17, 0.13), Color(0.2, 0.34, 0.22), Color(0.46, 0.58, 0.3), 0.0],
+		["pine", Color(0.1, 0.19, 0.11), Color(0.24, 0.38, 0.18), Color(0.55, 0.62, 0.26), 0.3],
+		["birch", Color(0.14, 0.25, 0.11), Color(0.36, 0.5, 0.18), Color(0.7, 0.74, 0.3), 1.0],
+		["leaf", Color(0.12, 0.22, 0.1), Color(0.3, 0.45, 0.17), Color(0.62, 0.68, 0.27), 1.0],
+		["bush", Color(0.1, 0.2, 0.09), Color(0.26, 0.4, 0.15), Color(0.56, 0.62, 0.24), 0.8],
 	]:
 		var m := ShaderMaterial.new()
 		m.shader = fol
@@ -150,7 +150,7 @@ func _icosphere() -> Array:
 	return [v, out]
 
 ## Пятно кроны: 2–3 сросшихся облака дают неровный «живописный» край.
-var cards: SurfaceTool
+var cards: SurfaceTool = null
 
 func clump(st: SurfaceTool, c: Vector3, sc: Vector3, shade: float) -> void:
 	leafblob(st, cards, c, sc, shade)
@@ -216,6 +216,16 @@ func skirt(st: SurfaceTool, y: float, r: float, h: float, teeth: int, shade: flo
 		var dy := -r * (0.38 if i % 2 == 0 else 0.22) + R(-0.06, 0.06)
 		ring.append(Vector3(cos(a) * rr, y + dy, sin(a) * rr))
 	var inner := Vector3(0, y + h * 0.25, 0)
+	if cards != null:
+		for i in range(0, n, 2):
+			var tip: Vector3 = ring[i]
+			var outv := Vector3(tip.x, 0, tip.z).normalized()
+			for corner in [[0, 0], [1, 0], [1, 1], [0, 0], [1, 1], [0, 1]]:
+				cards.set_color(Color(clampf(shade + R(-0.15, 0.15), 0.0, 1.0), 0, 0, 1))
+				cards.set_normal((outv * 0.8 + Vector3(0, 0.6, 0)).normalized())
+				cards.set_uv(Vector2(corner[0], corner[1]))
+				cards.set_uv2(Vector2(r * 0.32 + 0.12, R(0, TAU)))
+				cards.add_vertex(tip - outv * r * 0.12)
 	for i in n:
 		var a: Vector3 = ring[i]
 		var b: Vector3 = ring[(i + 1) % n]
@@ -250,6 +260,7 @@ func spruce(seed_v: int) -> Array:
 	var H := R(7.0, 11.0)
 	var bk := _st()
 	var fl := _st()
+	cards = _st()
 	trunk(bk, Vector3.ZERO, Vector3(0, H * 0.5, 0), Vector3(0, H * 0.9, 0), 0.24, 0.05, 2, 6)
 	var tiers := rng.randi_range(8, 11)
 	var R0 := H * R(0.2, 0.25)
@@ -259,7 +270,9 @@ func spruce(seed_v: int) -> Array:
 		var r := R0 * (1.0 - t * 0.85) * R(0.9, 1.1)
 		skirt(fl, y, r, r * 0.7 + 0.4, rng.randi_range(9, 13), lerpf(0.5, 1.0, t))
 	skirt(fl, H * 0.9, 0.35, H * 0.12, 4, 1.0)
-	return [_mesh([[bk, "bark"], [fl, "spruce"]]), H]
+	var out := [_mesh([[bk, "bark"], [fl, "spruce"], [cards, "spruce_card"]]), H]
+	cards = null
+	return out
 
 ## Сосна: высокий рыжий ствол, несколько плоских облаков наверху.
 func pine(seed_v: int) -> Array:
@@ -340,14 +353,16 @@ func rock(seed_v: int) -> Array:
 func tuft(seed_v: int, tall: float = 1.0) -> Array:
 	rng.seed = seed_v
 	var st := _st()
-	var h := R(0.35, 0.55) * tall
-	var w := R(0.5, 0.75)
-	for k in 3:
-		var a := PI * k / 3.0 + R(-0.2, 0.2)
-		var d := Vector3(cos(a), 0, sin(a)) * w * 0.5
-		var lean := Vector3(R(-0.08, 0.08), 0, R(-0.08, 0.08))
+	var h := R(0.3, 0.45) * tall
+	var w := R(0.35, 0.5)
+	for k in 5:
+		var a := TAU * k / 5.0 + R(-0.25, 0.25)
+		var o := Vector3(cos(a), 0, sin(a))
+		var d := Vector3(-o.z, 0, o.x) * w * 0.5
+		# карточка наклонена наружу — сверху пучок читается веером, а не крестом
+		var lean := o * h * R(0.5, 0.8)
 		var sh := R(0.0, 1.0)
-		var pts := [[-d, Vector2(0, 1)], [d, Vector2(1, 1)], [d + Vector3(0, h, 0) + lean, Vector2(1, 0)], [-d + Vector3(0, h, 0) + lean, Vector2(0, 0)]]
+		var pts := [[-d * 0.6, Vector2(0, 1)], [d * 0.6, Vector2(1, 1)], [d + Vector3(0, h * 0.8, 0) + lean, Vector2(1, 0)], [-d + Vector3(0, h * 0.8, 0) + lean, Vector2(0, 0)]]
 		for idx in [0, 1, 2, 0, 2, 3]:
 			st.set_color(Color(sh, 0, 0, 1))
 			st.set_normal(Vector3.UP)

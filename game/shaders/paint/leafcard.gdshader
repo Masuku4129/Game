@@ -32,7 +32,7 @@ void vertex() {
 void fragment() {
 	vec4 b = texture(brush, UV);
 	float up = wn.y * 0.5 + 0.5;
-	float g = clamp(up * 0.85 + (b.g - 0.5) * 0.6 + shade * 0.25 - 0.15, 0.0, 1.0);
+	float g = clamp(up * 1.0 + (b.g - 0.5) * 0.6 + shade * 0.25 - 0.2, 0.0, 1.0);
 	vec3 c = g < 0.5 ? mix(lin(col_dark), lin(col_mid), g * 2.0) : mix(lin(col_mid), lin(col_light), g * 2.0 - 1.0);
 	c = mix(c, mix(lin(col_autumn) * 0.7, lin(col_autumn), g), autumn);
 	c = mix(c, vec3(0.9, 0.93, 0.97), smoothstep(0.6, 0.85, wn.y + b.g * 0.2) * snow);
