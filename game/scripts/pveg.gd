@@ -35,8 +35,93 @@ func _init() -> void:
 	rk.shader = load("res://shaders/paint/rock.gdshader")
 	mats["rock"] = rk
 	var tf := ShaderMaterial.new()
-	tf.shader = load("res://shaders/paint/tuft.gdshader")
+	tf.shader = load("res://shaders/paint/grasscard.gdshader")
+	tf.set_shader_parameter("strokes_tex", _grass_tex())
 	mats["tuft"] = tf
+	# мазки листвы: те же цвета, что у сплошных крон
+	var bt := _brush_tex()
+	var lc := load("res://shaders/paint/leafcard.gdshader")
+	for k in ["spruce", "pine", "birch", "leaf", "bush"]:
+		var m := ShaderMaterial.new()
+		m.shader = lc
+		m.set_shader_parameter("brush", bt)
+		for p in ["col_dark", "col_mid", "col_light"]:
+			m.set_shader_parameter(p, mats[k].get_shader_parameter(p))
+		mats[k + "_card"] = m
+
+## Текстура мазка листвы: десяток листьев-эллипсов в круге, рваный край, g — оттенок.
+func _brush_tex() -> Texture2D:
+	var n := 128
+	var img := Image.create(n, n, false, Image.FORMAT_RGBA8)
+	img.fill(Color(0, 0, 0, 0))
+	var r := RandomNumberGenerator.new()
+	r.seed = 77
+	for i in 18:
+		var a := r.randf() * TAU
+		var d := sqrt(r.randf()) * 0.3
+		var cx := 0.5 + cos(a) * d
+		var cy := 0.5 + sin(a) * d
+		var ang := r.randf() * PI
+		var la := r.randf_range(0.1, 0.17)
+		var lb := la * r.randf_range(0.4, 0.6)
+		var g := clampf(0.55 - (cy - 0.5) * 1.2 + r.randf_range(-0.2, 0.2), 0.0, 1.0)
+		var ca := cos(ang)
+		var sa := sin(ang)
+		for y in range(maxi(0, int((cy - la) * n)), mini(n, int((cy + la) * n) + 1)):
+			for x in range(maxi(0, int((cx - la) * n)), mini(n, int((cx + la) * n) + 1)):
+				var dx := float(x) / n - cx
+				var dy := float(y) / n - cy
+				var u := (dx * ca + dy * sa) / la
+				var v := (-dx * sa + dy * ca) / lb
+				if u * u + v * v < 1.0:
+					img.set_pixel(x, y, Color(0, g, 0, 1))
+	img.generate_mipmaps()
+	return ImageTexture.create_from_image(img)
+
+## Текстура пучка травы: вертикальные сужающиеся мазки от низа.
+func _grass_tex() -> Texture2D:
+	var w := 64
+	var h := 96
+	var img := Image.create(w, h, false, Image.FORMAT_RGBA8)
+	img.fill(Color(0, 0, 0, 0))
+	var r := RandomNumberGenerator.new()
+	r.seed = 91
+	for i in 16:
+		var x0 := r.randf_range(0.12, 0.88)
+		var bend := r.randf_range(-0.25, 0.25)
+		var top := r.randf_range(0.05, 0.5)
+		var wd := r.randf_range(0.03, 0.06)
+		var g := r.randf()
+		for y in h:
+			var t := float(y) / h
+			if t < top:
+				continue
+			var k := (1.0 - t) / (1.0 - top)
+			var cx := x0 + bend * k * k
+			var half := wd * (1.0 - k) + 0.004
+			for x in range(maxi(0, int((cx - half) * w)), mini(w, int((cx + half) * w) + 1)):
+				img.set_pixel(x, y, Color(0, g, 0, 1))
+	img.generate_mipmaps()
+	return ImageTexture.create_from_image(img)
+
+## Облако из мазков: сплошное ядро + карточки-мазки по поверхности (рваный край).
+func leafblob(core: SurfaceTool, cards: SurfaceTool, c: Vector3, sc: Vector3, shade: float) -> void:
+	blob(core, c, sc * 0.78, shade * 0.6)
+	var verts: Array = _ico[0]
+	var sz := (sc.x + sc.y + sc.z) / 3.0 * 0.62
+	for p in verts:
+		var q: Vector3 = p
+		var pos := c + Vector3(q.x * sc.x, q.y * sc.y * (0.7 if q.y < 0 else 1.0), q.z * sc.z) * R(0.85, 1.0)
+		var nrm := (q + Vector3(0, 0.35, 0)).normalized()
+		var rot := R(0, TAU)
+		var sh := clampf(shade + R(-0.2, 0.2), 0.0, 1.0)
+		var s2 := sz * R(0.8, 1.2)
+		for corner in [[0, 0], [1, 0], [1, 1], [0, 0], [1, 1], [0, 1]]:
+			cards.set_color(Color(sh, 0, 0, 1))
+			cards.set_normal(nrm)
+			cards.set_uv(Vector2(corner[0], corner[1]))
+			cards.set_uv2(Vector2(s2, rot))
+			cards.add_vertex(pos)
 
 func R(a: float, b: float) -> float:
 	return rng.randf_range(a, b)
@@ -65,11 +150,13 @@ func _icosphere() -> Array:
 	return [v, out]
 
 ## Пятно кроны: 2–3 сросшихся облака дают неровный «живописный» край.
+var cards: SurfaceTool
+
 func clump(st: SurfaceTool, c: Vector3, sc: Vector3, shade: float) -> void:
-	blob(st, c, sc, shade)
-	for i in rng.randi_range(1, 2):
+	leafblob(st, cards, c, sc, shade)
+	for i in rng.randi_range(0, 1):
 		var o := Vector3(R(-0.6, 0.6), R(-0.2, 0.4), R(-0.6, 0.6)) * sc
-		blob(st, c + o, sc * R(0.5, 0.7), clampf(shade + R(-0.2, 0.3), 0.0, 1.0))
+		leafblob(st, cards, c + o, sc * R(0.55, 0.75), clampf(shade + R(-0.2, 0.3), 0.0, 1.0))
 
 ## Облако листвы: искажённая шумом сфера, нормали — от центра (мягкий объём), чуть вверх.
 func blob(st: SurfaceTool, c: Vector3, sc: Vector3, shade: float, autumn_k: float = 1.0) -> void:
@@ -180,6 +267,7 @@ func pine(seed_v: int) -> Array:
 	var H := R(11.0, 15.0)
 	var bk := _st()
 	var fl := _st()
+	cards = _st()
 	var top := Vector3(R(-0.6, 0.6), H, R(-0.6, 0.6))
 	trunk(bk, Vector3.ZERO, Vector3(R(-0.3, 0.3), H * 0.5, R(-0.3, 0.3)), top, 0.28, 0.08, 4, 6)
 	for i in rng.randi_range(3, 5):
@@ -189,7 +277,7 @@ func pine(seed_v: int) -> Array:
 		var c := Vector3(cos(a) * d, y, sin(a) * d) + top * Vector3(1, 0, 1) * (y / H)
 		trunk(bk, Vector3(top.x * y / H * 0.8, y - 0.8, top.z * y / H * 0.8), (Vector3(top.x * y / H, y - 0.6, top.z * y / H) + c) * 0.5, c, 0.07, 0.03, 1, 4)
 		clump(fl, c + Vector3(0, 0.3, 0), Vector3(R(1.3, 2.0), R(0.6, 0.9), R(1.3, 2.0)), R(0.4, 1.0))
-	return [_mesh([[bk, "bark_pine"], [fl, "pine"]]), H]
+	return [_mesh([[bk, "bark_pine"], [fl, "pine"], [cards, "pine_card"]]), H]
 
 ## Берёза: белый ствол с наклоном, вертикальные лёгкие облака.
 func birch(seed_v: int, kind: String = "birch") -> Array:
@@ -197,6 +285,7 @@ func birch(seed_v: int, kind: String = "birch") -> Array:
 	var H := R(8.0, 11.0)
 	var bk := _st()
 	var fl := _st()
+	cards = _st()
 	var top := Vector3(R(-0.8, 0.8), H, R(-0.8, 0.8))
 	trunk(bk, Vector3.ZERO, Vector3(R(-0.3, 0.3), H * 0.5, R(-0.3, 0.3)), top, 0.17, 0.05, 4, 6)
 	var n := rng.randi_range(5, 8)
@@ -210,16 +299,18 @@ func birch(seed_v: int, kind: String = "birch") -> Array:
 		if i % 2 == 0:
 			trunk(bk, axis - Vector3(0, 0.5, 0), (axis + c) * 0.5, c, 0.05, 0.02, 1, 4)
 		clump(fl, c, Vector3(R(0.8, 1.2), R(0.8, 1.3), R(0.8, 1.2)) * (1.0 - t * 0.3), R(0.3, 1.0))
-	return [_mesh([[bk, "bark_birch"], [fl, "birch" if kind == "birch" else "leaf"]]), H]
+	var lk := "birch" if kind == "birch" else "leaf"
+	return [_mesh([[bk, "bark_birch"], [fl, lk], [cards, lk + "_card"]]), H]
 
 func bush(seed_v: int) -> Array:
 	rng.seed = seed_v
 	var fl := _st()
-	for i in rng.randi_range(3, 5):
+	cards = _st()
+	for i in rng.randi_range(2, 4):
 		var a := R(0, TAU)
 		var d := R(0.1, 0.6)
-		blob(fl, Vector3(cos(a) * d, R(0.35, 0.7), sin(a) * d), Vector3(R(0.45, 0.7), R(0.4, 0.6), R(0.45, 0.7)), R(0.3, 1.0))
-	return [_mesh([[fl, "bush"]]), 1.0]
+		leafblob(fl, cards, Vector3(cos(a) * d, R(0.35, 0.7), sin(a) * d), Vector3(R(0.45, 0.7), R(0.4, 0.6), R(0.45, 0.7)), R(0.3, 1.0))
+	return [_mesh([[fl, "bush"], [cards, "bush_card"]]), 1.0]
 
 ## Камень: гранёная глыба (шейдер считает плоские нормали сам).
 func rock(seed_v: int) -> Array:
@@ -245,26 +336,21 @@ func rock(seed_v: int) -> Array:
 			st.add_vertex(pts[tri[k]])
 	return [_mesh([[st, "rock"]]), sc.y]
 
-## Кочка травы: 7–11 широких изогнутых листьев (по 3 треугольника), без одиночных волосков.
+## Пучок травы: три перекрещенные карточки с мазками травинок.
 func tuft(seed_v: int, tall: float = 1.0) -> Array:
 	rng.seed = seed_v
 	var st := _st()
-	var n := rng.randi_range(18, 24)
-	for i in n:
-		var a := TAU * i / n + R(-0.3, 0.3)
-		var dir := Vector3(cos(a), 0, sin(a))
-		var side := Vector3(-dir.z, 0, dir.x)
-		var h := R(0.14, 0.3) * tall
-		var w := R(0.07, 0.11)
-		var lean := R(0.55, 1.0)
-		var b := dir * R(0.0, 0.12)
-		var m := b + dir * h * lean * 0.4 + Vector3(0, h * 0.6, 0)
-		var tp := b + dir * h * lean + Vector3(0, h, 0)
-		var shade := R(0.0, 1.0)
-		var pts := [[b - side * w, 0.0], [b + side * w, 0.0], [m - side * w * 0.7, 0.6], [m + side * w * 0.7, 0.6], [tp, 1.0]]
-		for tri in [[0, 1, 2], [1, 3, 2], [2, 3, 4]]:
-			for k in tri:
-				st.set_color(Color(shade, 0, 0, pts[k][1]))
-				st.set_normal(Vector3.UP)
-				st.add_vertex(pts[k][0])
-	return [_mesh([[st, "tuft"]]), 0.5]
+	var h := R(0.35, 0.55) * tall
+	var w := R(0.5, 0.75)
+	for k in 3:
+		var a := PI * k / 3.0 + R(-0.2, 0.2)
+		var d := Vector3(cos(a), 0, sin(a)) * w * 0.5
+		var lean := Vector3(R(-0.08, 0.08), 0, R(-0.08, 0.08))
+		var sh := R(0.0, 1.0)
+		var pts := [[-d, Vector2(0, 1)], [d, Vector2(1, 1)], [d + Vector3(0, h, 0) + lean, Vector2(1, 0)], [-d + Vector3(0, h, 0) + lean, Vector2(0, 0)]]
+		for idx in [0, 1, 2, 0, 2, 3]:
+			st.set_color(Color(sh, 0, 0, 1))
+			st.set_normal(Vector3.UP)
+			st.set_uv(pts[idx][1])
+			st.add_vertex(pts[idx][0])
+	return [_mesh([[st, "tuft"]]), h]

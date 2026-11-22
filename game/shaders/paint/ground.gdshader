@@ -31,8 +31,9 @@ void fragment() {
 	c = mix(c, lin(stone) * (0.85 + fine * 0.3), smoothstep(0.28, 0.42, slope + (s - 0.5) * 0.12));
 	// дно и берег: песок с округлыми камешками
 	float sh = smoothstep(water_y + 0.5, water_y - 0.1, wp.y);
-	vec2 cell = floor(wp.xz * 2.2);
-	vec2 f = fract(wp.xz * 2.2) - 0.5;
+	vec2 pq = wp.xz * 1.6 + vec2(vnoise(wp.xz * 1.3), vnoise(wp.zx * 1.3 + 5.0)) * 0.9;
+	vec2 cell = floor(pq);
+	vec2 f = fract(pq) - 0.5;
 	float pr = h21(cell);
 	float peb = 0.5 * smoothstep(0.32, 0.22, length(f + (vec2(h21(cell + 3.1), h21(cell + 7.7)) - 0.5) * 0.3)) * step(0.6, pr);
 	vec3 bc = mix(lin(bed), lin(mix(vec3(0.42, 0.42, 0.38), vec3(0.62, 0.58, 0.48), pr)), peb);
