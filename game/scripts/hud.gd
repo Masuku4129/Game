@@ -1,12 +1,25 @@
 extends Control
-## Шкалы выживания, часы и строка состояния (раны, вещи, сообщения).
+## HUD: шкалы выживания на берестяной табличке, часы, строка сообщений; справа внизу —
+## кнопки: «Действие» (main.act_btn), «Рюкзак», круглые кнопки инструмента по обстановке
+## («Рубить», «Срезать», «Ударить»…), «Метнуть» и «Воткнуть» для копья; внизу — пояс:
+## нож и топор (нажать — взять в руку, ещё раз — убрать на пояс).
+## Свои действия другие команды добавляют через hero.tools / world_tools (use_label/use).
+
+const INV = preload("res://scripts/inventory.gd")
+const INK := Color(0.24, 0.15, 0.08)
+const PAPER := Color(0.88, 0.8, 0.62)
 
 var vals := [1.0, 0.85, 0.9, 0.8, 1.0]
 var names := ["Здоровье", "Сытость", "Жажда", "Тепло", "Силы"]
-var cols := [Color(0.78, 0.22, 0.2), Color(0.80, 0.66, 0.30), Color(0.35, 0.6, 0.85), Color(0.86, 0.46, 0.26), Color(0.52, 0.72, 0.42)]
+var cols := [Color(0.7, 0.22, 0.18), Color(0.74, 0.6, 0.27), Color(0.33, 0.52, 0.72), Color(0.8, 0.45, 0.25), Color(0.45, 0.62, 0.36)]
 var clock := ""
 var info := ""
 var bag_btn: BagButton
+var main: Node3D
+var use_btn: RoundBtn
+var throw_btn: RoundBtn
+var stick_btn: RoundBtn
+var belt_btns := {}
 
 ## Кнопка короба: нарисованный берестяной короб с лямками и подписью.
 class BagButton extends Button:
@@ -41,20 +54,120 @@ class BagButton extends Button:
 		for sx in [-0.25, 0.25]:
 			draw_line(Vector2(o.x + w * sx, body.position.y - 2), Vector2(o.x + w * sx, body.end.y + 2), Color(0.25, 0.15, 0.08), 4.0)
 		var f := ThemeDB.fallback_font
-		draw_string(f, Vector2(c.x - 60, c.y + r * 0.78), "Рюкзак", HORIZONTAL_ALIGNMENT_CENTER, 120, 19, Color(1, 0.95, 0.85))
+		draw_string_outline(f, Vector2(c.x - 60, c.y + r * 0.8), "Рюкзак", HORIZONTAL_ALIGNMENT_CENTER, 120, 20, 5, Color(0.2, 0.12, 0.06))
+		draw_string(f, Vector2(c.x - 60, c.y + r * 0.8), "Рюкзак", HORIZONTAL_ALIGNMENT_CENTER, 120, 20, Color(1, 0.95, 0.85))
+
+## Круглая кнопка с нарисованным значком вещи и подписью под ней.
+class RoundBtn extends Button:
+	var icon_id := ""
+	var caption := ""
+	var hot := false        # выделена (вещь в руке)
+	func _ready() -> void:
+		flat = true
+		focus_mode = Control.FOCUS_NONE
+		for st in ["normal", "hover", "pressed", "disabled", "focus"]:
+			add_theme_stylebox_override(st, StyleBoxEmpty.new())
+	func _draw() -> void:
+		var c := Vector2(size.x * 0.5, size.x * 0.5)
+		var r := size.x * 0.5 - 4.0
+		var dn := is_pressed() and is_hovered()
+		draw_circle(c + Vector2(3, 4), r, Color(0, 0, 0, 0.3))
+		draw_circle(c, r, Color(0.3, 0.21, 0.13, 0.82) if not dn else Color(0.45, 0.31, 0.18, 0.9))
+		draw_circle(c, r - 7.0, Color(0.88, 0.8, 0.62, 0.92) if not hot else Color(0.95, 0.82, 0.55, 0.97))
+		draw_arc(c, r - 3.0, 0.0, TAU, 48, Color(0.86, 0.76, 0.56, 0.9) if not hot else Color(0.95, 0.6, 0.25), 4.0 if not hot else 6.0, true)
+		if icon_id != "":
+			INV.icon(self, icon_id, c, r * 0.55)
+		if caption != "":
+			var f := ThemeDB.fallback_font
+			var fs := 22 if caption.length() < 12 else 19
+			draw_string_outline(f, Vector2(c.x - 110, size.y - 4), caption, HORIZONTAL_ALIGNMENT_CENTER, 220, fs, 6, Color(0.18, 0.11, 0.06, 0.9))
+			draw_string(f, Vector2(c.x - 110, size.y - 4), caption, HORIZONTAL_ALIGNMENT_CENTER, 220, fs, Color(1, 0.95, 0.85))
+
+func _anchor_br(c: Control, l: float, t: float, w: float, h: float) -> void:
+	c.anchor_left = 1.0
+	c.anchor_right = 1.0
+	c.anchor_top = 1.0
+	c.anchor_bottom = 1.0
+	c.offset_left = l
+	c.offset_right = l + w
+	c.offset_top = t
+	c.offset_bottom = t + h
 
 func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	bag_btn = BagButton.new()
-	bag_btn.anchor_left = 1.0
-	bag_btn.anchor_right = 1.0
-	bag_btn.anchor_top = 1.0
-	bag_btn.anchor_bottom = 1.0
-	bag_btn.offset_left = -236.0
-	bag_btn.offset_right = -86.0
-	bag_btn.offset_top = -400.0
-	bag_btn.offset_bottom = -250.0
+	_anchor_br(bag_btn, -236.0, -400.0, 150.0, 150.0)
 	add_child(bag_btn)
+
+func _round(id: String, cap: String, l: float, t: float, sz: float) -> RoundBtn:
+	var b := RoundBtn.new()
+	b.icon_id = id
+	b.caption = cap
+	_anchor_br(b, l, t, sz, sz + 30.0)
+	b.visible = false
+	add_child(b)
+	return b
+
+## Подключить кнопки к миру (из main после создания героя и кнопки «Действие»).
+func setup(m: Node3D) -> void:
+	main = m
+	# основная кнопка «Действие» в стиле листа
+	if main.act_btn != null:
+		INV.style_button(main.act_btn, 34)
+	use_btn = _round("", "", -440.0, -270.0, 150.0)
+	use_btn.pressed.connect(func() -> void: main.hero.tools.use())
+	throw_btn = _round("spear", "Метнуть", -400.0, -470.0, 120.0)
+	throw_btn.pressed.connect(func() -> void: main.hero.tools.throw())
+	stick_btn = _round("spear", "Воткнуть", -560.0, -470.0, 120.0)
+	stick_btn.pressed.connect(func() -> void: main.hero.tools.stick())
+	var x := -780.0
+	for id in ["knife", "axe"]:
+		var b := _round(id, IT_name(id), x, -150.0, 104.0)
+		b.pressed.connect(_belt_pressed.bind(id))
+		belt_btns[id] = b
+		x += 118.0
+
+func IT_name(id: String) -> String:
+	return String(INV.ITEMS.get(id, {}).get("name", id))
+
+func _belt_pressed(id: String) -> void:
+	var t: Node = main.hero.tools
+	if t.held == id:
+		t.holster()
+	else:
+		t.take(id)
+
+var _ui_t := 0.0
+func _process(delta: float) -> void:
+	if main == null or main.hero == null or main.hero.tools == null:
+		return
+	_ui_t -= delta
+	if _ui_t > 0.0:
+		return
+	_ui_t = 0.15
+	var hero: Node3D = main.hero
+	var t: Node = hero.tools
+	var free: bool = hero.state == "walk" and not main.inventory.is_open() and hero.pack_stage == ""
+	var ul: String = t.use_label() if free else ""
+	use_btn.visible = ul != ""
+	if ul != "":
+		use_btn.caption = ul
+		use_btn.icon_id = t.held if t.held != "" else "fiber"
+		use_btn.queue_redraw()
+	throw_btn.visible = free and t.can_throw()
+	stick_btn.visible = free and t.can_stick()
+	if stick_btn.visible and stick_btn.icon_id != t.held:
+		stick_btn.icon_id = t.held
+		stick_btn.queue_redraw()
+	for id: String in belt_btns:
+		var b: RoundBtn = belt_btns[id]
+		var own: bool = int(main.inv.get(id, 0)) > 0
+		b.visible = free and own
+		var h: bool = t.held == id
+		if b.hot != h:
+			b.hot = h
+			b.caption = ("Убрать" if h else IT_name(id))
+			b.queue_redraw()
 
 func set_state(v: Array, text: String, inf: String) -> void:
 	vals = v
@@ -62,17 +175,35 @@ func set_state(v: Array, text: String, inf: String) -> void:
 	info = inf
 	queue_redraw()
 
+## Берестяная табличка: светлая подложка, неровная тёмная рамка.
+func _plate(r: Rect2) -> void:
+	draw_rect(Rect2(r.position + Vector2(4, 5), r.size), Color(0, 0, 0, 0.25))
+	draw_rect(r, Color(PAPER, 0.86))
+	draw_rect(Rect2(r.position + Vector2(5, 5), r.size - Vector2(10, 10)), Color(0.93, 0.87, 0.72, 0.5))
+	draw_rect(r, Color(0.4, 0.28, 0.16, 0.95), false, 3.0)
+
 func _draw() -> void:
 	var f := ThemeDB.fallback_font
+	var pr := Rect2(18, 16, 330, 30.0 + vals.size() * 34.0)
+	_plate(pr)
 	for i in vals.size():
-		var y := 40.0 + i * 42.0
-		draw_string(f, Vector2(30, y + 1), names[i], HORIZONTAL_ALIGNMENT_LEFT, -1, 21, Color(0, 0, 0, 0.6))
-		draw_string(f, Vector2(28, y), names[i], HORIZONTAL_ALIGNMENT_LEFT, -1, 21, Color(1, 1, 1, 0.92))
-		draw_rect(Rect2(28, y + 7, 230, 10), Color(0, 0, 0, 0.5))
-		draw_rect(Rect2(28, y + 7, 230.0 * clampf(vals[i], 0.0, 1.0), 10), cols[i])
+		var y := pr.position.y + 22.0 + i * 34.0
+		draw_string(f, Vector2(32, y + 7), names[i], HORIZONTAL_ALIGNMENT_LEFT, 120, 20, INK)
+		var br := Rect2(150, y - 6, 180, 14)
+		draw_rect(br, Color(0.55, 0.45, 0.3, 0.6))
+		var v := clampf(vals[i], 0.0, 1.0)
+		var c: Color = cols[i]
+		if v < 0.25:
+			c = c.lerp(Color(0.8, 0.15, 0.1), 0.5 + 0.5 * sin(Time.get_ticks_msec() * 0.008))
+		draw_rect(Rect2(br.position, Vector2(br.size.x * v, br.size.y)), c)
+		draw_rect(br, Color(INK, 0.85), false, 2.0)
 	if info != "":
-		var y2 := 40.0 + vals.size() * 42.0 + 8.0
-		draw_string(f, Vector2(30, y2 + 1), info, HORIZONTAL_ALIGNMENT_LEFT, 900, 22, Color(0, 0, 0, 0.7))
-		draw_string(f, Vector2(28, y2), info, HORIZONTAL_ALIGNMENT_LEFT, 900, 22, Color(1, 0.93, 0.8, 0.95))
-	draw_string(f, Vector2(size.x - 728, 41), clock, HORIZONTAL_ALIGNMENT_RIGHT, 700, 26, Color(0, 0, 0, 0.6))
-	draw_string(f, Vector2(size.x - 730, 40), clock, HORIZONTAL_ALIGNMENT_RIGHT, 700, 26, Color(1, 1, 1, 0.95))
+		var w := minf(f.get_string_size(info, HORIZONTAL_ALIGNMENT_LEFT, -1, 22).x + 36.0, 900.0)
+		var ir := Rect2(18, pr.end.y + 10, w, 40)
+		_plate(ir)
+		draw_string(f, Vector2(36, ir.position.y + 28), info, HORIZONTAL_ALIGNMENT_LEFT, 860, 22, INK)
+	if clock != "":
+		var cw := f.get_string_size(clock, HORIZONTAL_ALIGNMENT_LEFT, -1, 24).x + 40.0
+		var cr := Rect2(size.x - cw - 20.0, 16, cw, 44)
+		_plate(cr)
+		draw_string(f, Vector2(cr.position.x + 20, cr.position.y + 31), clock, HORIZONTAL_ALIGNMENT_LEFT, -1, 24, INK)

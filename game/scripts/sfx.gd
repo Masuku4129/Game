@@ -56,6 +56,11 @@ func _ready() -> void:
 		drip_s.append(_drip(i))
 	howl = _howl()
 	synth = {"crack": _crack(), "thud": _thud(), "slap": _slap(), "gnaw": _gnaw(), "splash": _splash()}
+	# --- tools: удар топора, нож по коре/прутьям, свист копья, копьё вонзилось
+	synth["chop"] = _knock(0.22, 190.0, 0.5, 21)
+	synth["thunk"] = _knock(0.3, 120.0, 0.25, 22)
+	synth["cut"] = _scrape()
+	synth["whoosh"] = _whoosh()
 	for i in 6:
 		var p := AudioStreamPlayer3D.new()
 		p.unit_size = 10.0
@@ -201,6 +206,60 @@ func _gnaw() -> AudioStreamWAV:
 		var burst := maxf(0.0, sin(t * TAU * 9.0)) * (0.6 + 0.4 * sin(t * 170.0))
 		var v := (nz - lp) * burst * 0.5
 		b.encode_s16(i * 2, int(clampf(v, -1.0, 1.0) * 30000.0))
+	return _wav(b, rate)
+
+# --- tools ---
+## Удар по дереву: щелчок, глухой тон и короткий отзвук волокон.
+func _knock(len_s: float, tone: float, click: float, seed_v: int) -> AudioStreamWAV:
+	var rate := 22050
+	var n := int(len_s * rate)
+	var b := PackedByteArray()
+	b.resize(n * 2)
+	var r := RandomNumberGenerator.new()
+	r.seed = seed_v
+	var lp := 0.0
+	for i in n:
+		var t := float(i) / rate
+		var nz := r.randf_range(-1.0, 1.0)
+		lp += (nz - lp) * 0.25
+		var v := nz * exp(-t * 90.0) * click + sin(TAU * tone * t) * exp(-t * 28.0) * 0.6 + sin(TAU * tone * 2.7 * t) * exp(-t * 45.0) * 0.25 + lp * exp(-t * 18.0) * 0.5
+		b.encode_s16(i * 2, int(clampf(v, -1.0, 1.0) * 28000.0))
+	return _wav(b, rate)
+
+## Нож по коре и прутьям: два-три сухих скребка.
+func _scrape() -> AudioStreamWAV:
+	var rate := 22050
+	var n := int(0.5 * rate)
+	var b := PackedByteArray()
+	b.resize(n * 2)
+	var r := RandomNumberGenerator.new()
+	r.seed = 23
+	var lp := 0.0
+	for i in n:
+		var t := float(i) / rate
+		var nz := r.randf_range(-1.0, 1.0)
+		lp += (nz - lp) * 0.5
+		var env := maxf(0.0, sin(t * TAU * 5.0)) * exp(-t * 3.0)
+		b.encode_s16(i * 2, int(clampf((nz - lp) * env * 0.7, -1.0, 1.0) * 26000.0))
+	return _wav(b, rate)
+
+## Свист летящего копья: полосовой шум с нарастанием и спадом.
+func _whoosh() -> AudioStreamWAV:
+	var rate := 22050
+	var n := int(0.45 * rate)
+	var b := PackedByteArray()
+	b.resize(n * 2)
+	var r := RandomNumberGenerator.new()
+	r.seed = 24
+	var lp := 0.0
+	var lp2 := 0.0
+	for i in n:
+		var t := float(i) / n
+		var nz := r.randf_range(-1.0, 1.0)
+		lp += (nz - lp) * 0.3
+		lp2 += (lp - lp2) * 0.3
+		var env := sin(PI * t) * sin(PI * t)
+		b.encode_s16(i * 2, int(clampf((lp - lp2) * env * 1.6, -1.0, 1.0) * 26000.0))
 	return _wav(b, rate)
 
 ## Бесшовная петля: хвост плавно накладывается на начало.

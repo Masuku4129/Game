@@ -56,6 +56,12 @@ var arm_lx := 0.0
 var arm_rx := 0.0
 var cloth_tex: Texture2D
 var torch := OmniLight3D.new()
+## Инструменты (hero_tools.gd): held — что в руке ("" / knife / axe / spear / shovel / log).
+var tools: Node
+var held := ""
+
+func has_tool(id: String) -> bool:
+	return tools != null and tools.has_tool(id)
 
 ## Живописный материал (тот же свет, что у мира).
 var _pmats := {}
@@ -343,6 +349,10 @@ func action_label() -> String:
 		return "Встать"
 	if swimb > 0.3:
 		return ""
+	if tools != null:
+		var tl: String = tools.action_label()
+		if tl != "":
+			return tl
 	if main.bleed > 0.02:
 		return "Перевязать"
 	var it: Array = main.find_pick(position)
@@ -359,6 +369,9 @@ func do_action() -> void:
 		return
 	if state == "sit":
 		_stand_up()
+		return
+	if tools != null and tools.action_label() != "" and main.bleed <= 0.02:
+		tools.do_action()
 		return
 	var lbl := action_label()
 	if lbl == "Перевязать":
@@ -412,6 +425,8 @@ func _stand_up() -> void:
 	position = stand_pos
 
 func _process(delta: float) -> void:
+	if tools != null:
+		tools.process(delta)
 	_process_main(delta)
 	_animate_model(delta)
 
@@ -436,6 +451,8 @@ func _process_main(delta: float) -> void:
 		return
 	sitb = maxf(0.0, sitb - delta * 4.0)
 	climbb = maxf(0.0, climbb - delta * 4.0)
+	if tools != null and tools.busy():
+		move_vec = Vector2.ZERO
 	leg_l.rotation.z = 0.0
 	leg_r.rotation.z = 0.0
 	var mag := minf(move_vec.length(), 1.0)
@@ -455,7 +472,7 @@ func _process_main(delta: float) -> void:
 		else:
 			f = minf(1.0 + along * slope * 0.2, 1.15)
 		var stam: float = main.stamina
-		running = mag > 0.92 and stam > 0.08
+		running = mag > 0.92 and stam > 0.08 and (tools == null or tools.can_run())
 		var sp_base := run_speed if running else speed
 		var wf := 1.0
 		if depth > 1.25:
@@ -463,7 +480,7 @@ func _process_main(delta: float) -> void:
 			running = false
 		elif depth > 0.3:
 			wf = 1.0 - (depth - 0.3) * 0.55
-		target = d * sp_base * mag * f * wf * _sink_slow() * main.move_factor()
+		target = d * sp_base * mag * f * wf * _sink_slow() * main.move_factor() * (tools.speed_factor() if tools != null else 1.0)
 	else:
 		running = false
 	# крутой склон: человека тянет вниз, он теряет управление и катится
@@ -838,8 +855,11 @@ func _build_model() -> void:
 	var hipy: float = sk.get_bone_global_rest(sk.find_bone("pelvis")).origin.y
 	# пояс с ножом, короб за спиной со скаткой и котелком
 	_attach(sk, tsk, "pelvis", _loft([[0.0, 0.2, 0.165, 0.0], [0.07, 0.195, 0.16, 0.0]], 22, false, false), belt, Vector3(0, hipy + 0.07, 0.0))
-	_attach(sk, tsk, "pelvis", _cyl(0.014, 0.018, 0.22), belt, Vector3(0.21, hipy - 0.02, 0.07), Vector3(0, 0, 0.15))
 	_build_pack(sk, ty, wood, roll, metal, belt)
+	# нож, топор, копьё: в руке и на поясе (после модификатора короба — поверх его позы)
+	tools = preload("res://scripts/hero_tools.gd").new()
+	add_child(tools)
+	tools.setup(self, sk)
 
 ## Прикрепить меш к кости так, чтобы в позе покоя он стоял в точке pos (в метрах героя).
 func _attach(sk: Skeleton3D, tsk: Transform3D, bone: String, mesh: Mesh, m: Material, pos: Vector3, rot: Vector3 = Vector3.ZERO, sc: Vector3 = Vector3.ONE) -> void:
@@ -872,6 +892,8 @@ func _animate_model(delta: float) -> void:
 	model.position = Vector3(0, -mud_sink, 0)
 	if state == "dead":
 		_play("Death01", 1.0, 0.2)
+		return
+	if tools != null and state == "walk" and swimb < 0.5 and tools.anim_override():
 		return
 	if state == "pack":
 		# опускание на колено ведём сами по времени последовательности; руки — модификатор
@@ -1066,6 +1088,8 @@ func can_open_pack() -> bool:
 func pack_open() -> bool:
 	if not can_open_pack():
 		return false
+	if tools != null:
+		tools.free_hands()
 	state = "pack"
 	pack_stage = "opening"
 	pack_t = 0.0
