@@ -488,7 +488,7 @@ func _process(delta: float) -> void:
 			_land(-vy)
 			vy = 0.0
 			airborne = false
-	fallb = lerpf(fallb, 1.0 if (airborne and vy < -3.0) else 0.0, minf(1.0, 8.0 * delta))
+	fallb = lerpf(fallb, 1.0 if (airborne and vy < -4.5) else 0.0, minf(1.0, 5.0 * delta))
 	land_t = maxf(0.0, land_t - delta)
 	# походка: фаза от пройденного пути, размах от скорости
 	var sn := clampf(sp / speed, 0.0, 1.6)
@@ -566,15 +566,16 @@ func _process(delta: float) -> void:
 func _pose_fall_land() -> void:
 	var f := fallb
 	if f > 0.01:
-		arm_l.rotation.x = lerpf(arm_l.rotation.x, -1.9, f)
-		arm_r.rotation.x = lerpf(arm_r.rotation.x, -1.7, f)
-		arm_l.rotation.z = lerpf(arm_l.rotation.z, 0.9, f)
-		arm_r.rotation.z = lerpf(arm_r.rotation.z, -0.9, f)
-		leg_l.rotation.x = lerpf(leg_l.rotation.x, -0.5, f)
-		leg_r.rotation.x = lerpf(leg_r.rotation.x, 0.1, f)
-		knee_l.rotation.x = lerpf(knee_l.rotation.x, 0.9, f)
-		knee_r.rotation.x = lerpf(knee_r.rotation.x, 0.5, f)
-		torso.rotation.x = lerpf(torso.rotation.x, -0.15, f)
+		# руки чуть вперёд и в стороны для равновесия, ноги готовятся к приземлению
+		arm_l.rotation.x = lerpf(arm_l.rotation.x, -0.7, f)
+		arm_r.rotation.x = lerpf(arm_r.rotation.x, -0.6, f)
+		arm_l.rotation.z = lerpf(arm_l.rotation.z, 0.45, f)
+		arm_r.rotation.z = lerpf(arm_r.rotation.z, -0.45, f)
+		leg_l.rotation.x = lerpf(leg_l.rotation.x, -0.35, f)
+		leg_r.rotation.x = lerpf(leg_r.rotation.x, 0.05, f)
+		knee_l.rotation.x = lerpf(knee_l.rotation.x, 0.6, f)
+		knee_r.rotation.x = lerpf(knee_r.rotation.x, 0.35, f)
+		torso.rotation.x = lerpf(torso.rotation.x, 0.12, f)
 	if land_t > 0.0:
 		var k := clampf(land_t * 3.0, 0.0, 1.0) * land_k
 		leg_l.rotation.x = lerpf(leg_l.rotation.x, -1.0, k)

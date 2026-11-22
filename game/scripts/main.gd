@@ -448,6 +448,10 @@ func _process(delta: float) -> void:
 		dead_t -= delta
 		if dead_t <= 0.0:
 			_respawn()
+	_near_t -= delta
+	if _near_t <= 0.0:
+		_near_t = 0.25
+		_update_near()
 	hero.move_vec = joy.value if health > 0.0 else Vector2.ZERO
 	hero.cam_yaw = rig.rotation.y
 	# время суток: 1 игровой час за 75 секунд
@@ -607,7 +611,6 @@ func _build_grass_cell(k: Vector2i) -> void:
 		mmi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 		mmi.visibility_range_end = (GRADIUS + 0.55) * GCELL
 		mmi.visibility_range_end_margin = 8.0
-		mmi.visibility_range_fade_mode = GeometryInstance3D.VISIBILITY_RANGE_FADE_SELF
 		holder.add_child(mmi)
 	add_child(holder)
 	grass_cells[k] = holder
@@ -645,9 +648,9 @@ func _variants(kind: String) -> Array:
 		"grass":
 			for i in 4: out.append(veg.grass(800 + i))
 		"rock":
-			for i in 8: out.append(veg.rock(900 + i))
+			for i in 8: out.append(veg.rock(900 + i, 1))
 		"pebble":
-			for i in 3: out.append(veg.rock(950 + i))
+			for i in 3: out.append(veg.rock(950 + i, 0))
 		"reeds":
 			for i in 3: out.append(veg.reeds(1200 + i))
 		"twig":
@@ -657,6 +660,70 @@ func _variants(kind: String) -> Array:
 		"log":
 			for i in 2: out.append(veg.log_fallen(1100 + i))
 	return out
+
+const TREE_KINDS := ["spruce", "spruce_dead", "pine", "birch", "bare", "larch", "aspen"]
+const NEAR_R := 30.0
+var tree_grid := {}
+var near_mesh := {}
+var near_mmi := {}
+var near_set := {}
+var _near_at := Vector3(1e9, 0, 0)
+var _near_t := 0.0
+var _tree_id := 0
+
+## Детальные деревья только вблизи: в радиусе NEAR_R дерево берётся из полной модели,
+## а в дальнем MultiMesh его экземпляр прячется. Остальной лес — лёгкие модели.
+func _update_near(force: bool = false) -> void:
+	var c: Vector3 = rig.position
+	if not force and Vector2(c.x - _near_at.x, c.z - _near_at.z).length() < 2.5:
+		return
+	_near_at = c
+	var hide := Transform3D(Basis().scaled(Vector3(0.0001, 0.0001, 0.0001)), Vector3(0, -500, 0))
+	var now := {}
+	var by_key := {}
+	var r2 := NEAR_R * NEAR_R
+	var g0 := Vector2i(floori((c.x - NEAR_R) / 16.0), floori((c.z - NEAR_R) / 16.0))
+	var g1 := Vector2i(floori((c.x + NEAR_R) / 16.0), floori((c.z + NEAR_R) / 16.0))
+	for gz in range(g0.y, g1.y + 1):
+		for gx in range(g0.x, g1.x + 1):
+			var gk := Vector2i(gx, gz)
+			if not tree_grid.has(gk):
+				continue
+			for rec in tree_grid[gk]:
+				var t: Transform3D = rec[2]
+				if (t.origin.x - c.x) * (t.origin.x - c.x) + (t.origin.z - c.z) * (t.origin.z - c.z) > r2:
+					continue
+				var id: int = rec[4]
+				now[id] = rec
+				if not near_set.has(id):
+					rec[0].set_instance_transform(rec[1], hide)
+				var key: String = rec[3]
+				if not by_key.has(key):
+					by_key[key] = []
+				by_key[key].append(t)
+	for id in near_set.keys():
+		if not now.has(id):
+			var rec: Array = near_set[id]
+			rec[0].set_instance_transform(rec[1], rec[2])
+	near_set = now
+	for key in near_mmi.keys():
+		if not by_key.has(key):
+			near_mmi[key].visible = false
+	for key in by_key.keys():
+		if not near_mmi.has(key):
+			var mmi := MultiMeshInstance3D.new()
+			var mm := MultiMesh.new()
+			mm.transform_format = MultiMesh.TRANSFORM_3D
+			mm.mesh = near_mesh[key]
+			mmi.multimesh = mm
+			add_child(mmi)
+			near_mmi[key] = mmi
+		var mi: MultiMeshInstance3D = near_mmi[key]
+		var xs: Array = by_key[key]
+		mi.multimesh.instance_count = xs.size()
+		for i in xs.size():
+			mi.multimesh.set_instance_transform(i, xs[i])
+		mi.visible = true
 
 const PICK := ["berry", "mushroom", "twig", "pebble"]
 const PICK_NAME := {"berry": "ягоды", "mushroom": "гриб", "amanita": "мухомор", "twig": "хворост", "pebble": "камень"}
@@ -837,9 +904,14 @@ func _scatter_all() -> void:
 		["anthill", 1, Vector2(0.8, 1.2), 50.0, true, "under"],
 	]
 	var cache := {}
+	var cache_lod := {}
 	for r in rules:
 		if not cache.has(r[0]):
 			cache[r[0]] = _variants(r[0])
+			if r[0] in TREE_KINDS:
+				veg.lod = true
+				cache_lod[r[0]] = _variants(r[0])
+				veg.lod = false
 	var cells := int(SIZE / CELL)
 	for cz in cells:
 		for cx in cells:
@@ -903,7 +975,8 @@ func _scatter_all() -> void:
 						continue
 					var mm := MultiMesh.new()
 					mm.transform_format = MultiMesh.TRANSFORM_3D
-					mm.mesh = vars[vi][0]
+					var is_tree: bool = cache_lod.has(r[0])
+					mm.mesh = cache_lod[r[0]][vi][0] if is_tree else vars[vi][0]
 					mm.instance_count = xs.size()
 					for i in xs.size():
 						mm.set_instance_transform(i, xs[i])
@@ -913,6 +986,16 @@ func _scatter_all() -> void:
 					mmi.visibility_range_end_margin = 10.0
 					mmi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON if r[4] else GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 					add_child(mmi)
+					if is_tree:
+						var key: String = r[0] + str(vi)
+						near_mesh[key] = vars[vi][0]
+						for i in xs.size():
+							var o: Vector3 = xs[i].origin
+							var gk := Vector2i(floori(o.x / 16.0), floori(o.z / 16.0))
+							if not tree_grid.has(gk):
+								tree_grid[gk] = []
+							_tree_id += 1
+							tree_grid[gk].append([mm, i, xs[i], key, _tree_id])
 					if pick_kind != "":
 						var pk := pick_kind
 						if pk == "mushroom" and vi < 2:
