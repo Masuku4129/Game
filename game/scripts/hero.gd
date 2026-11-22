@@ -4,8 +4,8 @@ extends Node3D
 var main: Node3D
 var move_vec := Vector2.ZERO
 var cam_yaw := 0.0
-var speed := 3.1
-var run_speed := 4.8
+var speed := 1.7
+var run_speed := 3.6
 var running := false
 var climbing := 0.0
 var moving := false
@@ -862,7 +862,8 @@ func _animate_model(delta: float) -> void:
 	var d := position - _last_pos
 	_last_pos = position
 	_hspeed = lerpf(_hspeed, Vector2(d.x, d.z).length() / maxf(delta, 0.001), minf(1.0, delta * 8.0))
-	model.rotation = Vector3(body.rotation.x, body.rotation.y, body.rotation.z)
+	# только поворот: наклоны старого тела (присед при остановке, крен) модели не нужны
+	model.rotation = Vector3(0, body.rotation.y, 0)
 	model.position = Vector3(0, -mud_sink, 0)
 	if state == "dead":
 		_play("Death01", 1.0, 0.2)
@@ -889,9 +890,9 @@ func _animate_model(delta: float) -> void:
 	if airborne and vy < -2.5:
 		_play("Jump", 1.0, 0.15)
 		return
-	if _hspeed > 3.6:
-		_play("Sprint" if _hspeed > 5.5 else "Jog_Fwd", clampf(_hspeed / (6.0 if _hspeed > 5.5 else 3.8), 0.7, 1.3))
-	elif _hspeed > 0.25:
-		_play("Walk", clampf(_hspeed / 1.5, 0.5, 1.6))
+	if _hspeed > 2.4:
+		_play("Jog_Fwd", clampf(_hspeed / 3.6, 0.75, 1.15))
+	elif _hspeed > 0.2:
+		_play("Walk", clampf(_hspeed / 1.6, 0.6, 1.25))
 	else:
 		_play("Idle")
