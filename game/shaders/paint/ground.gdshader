@@ -34,7 +34,7 @@ void fragment() {
 	vec2 cell = floor(wp.xz * 2.2);
 	vec2 f = fract(wp.xz * 2.2) - 0.5;
 	float pr = h21(cell);
-	float peb = smoothstep(0.32, 0.22, length(f + (vec2(h21(cell + 3.1), h21(cell + 7.7)) - 0.5) * 0.3)) * step(0.35, pr);
+	float peb = 0.5 * smoothstep(0.32, 0.22, length(f + (vec2(h21(cell + 3.1), h21(cell + 7.7)) - 0.5) * 0.3)) * step(0.6, pr);
 	vec3 bc = mix(bed, mix(vec3(0.42, 0.42, 0.38), vec3(0.62, 0.58, 0.48), pr), peb);
 	c = mix(c, bc * (0.9 + fine * 0.2), sh);
 	c *= 0.92 + fine * 0.16;

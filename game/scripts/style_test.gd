@@ -44,6 +44,16 @@ func _ready() -> void:
 	_scatter()
 	hero = preload("res://scripts/hero.gd").new()
 	add_child(hero)
+	# эталон для сверки яркости: обычный материал того же цвета, что луг
+	var ref := MeshInstance3D.new()
+	var bm := BoxMesh.new()
+	bm.size = Vector3(1.5, 0.3, 1.5)
+	ref.mesh = bm
+	var sm := StandardMaterial3D.new()
+	sm.albedo_color = Color(0.26, 0.38, 0.12)
+	ref.material_override = sm
+	ref.position = Vector3(1.5, 0.2, 0)
+	hero.add_child(ref)
 	cam = Camera3D.new()
 	cam.fov = 45.0
 	cam.far = 200.0
