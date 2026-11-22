@@ -39,6 +39,8 @@ func _ready() -> void:
 		_beaver()
 	elif who == "pack":
 		_pack()
+	elif who == "build":
+		_build_studio()
 
 ## Бобр: ракурсы и позы (шаг, плавание, грызёт, хлопок хвостом). STUDIO=beaver
 var bv: Node3D
@@ -176,6 +178,9 @@ func _env() -> void:
 	add_child(sun)
 
 func _process(_d: float) -> void:
+	if bd_mode:
+		_build_step()
+		return
 	if sp_mode:
 		_species_step()
 		return
@@ -356,3 +361,155 @@ func _save() -> void:
 			sheet.blit_rect(im, Rect2i(0, 0, CW, CH), Vector2i((i % cols) * CW, (i / cols) * CH))
 		sheet.save_png(dir + "/" + key + ".png")
 		print("studio saved ", key)
+
+# ---------- STUDIO=build: постройки лагеря ----------
+# BUILD=через,запятую — какие листы снять (fire, leanto, tree, snow, cabin, stages, interior, furniture).
+
+var bd_mode := false
+var bd_geo
+var bd_node: Node3D
+var bd_ground: MeshInstance3D
+var bd_cur := ""
+
+func _build_studio() -> void:
+	bd_mode = true
+	bd_geo = load("res://scripts/build_geo.gd").new(load("res://scripts/pveg.gd").new())
+	for c in get_children():
+		if c is MeshInstance3D:
+			bd_ground = c
+	var want := OS.get_environment("BUILD")
+	var all := ["fire", "leanto", "tree", "snow", "cabin", "stages", "interior", "furniture"]
+	var kinds: Array = all if want == "" else Array(want.split(","))
+	for k: String in kinds:
+		match k:
+			"fire":
+				for v: Array in [[30, 25, 3.2, 0.3], [120, 35, 3.0, 0.3], [-60, 12, 2.6, 0.4], [0, 70, 3.4, 0.0]]:
+					tiles.append(["b_fire", v[0], v[1], v[2], v[3], "fire", 0.0, ""])
+			"leanto":
+				for v: Array in [[20, 18, 6.0, 0.7], [70, 22, 6.0, 0.7], [160, 25, 6.0, 0.6], [-35, 45, 7.0, 0.5]]:
+					tiles.append(["b_leanto", v[0], v[1], v[2], v[3], "leanto", 0.0, ""])
+			"tree":
+				for v: Array in [[40, 18, 8.0, 1.2], [110, 22, 8.0, 1.0], [-50, 15, 8.0, 1.2], [200, 35, 8.5, 1.0]]:
+					tiles.append(["b_tree", v[0], v[1], v[2], v[3], "tree", 0.0, ""])
+			"snow":
+				for v: Array in [[15, 15, 6.0, 0.6], [80, 25, 6.0, 0.6], [180, 30, 6.0, 0.6], [-30, 60, 6.5, 0.4]]:
+					tiles.append(["b_snow", v[0], v[1], v[2], v[3], "snow", 0.0, ""])
+			"cabin":
+				for v: Array in [[30, 15, 13.0, 2.0], [-40, 18, 13.0, 2.0], [120, 20, 13.0, 2.0], [200, 30, 14.0, 2.0], [10, 8, 6.0, 1.3], [60, 12, 5.5, 2.0]]:
+					tiles.append(["b_cabin", v[0], v[1], v[2], v[3], "cabin", 0.0, ""])
+			"stages":
+				for st: float in [0.0, 3.0, 7.0, 11.0, 11.5, 11.8]:
+					tiles.append(["b_stages", 35, 22, 13.0, 1.6, "stage", st, ""])
+			"interior":
+				for v: Array in [[0, 55, 9.5, 0.6], [35, 50, 9.0, 0.6], [-35, 48, 9.0, 0.6], [0, 80, 9.5, 0.3]]:
+					tiles.append(["b_interior", v[0], v[1], v[2], v[3], "interior", 0.0, ""])
+			"furniture":
+				for f: String in ["bed", "table", "bench", "shelf", "chest", "rack", "workbench", "stove"]:
+					tiles.append(["b_furniture", 35, 22, 3.6, 0.7, "furn", 0.0, f])
+
+func _build_scene(t: Array) -> void:
+	var kind: String = t[5]
+	var key := kind + str(t[6]) + String(t[7])
+	if key == bd_cur:
+		return
+	bd_cur = key
+	if bd_node != null:
+		bd_node.queue_free()
+	bd_node = Node3D.new()
+	add_child(bd_node)
+	var snow := 0.0
+	var gcol := Color(0.36, 0.38, 0.27)
+	match kind:
+		"fire":
+			var f: Node3D = bd_geo.campfire()
+			f.get_node("wood_low").visible = false
+			bd_node.add_child(f)
+			bd_node.add_child(bd_geo.spit_food("meat_raw", 0.6))
+		"leanto":
+			bd_node.add_child(bd_geo.lean_to())
+		"tree":
+			var sp: Array = bd_geo.pv.pine(301)
+			var tm := MeshInstance3D.new()
+			tm.mesh = sp[0]
+			tm.scale = Vector3.ONE * 1.2
+			bd_node.add_child(tm)
+			bd_node.add_child(bd_geo.tree_shelter())
+		"snow":
+			snow = 1.0
+			gcol = Color(0.86, 0.89, 0.95)
+			bd_node.add_child(bd_geo.snow_shelter())
+		"cabin":
+			var cb: Node3D = bd_geo.cabin(11, 1.0, [0.0, -0.1, 0.05, -0.2, 0.0, 0.0, -0.1])
+			bd_node.add_child(cb)
+			var sm: GPUParticles3D = bd_geo.smoke(0.6, 0.0)
+			sm.position = bd_geo.chimney_top()
+			bd_node.add_child(sm)
+			var fire: Node3D = bd_geo.campfire()
+			fire.position = Vector3(3.5, 0, 4.5)
+			bd_node.add_child(fire)
+		"stage":
+			var crowns := int(t[6])
+			var roof := clampf((float(t[6]) - 11.0) * 2.0, 0.0, 1.0)
+			if t[6] == 11.8:
+				roof = 0.75
+			bd_node.add_child(bd_geo.site_marks())
+			if crowns > 0:
+				bd_node.add_child(bd_geo.cabin(crowns, roof, [0.0, -0.1, 0.05, -0.2, 0.0, 0.0, -0.1]))
+			var left := 1.0 - float(t[6]) / 12.0
+			bd_node.add_child(bd_geo.site_stock({"log": int(24 * left), "plank": int(10 * left), "moss": int(10 * left), "clay": int(8 * left), "pebble": int(12 * left)}))
+		"interior":
+			var cb2: Node3D = bd_geo.cabin(11, 1.0, [0.0, -0.1, 0.05, -0.2, 0.0, 0.0, -0.1])
+			for c in cb2.get_children():
+				if c.has_meta("cut") and bool(c.get_meta("cut")):
+					c.visible = false
+				if c.name == "room_light":
+					c.visible = true
+			bd_node.add_child(cb2)
+			var stv: Node3D = bd_geo.stove()
+			bd_node.add_child(stv)
+			var fy: float = bd_geo.floor_y()
+			for fp: Array in [["bed", Vector3(1.38, fy, -1.05), 0.0], ["table", Vector3(1.2, fy, 0.95), 0.0], ["bench", Vector3(1.68, fy, 1.0), 0.0], ["shelf", Vector3(-1.72, fy, 1.0), 0.0], ["chest", Vector3(-1.5, fy, 0.05), PI * 0.5], ["workbench", Vector3(-0.2, fy, 1.7), PI * 0.5], ["rack", Vector3(0.25, fy, -1.0), 0.0]]:
+				var fn: Node3D = bd_geo.furniture(fp[0])
+				fn.position = fp[1]
+				fn.rotation.y = fp[2]
+				bd_node.add_child(fn)
+		"furn":
+			if String(t[7]) == "stove":
+				var s2: Node3D = bd_geo.stove()
+				s2.position = Vector3(0.9, -bd_geo.floor_y(), 1.0)
+				bd_node.add_child(s2)
+			else:
+				bd_node.add_child(bd_geo.furniture(t[7]))
+	(bd_ground.material_override as StandardMaterial3D).albedo_color = gcol
+	for m: ShaderMaterial in bd_geo.weather_mats() + [bd_geo.pv.mats["spruce"], bd_geo.pv.mats["spruce_card"], bd_geo.pv.mats["bark"]]:
+		m.set_shader_parameter("snow", snow)
+
+func _build_step() -> void:
+	if ti >= tiles.size():
+		_save()
+		get_tree().quit()
+		return
+	var t: Array = tiles[ti]
+	if wait == 0:
+		_build_scene(t)
+	var yaw := deg_to_rad(float(t[1]))
+	var pitch := deg_to_rad(float(t[2]))
+	var look := Vector3(0, float(t[4]), 0)
+	cam.position = look + Vector3(sin(yaw) * cos(pitch), sin(pitch), cos(yaw) * cos(pitch)) * float(t[3])
+	cam.look_at(look, Vector3.UP)
+	wait += 1
+	if wait < 8:
+		return
+	wait = 0
+	var img := get_viewport().get_texture().get_image()
+	var w := img.get_width()
+	var h := img.get_height()
+	var cw := int(h * float(CW) / CH)
+	var crop := img.get_region(Rect2i((w - cw) / 2, 0, cw, h))
+	crop.resize(CW, CH, Image.INTERPOLATE_LANCZOS)
+	var key: String = t[0]
+	if not sheets.has(key):
+		sheets[key] = []
+	sheets[key].append(crop)
+	print("studio ", key, " ", t[5], " ", t[7])
+	ti += 1

@@ -45,6 +45,7 @@ varying float v_md;
 varying float v_fd;
 varying float v_mf;
 varying float v_patch;
+varying float v_wear;  // build: тропа/расчистка (1 - field.a)
 
 // Значение в точке по треугольникам той же разбивки, что у сетки земли.
 vec4 tri4(sampler2D t, vec2 xz) {
@@ -88,7 +89,8 @@ void vertex() {
 		float sx = tri4(field_tex, wp.xz + vec2(e, 0.0)).g;
 		float sz = tri4(field_tex, wp.xz + vec2(0.0, e)).g;
 		float k = snow_m * 1.4;
-		v_sd = k * f.g;
+		v_wear = 1.0 - f.a;
+		v_sd = k * f.g * (1.0 - 0.85 * v_wear);
 		v_md = mud_m * f.b;
 		v_fd = f.r;
 		v_mf = f.b;
@@ -115,7 +117,8 @@ void vertex() {
 		float sx = texelFetch(field_tex, gi + ivec2(1, 0), 0).g - texelFetch(field_tex, gi - ivec2(1, 0), 0).g;
 		float sz = texelFetch(field_tex, gi + ivec2(0, 1), 0).g - texelFetch(field_tex, gi - ivec2(0, 1), 0).g;
 		float k = snow_m * 1.4;
-		v_sd = k * f.g;
+		v_wear = 1.0 - f.a;
+		v_sd = k * f.g * (1.0 - 0.85 * v_wear);
 		v_md = mud_m * f.b;
 		v_fd = f.r;
 		v_mf = f.b;
@@ -182,6 +185,9 @@ void fragment() {
 	vec3 bc = mix(lin(bed), lin(mix(vec3(0.42, 0.42, 0.38), vec3(0.62, 0.58, 0.48), pr)), peb);
 	c = mix(c, bc * (0.9 + fine * 0.2), sh);
 	c *= 0.92 + fine * 0.16;
+	// build: натоптанная тропа и расчищенная площадка — вытертая трава, утоптанная земля
+	float worn = smoothstep(0.25, 0.65, v_wear + (s - 0.5) * 0.25);
+	c = mix(c, lin(vec3(0.36, 0.29, 0.2)) * (0.85 + fine * 0.3), worn * 0.8);
 	// грязь: тёмная, мокрая, блестит; лужицы в низинах
 	float mudv = clamp(v_md / 0.12, 0.0, 1.0) * smoothstep(0.1, 0.4, v_mf + (s - 0.5) * 0.35);
 	float puddle = mudv * smoothstep(0.62, 0.72, s + big * 0.2) * clamp(wet * 1.5 + 0.2, 0.0, 1.0);
@@ -208,7 +214,9 @@ void fragment() {
 	float cover = smoothstep(0.012, 0.07, v_sd + (fine - 0.5) * 0.02) * smoothstep(0.35, 0.6, wn.y + (s - 0.5) * 0.1);
 	cover = max(cover, smoothstep(0.2, 0.5, snow + wn.y * 0.2 - 0.2) * step(0.01, snow) * 0.5 * smoothstep(0.5, 0.7, wn.y));
 	float drift = clamp(v_sd / 0.8, 0.0, 1.0);
+	float packed = smoothstep(0.2, 0.6, v_wear);
 	vec3 sc = vec3(0.7, 0.73, 0.8) * (0.94 + fine * 0.05 + drift * 0.04);
+	sc = mix(sc, vec3(0.6, 0.63, 0.7) * (0.9 + fine * 0.15), packed * 0.7);
 	// в яме снег голубеет и темнеет, на дне грязного следа стоит вода
 	// в яме — лёгкая прохладная тень, глубже чуть темнее; стенки рисует нормаль
 	float hole = smoothstep(0.0, 0.03, t) * 0.5 + smoothstep(0.05, 0.6, t) * 0.5;

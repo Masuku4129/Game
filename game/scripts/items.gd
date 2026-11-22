@@ -37,6 +37,9 @@ const DEF := {
 	"fur_coat": {"name": "Меховая парка", "desc": "Тепло ++", "w": 2.0, "wear": "body", "warm": 0.35, "craft": {"fur": 3, "fiber": 2}},
 	"fur_boots": {"name": "Унты", "desc": "Тепло +, меньше вязнешь в снегу.", "w": 0.8, "wear": "feet", "warm": 0.15, "craft": {"fur": 2, "fiber": 1}},
 	"bandage": {"name": "Повязка", "desc": "Останавливает кровь.", "w": 0.05, "craft": {"fiber": 2}},
+	# --- build ---
+	"meat_dried": {"name": "Вяленое мясо", "desc": "Высушено на сушиле. Лёгкое, долго хранится.", "w": 0.2, "eat": [0.22, -0.05, 0.01], "craft": {"meat_raw": 1}, "station": "rack"},
+	"fish_dried": {"name": "Вяленая рыба", "desc": "Высушена на сушиле. Солоновата, сытная.", "w": 0.15, "eat": [0.16, -0.06, 0.0], "craft": {"fish_raw": 1}, "station": "rack"},
 }
 
 static func name_of(id: String) -> String:

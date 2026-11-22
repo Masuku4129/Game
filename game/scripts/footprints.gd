@@ -187,7 +187,8 @@ func _field(x: float, z: float, ch: int) -> float:
 	return (d + (1.0 - fx) * (c - d) + (1.0 - fz) * (b - d)) / 255.0
 
 func snow_depth(x: float, z: float) -> float:
-	return snow_m * 1.4 * _field(x, z, 1)
+	# --- build: тропы и расчищенный лопатой снег (канал A карты поля — 255 минус износ) ---
+	return snow_m * 1.4 * _field(x, z, 1) * (1.0 - 0.85 * wear_at(x, z))
 
 func mud_depth(x: float, z: float) -> float:
 	return mud_m * _field(x, z, 2)
@@ -220,7 +221,42 @@ func sink_at(p: Vector3) -> Vector2:
 ## Множитель скорости: по щиколотку почти не мешает, по колено ~0.6, по пояс ~0.35.
 func slow(sk: Vector2) -> float:
 	var s := sk.x + sk.y * 1.5
-	return 1.0 / (1.0 + 1.3 * s + 0.55 * s * s)
+	# --- build: по натоптанной тропе идти легче ---
+	return (1.0 + path_k * 0.15) / (1.0 + 1.3 * s + 0.55 * s * s)
+
+# ---------- build: тропы и расчистка снега ----------
+# Износ хранится в канале A карты поля (255 — нетронуто, 0 — земля расчищена/утоптана до конца).
+# Он постоянный: тропа, натоптанная за много проходов, остаётся; снег на ней лежит тонко,
+# летом трава на ней вытерта (ground.gdshader). Лопата и постройки ставят износ сразу.
+var path_k := 0.0     # герой на тропе (0..1): шаг чуть быстрее
+var _wear_dirty := false
+var _wear_t := 0.0
+
+## Износ в точке 0..1.
+func wear_at(x: float, z: float) -> float:
+	return 1.0 - _field(x, z, 3)
+
+## Добавить износ в круге радиуса r (по узлам сетки поля), не выше cap.
+func add_wear(x: float, z: float, r: float, amount: float, cap: float = 1.0) -> void:
+	var i0 := maxi(0, int(floor((x - r + half) / fstep)))
+	var i1 := mini(fn - 1, int(ceil((x + r + half) / fstep)))
+	var j0 := maxi(0, int(floor((z - r + half) / fstep)))
+	var j1 := mini(fn - 1, int(ceil((z + r + half) / fstep)))
+	for j in range(j0, j1 + 1):
+		for i in range(i0, i1 + 1):
+			var px := i * fstep - half
+			var pz := j * fstep - half
+			var d := Vector2(px - x, pz - z).length()
+			var rr := r + fstep * 0.5
+			if d > rr:
+				continue
+			var k := (j * fn + i) * 4 + 3
+			var w := 1.0 - float(fdata[k]) / 255.0
+			if w >= cap:
+				continue
+			w = minf(cap, w + amount * clampf(1.2 - d / rr, 0.0, 1.0))
+			fdata[k] = int(round((1.0 - w) * 255.0))
+			_wear_dirty = true
 
 # ---------- следы ----------
 
@@ -253,6 +289,8 @@ func _track_hero() -> void:
 		_step_acc = fmod(_step_acc, stride)
 		_side = -_side
 		queue.append([_now, hp.x, hp.z, _dir.x, _dir.y, _side, hp.y, _seg_last.x, _seg_last.y])
+		# --- build: каждый шаг понемногу натаптывает тропу ---
+		add_wear(hp.x, hp.z, 0.7, 0.018, 0.75)
 		_seg_last = Vector2(hp.x, hp.z)
 
 ## Глубина следа героя в точке (0 — следа нет).
@@ -529,6 +567,13 @@ func _process(delta: float) -> void:
 		tuft_mat.set_shader_parameter("mud_m", mud_m)
 	m.set_shader_parameter("track_clock", fposmod(clock, 256.0))
 	m.set_shader_parameter("track_eye", Vector2(hp.x, hp.z))
+	# --- build: износ (тропы, расчистка) — в текстуру поля не чаще раза в 0,4 с ---
+	_wear_t -= delta
+	if _wear_dirty and _wear_t <= 0.0:
+		_wear_t = 0.4
+		_wear_dirty = false
+		field_tex.update(Image.create_from_data(fn, fn, false, Image.FORMAT_RGBA8, fdata))
+	path_k = smoothstep(0.25, 0.6, wear_at(hp.x, hp.z))
 	_up_t -= delta
 	if dirty and _up_t <= 0.0:
 		_up_t = 0.12

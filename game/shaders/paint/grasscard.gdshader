@@ -33,7 +33,10 @@ void vertex() {
 	// у края области трава плавно вырастает, а не появляется клеткой
 	VERTEX *= 1.0 - smoothstep(grass_r - 14.0, grass_r - 2.0, d);
 	// в вязкой грязи трава вытоптана и редкая
-	float mf = texture(field_tex, ((w.xz + 256.0) / (512.0 / 384.0) + 0.5) / 385.0).b;
+	vec4 fld = texture(field_tex, ((w.xz + 256.0) / (512.0 / 384.0) + 0.5) / 385.0);
+	float mf = fld.b;
+	// build: на тропе и расчищенной площадке травы нет (износ = 1 - fld.a)
+	VERTEX *= 1.0 - smoothstep(0.3, 0.6, 1.0 - fld.a);
 	VERTEX *= 1.0 - smoothstep(0.3, 0.7, mf) * clamp(mud_m / 0.15, 0.0, 1.0) * 0.85;
 	if (INSTANCE_CUSTOM.z > 0.0) {
 		VERTEX *= clamp((grass_now - INSTANCE_CUSTOM.z) / 0.7, 0.0, 1.0);

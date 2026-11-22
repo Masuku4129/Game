@@ -50,6 +50,7 @@ var msg := ""
 var water_mat: ShaderMaterial
 var beavers
 var inventory  # короб: inventory.gd
+var camp  # --- build: лагерь и постройки (structures.gd) ---
 
 func _ready() -> void:
 	_setup_noise()
@@ -117,6 +118,11 @@ func _ready() -> void:
 	inventory = preload("res://scripts/inventory.gd").new()
 	inventory.main = self
 	ui.add_child(inventory)
+	# --- build: лагерь, постройки, стройка (structures.gd + build_mode/cabin/camp_ui) ---
+	camp = preload("res://scripts/structures.gd").new()
+	camp.main = self
+	add_child(camp)
+	# --- /build ---
 	fps_lbl = Label.new()
 	fps_lbl.anchor_left = 0.5
 	fps_lbl.anchor_right = 0.5
@@ -756,6 +762,10 @@ func _update_stats(dt: float) -> void:
 	var tc: float = weather.temp
 	var soak: float = maxf(float(weather.wet) * 0.6, float(hero.soaked))
 	var target_w := clampf(0.55 + tc * 0.025 - soak * 0.35 - weather.wind * 0.05 - (0.25 if hero.swimb > 0.5 else 0.0), 0.02, 0.95)
+	# --- build: костёр, шалаш, изба с печью греют; укрытие ослабляет ветер ---
+	if camp != null:
+		target_w = clampf(target_w + camp.warm_bonus() + weather.wind * 0.05 * (1.0 - camp.wind_k()), 0.02, 0.98)
+	# --- /build ---
 	warmth = lerpf(warmth, target_w, 0.01 * dt * 4.0)
 	if hero.moving:
 		# шаг почти не утомляет; бег, лазание и плавание — заметно
@@ -785,7 +795,7 @@ func _update_stats(dt: float) -> void:
 	var items := PackedStringArray()
 	for k in inv.keys():
 		if int(inv[k]) > 0:
-			items.append("%s %d" % [PICK_NAME[k], inv[k]])
+			items.append("%s %d" % [PICK_NAME.get(k, preload("res://scripts/items.gd").name_of(k).to_lower()), inv[k]])  # build: не только PICK_NAME
 	if not items.is_empty():
 		info += "· " + ", ".join(items)
 	if msg_t > 0.0:
@@ -832,6 +842,8 @@ func _grass_step() -> void:
 			# высоты — из сетки рельефа (быстро и ровно по видимой земле), без шума на каждую точку
 			var y := grid_height(px, pz)
 			if y < water_level(px, pz) + 0.15:
+				continue
+			if camp != null and camp.cleared(px, pz):  # build: под постройкой травы нет
 				continue
 			var fd := forest_density(px, pz)
 			var h1 := grid_height(px + 1.0, pz)
