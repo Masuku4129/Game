@@ -155,14 +155,14 @@ func _ready() -> void:
 	_anchor(camp_btn, 1, 1, Rect2(-236, -560, 150, 150))
 	camp_btn.pressed.connect(_camp_pressed)
 	add_child(camp_btn)
-	# столбик действий слева от кнопки действия
-	_anchor(ctx_box, 1, 1, Rect2(-720, -560, 370, 470))
+	# столбик действий над кнопками инструментов (Метнуть/Воткнуть/пояс), чтобы не перекрывать их
+	_anchor(ctx_box, 1, 1, Rect2(-760, -860, 370, 370))
 	ctx_box.alignment = BoxContainer.ALIGNMENT_END
 	ctx_box.add_theme_constant_override("separation", 12)
 	ctx_box.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(ctx_box)
 	for i in 5:
-		var b := _button("", Vector2(370, 88), 30)
+		var b := _button("", Vector2(370, 76), 28)
 		b.visible = false
 		b.pressed.connect(_ctx.bind(i))
 		ctx_box.add_child(b)

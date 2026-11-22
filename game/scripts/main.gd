@@ -1177,6 +1177,11 @@ func bandage() -> void:
 			injuries[k] = minf(float(injuries[k]), 24.0)
 	_say("Раны перевязаны")
 
+# --- build: станции ремесла (inventory.station_ok) — костёр "fire", печь "stove", верстак "camp" ---
+func station_near(st: String) -> bool:
+	return camp != null and bool(camp.station_near(st))
+# --- /build ---
+
 func _say(t: String) -> void:
 	msg = t
 	msg_t = 3.0

@@ -84,18 +84,53 @@ func has_shovel() -> bool:
 	var h = main.hero.get("held")
 	if h != null and String(h) == "shovel":
 		return true
+	if main.hero.has_method("has_tool"):
+		return bool(main.hero.has_tool("shovel"))
 	return int(main.inv.get("shovel", 0)) > 0
 
 func count(id: String) -> int:
 	return int(main.inv.get(id, 0))
 
 func take(id: String, n: int) -> void:
+	if main.inventory != null:
+		main.inventory.remove_item(id, mini(n, count(id)))
+		return
 	main.inv[id] = count(id) - n
 	if int(main.inv[id]) <= 0:
 		main.inv.erase(id)
 
 func give(id: String, n: int) -> void:
+	if main.inventory != null:
+		main.inventory.add_item(id, n)
+		return
 	main.inv[id] = count(id) + n
+
+## Станция ремесла рядом (для inventory.station_ok через main.station_near):
+## "fire" — горящий костёр в 3 м или топящаяся печь в избе; "stove" — печь; "camp" — верстак.
+## "rack" — сушило работает только через своё окно (нужно время), поэтому здесь false.
+func station_near(st: String) -> bool:
+	var hp: Vector3 = main.hero.position
+	if cabin_ctl != null and cabin_ctl.inside:
+		var c: Dictionary = cabin_ctl.cur
+		match st:
+			"fire", "stove":
+				return bool(c.get("stove_lit", false))
+			"camp":
+				return cabin_ctl.has_furn(c, "workbench")
+		return false
+	for s: Dictionary in list:
+		var d := Vector2(hp.x - (s["pos"] as Vector3).x, hp.z - (s["pos"] as Vector3).z).length()
+		match st:
+			"fire":
+				if s["type"] == "campfire" and bool(s["lit"]) and d < 3.0:
+					return true
+			"stove":
+				if s["type"] == "cabin" and bool(s.get("stove_lit", false)) and d < 4.0:
+					return true
+			"camp":
+				if s["type"] == "cabin" and cabin_ctl != null and cabin_ctl.has_furn(s, "workbench") and d < 4.0:
+					return true
+	return false
 
 func can_pay(cost: Dictionary) -> bool:
 	for k: String in cost:
@@ -631,6 +666,14 @@ func deposit(s: Dictionary) -> void:
 	var need: Dictionary = DEFS["cabin"]["need"]
 	var have: Dictionary = s["have"]
 	var moved := 0
+	# брёвна, лежащие у стройки (принесённые на плече), — сразу в сруб
+	if main.tools_world != null:
+		for it: Dictionary in main.tools_world.logs_near(s["pos"], 8.0):
+			if int(have.get("log", 0)) >= int(need["log"]):
+				break
+			if main.tools_world.take_item(it):
+				have["log"] = int(have.get("log", 0)) + 1
+				moved += 1
 	for id: String in need:
 		var want := int(need[id]) - int(have.get(id, 0))
 		var n := mini(want, count(id))
@@ -894,6 +937,8 @@ func actions() -> Array:
 			"cabin":
 				match String(s["stage"]):
 					"site":
+						if _held_log() and int((s["have"] as Dictionary).get("log", 0)) < int(DEFS["cabin"]["need"]["log"]):
+							out.append(["Положить бревно на стройку", func(): deposit_held_log(s)])
 						out.append(["Стройка избы", func(): ui.open_site(s)])
 					"building":
 						pass
@@ -903,6 +948,22 @@ func actions() -> Array:
 	if out.size() < 3 and has_shovel() and snow_here() > 0.06 and hero.state == "walk":
 		out.append(["Расчистить снег", dig_snow])
 	return out
+
+func _held_log() -> bool:
+	var t = main.hero.get("tools")
+	return t != null and String(t.held) == "log"
+
+## Бревно с плеча — прямо в сруб.
+func deposit_held_log(s: Dictionary) -> void:
+	if not _held_log():
+		return
+	var t: Node = main.hero.tools
+	t.held = ""
+	t._refresh()
+	var have: Dictionary = s["have"]
+	have["log"] = int(have.get("log", 0)) + 1
+	main._say("Бревно на стройке: %d из %d" % [int(have["log"]), int(DEFS["cabin"]["need"]["log"])])
+	_rebuild(s)
 
 func _near_door(s: Dictionary) -> bool:
 	var lp: Vector3 = _xf(s).affine_inverse() * main.hero.position
@@ -1035,6 +1096,15 @@ func _run_test() -> void:
 			_shot("t_tree")
 			if not _tcab.is_empty():
 				_look(_tcab["pos"] + Basis(Vector3.UP, _tcab["yaw"]) * Vector3(0, 0, 4.0), float(_tcab["yaw"]) + 0.5, 14.0, 35.0)
+				if main.tools_world != null:
+					main.tools_world.drop_log(_xf(_tcab) * Vector3(3.5, 0.15, 0), 0.0)
+					main.tools_world.drop_log(_xf(_tcab) * Vector3(3.8, 0.15, 1.0), 0.0)
+				main.inv["log"] = maxi(0, count("log") - 3)
+				var ht: Node = main.hero.get("tools")
+				if ht != null:
+					ht.held = "log"
+					deposit_held_log(_tcab)
+					print("build test held log deposited, held=", ht.held, " have ", _tcab["have"].get("log", 0))
 				deposit(_tcab)
 				print("build test site ready ", site_ready(_tcab), " have ", _tcab["have"])
 		190:
@@ -1057,6 +1127,7 @@ func _run_test() -> void:
 				print("build test furn ", k, " ok=", cabin_ctl.confirm_place(), " at ", cabin_ctl.p_pos)
 			print("build test inside warm ", warm_bonus(), " wind ", wind_k(), " cap ", store_cap(_tcab))
 			print("build test inside actions ", actions().map(func(a: Array) -> String: return a[0]))
+			print("build test stations fire=", main.station_near("fire"), " stove=", main.station_near("stove"), " camp=", main.station_near("camp"), " rack=", main.station_near("rack"))
 		290:
 			_shot("t_interior")
 			ui.open_store(_tcab)
