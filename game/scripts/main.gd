@@ -1022,7 +1022,7 @@ func hurt(amount: float, from: Vector3, kind: String) -> void:
 func _die(kind: String) -> void:
 	hero.state = "dead"
 	dead_t = 6.0
-	var who: String = {"wolf": "волки", "bear": "медведь", "tiger": "тигр", "boar": "кабан"}.get(kind, "")
+	var who: String = {"wolf": "волки", "bear": "медведь", "tiger": "тигр", "boar": "кабан", "moose": "лось", "wolverine": "росомаха"}.get(kind, "")
 	dead_lbl.text = "Вы погибли" + ("\n" + who if who != "" else "")
 	dead_lbl.visible = true
 

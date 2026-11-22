@@ -1,3 +1,4 @@
 Модели зверей: Ultimate Animated Animals (июль 2021) и Farm Animals Animated (июнь 2018), автор Quaternius, CC0 1.0.
 Модель героя: Universal Base Characters [Standard] и причёски оттуда же, анимации Universal Animation Library 1 и 2 [Standard], автор Quaternius, CC0 1.0.
 https://quaternius.com
+Лось, рысь, росомаха, кабарга и глухарь — процедурные модели и анимации кодом (scripts/animal_model.gd, animal.gd): свободных (CC0/CC-BY) анимированных моделей этих видов найти не удалось.
