@@ -247,7 +247,7 @@ func blocked(x: float, z: float, rad: float) -> bool:
 
 func _setup_noise() -> void:
 	n_hill.seed = 1640; n_hill.frequency = 0.004; n_hill.fractal_octaves = 4
-	n_cliff.seed = 77; n_cliff.frequency = 0.009; n_cliff.fractal_octaves = 2
+	n_cliff.seed = 77; n_cliff.frequency = 0.0045; n_cliff.fractal_octaves = 2
 	n_detail.seed = 5; n_detail.frequency = 0.05; n_detail.fractal_octaves = 3
 	n_crag.seed = 31; n_crag.frequency = 0.16; n_crag.fractal_octaves = 4
 	n_crag2.seed = 32; n_crag2.frequency = 0.55; n_crag2.fractal_octaves = 2
@@ -260,19 +260,25 @@ func river_dist(x: float, z: float) -> float:
 func biome(x: float, z: float) -> float:
 	return clampf(n_biome.get_noise_2d(x, z) * 2.2, -1.0, 1.0)
 
+## Рельеф: пологие холмы и редкие отвесные скальные уступы 5–20 м.
+## Уступ — уровень шума n_cliff; линия рвётся мелким шумом, поэтому край неровный.
+func cliff_k(x: float, z: float) -> float:
+	var c := n_cliff.get_noise_2d(x, z) + n_crag.get_noise_2d(x * 0.35, z * 0.35) * 0.03 + n_crag2.get_noise_2d(x, z) * 0.004
+	var sharp := smoothstep(0.34, 0.355, c)
+	# с части сторон уступ переходит в пологий подъём — наверх можно зайти
+	var soft := smoothstep(0.16, 0.36, c)
+	var g := smoothstep(-0.15, 0.15, n_biome.get_noise_2d(x * 2.3 - 500.0, z * 2.3))
+	return lerpf(soft, sharp, g)
+
+func cliff_h(x: float, z: float) -> float:
+	return 5.0 + 15.0 * clampf(n_biome.get_noise_2d(x * 0.7 + 300.0, z * 0.7) * 1.4 + 0.5, 0.0, 1.0)
+
 func height(x: float, z: float) -> float:
 	var rocky := clampf(biome(x, z), 0.0, 1.0)
-	var h := n_hill.get_noise_2d(x, z) * (8.0 + rocky * 6.0) + n_detail.get_noise_2d(x, z) * 1.0 + 3.0
-	var c := n_cliff.get_noise_2d(x, z)
-	# ступени-обрывы: резкий подъём на узкой полосе шума
-	var t1 := smoothstep(0.09, 0.21, c)
-	var t2 := smoothstep(0.31, 0.43, c)
-	h += t1 * 6.0 + t2 * 5.0
-	# рваная скалистая поверхность обрывов: крупные и мелкие сколы только на самом уступе
-	var face := (t1 * (1.0 - t1) + t2 * (1.0 - t2)) * 4.0
-	h += n_crag.get_noise_2d(x, z) * 1.8 * face + n_crag2.get_noise_2d(x, z) * 0.6 * face
+	var h := n_hill.get_noise_2d(x, z) * (3.0 + rocky * 2.0) + n_detail.get_noise_2d(x, z) * 0.35 + 2.5
+	h += cliff_k(x, z) * cliff_h(x, z)
 	h = maxf(h, WATER_Y + 0.6 + n_detail.get_noise_2d(x * 0.5, z * 0.5) * 0.3)
-	var r := 1.0 - smoothstep(7.0, 32.0, river_dist(x, z))
+	var r := 1.0 - smoothstep(7.0, 26.0, river_dist(x, z))
 	return lerpf(h, WATER_Y - 2.5, r)
 
 func normal_at(x: float, z: float) -> Vector3:
@@ -1007,6 +1013,7 @@ func _scatter_all() -> void:
 				pv.lod = true
 				cache_lod[r[0]] = _variants(r[0])
 				pv.lod = false
+	_cliff_rocks(cache["rock"])
 	var cells := int(SIZE / CELL)
 	for cz in cells:
 		for cx in cells:
@@ -1098,6 +1105,67 @@ func _scatter_all() -> void:
 							pk = "amanita"
 						for i in xs.size():
 							_add_pick(xs[i].origin, pk, mm, i)
+
+## Скальные стены уступов: высокие глыбы вдоль обрыва и осыпь камней у подножия.
+func _cliff_rocks(vars: Array) -> void:
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 4711
+	var per_var := []
+	for v in vars:
+		per_var.append([])
+	var half := SIZE * 0.5 - 4.0
+	var step := 2.2
+	var z := -half
+	while z < half:
+		var x := -half
+		while x < half:
+			var px := x + rng.randf_range(-0.8, 0.8)
+			var pz := z + rng.randf_range(-0.8, 0.8)
+			var gx := height(px + 1.0, pz) - height(px - 1.0, pz)
+			var gz := height(px, pz + 1.0) - height(px, pz - 1.0)
+			var g := Vector2(gx, gz)
+			if g.length() > 3.0:
+				var up := g.normalized()
+				var hb := height(px - up.x * 2.5, pz - up.y * 2.5)
+				var ht := height(px + up.x * 2.5, pz + up.y * 2.5)
+				var dh := ht - hb
+				if dh > 3.0:
+					var vi := rng.randi() % vars.size()
+					var rsc: Vector3 = vars[vi][2]
+					var sxz := rng.randf_range(1.5, 2.6)
+					var sy := dh * rng.randf_range(0.75, 1.05) / rsc.y
+					var b := Basis(Vector3.UP, atan2(up.x, up.y) + rng.randf_range(-0.5, 0.5)).scaled(Vector3(sxz, sy, sxz * 0.8))
+					var o := Vector3(px - up.x * 0.6, hb - 0.4, pz - up.y * 0.6)
+					per_var[vi].append(Transform3D(b, o))
+					_add_blocker(o.x, o.z, sxz * 0.7)
+					# осыпь у подножия
+					for k in 2:
+						if rng.randf() < 0.6:
+							var d := rng.randf_range(1.8, 4.5)
+							var sx2 := px - up.x * d + rng.randf_range(-1.5, 1.5)
+							var sz2 := pz - up.y * d + rng.randf_range(-1.5, 1.5)
+							var s2 := rng.randf_range(0.3, 1.1)
+							var vj := rng.randi() % vars.size()
+							per_var[vj].append(Transform3D(Basis(Vector3.UP, rng.randf() * TAU).scaled(Vector3(s2, s2, s2)), Vector3(sx2, height(sx2, sz2) - 0.08, sz2)))
+			x += step
+		z += step
+	for vi in vars.size():
+		var xs: Array = per_var[vi]
+		if xs.is_empty():
+			continue
+		var mm := MultiMesh.new()
+		mm.transform_format = MultiMesh.TRANSFORM_3D
+		mm.mesh = vars[vi][0]
+		mm.instance_count = xs.size()
+		for i in xs.size():
+			mm.set_instance_transform(i, xs[i])
+		var mmi := MultiMeshInstance3D.new()
+		mmi.multimesh = mm
+		mmi.visibility_range_end = 140.0
+		mmi.visibility_range_end_margin = 14.0
+		mmi.visibility_range_fade_mode = GeometryInstance3D.VISIBILITY_RANGE_FADE_SELF
+		add_child(mmi)
+	print("cliff rocks ", per_var.reduce(func(acc, a): return acc + a.size(), 0))
 
 func _accept(kind: String, x: float, z: float, rng: RandomNumberGenerator) -> bool:
 	var y := height(x, z)

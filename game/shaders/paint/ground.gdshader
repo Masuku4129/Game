@@ -29,6 +29,11 @@ void fragment() {
 	c = mix(c, fl, smoothstep(0.35, 0.65, fd + (s - 0.5) * 0.3));
 	float slope = 1.0 - wn.y;
 	c = mix(c, lin(stone) * (0.85 + fine * 0.3), smoothstep(0.28, 0.42, slope + (s - 0.5) * 0.12));
+	// отвесная скала: серый камень с горизонтальными пластами и трещинами
+	float strata = sin(wp.y * 2.6 + vnoise(wp.xz * 0.4) * 4.0) * 0.5 + 0.5;
+	float crack = smoothstep(0.08, 0.0, abs(fract(wp.y * 0.7 + vnoise(wp.xz * 0.8) * 1.5) - 0.5) - 0.42);
+	vec3 cliff = lin(vec3(0.42, 0.41, 0.38)) * (0.75 + strata * 0.3 + fine * 0.15) * (1.0 - crack * 0.45);
+	c = mix(c, cliff, smoothstep(0.5, 0.7, slope));
 	// дно и берег: песок с округлыми камешками
 	float sh = smoothstep(water_y + 0.5, water_y - 0.1, wp.y);
 	vec2 pq = wp.xz * 1.6 + vec2(vnoise(wp.xz * 1.3), vnoise(wp.zx * 1.3 + 5.0)) * 0.9;

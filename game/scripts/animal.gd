@@ -89,6 +89,10 @@ func _new_wander() -> void:
 	target = position + Vector3(cos(a), 0, sin(a)) * r
 	if target.distance_to(home) > home_r:
 		target = home + (target - home).normalized() * home_r * 0.6
+	# цель на другом ярусе уступа или в реке (для тех, кто не плавает) — ближе к дому
+	var th: float = main.height(target.x, target.z)
+	if absf(th - main.height(position.x, position.z)) > 4.0 or (th < main.WATER_Y - 0.3 and not swimmer()):
+		target = home + Vector3(rng.randf_range(-8, 8), 0, rng.randf_range(-8, 8))
 	state = "wander"
 	state_t = rng.randf_range(8.0, 20.0)
 
@@ -302,26 +306,69 @@ func tick(delta: float) -> void:
 	if to.length() > 0.2 and want > 0.0:
 		var hd := atan2(to.x, to.z)
 		heading = lerp_angle(heading, hd, minf(1.0, delta * (3.0 + want * 0.4)))
+	if swim_k > 0.3:
+		want *= 0.45
 	speed = move_toward(speed, want, delta * (4.0 + want * 0.8))
 	if climb_h <= 0.0 and speed > 0.01:
 		var dir := Vector3(sin(heading), 0, cos(heading))
 		var np := position + dir * speed * delta
 		# обход стволов и воды (кроме бобра)
+		# крупные звери плывут, мелкие обходят воду; отвесный уступ не одолеть
 		var gy: float = main.height(np.x, np.z)
-		var wet: bool = gy < main.WATER_Y - 0.3 and kind != "beaver"
-		if main.blocked(np.x, np.z, 0.2 * scale_k) or wet or absf(np.x) > main.SIZE * 0.5 - 10.0 or absf(np.z) > main.SIZE * 0.5 - 10.0:
-			heading += (1.0 if rng.randf() < 0.5 else -1.0) * 0.9
+		var g0: float = main.height(position.x, position.z)
+		var wet: bool = gy < main.WATER_Y - 0.3 and not swimmer()
+		var steep: bool = (gy - g0) > maxf(0.35, speed * delta * 1.6) and gy > main.WATER_Y
+		if main.blocked(np.x, np.z, 0.2 * scale_k) or wet or steep or absf(np.x) > main.SIZE * 0.5 - 10.0 or absf(np.z) > main.SIZE * 0.5 - 10.0:
+			heading += _turn_dir * 0.9
 			speed *= 0.5
+			_bump += 1
 		else:
 			position.x = np.x
 			position.z = np.z
+	_unstick(delta)
 	var g: float = main.ground_at(position.x, position.z)
+	swim_k = clampf((main.WATER_Y - 0.25 - g) / 0.6, 0.0, 1.0) if swimmer() else 0.0
+	if swim_k > 0.0:
+		# плывёт: над водой голова и спина
+		g = lerpf(g, main.WATER_Y - float(parts.get("H", 0.8)) * 0.55, swim_k)
 	if kind == "beaver":
 		g = maxf(g, main.WATER_Y - 0.12)
 	position.y = g + climb_h
 	rotation.y = heading
 	if not far:
 		_animate(delta)
+
+var swim_k := 0.0
+var _bump := 0
+var _turn_dir := 1.0
+var _chk_t := 0.0
+var _chk_p := Vector3.ZERO
+
+func swimmer() -> bool:
+	return kind != "hare" and kind != "squirrel"
+
+## Застрял (упирается в склон, ствол или воду и почти не движется) — новая цель в сторону,
+## откуда пришёл, со сменой направления обхода; долго не выходит — переносится к дому.
+func _unstick(delta: float) -> void:
+	_chk_t += delta
+	if _chk_t < 2.0:
+		return
+	var moved := Vector2(position.x - _chk_p.x, position.z - _chk_p.z).length()
+	var tried := want > 0.3
+	_chk_t = 0.0
+	_chk_p = position
+	if not tried or moved > 0.8:
+		_bump = 0
+		return
+	_turn_dir = -_turn_dir
+	var back := heading + PI + rng.randf_range(-0.8, 0.8)
+	target = position + Vector3(sin(back), 0, cos(back)) * rng.randf_range(8.0, 18.0)
+	heading = back
+	if state == "wander":
+		state_t = rng.randf_range(6.0, 12.0)
+	if _bump > 40:
+		_bump = 0
+		position = home + Vector3(rng.randf_range(-6, 6), 0, rng.randf_range(-6, 6))
 
 func _strike(tg: Node3D) -> void:
 	if attack_cd > 0.0:
@@ -363,6 +410,9 @@ func _animate_model(delta: float) -> void:
 	var sc := 1.0
 	if _attack_t > 0.0:
 		want_a = SK.find_anim(ap, ["Attack", "Attack_Headbutt"])
+	elif swim_k > 0.5:
+		want_a = SK.find_anim(ap, ["Walk"])
+		sc = 0.7 if speed > 0.05 else 0.25
 	elif speed > walk * 1.7:
 		want_a = SK.find_anim(ap, ["Gallop"])
 		sc = clampf(speed / (float(sp["run"]) * 0.75), 0.6, 1.6)
@@ -387,7 +437,7 @@ func _animate_model(delta: float) -> void:
 	var hf: float = main.ground_at(position.x + fwd.x * L * 0.4, position.z + fwd.z * L * 0.4)
 	var hb: float = main.ground_at(position.x - fwd.x * L * 0.4, position.z - fwd.z * L * 0.4)
 	var m: Node3D = parts["model"]
-	m.rotation.x = lerpf(m.rotation.x, -atan2(hf - hb, L * 0.8), minf(1.0, delta * 6.0))
+	m.rotation.x = lerpf(m.rotation.x, -atan2(hf - hb, L * 0.8) * (1.0 - swim_k), minf(1.0, delta * 6.0))
 
 func _animate(delta: float) -> void:
 	if parts.has("ap"):

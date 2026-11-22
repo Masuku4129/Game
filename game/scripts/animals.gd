@@ -3,7 +3,7 @@ extends Node3D
 
 const Animal = preload("res://scripts/animal.gd")
 const SHOW_R := 75.0
-const NEAR_R := 130.0
+const NEAR_R := 95.0
 
 var main: Node3D
 var list: Array = []
@@ -18,34 +18,34 @@ func populate() -> void:
 	rng.seed = 7741
 	var start: Vector3 = main.hero.position
 	# заяц: опушки и поляны
-	for i in 22:
+	for i in 50:
 		_spawn("hare", _spot(func(x, z): return main.forest_density(x, z) < 0.55, start, 25.0), 1.0, -1)
 	# белка: у деревьев
-	for i in 20:
+	for i in 80:
 		var p := _spot(func(x, z): return main.nearest_tree(Vector3(x, 0, z), 6.0) != Vector3.INF, start, 15.0)
 		_spawn("squirrel", p, 1.0, -1)
-	for i in 5:
+	for i in 12:
 		_spawn("fox", _spot(func(x, z): return main.forest_density(x, z) < 0.6, start, 50.0), 1.0, -1)
 	# первая встреча: пара косуль на опушке недалеко от старта
 	var c0 := _spot(func(x, z): return main.forest_density(x, z) < 0.5 and Vector2(x - start.x, z - start.z).length() < 70.0, start, 35.0)
 	for k in 2:
 		_spawn("roe", _near(c0, 4.0), rng.randf_range(0.9, 1.05), 99)
 	# водопои: звери держатся у реки
-	for gi in 2:
+	for gi in 4:
 		var c := _spot(func(x, z): return main.river_dist(x, z) < 14.0 and main.river_dist(x, z) > 4.0, start, 50.0)
 		for k in rng.randi_range(2, 3):
 			_spawn("roe", _near(c, 5.0), rng.randf_range(0.9, 1.05), 110 + gi)
 	# косули — группы по 2–3, олени — стада 4–5
-	for gi in 4:
+	for gi in 10:
 		var c := _spot(func(x, z): return main.forest_density(x, z) < 0.7, start, 60.0)
 		for k in rng.randi_range(2, 3):
 			_spawn("roe", _near(c, 6.0), rng.randf_range(0.9, 1.05), 100 + gi)
-	for gi in 2:
+	for gi in 5:
 		var c := _spot(func(x, z): return main.forest_density(x, z) < 0.5 and main.normal_at(x, z).y > 0.9, start, 80.0)
 		for k in rng.randi_range(4, 5):
 			_spawn("deer", _near(c, 8.0), rng.randf_range(0.85, 1.05), 200 + gi)
 	# кабаны с поросятами
-	for gi in 3:
+	for gi in 7:
 		var c := _spot(func(x, z): return main.forest_density(x, z) > 0.4, start, 70.0)
 		_spawn("boar", c, 1.0, 300 + gi)
 		_spawn("boar", _near(c, 4.0), 0.85, 300 + gi)
@@ -57,24 +57,31 @@ func populate() -> void:
 	for k in 5:
 		var w = _spawn("wolf", _near(den, 5.0), rng.randf_range(0.9, 1.05) if k > 0 else 1.1, 400)
 		w.home_r = 170.0
-	# медведь: берлога в каменистой местности
-	var bden := _spot(func(x, z): return main.biome(x, z) > 0.2 and main.normal_at(x, z).y > 0.8, start, 120.0)
-	_den(bden, 2.2, 1.3)
-	_spawn("bear", _near(bden, 3.0), 1.0, -1)
-	# тигр: юго-восток
-	var tp := _spot(func(x, z): return x > 70.0 and z > 70.0, start, 140.0)
-	_spawn("tiger", tp, 1.0, -1)
+	var den2 := _spot(func(x, z): return main.forest_density(x, z) > 0.5 and main.normal_at(x, z).y > 0.85 and den.distance_to(Vector3(x, den.y, z)) > 180.0, start, 150.0)
+	_den(den2, 1.6, 0.9)
+	for k in 4:
+		var w2 = _spawn("wolf", _near(den2, 5.0), rng.randf_range(0.9, 1.05) if k > 0 else 1.1, 401)
+		w2.home_r = 170.0
+	# медведи: берлоги в каменистой местности
+	for bi in 3:
+		var bden := _spot(func(x, z): return main.biome(x, z) > 0.2 and main.normal_at(x, z).y > 0.8, start, 100.0)
+		_den(bden, 2.2, 1.3)
+		_spawn("bear", _near(bden, 3.0), 1.0 if bi == 0 else 0.9, -1)
+	# тигры: юго-восток
+	for ti in 2:
+		var tp := _spot(func(x, z): return x > 60.0 and z > 60.0, start, 120.0)
+		_spawn("tiger", tp, 1.0, -1)
 	# бобры: хатка на реке
-	for gi in 2:
+	for gi in 4:
 		var bp := _spot(func(x, z): return main.river_dist(x, z) < 9.0 and main.height(x, z) < main.WATER_Y + 0.6 and main.height(x, z) > main.WATER_Y - 1.2, start, 40.0)
 		_lodge(bp)
 		for k in 2:
 			_spawn("beaver", _near(bp, 3.0), 1.0, 500 + gi)
 	# птицы: стайки
 	_make_bird_mesh()
-	for gi in 6:
-		var c := _spot(func(x, z): return true, start, 15.0)
-		for k in rng.randi_range(4, 7):
+	for gi in 28:
+		var c := _spot(func(x, z): return true, start, 10.0)
+		for k in rng.randi_range(4, 9):
 			var b := Bird.new()
 			b.setup(self, _near(c, 3.0), rng.randi())
 			add_child(b)
@@ -348,6 +355,8 @@ class Bird extends Node3D:
 			wi.position = Vector3(sd * 0.08, 0, 0)
 			wi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 			w.add_child(wi)
+		for gi: GeometryInstance3D in find_children("*", "GeometryInstance3D", true, false):
+			gi.visibility_range_end = 70.0
 		position = Vector3(p.x, main.ground_at(p.x, p.z), p.z)
 		rotation.y = rng.randf() * TAU
 		t = rng.randf_range(3.0, 12.0)
