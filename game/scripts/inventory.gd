@@ -201,6 +201,9 @@ func _update_buttons() -> void:
 		btn_use.disabled = false
 		btn_belt.text = "С пояса" if tools.belt.has(sel) else "На пояс"
 		btn_belt.disabled = not d.get("belt", false)
+		if d.get("back", false):  # --- combat: лук — за спину ---
+			btn_belt.text = "Со спины" if tools.back == sel else "За спину"
+			btn_belt.disabled = false
 	else:
 		btn_use.text = "Съесть"
 		btn_use.disabled = sel == "" or not d.has("eat")
@@ -319,7 +322,7 @@ func craft(id: String) -> bool:
 	var rc := recipe(id)
 	for k: String in rc:
 		remove_item(k, int(rc[k]))
-	add_item(id, int(EXTRA_OUT.get(id, 1)))
+	add_item(id, int(EXTRA_OUT.get(id, ITEMS.get(id, {}).get("out", 1))))  # --- combat: out — стрелы по 3 ---
 	main._say("Сделано: " + _name(id).to_lower())
 	if main.sfx != null:
 		main.sfx.play_at("chop" if id == "flint" else "cut", main.hero.position + Vector3(0, 0.6, 0), -2.0, 1.3)
@@ -336,17 +339,12 @@ func _use() -> void:
 	if sel == "":
 		return
 	if ITEMS.get(sel, {}).has("tool"):
+		# --- combat: состояние рук и пояса — только через hero_tools ---
 		var tools: Node = main.hero.tools
 		if tools.held == sel:
 			tools.to_pack(sel)
-		elif ITEMS[sel].get("hands", false):
-			tools.give_long(sel)
 		else:
-			if tools.held != "" and not tools.is_long(tools.held):
-				tools._put_away(tools.held)
-			tools.belt.erase(sel)
-			tools.held = sel
-			tools._refresh()
+			tools.draw(sel)
 		return
 	if not ITEMS.get(sel, {}).has("eat"):
 		return
@@ -364,6 +362,14 @@ func _use() -> void:
 
 func _belt() -> void:
 	var tools: Node = main.hero.tools
+	# --- combat: лук — за спину и обратно в короб ---
+	if sel != "" and ITEMS.get(sel, {}).get("back", false):
+		if tools.back == sel:
+			tools.to_pack(sel)
+		else:
+			tools.to_back(sel)
+		return
+	# --- /combat ---
 	if sel == "" or not ITEMS.get(sel, {}).get("belt", false):
 		return
 	if tools.belt.has(sel):
@@ -599,6 +605,10 @@ func _draw_craft(ci: CanvasItem, f: Font) -> void:
 
 ## Значок вещи: простой рисунок кистью (круги, эллипсы, штрихи).
 static func icon(ci: CanvasItem, kind: String, c: Vector2, r: float) -> void:
+	# --- combat: лук, стрела, верёвка, присед (combat_icons.gd) ---
+	if preload("res://scripts/combat_icons.gd").icon(ci, kind, c, r):
+		return
+	# --- /combat ---
 	match kind:
 		"berry":
 			ci.draw_colored_polygon(_ell(c + Vector2(-r * 0.35, -r * 0.55), r * 0.38, r * 0.16, -0.6), Color(0.3, 0.45, 0.2))

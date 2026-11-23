@@ -395,6 +395,17 @@ func throw_spear(xf: Transform3D, vel: Vector3) -> void:
 	flying.append({"node": mi, "vel": vel, "t": 0.0, "pos": xf.origin})
 	_snd("whoosh", xf.origin, -2.0)
 
+# --- combat: стрелы из лука (hero_tools.gd «shoot») ---
+## Стрела: ушко в начале координат, острие в 0,74 м по +Y; урон — от скорости, но слабее копья.
+func shoot_arrow(xf: Transform3D, vel: Vector3) -> void:
+	var mi := MeshInstance3D.new()
+	mi.mesh = TM.arrow()
+	add_child(mi)
+	mi.global_transform = xf
+	flying.append({"node": mi, "vel": vel, "t": 0.0, "pos": xf.origin, "id": "arrow", "tip": 0.74, "k": 0.42, "drag": 0.01})
+	_snd("whoosh", xf.origin, -8.0, 1.6)
+# --- /combat ---
+
 func _spear_basis(d: Vector3) -> Basis:
 	var A := d.normalized()
 	var X := (Vector3.UP.cross(A)).normalized() if absf(A.y) < 0.98 else Vector3.RIGHT
@@ -472,6 +483,10 @@ static func _closest_seg_seg(p1: Vector3, q1: Vector3, p2: Vector3, q2: Vector3)
 ## ноги — зверь хромает (медленнее бежит), корпус — ранен и убегает.
 func _damage(a: Node3D, zone: String, speed: float) -> void:
 	var mult: float = {"head": 2.6, "body": 1.3, "legs": 0.55}[zone]
+	# --- combat: дрожь зверя от попадания ---
+	if main.get("combat") != null and main.combat != null:
+		main.combat.flinch(a, a.position - main.hero.position, 0.8)
+	# --- /combat ---
 	if main.get("hunt") != null:
 		# охота (hunt.gd): доля жизни косули, крепость вида учитывается там; кровь и след — тоже там
 		main.hunt.hit_animal(a, speed / 18.0 * mult * 0.85, main.hero.position)
@@ -535,10 +550,10 @@ func _fly(delta: float) -> void:
 		var p0: Vector3 = fl["pos"]
 		var v: Vector3 = fl["vel"]
 		v += Vector3(0, -9.8, 0) * delta
-		v *= 1.0 - 0.02 * delta
+		v *= 1.0 - float(fl.get("drag", 0.02)) * delta
 		var p1 := p0 + v * delta
 		fl["t"] = float(fl["t"]) + delta
-		var tip_off := 1.1
+		var tip_off := float(fl.get("tip", 1.1))
 		var dir := v.normalized()
 		var t0 := p0 + dir * tip_off
 		var t1 := p1 + dir * tip_off
@@ -551,21 +566,22 @@ func _fly(delta: float) -> void:
 					continue
 				var z: Array = _hit_zone(a, t0, t1, 0.0)
 				if not z.is_empty():
-					_snd("thunk", z[1], 4.0)
-					_damage(a, z[0], v.length())
+					_snd("thunk", z[1], 4.0 if tip_off > 1.0 else -2.0, 1.0 if tip_off > 1.0 else 1.4)
+					_damage(a, z[0], v.length() * float(fl.get("k", 1.0)))
 					# копьё падает рядом со зверем (у убитого остаётся торчать)
 					var hp: Vector3 = z[1]
-					if a.dead:
-						_stick(node, hp, dir, 0.25)
+					if a.dead or fl.has("k"):
+						# стрела застревает и в живом звере, и в убитом (--- combat ---)
+						_stick(node, hp, dir, 0.25 if tip_off > 1.0 else 0.2, String(fl.get("id", "spear")), a if not a.dead else null)
 					else:
 						var gp := hp + Vector3(rng.randf_range(-0.4, 0.4), 0, rng.randf_range(-0.4, 0.4))
 						gp.y = main.ground_at(gp.x, gp.z)
-						_lie(node, gp, dir)
+						_lie(node, gp, dir, String(fl.get("id", "spear")))
 					stop = true
 					break
 		# стволы деревьев
-		if not stop and t1.y - main.height(t1.x, t1.z) < 7.0 and main.blocked(t1.x, t1.z, 0.0):
-			_stick(node, t1, dir, 0.12)
+		if not stop and float(fl["t"]) > 0.08 and t1.y - main.height(t1.x, t1.z) < 7.0 and main.blocked(t1.x, t1.z, 0.0):
+			_stick(node, t1, dir, 0.12, String(fl.get("id", "spear")))
 			_snd("thunk", t1, 2.0, 1.15)
 			stop = true
 		# земля
@@ -574,7 +590,7 @@ func _fly(delta: float) -> void:
 			if t1.y <= gy or float(fl["t"]) > 6.0:
 				var hit := t1
 				hit.y = gy
-				_stick(node, hit, dir, 0.22 if dir.y < -0.25 else 0.08)
+				_stick(node, hit, dir, (0.22 if dir.y < -0.25 else 0.08) * (1.0 if tip_off > 1.0 else 0.7), String(fl.get("id", "spear")))
 				_snd("thunk", hit, -2.0, 0.7)
 				stop = true
 		if stop:
@@ -584,20 +600,25 @@ func _fly(delta: float) -> void:
 		fl["vel"] = v
 		node.global_transform = Transform3D(_spear_basis(dir), p1)
 
-## Копьё вонзилось: острие на depth в цель.
-func _stick(node: MeshInstance3D, hit: Vector3, dir: Vector3, depth: float) -> void:
-	var o := hit - dir.normalized() * (1.1 - depth)
+## Копьё (стрела) вонзилось: острие на depth в цель. Стрела в живом звере (on) едет с ним
+## (combat.gd), пока не выпадет; подобрать её можно, когда зверь убит или стрела упала.
+func _stick(node: MeshInstance3D, hit: Vector3, dir: Vector3, depth: float, id: String = "spear", on: Node3D = null) -> void:
+	var tip := 1.1 if id == "spear" else 0.74
+	var o := hit - dir.normalized() * (tip - depth)
 	node.global_transform = Transform3D(_spear_basis(dir), o)
-	items.append({"id": "spear", "node": node, "pos": o})
+	if on != null and main.get("combat") != null and main.combat != null:
+		main.combat.carry_arrow(node, on)
+		return
+	items.append({"id": id, "node": node, "pos": o + dir.normalized() * (tip * 0.5) if id == "arrow" else o})
 
 ## Копьё отскочило и легло на землю.
-func _lie(node: MeshInstance3D, p: Vector3, dir: Vector3) -> void:
+func _lie(node: MeshInstance3D, p: Vector3, dir: Vector3, id: String = "spear") -> void:
 	var h := Vector3(dir.x, 0, dir.z).normalized()
 	if h.length() < 0.1:
 		h = Vector3.FORWARD
 	h = h.rotated(Vector3.UP, rng.randf_range(-0.8, 0.8))
 	node.global_transform = Transform3D(_spear_basis(h), p + Vector3(0, 0.02, 0) - h * 0.1)
-	items.append({"id": "spear", "node": node, "pos": p})
+	items.append({"id": id, "node": node, "pos": p})
 
 # ---------- сбор: береста, лыко, жерди, ягоды ----------
 

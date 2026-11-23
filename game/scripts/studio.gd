@@ -45,6 +45,8 @@ func _ready() -> void:
 		_build_studio()
 	elif who == "tools":
 		_tools()
+	elif who == "combat":
+		_combat_studio()
 
 ## Бобр: ракурсы и позы (шаг, плавание, грызёт, хлопок хвостом). STUDIO=beaver
 var bv: Node3D
@@ -214,6 +216,8 @@ func _process(_d: float) -> void:
 		seat.visible = an.begins_with("Sitting")
 		if t.size() > 8:
 			_tools_pose(t[8])
+	if subj != null and subj.tools != null and subj.tools.bundle != null:
+		subj.tools.bundle.step(0.016, subj.tools.rope_anchor())
 	if wait == 1 and seat != null and seat.visible:
 		var py: float = sk.get_bone_global_pose(sk.find_bone("pelvis")).origin.y
 		seat.position = Vector3(0, (py - 0.1) * 0.5, -0.05)
@@ -732,6 +736,32 @@ func _tools() -> void:
 	for th: float in [0.0, 0.35, 0.8, 1.2, 1.5]:
 		tiles.append(["tools_fall", 75, 12, 13.0, 3.0, "TreeChopping", 0.18, "падение %.2f" % th, {"held": "axe", "act": "chop", "fall": th}])
 
+# ---------- STUDIO=combat: удары копьём, топором, ножом; лук; два бревна; присед ----------
+func _combat_studio() -> void:
+	_hero()
+	tiles.clear()
+	for u in [0.3, 0.42, 0.5]:
+		tiles.append(["combat_stab", 70, 8, 3.6, 1.0, "Idle", 0.3, "копьё %.2f" % u, {"held": "spear", "act": "attack", "u": u, "data": {"tool": "spear"}}])
+	tiles.append(["combat_stab", 20, 8, 3.6, 1.0, "Idle", 0.3, "копьё спереди", {"held": "spear", "act": "attack", "u": 0.5, "data": {"tool": "spear"}}])
+	for at: Array in [["Sword_Regular_A", 0.3, 0.1], ["Sword_Regular_A", 0.43, 0.3], ["Sword_Regular_B", 0.12, 0.36], ["Sword_Regular_B", 0.27, 0.42]]:
+		tiles.append(["combat_axe", 60, 8, 3.4, 1.0, at[0], at[1], "топор", {"held": "axe", "act": "attack", "u": at[2], "data": {"tool": "axe"}}])
+	for at2: Array in [["Punch_Cross", 0.15, 0.2], ["Punch_Cross", 0.28, 0.35], ["Punch_Cross", 0.36, 0.45], ["Punch_Cross", 0.5, 0.55]]:
+		tiles.append(["combat_knife", 25, 35, 2.8, 1.1, at2[0], at2[1], "нож", {"held": "knife", "act": "attack", "u": at2[2], "data": {"tool": "knife"}}])
+	for v: Array in [[90, 3.0], [40, 3.0], [-60, 3.0], [140, 2.4]]:
+		tiles.append(["combat_bow", v[0], 6, v[1], 1.3, "Idle", 0.3, "натяжение", {"held": "bow", "act": "shoot", "u": 0.5, "t": 1.0, "drawk": 1.0, "data": {"aiming": true}}])
+	tiles.append(["combat_bow", 60, 8, 3.2, 1.0, "Idle", 0.3, "лук в руке", {"held": "bow", "belt": ["knife"]}])
+	tiles.append(["combat_bow", 60, 8, 3.2, 1.0, "Walk", 0.4, "лук в руке, шаг", {"held": "bow", "belt": ["knife"]}])
+	tiles.append(["combat_bow", 160, 12, 3.0, 1.1, "Idle", 0.3, "лук за спиной", {"back": "bow", "belt": ["knife", "axe"]}])
+	tiles.append(["combat_bow", -120, 12, 3.0, 1.1, "Walk", 0.4, "лук за спиной", {"back": "bow", "belt": ["knife", "axe"]}])
+	tiles.append(["combat_logs", 60, 8, 3.6, 1.1, "Walk", 0.4, "два бревна", {"held": "log", "logs": 2}])
+	tiles.append(["combat_logs", -50, 10, 3.6, 1.1, "Idle", 0.4, "два бревна", {"held": "log", "logs": 2}])
+	tiles.append(["combat_logs", 70, 8, 3.2, 0.8, "Crouch_Idle", 0.5, "присед", {"held": "knife", "belt": ["axe"]}])
+	tiles.append(["combat_drag", 75, 22, 5.5, 0.7, "Walk", 0.3, "волок", {"bundle": 6}])
+	tiles.append(["combat_drag", 140, 25, 5.0, 0.6, "Walk", 0.6, "волок", {"bundle": 6}])
+	tiles.append(["combat_drag", 30, 18, 5.0, 0.8, "Walk", 0.9, "волок", {"bundle": 8}])
+	tiles.append(["combat_drag", -100, 30, 5.0, 0.6, "Walk", 0.2, "волок", {"bundle": 3}])
+	tiles.append(["combat_logs", 70, 8, 3.2, 0.8, "Crouch_Fwd", 0.5, "присед, шаг", {"held": "", "belt": ["knife", "axe"]}])
+
 func _tools_pose(cfg: Dictionary) -> void:
 	var T: Node = subj.tools
 	T.act = String(cfg.get("act", ""))
@@ -741,7 +771,22 @@ func _tools_pose(cfg: Dictionary) -> void:
 	T.act_t = float(cfg.get("u", 0.0)) * T.act_dur
 	if cfg.has("t"):
 		T.act_t = float(cfg["t"])
-	T.act_data = {}
+	T.act_data = (cfg.get("data", {}) as Dictionary).duplicate()
+	T.back = String(cfg.get("back", ""))
+	T.drawk = float(cfg.get("drawk", 0.0))
+	if cfg.has("logs"):
+		T.logs = int(cfg["logs"])
+	T.tr_t = 9.0
+	if T.bundle != null:
+		T.bundle.queue_free()
+		T.bundle = null
+	if cfg.has("bundle"):
+		var list: Array = []
+		for i in int(cfg["bundle"]):
+			list.append({"r": 0.13 + 0.01 * (i % 3), "bark": Color(0.42, 0.33, 0.24).lightened(0.05 * (i % 2)), "L": 1.25})
+		T.bundle = load("res://scripts/log_bundle.gd").new()
+		add_child(T.bundle)
+		T.bundle.setup(list, Vector3.ZERO, Vector3(0, 0, 1))
 	T._refresh()
 	if cfg.has("fall"):
 		if fell == null:

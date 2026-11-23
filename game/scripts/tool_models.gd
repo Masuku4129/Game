@@ -111,6 +111,27 @@ class B extends RefCounted:
 			cols.append(col.darkened(rng.randf_range(-0.06, 0.12)))
 		tube(pts, rs, cols, 4, true, 30.0)
 
+	## Плоская полоса (плечо лука): сечение — эллипс шириной ws (по оси Z) и толщиной ts (в плоскости XY).
+	func band(pts: Array, ws: Array, ts: Array, cols: Array, sides: int) -> void:
+		var base := n_sm
+		var n := pts.size()
+		for i in n:
+			var p: Vector3 = pts[i]
+			var tg: Vector3 = ((pts[mini(i + 1, n - 1)] as Vector3) - (pts[maxi(i - 1, 0)] as Vector3)).normalized()
+			var nz := Vector3(0, 0, 1)
+			var nx := tg.cross(nz).normalized()
+			for j in sides + 1:
+				var a := TAU * float(j) / sides
+				sm.set_color(cols[i])
+				sm.set_uv(Vector2(float(j) / sides, float(i) * 0.4))
+				sm.add_vertex(p + nx * cos(a) * float(ts[i]) * 0.5 + nz * sin(a) * float(ws[i]) * 0.5)
+				n_sm += 1
+		for i in n - 1:
+			for j in sides:
+				var k := base + i * (sides + 1) + j
+				for q in [k, k + sides + 1, k + 1, k + 1, k + sides + 1, k + sides + 2]:
+					sm.add_index(q)
+
 	func commit(mt: Material) -> ArrayMesh:
 		var m := ArrayMesh.new()
 		if n_sm > 0:
@@ -419,8 +440,107 @@ static func sheath() -> ArrayMesh:
 	_cache["sheath"] = m
 	return m
 
+# --- combat: лук, стрела, тетива ---
+
+## Изгиб плеча лука: x(y) — насколько плечо отходит назад (к стрелку, −X) на высоте y.
+## Цельный лук 1,3 м, концы чуть загнуты вперёд (рекурв), рукоять — в начале координат.
+const BOW_H := 0.66
+static func bow_x(y: float) -> float:
+	var t := absf(y) / BOW_H
+	var x := -0.15 * t * t
+	x += 0.05 * smoothstep(0.82, 1.0, t)
+	return x
+
+## Концы лука (ушки тетивы) в осях лука.
+static func bow_tip(top: bool) -> Vector3:
+	var y := BOW_H * (0.985 if top else -0.985)
+	return Vector3(bow_x(y) - 0.006, y, 0)
+
+## Лук: плечи — тёсаные плоские полосы (шире у рукояти, к концам уже), рукоять обмотана лыком,
+## ушки потемнее. Ось лука +Y (вверх), спинка смотрит в +X (к цели), тетива — отдельно (string()).
+static func bow() -> ArrayMesh:
+	if _cache.has("bow"):
+		return _cache["bow"]
+	var b := B.new(61)
+	var pts: Array = []
+	var ws: Array = []
+	var ts: Array = []
+	var cs: Array = []
+	var n := 26
+	var wood := Color(0.6, 0.45, 0.28)
+	for i in n + 1:
+		var y := lerpf(-BOW_H, BOW_H, float(i) / n)
+		var t := absf(y) / BOW_H
+		pts.append(Vector3(bow_x(y), y, 0))
+		var grip := 1.0 - smoothstep(0.08, 0.2, t)
+		ws.append(lerpf(0.036, 0.013, smoothstep(0.15, 1.0, t)) + grip * 0.002)
+		ts.append(lerpf(0.022, 0.011, smoothstep(0.1, 1.0, t)) + grip * 0.012)
+		var c := wood.darkened(0.06 * sin(t * 17.0) + 0.03)
+		if t > 0.93:
+			c = Color(0.3, 0.2, 0.13)
+		cs.append(c)
+	b.band(pts, ws, ts, cs, 8)
+	b.wrap(Vector3(-0.002, 0, 0), Vector3.UP, 0.016, -0.06, 0.06, 9.0, FIBRE, 0.0032)
+	# ушки: обмотка у концов
+	for top in [true, false]:
+		var tp := bow_tip(top)
+		b.wrap(Vector3(tp.x + 0.004, 0, 0), Vector3.UP, 0.007, tp.y - 0.025 if top else tp.y + 0.008, tp.y - 0.008 if top else tp.y + 0.025, 3.0, Color(0.5, 0.42, 0.3), 0.0022)
+	var m := b.commit(mat())
+	_cache["bow"] = m
+	return m
+
+## Отрезок тетивы единичной длины вдоль +Y (растягивается по длине масштабом).
+static func string_seg() -> ArrayMesh:
+	if _cache.has("string"):
+		return _cache["string"]
+	var b := B.new(62)
+	var c := Color(0.7, 0.62, 0.45)
+	b.tube([Vector3.ZERO, Vector3(0, 0.5, 0), Vector3(0, 1, 0)], [0.0024, 0.0024, 0.0024], [c, c.darkened(0.08), c], 4, false)
+	var m := b.commit(mat())
+	_cache["string"] = m
+	return m
+
+## Стрела 0,74 м: прямой прут, кремнёвый наконечник с обмоткой, оперение из трёх перьев.
+## Ушко (выемка под тетиву) — в начале координат, наконечник к +Y.
+static func arrow() -> ArrayMesh:
+	if _cache.has("arrow"):
+		return _cache["arrow"]
+	var b := B.new(71)
+	var sh := Color(0.66, 0.53, 0.36)
+	b.tube([Vector3(0, 0.0, 0), Vector3(0, 0.35, 0), Vector3(0, 0.69, 0)], [0.0048, 0.0052, 0.0047], [sh.darkened(0.1), sh, sh.darkened(0.05)], 6)
+	var tip := func(p: Vector3) -> Vector3:
+		var y := (p.y + 1.0) * 0.5
+		var w := 0.011 * pow(sin(PI * clampf(y * 0.85 + 0.12, 0.0, 1.0)), 0.8)
+		return Vector3(p.x * w, y * 0.065, p.z * 0.0032)
+	_flint(b, tip, Transform3D(Basis(), Vector3(0, 0.672, 0)), 18, 0.2)
+	b.wrap(Vector3.ZERO, Vector3.UP, 0.005, 0.655, 0.685, 5.0, FIBRE, 0.0018)
+	b.wrap(Vector3.ZERO, Vector3.UP, 0.005, 0.015, 0.03, 3.0, FIBRE, 0.0018)
+	# оперение: три пера под 120°, у каждого — плоская трапеция с зубчатым краем
+	var fc := Color(0.36, 0.3, 0.26)
+	for k in 3:
+		var a := TAU * k / 3.0 + 0.3
+		var d := Vector3(cos(a), 0, sin(a))
+		var y0 := 0.035
+		var y1 := 0.15
+		var p0 := Vector3(0, y0, 0) + d * 0.004
+		var p1 := Vector3(0, y1, 0) + d * 0.004
+		var q0 := Vector3(0, y0 + 0.01, 0) + d * 0.02
+		var q1 := Vector3(0, y1 - 0.035, 0) + d * 0.016
+		var c := fc.lerp(Color(0.62, 0.58, 0.52), 0.35 if k == 0 else 0.0)
+		b.tri(p0, q0, q1, c)
+		b.tri(p0, q1, p1, c.darkened(0.08))
+		b.tri(p0, q1, q0, c)
+		b.tri(p0, p1, q1, c.darkened(0.08))
+	var m := b.commit(mat())
+	_cache["arrow"] = m
+	return m
+
 static func mesh_of(id: String) -> Mesh:
 	match id:
+		"bow":
+			return bow()
+		"arrow":
+			return arrow()
 		"knife":
 			return knife()
 		"axe":

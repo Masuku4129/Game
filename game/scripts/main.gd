@@ -56,6 +56,7 @@ var res_spots := {}      # клетка 8 м → [[позиция, вид]] — 
 var fallen_spots := {}   # клетка 16 м → [{kind, mm, i, xf, a, b, r}] — бурелом под топор
 var hunt  # --- hunt: туши, разделка, кровь, запах крови (hunt.gd) ---
 var camp  # --- build: лагерь и постройки (structures.gd) ---
+var combat  # --- combat: удары, прицел, стрелы (combat.gd) ---
 
 func _ready() -> void:
 	_setup_noise()
@@ -136,6 +137,12 @@ func _ready() -> void:
 	add_child(hunt)
 	hunt.setup()
 	# --- /hunt ---
+	# --- combat: удары, прицел броска и лука, стрелы в звере (combat.gd) ---
+	combat = preload("res://scripts/combat.gd").new()
+	combat.main = self
+	add_child(combat)
+	combat.setup(ui)
+	# --- /combat ---
 	# --- build: лагерь, постройки, стройка (structures.gd + build_mode/cabin/camp_ui) ---
 	camp = preload("res://scripts/structures.gd").new()
 	camp.main = self
