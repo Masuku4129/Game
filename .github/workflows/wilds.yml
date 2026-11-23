@@ -1,0 +1,85 @@
+name: Wilds APK
+on:
+  push:
+    branches: [wilds]
+    paths: ["wilds/**", ".github/workflows/wilds.yml"]
+  workflow_dispatch:
+concurrency:
+  group: wilds-${{ github.ref }}
+  cancel-in-progress: true
+permissions:
+  contents: write
+jobs:
+  preview:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    continue-on-error: true
+    container:
+      image: barichello/godot-ci:4.3
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install software GPU
+        run: |
+          apt-get update -qq
+          DEBIAN_FRONTEND=noninteractive apt-get install -y -qq xvfb mesa-vulkan-drivers libvulkan1 libgl1-mesa-dri >/dev/null
+      - name: Import project
+        run: cd wilds && (timeout 600 godot --headless --import || true)
+      - name: Render preview frames
+        run: |
+          mkdir -p /tmp/pv
+          cd wilds
+          SHOTS=/tmp/pv timeout 600 xvfb-run -a -s "-screen 0 1280x720x24" godot --rendering-method forward_plus --rendering-driver vulkan --resolution 1280x720 2>&1 | grep -iE "error|warning" | head -40 || true
+          ls /tmp/pv
+      - name: Publish preview frames to branch
+        run: |
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout --orphan wilds-preview
+          git rm -rf -q . || true
+          rm -rf game wilds tools
+          cp /tmp/pv/*.png . && git add *.png
+          git commit -q -m "Wilds: кадры предпросмотра"
+          git push -f origin wilds-preview
+  export:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    container:
+      image: barichello/godot-ci:4.3
+    env:
+      GODOT_VERSION: "4.3"
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Godot templates and editor settings
+        run: |
+          mkdir -p ~/.local/share/godot/export_templates/ ~/.config/
+          cp -r /root/.config/godot ~/.config/godot || true
+          cp -r /root/.local/share/godot/export_templates/${GODOT_VERSION}.stable ~/.local/share/godot/export_templates/ || true
+      - name: Import project
+        run: cd wilds && (timeout 600 godot --headless --import || true)
+      - name: Check scripts
+        run: |
+          cd wilds
+          for f in *.gd; do godot --headless --check-only --script "$f" 2>&1 | grep -E "SCRIPT ERROR|Parse Error|ERROR" && exit 1 || true; done
+      - name: Smoke test
+        run: |
+          cd wilds
+          timeout 300 godot --headless --quit-after 60 res://main.tscn 2>&1 | tee ../smoke.log | tail -40
+          ! grep -E "SCRIPT ERROR|Invalid|Cannot|Nonexistent" ../smoke.log
+      - name: Export APK
+        run: |
+          mkdir -p build
+          cd wilds && godot --headless --export-debug "Android" ../build/wilds.apk
+          test -s ../build/wilds.apk
+      - uses: actions/upload-artifact@v4
+        with:
+          name: wilds-apk
+          path: build/wilds.apk
+      - name: Publish to "wilds-latest" release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: wilds-latest
+          target_commitish: ${{ github.sha }}
+          name: Wilds, последняя сборка
+          prerelease: true
+          files: build/wilds.apk
