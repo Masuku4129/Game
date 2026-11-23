@@ -326,7 +326,7 @@ func _walk(dt: float) -> void:
 	var tgt: Vector3 = path[0]
 	var to := Vector2(tgt.x - position.x, tgt.z - position.z)
 	var d := to.length()
-	if d < (0.5 if path.size() > 1 else 0.35):
+	if d < (0.5 if path.size() > 1 else 0.45):
 		path.remove_at(0)
 		if path.is_empty():
 			state = "idle"
@@ -346,6 +346,8 @@ func _walk(dt: float) -> void:
 		var dl := dv.length()
 		if dl < 0.9 and dl > 0.001:
 			push += dv / dl * (0.9 - dl) * 1.6
+	if d < 1.3:
+		push = Vector2.ZERO
 	dir = (dir + push).normalized()
 	var sp := (RUN if run else SPEED)
 	sp *= clampf(0.45 + health * 0.55, 0.4, 1.0) * (1.0 - clampf(fatigue, 0.0, 1.0) * 0.3)

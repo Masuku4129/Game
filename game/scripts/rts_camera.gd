@@ -39,7 +39,7 @@ var _tool := false            # палец работает кистью/рам�
 func _ready() -> void:
 	cam.fov = 48.0
 	cam.near = 0.5
-	cam.far = 520.0
+	cam.far = float(OS.get_environment("CFAR")) if OS.get_environment("CFAR") != "" else 520.0
 	add_child(cam)
 	want_pos = position
 	want_dist = distance

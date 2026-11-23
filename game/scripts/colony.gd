@@ -99,24 +99,27 @@ func setup(m: Node3D, layer: CanvasLayer) -> void:
 	camp_center = main.hero.position
 	for id: String in START_STOCK:
 		main.inv[id] = int(main.inv.get(id, 0)) + int(START_STOCK[id])
-	_spawn_units()
+	if "u" not in OS.get_environment("CB"):
+		_spawn_units()
 	planner = PLAN.new()
 	planner.setup(self)
 	_build_marks()
 	# первый костёр: с него начинается зимовка
 	var fp: Vector3 = nav.nearest_free(camp_center + Vector3(2.0, 0, 1.0), 6.0)
-	if not main.camp.overlaps(fp.x, fp.z, 1.0):
+	if not main.camp.overlaps(fp.x, fp.z, 1.0) and OS.get_environment("NOFIRE") == "":
 		var fire: Dictionary = main.camp.place("campfire", Vector3(fp.x, main.height(fp.x, fp.z), fp.z), 0.0)
 		fire["fuel"] = 3.0
 		fire["lit"] = true
 		main.camp._refresh(fire)
-	nav.invalidate(camp_center.x, camp_center.z, 12.0)
+	_clear_trees(camp_center, 11.0)
+	nav.invalidate(camp_center.x, camp_center.z, 16.0)
 	ui = preload("res://scripts/colony_ui.gd").new()
 	ui.colony = self
 	ui.main = main
 	ui.anchor_right = 1.0
 	ui.anchor_bottom = 1.0
-	layer.add_child(ui)
+	if "i" not in OS.get_environment("CB"):
+		layer.add_child(ui)
 	scenario = preload("res://scripts/scenario.gd").new()
 	scenario.colony = self
 	scenario.main = main
@@ -125,6 +128,22 @@ func setup(m: Node3D, layer: CanvasLayer) -> void:
 		select(units[0])
 	if main.saver != null:
 		main.saver.register("colony", self, 60)
+
+## Расчистить поляну: деревья у лагеря убираем, чтобы кроны не закрывали людей.
+func _clear_trees(c: Vector3, r: float) -> void:
+	var w: Node = main.tools_world
+	var n := 0
+	var x := -r
+	while x <= r:
+		var z := -r
+		while z <= r:
+			if Vector2(x, z).length() <= r:
+				var rec: Array = w.find_tree(c + Vector3(x, 0, z), 2.2)
+				if not rec.is_empty() and (rec[2] as Transform3D).origin.y > -100.0:
+					w._hide_tree(rec)
+					n += 1
+			z += 2.5
+		x += 2.5
 
 func _spawn_units() -> void:
 	var i := 0
@@ -973,7 +992,9 @@ func alive_count() -> int:
 
 # ---------- кадр ----------
 
+var _dbgc := 0
 func _process(delta: float) -> void:
+	_dbgc += 1
 	var t0 := Time.get_ticks_usec()
 	if main == null or rig == null:
 		return

@@ -99,23 +99,17 @@ func _ready() -> void:
 		portraits.append(p)
 		i += 1
 	# кнопки: два столбца по четыре (под большой палец)
-	order_btn = _grid("Приказ", 0, 0)
-	order_btn.pressed.connect(func() -> void: colony.open_orders())
-	build_btn = _grid("Стройка", 1, 0)
+	build_btn = _grid("Стройка", 0, 0)
 	build_btn.pressed.connect(_open_build)
-	plan_btn = _grid("Работы", 0, 1)
+	plan_btn = _grid("Работы", 1, 0)
 	plan_btn.pressed.connect(_open_plan)
-	zone_btn = _grid("Зона", 1, 1)
+	zone_btn = _grid("Зона", 0, 1)
 	zone_btn.pressed.connect(_open_zone)
-	desig_btn = _grid("Метить", 0, 2)
+	desig_btn = _grid("Метить", 1, 1)
 	desig_btn.pressed.connect(_toggle_desig)
-	box_btn = _grid("Рамка", 1, 2)
-	box_btn.pressed.connect(_toggle_box)
-	stop_btn = _grid("Стоять", 0, 3)
-	stop_btn.pressed.connect(_stop_unit)
-	auto_btn = _grid("Сам: да", 1, 3)
+	auto_btn = _grid("Сам: да", 1, 2)
 	auto_btn.pressed.connect(_toggle_auto)
-	main_btns = [order_btn, build_btn, plan_btn, zone_btn, desig_btn, box_btn, stop_btn, auto_btn]
+	main_btns = [build_btn, plan_btn, zone_btn, desig_btn, auto_btn]
 	rot_l = _btn("⟲", -620.0, -150.0, 130.0, 100.0)
 	rot_r = _btn("⟳", -470.0, -150.0, 130.0, 100.0)
 	place_btn = _btn("Ставить", -300.0, -150.0, 270.0, 100.0)
@@ -176,14 +170,14 @@ func _open_build() -> void:
 	_free_build_sheet()
 	var sh: Control = SHEET.new()
 	sh.set("title", "Стройка")
-	sh.set("info", "листай, тап — выбрать")
+	sh.set("info", "")
 	sh.anchor_left = 0.0
 	sh.anchor_right = 0.0
 	sh.anchor_top = 0.0
 	sh.anchor_bottom = 1.0
 	sh.offset_left = 24.0
 	sh.offset_right = 824.0
-	sh.offset_top = 110.0
+	sh.offset_top = 150.0
 	sh.offset_bottom = -170.0
 	sh.mouse_filter = Control.MOUSE_FILTER_STOP
 	add_child(sh)

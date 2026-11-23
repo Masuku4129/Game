@@ -35,7 +35,7 @@ func _process(delta: float) -> void:
 	_t += delta
 	if _dbg and _n % 120 == 0:
 		for u in colony.units:
-			print("CL dbg %s %s job=%s stage=%s path=%d carry=%s" % [u.unit_name, u.state,
+			print("CL dbg %s %s pos=%s path=%s goal=%s job=%s stage=%s path=%d carry=%s" % [u.unit_name, u.state, u.position, u.path, u._goal,
 				String(u.job.get("kind", "-")), String(u.job.get("stage", "-")), u.path.size(), u.carry])
 	if _shots != "":
 		_shot_step()

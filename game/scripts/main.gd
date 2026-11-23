@@ -211,6 +211,7 @@ func _ready() -> void:
 	# --- colony: отряд, лист острога и сценарий «Первая зима» ---
 	if colony_mode:
 		fps_lbl.offset_top = 120.0
+		fps_lbl.visible = false
 		var cl := CanvasLayer.new()
 		cl.layer = 3
 		add_child(cl)
@@ -223,6 +224,20 @@ func _ready() -> void:
 			var ct: Node = preload("res://scripts/colony_test.gd").new()
 			ct.set("main", self)
 			add_child(ct)
+	var _hx := OS.get_environment("CHIDE")
+	if "s" in _hx:
+		sun.shadow_enabled = false
+	if "f" in _hx:
+		env.fog_enabled = false
+		env.volumetric_fog_enabled = false
+	if "g" in _hx:
+		for k in grass_cells:
+			grass_cells[k].visible = false
+	if "c" in _hx:
+		for m in cliff_mmi:
+			m.visible = false
+	if "a" in _hx:
+		animals.visible = false
 	# --- /colony ---
 	# --- perf: PERF=1 — замер нагрузки без экрана (perf.gd) ---
 	if OS.get_environment("PERF") != "":
@@ -742,7 +757,9 @@ func _shots() -> void:
 	if _shot_n > 90:
 		get_tree().quit()
 
+var _dbgf := 0
 func _process(delta: float) -> void:
+	_dbgf += 1
 	if hero == null or (joy == null and colony == null):
 		return
 	if OS.get_environment("SHOTS") != "":
@@ -1951,7 +1968,7 @@ func _core_setup(_ui: CanvasLayer) -> void:
 		st.set("main", self)
 		st.set("mode", OS.get_environment("SAVE_TEST"))
 		add_child(st)
-	if DisplayServer.get_name() == "headless" or OS.get_environment("SHOTS") != "" or OS.get_environment("UI_SHOTS") != "" or auto != "":
+	if DisplayServer.get_name() == "headless" or OS.get_environment("SHOTS") != "" or OS.get_environment("COLONY_SHOTS") != "" or OS.get_environment("COLONY_TEST") != "" or OS.get_environment("UI_SHOTS") != "" or auto != "":
 		if auto == "load":
 			saver.load_game()
 		saver.enabled = auto != ""
