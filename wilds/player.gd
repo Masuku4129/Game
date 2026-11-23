@@ -262,19 +262,19 @@ func _fx(rx: float, ry: float, rot: float, a0: float, a1: float, wm: float, dl: 
 func _spawn_slash(combo: int, hold := -1.0) -> void:
 	var th := _sector * PI / 4.0
 	var fl := -1.0 if cos(th) < -0.1 else 1.0
-	var fwd := Vector2(cos(th) * 40.0, sin(th) * 28.0 - 70.0)
+	var fwd := Vector2(cos(th) * 18.0, sin(th) * 12.0 - 70.0)
 	var body := Vector2(0.0, -70.0)
 	match combo:
 		0:
-			_fx(240.0, 150.0, -0.35 * fl, th - 1.6, th + 1.6, 1.0, 0.0, hold, fwd)
-			_fx(190.0, 115.0, -0.35 * fl, th - 1.5, th + 1.5, 0.55, 0.03, hold, fwd)
+			_fx(175.0, 120.0, -0.35 * fl, th - 1.6, th + 1.6, 1.0, 0.0, hold, fwd)
+			_fx(140.0, 95.0, -0.35 * fl, th - 1.5, th + 1.5, 0.55, 0.03, hold, fwd)
 		1:
-			_fx(250.0, 160.0, 0.35 * fl, th + 1.6, th - 1.6, 1.0, 0.0, hold, fwd)
-			_fx(195.0, 120.0, 0.35 * fl, th + 1.5, th - 1.5, 0.55, 0.03, hold, fwd)
+			_fx(180.0, 125.0, 0.35 * fl, th + 1.6, th - 1.6, 1.0, 0.0, hold, fwd)
+			_fx(145.0, 100.0, 0.35 * fl, th + 1.5, th - 1.5, 0.55, 0.03, hold, fwd)
 		_:
 			# вихрь вокруг тела и большая вертикальная дуга
-			_fx(165.0, 115.0, 0.0, th - 1.2, th - 1.2 + TAU * 1.1, 1.2, 0.0, hold, body)
-			_fx(130.0, 230.0, 0.0, th - 2.4, th - 0.5, 1.0, 0.07, hold, fwd)
+			_fx(140.0, 100.0, 0.0, th - 1.2, th - 1.2 + TAU * 1.1, 1.2, 0.0, hold, body)
+			_fx(200.0, 145.0, 0.0, th - 2.0, th - 2.0 + TAU * 0.85, 0.6, 0.06, hold, body)
 
 
 func _ghost() -> void:
