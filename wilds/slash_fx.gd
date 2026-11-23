@@ -1,11 +1,11 @@
 extends Node2D
 ## Светящийся полумесяц по дуге взмаха, рисуется кодом (аддитивное смешивание).
-var rx := 70.0
-var ry := 54.0
+var rx := 150.0
+var ry := 112.0
 var rot := 0.0
 var a0 := -1.4
 var a1 := 1.4
-var dur := 0.14
+var dur := 0.16
 var fade := 0.16
 var hold := -1.0      # >=0: заморозить на этом прогрессе (для кадров предпросмотра)
 var _t := 0.0
@@ -35,15 +35,15 @@ func _draw() -> void:
 	var tail_p := 0.0
 	if hold >= 0.0:
 		p = hold
-		tail_p = maxf(0.0, p - 0.7)
+		tail_p = maxf(0.0, p - 0.8)
 	else:
 		p = clampf(_t / dur, 0.0, 1.0)
 		p = 1.0 - pow(1.0 - p, 2.2)
-		tail_p = maxf(0.0, p - 0.7)
+		tail_p = maxf(0.0, p - 0.8)
 		if _t > dur:
 			var k := (_t - dur) / fade
 			alpha = 1.0 - k
-			tail_p = 0.3 + 0.7 * k
+			tail_p = 0.2 + 0.8 * k
 	if p - tail_p < 0.02:
 		return
 	var head := a0 + (a1 - a0) * p
@@ -52,9 +52,9 @@ func _draw() -> void:
 	var outer := PackedVector2Array()
 	var inner := PackedVector2Array()
 	var layers := [
-		[1.9, Color(0.40, 0.25, 1.0, 0.28)],
-		[1.15, Color(0.55, 0.80, 1.0, 0.55)],
-		[0.5, Color(1.0, 1.0, 1.0, 0.95)]]
+		[1.7, Color(1.0, 1.0, 1.0, 0.22)],
+		[1.1, Color(1.0, 1.0, 1.0, 0.55)],
+		[0.5, Color(1.0, 1.0, 1.0, 1.0)]]
 	for L in layers:
 		outer.clear()
 		inner.clear()
@@ -62,7 +62,7 @@ func _draw() -> void:
 			var u := float(i) / n
 			var pos := _pt(lerpf(tail, head, u))
 			var lw: float = L[0]
-			var w: float = pow(sin(PI * u), 0.75) * 17.0 * lw
+			var w: float = pow(sin(PI * u), 0.75) * 34.0 * lw
 			var nrm := pos.normalized()
 			outer.append(pos + nrm * w * 0.30)
 			inner.append(pos - nrm * w * 0.70)

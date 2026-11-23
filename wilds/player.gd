@@ -40,6 +40,9 @@ var _af := 0.0                  # кадр анимации боя (дробны
 var _combo := 0
 var _queued := false
 var _vfx_done := false
+var _hit_done := false
+var _hold := 0.0               # остановка кадра в момент удара
+var _shake := 0.0
 var _dash_dir := Vector2.RIGHT
 var _spr: Sprite2D
 var _tex := {}
@@ -109,6 +112,10 @@ func _physics_process(delta: float) -> void:
 			_:
 				_tick_move(delta)
 		_refresh()
+	var cam := get_viewport().get_camera_2d()
+	if cam:
+		_shake = move_toward(_shake, 0.0, delta * 60.0)
+		cam.offset = Vector2(randf_range(-1.0, 1.0), randf_range(-1.0, 1.0)) * _shake
 	queue_redraw()
 
 
@@ -175,9 +182,13 @@ func _start_attack() -> void:
 	_af = 0.0
 	_queued = false
 	_vfx_done = false
+	_hit_done = false
 
 
 func _tick_attack(delta: float) -> void:
+	if _hold > 0.0:
+		_hold -= delta
+		return
 	_af += delta * ATTACK_FPS[_combo]
 	if attack_requested:
 		attack_requested = false
@@ -185,9 +196,13 @@ func _tick_attack(delta: float) -> void:
 	var f := int(_af)
 	var key: Array = ATK.DATA[SECTORS[_sector][0]]["key"]
 	if f >= key[2] and f <= key[5]:
-		velocity = _aim_vec(_sector) * 140.0
+		velocity = _aim_vec(_sector) * 300.0
 		move_and_slide()
 		_clamp_world()
+	if not _hit_done and f >= key[4]:
+		_hit_done = true
+		_hold = 0.07
+		_shake = 7.0
 	if not _vfx_done and f >= key[3]:
 		_vfx_done = true
 		_spawn_slash(_combo)
@@ -224,16 +239,16 @@ func _spawn_slash(combo: int, hold := -1.0) -> void:
 	var s = preload("res://slash_fx.gd").new()
 	var th := _sector * PI / 4.0
 	var sgn := 1.0 if combo != 1 else -1.0
-	s.a0 = th - 1.15 * sgn
-	s.a1 = th + 1.15 * sgn
+	s.a0 = th - 1.5 * sgn
+	s.a1 = th + 1.5 * sgn
 	s.rot = [-0.35, 0.35, 0.0][combo] * (-1.0 if cos(th) < -0.1 else 1.0)
 	if combo == 2:
-		s.rx = 58.0
-		s.ry = 80.0
+		s.rx = 115.0
+		s.ry = 160.0
 		s.a0 = th - 1.4 * sgn - PI * 0.5
 		s.a1 = th + 0.9 * sgn - PI * 0.5
 	s.hold = hold
-	s.position = Vector2(cos(th) * 22.0, sin(th) * 16.0 - 66.0)
+	s.position = Vector2(cos(th) * 34.0, sin(th) * 24.0 - 70.0)
 	add_child(s)
 
 
