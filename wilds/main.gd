@@ -173,9 +173,9 @@ func _shots(dir: String) -> void:
 	var vs := [0, 2, 6]
 	for r in 3:
 		for c in 3:
-			for ch in player.get_children():
-				if ch.get_script() and ch.has_method("_pt"):
-					ch.queue_free()
+			for fxn in player.get_children():
+				if fxn.get_script() and fxn.has_method("_pt"):
+					fxn.queue_free()
 			player.set_attack_pose(vs[r], 4)
 			player._spawn_slash(c, 0.62)
 			for k in 3:
