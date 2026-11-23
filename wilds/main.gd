@@ -148,21 +148,21 @@ func _shots(dir: String) -> void:
 		idx += 1
 	sheet.save_png(dir + "/mita_sheet.png")
 
-	# кадры боя: 4 ряда по 5 кадров, камера ближе
-	cam.zoom = Vector2(2.0, 2.0)
-	var acw := 200
-	var ach := 280
-	var asheet := Image.create(acw * 8, ach * 4, false, Image.FORMAT_RGBA8)
-	for r in 4:
+	# кадры боя: 8 направлений x 8 кадров
+	cam.zoom = Vector2(1.6, 1.6)
+	var acw := 190
+	var ach := 250
+	var asheet := Image.create(acw * 8, ach * 8, false, Image.FORMAT_RGBA8)
+	for r in 8:
 		for c in 8:
-			player.set_attack_pose(r, c * 2)
-			for k in 4:
+			player.set_attack_pose(r, c)
+			for k in 3:
 				await get_tree().process_frame
 			await RenderingServer.frame_post_draw
 			var im2 := get_viewport().get_texture().get_image()
 			im2.convert(Image.FORMAT_RGBA8)
 			var ax := im2.get_width() / 2 - acw / 2
-			var ay := im2.get_height() / 2 - 230
+			var ay := im2.get_height() / 2 - 200
 			asheet.blit_rect(im2, Rect2i(ax, maxi(ay, 0), acw, ach), Vector2i(c * acw, r * ach))
 	asheet.save_png(dir + "/attack_sheet.png")
 	get_tree().quit()

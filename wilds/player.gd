@@ -4,18 +4,17 @@ extends CharacterBody2D
 ## Бой: комбо из трёх ударов и рывок, кадры из art/anim, эффекты из art/vfx.
 ## Точка опоры каждого спрайта = центр стоп (art/sprite_data.gd, art/anim/anim_data.gd).
 
-const ANIM := preload("res://art/anim/anim_data.gd")
+const ATK := preload("res://art/atk/atk_data.gd")
 
 const SPEED := 230.0
 const Y_SCALE := 0.75        # вертикальная скорость меньше (перспектива)
 const DRAW_SCALE := 0.375    # спрайт 320 px -> 120 единиц мира
 const WALK_FPS := 8.0
-const ATTACK_FPS := 22.0
-const DASH_FPS := 24.0
-const DASH_SPEED := 420.0
-const COMBO_ROWS := [0, 1, 2]     # ряды листа анимаций для ударов 1-3
-const DASH_ROW := 3               # ряд листа для рывка
-const VFX_ROWS := [0, 1, 3]       # ряды эффектов для ударов 1-3
+const ATTACK_FPS := [16.0, 19.0, 14.0]   # скорость ударов 1-3 (кадров в секунду)
+const DASH_FPS := 20.0
+const DASH_SPEED := 460.0
+const DASH_FRAMES := [2, 3, 3, 3, 4, 5]  # кадры листа удара, которые играют в рывке
+const VFX_ROWS := [0, 1, 3]              # ряды эффектов для ударов 1-3
 
 # сектор (0=вправо, по часовой на экране) -> [вид, зеркалить]
 const SECTORS := [
@@ -46,7 +45,7 @@ var _dash_dir := Vector2.RIGHT
 var _spr: Sprite2D
 var _tex := {}
 var _data := {}
-var _atex := []                 # [ряд][кадр] -> Texture2D
+var _atex := {}                 # вид -> [Texture2D x8]
 var _vfx_tex: Texture2D
 
 
@@ -61,11 +60,11 @@ func _ready() -> void:
 	_data = preload("res://art/sprite_data.gd").DATA
 	for n in _data:
 		_tex[n] = load("res://art/%s.png" % n)
-	for row in ANIM.ROWS:
+	for v in ATK.DATA:
 		var r := []
-		for f in row:
-			r.append(load("res://art/anim/" + f[0]))
-		_atex.append(r)
+		for f in ATK.DATA[v]["frames"]:
+			r.append(load("res://art/atk/" + f[0]))
+		_atex[v] = r
 	_vfx_tex = load("res://art/vfx/vfx_light1.png")
 
 	_spr = Sprite2D.new()
@@ -95,12 +94,11 @@ func set_pose(sector: int, moving: bool, wt: float) -> void:
 	_refresh()
 
 
-func set_attack_pose(row: int, frame: int) -> void:
+func set_attack_pose(sector: int, frame: int) -> void:
 	debug = true
 	_state = "attack"
-	_row = row
+	_sector = sector
 	_af = float(frame)
-	_face_x = 1.0
 	_refresh()
 
 
@@ -166,33 +164,39 @@ func _clamp_world() -> void:
 
 # ---------------------------------------------------------------- бой
 
+func _aim_vec(sector: int) -> Vector2:
+	var a := sector * PI / 4.0
+	return Vector2(cos(a), sin(a) * Y_SCALE)
+
+
 func _start_attack() -> void:
+	var dir := _input_dir()
+	if dir.length() > 0.3:
+		_sector = posmod(roundi(dir.angle() / (PI / 4.0)), 8)
 	_state = "attack"
-	_row = COMBO_ROWS[_combo]
+	_row = _combo
 	_af = 0.0
 	_queued = false
 	_vfx_done = false
 
 
 func _tick_attack(delta: float) -> void:
-	_af += delta * ATTACK_FPS
+	_af += delta * ATTACK_FPS[_combo]
 	if attack_requested:
 		attack_requested = false
 		_queued = true
-	var n: int = ANIM.ROWS[_row].size()
 	var f := int(_af)
-	# выпад вперёд на ударных кадрах
-	if f >= 3 and f <= 8:
-		velocity = Vector2(_face_x * 110.0, 0.0)
+	if f >= 2 and f <= 5:
+		velocity = _aim_vec(_sector) * 140.0
 		move_and_slide()
 		_clamp_world()
-	if not _vfx_done and f >= 4:
+	if not _vfx_done and f >= 3:
 		_vfx_done = true
 		_spawn_vfx(VFX_ROWS[_combo])
-	if _queued and _combo + 1 < COMBO_ROWS.size() and f >= n - 4:
+	if _queued and _combo < 2 and f >= 6:
 		_combo += 1
 		_start_attack()
-	elif f >= n:
+	elif f >= 8:
 		_combo = 0
 		_state = "move"
 		_moving = false
@@ -200,24 +204,21 @@ func _tick_attack(delta: float) -> void:
 
 func _start_dash(dir: Vector2) -> void:
 	_state = "dash"
-	_row = DASH_ROW
 	_af = 0.0
-	if dir.length() > 0.2:
-		_dash_dir = Vector2(dir.x, dir.y * Y_SCALE).normalized()
-		if absf(dir.x) > 0.25:
-			_face_x = signf(dir.x)
-	else:
-		_dash_dir = Vector2(_face_x, 0.0)
+	if dir.length() > 0.3:
+		_sector = posmod(roundi(dir.angle() / (PI / 4.0)), 8)
+	_dash_dir = _aim_vec(_sector).normalized()
+	_spawn_vfx(1)
 
 
 func _tick_dash(delta: float) -> void:
 	_af += delta * DASH_FPS
 	var f := int(_af)
-	if f >= 2 and f <= 9:
+	if f >= 1 and f <= 5:
 		velocity = _dash_dir * DASH_SPEED
 		move_and_slide()
 		_clamp_world()
-	if f >= ANIM.ROWS[_row].size():
+	if f >= DASH_FRAMES.size():
 		_state = "move"
 		_moving = false
 
@@ -232,8 +233,9 @@ func _spawn_vfx(row: int) -> void:
 	var m := CanvasItemMaterial.new()
 	m.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
 	s.material = m
-	s.position = Vector2(_face_x * 58.0, -64.0)
-	s.scale = Vector2(_face_x * 1.0, 1.0)
+	var v := Vector2.from_angle(_sector * PI / 4.0)
+	s.position = Vector2(v.x * 62.0, v.y * 62.0 * Y_SCALE - 64.0)
+	s.rotation = v.angle()
 	add_child(s)
 
 
@@ -241,13 +243,19 @@ func _spawn_vfx(row: int) -> void:
 
 func _refresh() -> void:
 	if _state != "move":
-		var frames: Array = ANIM.ROWS[_row]
-		var f: int = clampi(int(_af), 0, frames.size() - 1)
-		_spr.texture = _atex[_row][f]
-		_spr.offset = Vector2(-frames[f][1], -frames[f][2])
+		var av: String = SECTORS[_sector][0]
+		var aflip: bool = SECTORS[_sector][1]
+		var info = ATK.DATA[av]
+		var f: int = clampi(int(_af), 0, 7)
+		if _state == "dash":
+			f = DASH_FRAMES[clampi(int(_af), 0, DASH_FRAMES.size() - 1)]
+		_spr.texture = _atex[av][f]
+		var fr = info["frames"][f]
+		_spr.offset = Vector2(-fr[1], -fr[2])
 		_spr.position = Vector2.ZERO
 		_spr.rotation = 0.0
-		_spr.scale = Vector2(_face_x * ANIM.SCALE, ANIM.SCALE)
+		var sc: float = info["scale"]
+		_spr.scale = Vector2(-sc if aflip else sc, sc)
 		return
 
 	var view: String = SECTORS[_sector][0]
