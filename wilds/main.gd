@@ -91,7 +91,7 @@ func _shots(dir: String) -> void:
 	cam.position_smoothing_enabled = false
 	# обзор всей карты
 	player.set_pose(2, false, 0.0)
-	var mid := Vector2(G.GW * G.W * 0.5, G.GH * G.H * 0.5) + level.origin
+	var mid: Vector2 = Vector2(G.GW * G.W * 0.5, G.GH * G.H * 0.5) + level.origin
 	player.position = mid
 	cam.zoom = Vector2(0.135, 0.135)
 	for k in 6:
