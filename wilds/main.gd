@@ -123,10 +123,11 @@ func _shots(dir: String) -> void:
 	get_viewport().get_texture().get_image().save_png(dir + "/world.png")
 
 	cam.position_smoothing_enabled = false
-	cam.zoom = Vector2(3, 3)
-	var poses := [[0, false, 0.0], [0, true, 0.8], [1, false, 0.0], [1, true, 0.8],
-		[2, false, 0.0], [2, true, 0.8], [2, true, 2.4]]
-	var cw := 260
+	cam.zoom = Vector2(2.6, 2.6)
+	var poses := [[0, false, 0.0], [1, false, 0.0], [2, false, 0.0], [3, false, 0.0],
+		[4, false, 0.0], [5, false, 0.0], [6, false, 0.0], [7, false, 0.0],
+		[0, true, 0.5], [0, true, 1.5], [0, true, 2.5], [2, true, 1.5], [6, true, 1.5]]
+	var cw := 150
 	var ch := 350
 	var sheet: Image = null
 	var idx := 0
@@ -139,7 +140,7 @@ func _shots(dir: String) -> void:
 		if sheet == null:
 			sheet = Image.create(cw * poses.size(), ch, false, img.get_format())
 		var x0 := img.get_width() / 2 - cw / 2
-		var y0 := img.get_height() / 2 - 330
+		var y0 := img.get_height() / 2 - 325
 		sheet.blit_rect(img, Rect2i(x0, maxi(y0, 0), cw, ch), Vector2i(idx * cw, 0))
 		idx += 1
 	sheet.save_png(dir + "/mita_sheet.png")
