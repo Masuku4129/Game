@@ -43,6 +43,8 @@ var _vfx_done := false
 var _hit_done := false
 var _hold := 0.0               # остановка кадра в момент удара
 var _shake := 0.0
+var _punch := 0.0
+var _ghost_t := 0.0
 var _dash_dir := Vector2.RIGHT
 var _spr: Sprite2D
 var _tex := {}
@@ -116,6 +118,9 @@ func _physics_process(delta: float) -> void:
 	if cam:
 		_shake = move_toward(_shake, 0.0, delta * 60.0)
 		cam.offset = Vector2(randf_range(-1.0, 1.0), randf_range(-1.0, 1.0)) * _shake
+		if not debug:
+			_punch = move_toward(_punch, 0.0, delta * 4.0)
+			cam.zoom = Vector2.ONE * (1.0 + _punch * 0.07)
 	queue_redraw()
 
 
@@ -197,12 +202,17 @@ func _tick_attack(delta: float) -> void:
 	var key: Array = ATK.DATA[SECTORS[_sector][0]]["key"]
 	if f >= key[2] and f <= key[5]:
 		velocity = _aim_vec(_sector) * 300.0
+		_ghost_t -= delta
+		if _ghost_t <= 0.0:
+			_ghost_t = 0.035
+			_ghost()
 		move_and_slide()
 		_clamp_world()
 	if not _hit_done and f >= key[4]:
 		_hit_done = true
 		_hold = 0.07
-		_shake = 7.0
+		_shake = 9.0
+		_punch = 1.0
 	if not _vfx_done and f >= key[3]:
 		_vfx_done = true
 		_spawn_slash(_combo)
@@ -235,21 +245,53 @@ func _tick_dash(delta: float) -> void:
 		_moving = false
 
 
-func _spawn_slash(combo: int, hold := -1.0) -> void:
+func _fx(rx: float, ry: float, rot: float, a0: float, a1: float, wm: float, dl: float, hold: float, off: Vector2) -> void:
 	var s = preload("res://slash_fx.gd").new()
-	var th := _sector * PI / 4.0
-	var sgn := 1.0 if combo != 1 else -1.0
-	s.a0 = th - 1.5 * sgn
-	s.a1 = th + 1.5 * sgn
-	s.rot = [-0.35, 0.35, 0.0][combo] * (-1.0 if cos(th) < -0.1 else 1.0)
-	if combo == 2:
-		s.rx = 115.0
-		s.ry = 160.0
-		s.a0 = th - 1.4 * sgn - PI * 0.5
-		s.a1 = th + 0.9 * sgn - PI * 0.5
+	s.rx = rx
+	s.ry = ry
+	s.rot = rot
+	s.a0 = a0
+	s.a1 = a1
+	s.wmul = wm
+	s.delay = dl
 	s.hold = hold
-	s.position = Vector2(cos(th) * 34.0, sin(th) * 24.0 - 70.0)
+	s.position = off
 	add_child(s)
+
+
+func _spawn_slash(combo: int, hold := -1.0) -> void:
+	var th := _sector * PI / 4.0
+	var fl := -1.0 if cos(th) < -0.1 else 1.0
+	var fwd := Vector2(cos(th) * 40.0, sin(th) * 28.0 - 70.0)
+	var body := Vector2(0.0, -70.0)
+	match combo:
+		0:
+			_fx(240.0, 150.0, -0.35 * fl, th - 1.6, th + 1.6, 1.0, 0.0, hold, fwd)
+			_fx(190.0, 115.0, -0.35 * fl, th - 1.5, th + 1.5, 0.55, 0.03, hold, fwd)
+		1:
+			_fx(250.0, 160.0, 0.35 * fl, th + 1.6, th - 1.6, 1.0, 0.0, hold, fwd)
+			_fx(195.0, 120.0, 0.35 * fl, th + 1.5, th - 1.5, 0.55, 0.03, hold, fwd)
+		_:
+			# вихрь вокруг тела и большая вертикальная дуга
+			_fx(165.0, 115.0, 0.0, th - 1.2, th - 1.2 + TAU * 1.1, 1.2, 0.0, hold, body)
+			_fx(130.0, 230.0, 0.0, th - 2.4, th - 0.5, 1.0, 0.07, hold, fwd)
+
+
+func _ghost() -> void:
+	var g := Sprite2D.new()
+	g.texture = _spr.texture
+	g.centered = false
+	g.offset = _spr.offset
+	g.scale = _spr.scale
+	g.position = position
+	g.modulate = Color(0.75, 0.65, 1.0, 0.45)
+	var m := CanvasItemMaterial.new()
+	m.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
+	g.material = m
+	get_parent().add_child(g)
+	var tw := g.create_tween()
+	tw.tween_property(g, "modulate:a", 0.0, 0.2)
+	tw.tween_callback(g.queue_free)
 
 
 # ---------------------------------------------------------------- отображение

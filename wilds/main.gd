@@ -167,8 +167,9 @@ func _shots(dir: String) -> void:
 	asheet.save_png(dir + "/attack_sheet.png")
 
 	# полумесяцы: три удара x три вида
-	var fw := 420
-	var fh := 300
+	cam.zoom = Vector2(0.8, 0.8)
+	var fw := 640
+	var fh := 440
 	var fxs := Image.create(fw * 3, fh * 3, false, Image.FORMAT_RGBA8)
 	var vs := [0, 2, 6]
 	for r in 3:
@@ -183,6 +184,6 @@ func _shots(dir: String) -> void:
 			await RenderingServer.frame_post_draw
 			var im3 := get_viewport().get_texture().get_image()
 			im3.convert(Image.FORMAT_RGBA8)
-			fxs.blit_rect(im3, Rect2i(im3.get_width() / 2 - fw / 2, im3.get_height() / 2 - 230, fw, fh), Vector2i(c * fw, r * fh))
+			fxs.blit_rect(im3, Rect2i(im3.get_width() / 2 - fw / 2, im3.get_height() / 2 - 300, fw, fh), Vector2i(c * fw, r * fh))
 	fxs.save_png(dir + "/slash_fx.png")
 	get_tree().quit()

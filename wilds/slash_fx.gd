@@ -7,11 +7,15 @@ var a0 := -1.4
 var a1 := 1.4
 var dur := 0.16
 var fade := 0.16
+var wmul := 1.0       # толщина
+var delay := 0.0
 var hold := -1.0      # >=0: заморозить на этом прогрессе (для кадров предпросмотра)
 var _t := 0.0
 
 
+
 func _ready() -> void:
+	_t = -delay
 	var m := CanvasItemMaterial.new()
 	m.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
 	material = m
@@ -30,6 +34,8 @@ func _pt(a: float) -> Vector2:
 
 
 func _draw() -> void:
+	if _t < 0.0 and hold < 0.0:
+		return
 	var p: float
 	var alpha := 1.0
 	var tail_p := 0.0
@@ -62,7 +68,7 @@ func _draw() -> void:
 			var u := float(i) / n
 			var pos := _pt(lerpf(tail, head, u))
 			var lw: float = L[0]
-			var w: float = pow(sin(PI * u), 0.75) * 34.0 * lw
+			var w: float = pow(sin(PI * u), 0.75) * 34.0 * wmul * lw
 			var nrm := pos.normalized()
 			outer.append(pos + nrm * w * 0.30)
 			inner.append(pos - nrm * w * 0.70)
