@@ -61,7 +61,8 @@ func _draw() -> void:
 		for i in n + 1:
 			var u := float(i) / n
 			var pos := _pt(lerpf(tail, head, u))
-			var w := pow(sin(PI * u), 0.75) * 26.0 * L[0]
+			var lw: float = L[0]
+			var w: float = pow(sin(PI * u), 0.75) * 26.0 * lw
 			var nrm := pos.normalized()
 			outer.append(pos + nrm * w * 0.30)
 			inner.append(pos - nrm * w * 0.70)
