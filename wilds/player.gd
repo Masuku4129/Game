@@ -20,7 +20,7 @@ const SKIN := Color(0.80, 0.78, 0.90)
 const SKIN_SHADE := Color(0.52, 0.52, 0.72)
 const HAIR := Color(0.045, 0.04, 0.085)
 const RIM := Color(0.42, 0.45, 1.0, 0.8)
-const RIM_SOFT := Color(0.42, 0.45, 1.0, 0.35)
+const RIM_SOFT := Color(0.42, 0.45, 1.0, 0.18)
 const EYE := Color(0.25, 0.45, 1.0)
 const HILT := Color(0.34, 0.13, 0.55)
 const BLADE := Color(0.93, 0.91, 1.0)
@@ -242,7 +242,7 @@ func _draw_side() -> void:
 	draw_circle(c + Vector2(4.5, 6.0), 5.5, SKIN)
 	draw_colored_polygon(PackedVector2Array([
 		c + Vector2(10, -1), c + Vector2(13.5, 3), c + Vector2(9.5, 3.5)]), SKIN)
-	draw_circle(c + Vector2(5.8, -0.5), 3.4, INK)                       # глазница
+	draw_circle(c + Vector2(5.8, -0.5), 2.4, INK)                       # глазница
 	draw_line(c + Vector2(2, -4.5), c + Vector2(9.5, -3.2), INK, 2.0)   # веко
 	draw_line(c + Vector2(2.5, -7.5), c + Vector2(9.5, -6.2), HAIR, 1.6)
 	draw_line(c + Vector2(7, 6.5), c + Vector2(9.2, 6.2), Color(0.5, 0.25, 0.35), 1.2)
@@ -331,7 +331,7 @@ func _draw_front() -> void:
 		c + Vector2(-8, 4), c + Vector2(0, 13), c + Vector2(8, 4)]), SKIN)
 	for i in 2:
 		var side := -1.0 if i == 0 else 1.0
-		draw_circle(c + Vector2(side * 4.6, -0.5), 3.4, INK)
+		draw_circle(c + Vector2(side * 4.6, -0.5), 2.4, INK)
 		draw_line(c + Vector2(side * 8.2, -3.8), c + Vector2(side * 1.8, -3.2), INK, 1.9)
 		draw_line(c + Vector2(side * 8.5, -6.8), c + Vector2(side * 2.0, -6.0), HAIR, 1.5)
 		# чёлка с пробором и длинные пряди у лица
@@ -402,14 +402,14 @@ func _draw_glow() -> void:
 	_glow.draw_circle(Vector2(0, -50), 54.0, Color(0.22, 0.16, 0.55, 0.045))
 	# глаза
 	for e in _eyes:
-		_glow.draw_circle(e, 7.0, Color(0.15, 0.25, 1.0, 0.10))
-		_glow.draw_circle(e, 4.5, Color(0.2, 0.35, 1.0, 0.22))
-		_glow.draw_circle(e, 2.6, EYE)
-		_glow.draw_circle(e + Vector2(-0.7, -0.8), 1.0, Color(0.8, 0.9, 1.0))
+		_glow.draw_circle(e, 4.6, Color(0.15, 0.25, 1.0, 0.10))
+		_glow.draw_circle(e, 3.0, Color(0.2, 0.35, 1.0, 0.22))
+		_glow.draw_circle(e, 1.7, EYE)
+		_glow.draw_circle(e + Vector2(-0.4, -0.5), 0.6, Color(0.8, 0.9, 1.0))
 	# клинок
 	if _blade.size() > 1:
-		_glow.draw_polyline(_blade, Color(GLOW.r, GLOW.g, GLOW.b, 0.10), 14.0, true)
-		_glow.draw_polyline(_blade, Color(GLOW.r, GLOW.g, GLOW.b, 0.22), 8.0, true)
-		_glow.draw_polyline(_blade, Color(0.65, 0.55, 1.0, 0.85), 3.6, true)
-		_glow.draw_polyline(_blade, BLADE, 1.7, true)
+		_glow.draw_polyline(_blade, Color(GLOW.r, GLOW.g, GLOW.b, 0.10), 9.0, true)
+		_glow.draw_polyline(_blade, Color(GLOW.r, GLOW.g, GLOW.b, 0.22), 5.5, true)
+		_glow.draw_polyline(_blade, Color(0.65, 0.55, 1.0, 0.85), 2.4, true)
+		_glow.draw_polyline(_blade, BLADE, 1.1, true)
 	_glow.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
