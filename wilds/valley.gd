@@ -403,7 +403,10 @@ func _spawn_enemies() -> void:
 		[Vector2(3560, -1750), "sh", 2], [Vector2(3500, -1850), "ch", 3],
 		# враги в боковых ответвлениях
 		[Vector2(900, -450), "ch", 2], [Vector2(700, -700), "sh", 1],
-		[Vector2(1800, 800), "ch", 3]]
+		[Vector2(1800, 800), "ch", 3],
+		# призраки-маги на мистических участках
+		[Vector2(2800, 100), "wr", 1], [Vector2(3100, -300), "wr", 2],
+		[Vector2(750, -600), "wr", 1]]
 	for g in groups:
 		for i in g[2]:
 			var e = preload("res://enemy.gd").new()
