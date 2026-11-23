@@ -62,6 +62,9 @@ var max_hp := 100.0
 var _inv := 0.0
 var spawn_pos := Vector2.ZERO
 var next_hits_fly := 0   # активное умение: сколько ударов выпускают летящие шлейфы
+var skill_unlocked := false   # открыто ли умение (мост / победа над боссом)
+var skill_requested := false
+var skill_cd := 0.0           # секунд до следующего использования
 var _data := {}
 var _m2tex := {}
 var _hurt_t := 0.0
@@ -105,6 +108,9 @@ func _input(event: InputEvent) -> void:
 			attack_requested = true
 		elif k.keycode == KEY_K:
 			dash_requested = true
+		elif k.keycode == KEY_L:
+			if skill_unlocked:
+				skill_requested = true
 
 
 func set_pose(sector: int, moving: bool, wt: float) -> void:
@@ -170,6 +176,7 @@ func _input_dir() -> Vector2:
 
 
 func _tick_move(delta: float) -> void:
+	skill_cd = maxf(skill_cd - delta, 0.0)
 	var dir := _input_dir()
 	if attack_requested:
 		attack_requested = false
@@ -181,6 +188,16 @@ func _tick_move(delta: float) -> void:
 		dash_requested = false
 		_start_dash(dir)
 		return
+	if skill_requested:
+		skill_requested = false
+		if skill_unlocked and skill_cd <= 0.0:
+			next_hits_fly = 3
+			skill_cd = 4.0
+			_shake = 5.0
+			# вспышка белого света
+			_spr.modulate = Color(2.0, 2.0, 2.0, 1.0)
+			var tw := create_tween()
+			tw.tween_property(_spr, "modulate", Color.WHITE, 0.3)
 
 	velocity = Vector2(dir.x, dir.y * Y_SCALE) * SPEED
 	move_and_slide()
@@ -462,3 +479,21 @@ func _deal_damage() -> void:
 		if not spin and d.length() > 40.0 and aim.dot(d.normalized()) < 0.2:
 			continue
 		e.hurt(dmg, d, 330.0 if spin else 240.0)
+	# активное умение — выпускаем летящие шлейфы
+	if next_hits_fly > 0:
+		next_hits_fly -= 1
+		_launch_skill_projs()
+
+
+func _launch_skill_projs() -> void:
+	# три шлейфа: вперёд, вправо-сбоку, влево-сбоку
+	var th := _sector * PI / 4.0
+	var fwd := Vector2(cos(th), sin(th))
+	var perp := Vector2(-fwd.y, fwd.x)
+	var dirs := [fwd, fwd * 0.7 + perp * 0.7, fwd * 0.7 - perp * 0.7]
+	for dv in dirs:
+		var p = preload("res://slash_proj.gd").new()
+		p.global_position = global_position + Vector2(0, -60)
+		p.vel = dv.normalized() * 420.0
+		p.dmg = 18.0
+		get_parent().add_child(p)

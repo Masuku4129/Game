@@ -194,20 +194,41 @@ func _fire(dir: Vector2) -> void:
 
 
 func _animate(move: Vector2) -> void:
+	var sp := move.length() > 5.0
+	var sx := _face if (_view == "side" or _view == "run" or _view == "run2") else 1.0
+
 	if _state == "chase" or _state == "idle":
-		if move.length() > 5.0:
+		if sp:
 			if absf(move.x) > absf(move.y) * 1.2:
-				_view = "side"
 				_face = 1.0 if move.x > 0 else -1.0
+				# кадровая ходьба: run / run2 чередуются
+				var run_cycle := int(_wt * 6.5) % 2
+				if _tex.has("run2"):
+					_view = "run" if run_cycle == 0 else "run2"
+					_pose(_view)
+				elif _tex.has("run"):
+					_view = "run"
+					_pose(_view)
+				else:
+					_view = "side"
+					_pose("side")
 			elif move.y > 0:
 				_view = "front"
+				_pose("front")
 			else:
 				_view = "back"
-		_pose(_view)
-	var sp := move.length() > 5.0
-	var bob := absf(sin(_wt * 9.0)) if sp else sin(_wt * 2.5) * 0.35
-	var sx := _face if _view == "side" else 1.0
-	var squash := 1.0 + (sin(_wt * 18.0) * 0.035 if sp else sin(_wt * 2.5) * 0.015)
+				_pose("back")
+		else:
+			# стоит — показываем нейтральную позу
+			if _view in ["run", "run2"]:
+				_view = "side"
+			_pose(_view)
+		sx = _face if (_view == "side" or _view == "run" or _view == "run2") else 1.0
+
+	# плавный наклон при движении
+	var tilt := sin(_wt * 9.0) * 0.055 * sx if sp else 0.0
+	var squash := 1.0 + (sin(_wt * 18.0) * 0.03 if sp else sin(_wt * 2.5) * 0.012)
+	var bob := absf(sin(_wt * 9.0)) * 4.0 if sp else sin(_wt * 2.0) * 1.5
 	_spr.scale = Vector2(sx * sc / squash, sc * squash)
-	_spr.rotation = sin(_wt * 9.0) * 0.04 * sx if sp else 0.0
-	_spr.position.y = -bob * 5.0
+	_spr.rotation = tilt
+	_spr.position.y = -bob

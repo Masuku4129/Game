@@ -65,6 +65,13 @@ func on_kill(_kind: String) -> void:
 	kills += 1
 
 
+func on_skill_unlocked() -> void:
+	# передаём HUD сигнал для показа сообщения
+	for n in get_tree().get_nodes_in_group("hud"):
+		if n.has_method("show_message"):
+			n.show_message("Умение открыто!")
+
+
 func _process(_delta: float) -> void:
 	fps_label.text = "FPS %d" % Engine.get_frames_per_second()
 

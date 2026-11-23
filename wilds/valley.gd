@@ -44,7 +44,9 @@ func build(world_node: Node2D) -> void:
 	_scatter()
 	_arena_ring()
 	_spawn_enemies()
+	_make_side_paths()
 	_make_fog()
+	_make_bridge_trigger()
 
 
 # ------------------------------------------------------------------ утилиты
@@ -398,10 +400,89 @@ func _spawn_enemies() -> void:
 		[Vector2(1050, 210), "ch", 2], [Vector2(1850, 330), "ch", 3], [Vector2(2250, 280), "ch", 2],
 		[Vector2(3250, 150), "sh", 2], [Vector2(3350, -150), "ch", 2],
 		[Vector2(3480, -900), "ch", 3], [Vector2(3540, -1000), "sh", 2],
-		[Vector2(3560, -1750), "sh", 2], [Vector2(3500, -1850), "ch", 3]]
+		[Vector2(3560, -1750), "sh", 2], [Vector2(3500, -1850), "ch", 3],
+		# враги в боковых ответвлениях
+		[Vector2(900, -450), "ch", 2], [Vector2(700, -700), "sh", 1],
+		[Vector2(1800, 800), "ch", 3]]
 	for g in groups:
 		for i in g[2]:
 			var e = preload("res://enemy.gd").new()
 			e.setup(g[1])
 			e.position = g[0] + Vector2(rng.randf_range(-110, 110), rng.randf_range(-80, 80))
 			world.add_child(e)
+
+
+# ------------------------------------------------------------------ боковые тропки
+func _make_side_paths() -> void:
+	# -- северная боковая тропа (секрет) --
+	# уходит с главной тропы на север у x≈1200, заканчивается полянкой
+	var north_path := _smooth([
+		Vector2(1200, 290), Vector2(1050, 100), Vector2(900, -150),
+		Vector2(820, -400), Vector2(750, -680)], 25.0)
+	var under := get_child(0)   # under = первый ребёнок, добавленный в _make_ground
+	under.add_child(_line(north_path, _tex("path"), 130.0))
+	# несколько камней и пней на секретной полянке
+	for ox in [-90.0, 0.0, 90.0]:
+		_prop("r_3", Vector2(750, -680) + Vector2(ox, rng.randf_range(-40, 40)),
+			rng.randf_range(0.9, 1.3), rng.randf() < 0.5)
+	for ox in [-50.0, 50.0, 0.0, -80.0]:
+		_prop("f_2", Vector2(750, -680) + Vector2(ox, rng.randf_range(-60, 60)),
+			rng.randf_range(0.8, 1.1), rng.randf() < 0.5)
+	_prop("stump", Vector2(760, -700), 1.1, false)
+	# светлячки-огоньки намекают на секрет
+	for i in 5:
+		var gp := Sprite2D.new()
+		gp.texture = _tex("glow_warm")
+		gp.position = Vector2(750, -680) + Vector2(rng.randf_range(-120, 120), rng.randf_range(-80, 80))
+		gp.scale = Vector2(0.4, 0.3)
+		gp.modulate = Color(0.6, 1.0, 0.7, 0.4)
+		var m2 := CanvasItemMaterial.new()
+		m2.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
+		gp.material = m2
+		under.add_child(gp)
+	# -- южная боковая тропа (укрытие у реки) --
+	var south_path := _smooth([
+		Vector2(1800, 380), Vector2(1900, 600), Vector2(2050, 760),
+		Vector2(2200, 820)], 20.0)
+	under.add_child(_line(south_path, _tex("path"), 110.0))
+	# упавшее бревно перекрывает дальний конец
+	_prop("log", Vector2(2210, 820), 1.3, false)
+	_prop("r_2", Vector2(2170, 840), 1.0, true)
+	# -- изломанная тропа на востоке (после моста не прямо, а с петлёй) --
+	var east_loop := _smooth([
+		Vector2(3040, 330), Vector2(3200, 100), Vector2(3380, -50),
+		Vector2(3450, -300), Vector2(3350, -500), Vector2(3300, -700),
+		Vector2(3400, -900), Vector2(3540, -900)], 25.0)
+	under.add_child(_line(east_loop, _tex("path"), 155.0))
+	# враги на петле уже в _spawn_enemies
+
+
+# ------------------------------------------------------------------ триггер моста
+func _make_bridge_trigger() -> void:
+	# Area2D — когда игрок наступает на мост первый раз, открывает умение
+	var area := Area2D.new()
+	area.collision_layer = 0
+	area.collision_mask = 4   # слой игрока (layer 4 нет — используем сигнал от body_shape)
+	var cs := CollisionShape2D.new()
+	var rect := RectangleShape2D.new()
+	rect.size = Vector2(500.0, 160.0)
+	cs.shape = rect
+	cs.position = BRIDGE_POS
+	area.add_child(cs)
+	# при наложении любого тела проверяем что это игрок
+	area.body_entered.connect(_on_bridge_body(area))
+	add_child(area)
+
+
+func _on_bridge_body(area: Area2D) -> Callable:
+	return func(body: Node2D) -> void:
+		if not body.is_in_group("player"):
+			return
+		if body.skill_unlocked:
+			return
+		body.skill_unlocked = true
+		area.set_deferred("monitoring", false)
+		# уведомление — HUD покажет "Умение открыто!"
+		var main := get_tree().current_scene
+		if main.has_method("on_skill_unlocked"):
+			main.on_skill_unlocked()
