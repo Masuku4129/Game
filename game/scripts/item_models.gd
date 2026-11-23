@@ -158,6 +158,15 @@ func _build(id: String) -> void:
 				g.logp(Vector3(sx2, 0.0, -0.02), Vector3(sx2, 0.26, -0.02), 0.06, 0.055, Color(0.45, 0.33, 0.22), "fur")
 				g.logp(Vector3(sx2, 0.04, -0.02), Vector3(sx2, 0.04, 0.14), 0.045, 0.04, Color(0.38, 0.28, 0.18), "fur")
 		# ---------- деревянная утварь ----------
+		"rope":
+			# моток верёвки: витки-кольца
+			for k in 6:
+				var pts: Array = []
+				for i in 13:
+					var a6 := TAU * i / 12.0
+					pts.append(Vector3(cos(a6) * (0.09 - k * 0.004), 0.012 + k * 0.009, sin(a6) * (0.07 - k * 0.003)))
+				for i in 12:
+					g.logp(pts[i], pts[i + 1], 0.008, 0.008, GEO.C_FIBER.darkened(k * 0.03), "paint", false, 5, 0.0)
 		"handle":
 			g.logp(Vector3(-0.3, 0.025, 0), Vector3(0.0, 0.022, 0.0), 0.02, 0.018, C_WOOD, "wood")
 			g.logp(Vector3(0.0, 0.022, 0), Vector3(0.28, 0.03, 0.04), 0.018, 0.024, C_WOOD, "wood")

@@ -197,6 +197,10 @@ func think() -> void:
 	var sense: float = _sense() * (1.0 + float(hero.run_mag) * 0.6) * (0.6 + 0.4 * float(main.day_factor)) * (1.0 - float(w.precip) * 0.3)
 	if hero.state == "sit":
 		sense *= 0.5
+	# --- combat: присевшего замечают позже ---
+	if hero.get("crouch") == true:
+		sense *= 0.55
+	# --- /combat ---
 	# build: в снежной пещере человека не видно и не слышно
 	if main.get("camp") != null and main.camp.hidden:
 		sense *= 0.15

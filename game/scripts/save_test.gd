@@ -68,6 +68,14 @@ func _run_a() -> void:
 					a.kill()
 					print("SAVETEST killed roe")
 					break
+			# combat: лук за спиной, стрела в земле, связка из трёх брёвен
+			main.inv.merge({"bow": 1, "arrow": 4, "rope": 1}, true)
+			main.hero.tools.back = "bow"
+			tw.place_item("arrow", Transform3D(Basis(Vector3.RIGHT, 0.4), main.hero.position + Vector3(-2.5, 0.3, 1.0)), false)
+			for k in 3:
+				tw.drop_log(main.hero.position + Vector3(0.8, 0, -0.6 + k * 0.3), 1.2)
+			main.hero.tools._tie_now()
+			print("SAVETEST bundle ", main.hero.tools.bundle != null)
 			main.hero.position += Vector3(0.7, 0, 0.4)
 			main.hero.position.y = main.ground_at(main.hero.position.x, main.hero.position.z)
 		45:

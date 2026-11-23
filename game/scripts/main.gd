@@ -56,6 +56,7 @@ var res_spots := {}      # клетка 8 м → [[позиция, вид]] — 
 var fallen_spots := {}   # клетка 16 м → [{kind, mm, i, xf, a, b, r}] — бурелом под топор
 var hunt  # --- hunt: туши, разделка, кровь, запах крови (hunt.gd) ---
 var camp  # --- build: лагерь и постройки (structures.gd) ---
+var combat  # --- combat: удары, прицел, стрелы (combat.gd) ---
 
 func _ready() -> void:
 	_setup_noise()
@@ -136,6 +137,12 @@ func _ready() -> void:
 	add_child(hunt)
 	hunt.setup()
 	# --- /hunt ---
+	# --- combat: удары, прицел броска и лука, стрелы в звере (combat.gd) ---
+	combat = preload("res://scripts/combat.gd").new()
+	combat.main = self
+	add_child(combat)
+	combat.setup(ui)
+	# --- /combat ---
 	# --- build: лагерь, постройки, стройка (structures.gd + build_mode/cabin/camp_ui) ---
 	camp = preload("res://scripts/structures.gd").new()
 	camp.main = self
@@ -1908,7 +1915,20 @@ func to_save() -> Dictionary:
 		"stamina": stamina, "health": health, "bleed": bleed, "injuries": injuries.duplicate(),
 		"inv": inv.duplicate(), "pos": SV.enc(hero.position), "yaw": float(hero.body.rotation.y),
 		"cam_yaw": float(rig.rotation.y), "held": String(t.held) if t != null else "",
-		"belt": (t.belt as Array).duplicate() if t != null else [], "lamp_h": _lamp_h}
+		"belt": (t.belt as Array).duplicate() if t != null else [], "lamp_h": _lamp_h,
+		"back": String(t.get("back")) if t != null and t.get("back") != null else "",
+		"logs": int(t.get("logs")) if t != null and t.get("logs") != null else 0,
+		"bundle": _bundle_save(t)}
+
+## Связка брёвен на верёвке (hero_tools.bundle, log_bundle.gd): брёвна [{r, L, bark}].
+func _bundle_save(t: Node) -> Array:
+	var SV = preload("res://scripts/save.gd")
+	var out: Array = []
+	if t == null or t.get("bundle") == null:
+		return out
+	for lg: Dictionary in t.bundle.logs:
+		out.append({"r": float(lg["r"]), "L": float(lg["L"]), "bark": SV.enc(lg["bark"])})
+	return out
 
 func from_save(d: Dictionary) -> void:
 	var SV = preload("res://scripts/save.gd")
@@ -1939,6 +1959,27 @@ func from_save(d: Dictionary) -> void:
 		for x: Variant in d.get("belt", []):
 			b.append(String(x))
 		t.belt = b
+		# combat: спина, брёвна на плече, связка на верёвке
+		if t.get("back") != null:
+			t.back = String(d.get("back", ""))
+		if t.get("logs") != null:
+			t.logs = int(d.get("logs", 0))
+			if t.held == "log" and t.logs <= 0:
+				t.logs = 1
+		if "bundle" in t and t.bundle != null:
+			t.bundle.queue_free()
+			t.bundle = null
+		var bl: Array = d.get("bundle", [])
+		if not bl.is_empty() and "bundle" in t:
+			var list: Array = []
+			for e: Dictionary in bl:
+				list.append({"r": float(e["r"]), "L": float(e["L"]), "bark": SV.dec(e["bark"])})
+			var bn: Node3D = preload("res://scripts/log_bundle.gd").new()
+			bn.set("main", self)
+			tools_world.add_child(bn)
+			var yaw: float = hero.body.rotation.y
+			bn.call("setup", list, hero.position, Vector3(sin(yaw), 0, cos(yaw)))
+			t.bundle = bn
 		t.sync()
 	_update_near(true)
 	_update_sky()

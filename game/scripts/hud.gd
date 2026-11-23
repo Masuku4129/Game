@@ -1,8 +1,10 @@
 extends Control
 ## HUD: шкалы выживания на берестяной табличке, часы, строка сообщений; справа внизу —
 ## кнопки: «Действие» (main.act_btn), «Рюкзак», круглые кнопки инструмента по обстановке
-## («Рубить», «Срезать», «Ударить»…), «Метнуть» и «Воткнуть» для копья; внизу — пояс:
-## нож и топор (нажать — взять в руку, ещё раз — убрать на пояс).
+## («Рубить», «Срезать», «Ударить»…), «Метнуть» и «Воткнуть» для копья, «Стрелять» для лука;
+## внизу — пояс: нож, топор и лук за спиной (нажать — взять в руку, ещё раз — убрать на место),
+## рядом — «рука» (что в руке; нажать — убрать). Слева у джойстика — «Присесть».
+## Кнопки показывают только hero.tools.place_of(id): рука / пояс / спина / короб.
 ## Свои действия другие команды добавляют через hero.tools / world_tools (use_label/use).
 
 const INV = preload("res://scripts/inventory.gd")
@@ -20,6 +22,10 @@ var use_btn: RoundBtn
 var throw_btn: RoundBtn
 var stick_btn: RoundBtn
 var belt_btns := {}
+# --- combat: рука, присед ---
+var hand_btn: RoundBtn
+var crouch_btn: RoundBtn
+# --- /combat ---
 
 ## Кнопка короба: нарисованный берестяной короб с лямками и подписью.
 class BagButton extends Button:
@@ -62,6 +68,7 @@ class RoundBtn extends Button:
 	var icon_id := ""
 	var caption := ""
 	var hot := false        # выделена (вещь в руке)
+	var dim := false        # вещь в коробе (не на поясе и не за спиной)
 	func _ready() -> void:
 		flat = true
 		focus_mode = Control.FOCUS_NONE
@@ -73,7 +80,7 @@ class RoundBtn extends Button:
 		var dn := is_pressed() and is_hovered()
 		draw_circle(c + Vector2(3, 4), r, Color(0, 0, 0, 0.3))
 		draw_circle(c, r, Color(0.3, 0.21, 0.13, 0.82) if not dn else Color(0.45, 0.31, 0.18, 0.9))
-		draw_circle(c, r - 7.0, Color(0.88, 0.8, 0.62, 0.92) if not hot else Color(0.95, 0.82, 0.55, 0.97))
+		draw_circle(c, r - 7.0, (Color(0.88, 0.8, 0.62, 0.92) if not dim else Color(0.7, 0.64, 0.52, 0.8)) if not hot else Color(0.95, 0.82, 0.55, 0.97))
 		draw_arc(c, r - 3.0, 0.0, TAU, 48, Color(0.86, 0.76, 0.56, 0.9) if not hot else Color(0.95, 0.6, 0.25), 4.0 if not hot else 6.0, true)
 		if icon_id != "":
 			INV.icon(self, icon_id, c, r * 0.55)
@@ -117,25 +124,45 @@ func setup(m: Node3D) -> void:
 	use_btn = _round("", "", -440.0, -270.0, 150.0)
 	use_btn.pressed.connect(func() -> void: main.hero.tools.use())
 	throw_btn = _round("spear", "Метнуть", -400.0, -470.0, 120.0)
-	throw_btn.pressed.connect(func() -> void: main.hero.tools.throw())
+	# --- combat: «Метнуть» / «Стрелять» — прицел (combat.gd) ---
+	throw_btn.pressed.connect(_aim_pressed)
 	stick_btn = _round("spear", "Воткнуть", -560.0, -470.0, 120.0)
 	stick_btn.pressed.connect(func() -> void: main.hero.tools.stick())
-	var x := -780.0
-	for id in ["knife", "axe"]:
+	var x := -898.0
+	# --- combat: «рука» и пояс: нож, топор, лук ---
+	hand_btn = _round("", "Убрать", x, -150.0, 104.0)
+	hand_btn.hot = true
+	hand_btn.pressed.connect(func() -> void: main.hero.tools.holster())
+	x += 118.0
+	for id in ["knife", "axe", "bow"]:
 		var b := _round(id, IT_name(id), x, -150.0, 104.0)
 		b.pressed.connect(_belt_pressed.bind(id))
 		belt_btns[id] = b
 		x += 118.0
+	crouch_btn = _round("crouch", "Присесть", 0.0, 0.0, 104.0)
+	crouch_btn.anchor_left = 0.0
+	crouch_btn.anchor_right = 0.0
+	crouch_btn.offset_left = 420.0
+	crouch_btn.offset_right = 524.0
+	crouch_btn.offset_top = -150.0
+	crouch_btn.offset_bottom = -16.0
+	crouch_btn.pressed.connect(func() -> void: main.hero.toggle_crouch())
+	# --- /combat ---
 
 func IT_name(id: String) -> String:
 	return String(INV.ITEMS.get(id, {}).get("name", id))
 
 func _belt_pressed(id: String) -> void:
-	var t: Node = main.hero.tools
-	if t.held == id:
-		t.holster()
+	main.hero.tools.toggle(id)
+	_ui_t = 0.0
+
+# --- combat: прицел копья или лука ---
+func _aim_pressed() -> void:
+	if main.get("combat") != null and main.combat != null:
+		main.combat.begin_aim("bow" if main.hero.tools.held == "bow" else "spear")
 	else:
-		t.take(id)
+		main.hero.tools.throw()
+# --- /combat ---
 
 var _ui_t := 0.0
 func _process(delta: float) -> void:
@@ -154,20 +181,41 @@ func _process(delta: float) -> void:
 		use_btn.caption = ul
 		use_btn.icon_id = t.held if t.held != "" else "fiber"
 		use_btn.queue_redraw()
-	throw_btn.visible = free and t.can_throw()
+	# --- combat: «Метнуть» для копья, «Стрелять» для лука ---
+	var bow: bool = t.held == "bow"
+	throw_btn.visible = free and (t.can_shoot() if bow else t.can_throw())
+	if throw_btn.visible and throw_btn.icon_id != t.held:
+		throw_btn.icon_id = t.held
+		throw_btn.caption = "Стрелять" if bow else "Метнуть"
+		throw_btn.queue_redraw()
 	stick_btn.visible = free and t.can_stick()
 	if stick_btn.visible and stick_btn.icon_id != t.held:
 		stick_btn.icon_id = t.held
 		stick_btn.queue_redraw()
+	# --- combat: кнопки — по месту вещи (рука / пояс / спина / короб) ---
 	for id: String in belt_btns:
 		var b: RoundBtn = belt_btns[id]
-		var own: bool = int(main.inv.get(id, 0)) > 0
-		b.visible = free and own
-		var h: bool = t.held == id
-		if b.hot != h:
+		var pl: String = t.place_of(id)
+		b.visible = free and pl != ""
+		var h: bool = pl == "hand"
+		var dm: bool = pl == "pack"
+		if b.hot != h or b.dim != dm:
 			b.hot = h
+			b.dim = dm
 			b.caption = ("Убрать" if h else IT_name(id))
 			b.queue_redraw()
+	var hid: String = t.held
+	hand_btn.visible = free and hid != "" and hid != "log" and not t.is_long(hid)
+	if hand_btn.visible and hand_btn.icon_id != hid:
+		hand_btn.icon_id = hid
+		hand_btn.queue_redraw()
+	crouch_btn.visible = free and (hero.crouch or t.can_crouch())
+	var cc := "Встать" if hero.crouch else "Присесть"
+	if crouch_btn.caption != cc or crouch_btn.hot != hero.crouch:
+		crouch_btn.caption = cc
+		crouch_btn.hot = hero.crouch
+		crouch_btn.queue_redraw()
+	# --- /combat ---
 
 func set_state(v: Array, text: String, inf: String) -> void:
 	vals = v

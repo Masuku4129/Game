@@ -63,6 +63,15 @@ var held := ""
 func has_tool(id: String) -> bool:
 	return tools != null and tools.has_tool(id)
 
+# --- combat: присед (кнопка HUD): медленнее, тише шаг, звери замечают позже (animal.gd) ---
+var crouch := false
+func toggle_crouch() -> void:
+	if crouch:
+		crouch = false
+	elif state == "walk" and swimb < 0.3 and (tools == null or tools.can_crouch()):
+		crouch = true
+# --- /combat ---
+
 ## Живописный материал (тот же свет, что у мира).
 var _pmats := {}
 func _paint(c: Color) -> ShaderMaterial:
@@ -489,7 +498,7 @@ func _process_main(delta: float) -> void:
 		else:
 			f = minf(1.0 + along * slope * 0.2, 1.15)
 		var stam: float = main.stamina
-		running = mag > 0.92 and stam > 0.08 and (tools == null or tools.can_run())
+		running = mag > 0.92 and stam > 0.08 and (tools == null or tools.can_run()) and not crouch
 		var sp_base := run_speed if running else speed
 		var wf := 1.0
 		if depth > 1.25:
@@ -497,7 +506,7 @@ func _process_main(delta: float) -> void:
 			running = false
 		elif depth > 0.3:
 			wf = 1.0 - (depth - 0.3) * 0.55
-		target = d * sp_base * mag * f * wf * _sink_slow() * main.move_factor() * (tools.speed_factor() if tools != null else 1.0)
+		target = d * sp_base * mag * f * wf * _sink_slow() * main.move_factor() * (tools.speed_factor() if tools != null else 1.0) * (0.5 if crouch else 1.0)
 	else:
 		running = false
 	# крутой склон: человека тянет вниз, он теряет управление и катится
@@ -588,7 +597,7 @@ func _process_main(delta: float) -> void:
 	phase += sp * delta * 2.8
 	# звук шага: каждый раз, когда нога касается земли (полупериод фазы)
 	if floori(phase / PI) != floori(ph_prev / PI) and sp > 0.4 and (not airborne or swimb > 0.5) and main.sfx != null:
-		main.sfx.step(swimb > 0.3, sp / speed)
+		main.sfx.step(swimb > 0.3, sp / speed * (0.35 if crouch else 1.0))
 	var fwd := Vector3(sin(body.rotation.y), 0, cos(body.rotation.y))
 	var incline := 0.0
 	if sp > 0.1:
@@ -945,6 +954,17 @@ func _animate_model(delta: float) -> void:
 	if airborne and vy < -2.5:
 		_play("Jump", 1.0, 0.15)
 		return
+	# --- combat: присед ---
+	if crouch:
+		if swimb > 0.3 or (tools != null and not tools.can_crouch()):
+			crouch = false
+		elif _hspeed > 0.15:
+			_play("Crouch_Fwd", clampf(_hspeed / 0.85, 0.6, 1.4), 0.3)
+			return
+		else:
+			_play("Crouch_Idle", 1.0, 0.3)
+			return
+	# --- /combat ---
 	if _hspeed > 2.4:
 		_play("Jog_Fwd", clampf(_hspeed / 3.6, 0.75, 1.15))
 	elif _hspeed > 0.2:

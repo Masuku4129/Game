@@ -113,6 +113,23 @@ func _howto(k: String) -> Node3D:
 			n.add_child(m)
 		"h_cabin":
 			n.add_child(_building("cabin"))
+		"h_fight":
+			var sp: Node3D = im.make("spear")
+			n.add_child(sp)
+			var bw: Node3D = im.make("bow")
+			bw.position = Vector3(0.1, 0, 0.5)
+			n.add_child(bw)
+			var ar: Node3D = im.make("arrow")
+			ar.position = Vector3(0.3, 0, 0.8)
+			n.add_child(ar)
+		"h_logs":
+			for i in 3:
+				var lg2: Node3D = im.make("log")
+				lg2.position = Vector3(0, 0.25 * float(i / 2), float(i % 2) * 0.27 + (0.13 if i == 2 else 0.0))
+				n.add_child(lg2)
+			var rp: Node3D = im.make("rope")
+			rp.position = Vector3(0.9, 0, 0.6)
+			n.add_child(rp)
 		"h_cook":
 			n.add_child(geo.campfire())
 			var p: Node3D = im.make("clay_pot")

@@ -202,6 +202,9 @@ func _update_buttons() -> void:
 		btn_use.disabled = false
 		btn_belt.text = "С пояса" if tools.belt.has(sel) else "На пояс"
 		btn_belt.disabled = not d.get("belt", false)
+		if d.get("back", false):  # --- combat: лук — за спину ---
+			btn_belt.text = "Со спины" if tools.back == sel else "За спину"
+			btn_belt.disabled = false
 	else:
 		btn_use.text = "Съесть"
 		btn_use.disabled = sel == "" or not d.has("eat")
@@ -342,17 +345,12 @@ func _use() -> void:
 	if sel == "":
 		return
 	if ITEMS.get(sel, {}).has("tool"):
+		# --- combat: состояние рук и пояса — только через hero_tools ---
 		var tools: Node = main.hero.tools
 		if tools.held == sel:
 			tools.to_pack(sel)
-		elif ITEMS[sel].get("hands", false):
-			tools.give_long(sel)
 		else:
-			if tools.held != "" and not tools.is_long(tools.held):
-				tools._put_away(tools.held)
-			tools.belt.erase(sel)
-			tools.held = sel
-			tools._refresh()
+			tools.draw(sel)
 		return
 	if not ITEMS.get(sel, {}).has("eat"):
 		return
@@ -374,6 +372,14 @@ func _use() -> void:
 
 func _belt() -> void:
 	var tools: Node = main.hero.tools
+	# --- combat: лук — за спину и обратно в короб ---
+	if sel != "" and ITEMS.get(sel, {}).get("back", false):
+		if tools.back == sel:
+			tools.to_pack(sel)
+		else:
+			tools.to_back(sel)
+		return
+	# --- /combat ---
 	if sel == "" or not ITEMS.get(sel, {}).get("belt", false):
 		return
 	if tools.belt.has(sel):
@@ -623,6 +629,10 @@ static func icon(ci: CanvasItem, kind: String, c: Vector2, r: float) -> void:
 		ci.draw_texture_rect(png, Rect2(c - Vector2(r, r) * 1.25, Vector2(r, r) * 2.5), false)
 		return
 	# --- /core ---
+	# --- combat: лук, стрела, верёвка, присед (combat_icons.gd) ---
+	if preload("res://scripts/combat_icons.gd").icon(ci, kind, c, r):
+		return
+	# --- /combat ---
 	match kind:
 		"berry":
 			ci.draw_colored_polygon(_ell(c + Vector2(-r * 0.35, -r * 0.55), r * 0.38, r * 0.16, -0.6), Color(0.3, 0.45, 0.2))
