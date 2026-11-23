@@ -51,11 +51,17 @@ var _ghost_t := 0.0
 var _dash_dir := Vector2.RIGHT
 var _spr: Sprite2D
 var _tex := {}
+var hp := 100.0
+var max_hp := 100.0
+var _inv := 0.0
+var spawn_pos := Vector2.ZERO
+var next_hits_fly := 0   # активное умение: сколько ударов выпускают летящие шлейфы
 var _data := {}
 var _atex := {}                 # вид -> [Texture2D x8]
 
 
 func _ready() -> void:
+	add_to_group("player")
 	motion_mode = CharacterBody2D.MOTION_MODE_FLOATING
 	var cs := CollisionShape2D.new()
 	var sh := CircleShape2D.new()
@@ -110,6 +116,9 @@ func set_attack_pose(sector: int, frame: int) -> void:
 
 
 func _physics_process(delta: float) -> void:
+	_inv = maxf(_inv - delta, 0.0)
+	if _spr:
+		_spr.modulate = Color(1.0, 0.55, 0.6) if (_inv > 0.0 and int(_inv * 20.0) % 2 == 0) else Color.WHITE
 	if not debug:
 		match _state:
 			"attack":
@@ -221,6 +230,7 @@ func _tick_attack(delta: float) -> void:
 		_hold = 0.07
 		_shake = 9.0
 		_punch = 1.0
+		_deal_damage()
 	if not _vfx_done and f >= key[3]:
 		_vfx_done = true
 		_spawn_slash(_combo)
@@ -352,3 +362,35 @@ func _draw() -> void:
 	draw_set_transform(Vector2(0.0, -_lift), 0.0, Vector2(1.0, 0.4))
 	draw_circle(Vector2.ZERO, 26.0, Color(0, 0, 0, 0.45))
 	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+
+
+# ---------------------------------------------------------------- урон
+func hurt(amount: float, from: Vector2) -> void:
+	if _inv > 0.0 or _state == "dash":
+		return
+	hp -= amount
+	_inv = 0.7
+	_shake = 8.0
+	if hp <= 0.0:
+		hp = max_hp
+		global_position = spawn_pos
+		_inv = 1.5
+
+
+func _deal_damage() -> void:
+	var th := _sector * PI / 4.0
+	var aim := Vector2(cos(th), sin(th))
+	var spin := _combo == 2
+	var reach := 215.0 if spin else 200.0
+	var dmg := 34.0 if spin else 20.0
+	for e in get_tree().get_nodes_in_group("enemy"):
+		if e.dead:
+			continue
+		var d: Vector2 = e.global_position - global_position
+		d.y /= Y_SCALE
+		var rr := reach + (70.0 if e.kind == "hd" else 0.0)
+		if d.length() > rr:
+			continue
+		if not spin and d.length() > 40.0 and aim.dot(d.normalized()) < 0.2:
+			continue
+		e.hurt(dmg, d, 330.0 if spin else 240.0)

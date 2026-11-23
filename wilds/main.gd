@@ -10,6 +10,7 @@ var level
 var player
 var cam: Camera2D
 var fps_label: Label
+var kills := 0
 
 
 func _ready() -> void:
@@ -27,6 +28,7 @@ func _ready() -> void:
 	player.world_radius = WORLD_RADIUS
 	player.lift_fn = Callable(level, "lift_at")
 	player.position = level.spawn
+	player.spawn_pos = level.spawn
 	world.add_child(player)
 
 	cam = Camera2D.new()
@@ -44,6 +46,11 @@ func _ready() -> void:
 	buttons.player = player
 	ui.add_child(buttons)
 
+	var hud = preload("res://hud.gd").new()
+	hud.player = player
+	hud.main = self
+	ui.add_child(hud)
+
 	fps_label = Label.new()
 	fps_label.position = Vector2(12, 8)
 	fps_label.add_theme_font_size_override("font_size", 18)
@@ -52,6 +59,10 @@ func _ready() -> void:
 	var shots := OS.get_environment("SHOTS")
 	if shots != "":
 		_shots(shots)
+
+
+func on_kill(_kind: String) -> void:
+	kills += 1
 
 
 func _process(_delta: float) -> void:

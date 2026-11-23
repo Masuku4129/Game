@@ -2,7 +2,7 @@ extends Node2D
 ## Уровень 1 «Туманная долина»: хижина -> лесная тропа -> река с мостом -> берег -> арена с боссом.
 ## Земля, тропа и река рисуются текстурами из art/valley, лес расставляется по маске проходов.
 
-const DATA = preload("res://art/valley/valley_data.gd").DATA
+const DATA = preload("res://art/valley/art_data.gd").DATA
 const FogDrift := preload("res://fog_drift.gd")
 
 const BOUNDS := Rect2(-1200.0, -3300.0, 5800.0, 4800.0)
@@ -43,6 +43,7 @@ func build(world_node: Node2D) -> void:
 	_place_hut()
 	_scatter()
 	_arena_ring()
+	_spawn_enemies()
 	_make_fog()
 
 
@@ -155,8 +156,9 @@ func _make_ground() -> void:
 	mat.shader = sh
 	w.material = mat
 	under.add_child(w)
-	under.add_child(_line(path_w, _tex("path"), 170.0))
-	under.add_child(_line(path_e, _tex("path"), 170.0))
+	for k in 2:
+		under.add_child(_line(path_w, _tex("path"), 190.0))
+		under.add_child(_line(path_e, _tex("path"), 190.0))
 	# мост
 	var b := _sprite(_tex("bridge"), BRIDGE_POS + Vector2(0, 45), Vector2(260, 135))
 	under.add_child(b)
@@ -216,8 +218,8 @@ func _make_blocked_mask() -> void:
 	gh = int(BOUNDS.size.y / CELL) + 1
 	blocked.resize(gw * gh)
 	_mark(river, 340.0)
-	_mark(path_w, 150.0)
-	_mark(path_e, 150.0)
+	_mark(path_w, 190.0)
+	_mark(path_e, 190.0)
 	_mark(PackedVector2Array([Vector2(0, 0), Vector2(0, 120)]), 400.0)
 	_mark(PackedVector2Array([ARENA, ARENA + Vector2(0, 1)]), 600.0)
 
@@ -255,11 +257,11 @@ func _prop(name: String, pos: Vector2, sc: float, flip: bool, with_shadow := tru
 	if with_shadow:
 		var sh := Sprite2D.new()
 		sh.texture = _shadow()
-		var w := 150.0 * sc
-		if name.begins_with("rock_b"):
-			w = 230.0 * sc
-		elif name.begins_with("bush") or name.begins_with("fern"):
-			w = 110.0 * sc
+		var w := 190.0 * sc
+		if name.begins_with("r_"):
+			w = 200.0 * sc
+		elif name.begins_with("b_") or name.begins_with("f_") or name == "mush" or name == "stump":
+			w = 120.0 * sc
 		sh.scale = Vector2(w / 64.0, w * 0.34 / 64.0)
 		body.add_child(sh)
 	var s := _sprite(_tex(name), Vector2.ZERO, Vector2(d[0], d[1]), sc)
@@ -276,7 +278,7 @@ func _prop(name: String, pos: Vector2, sc: float, flip: bool, with_shadow := tru
 
 
 func _place_hut() -> void:
-	var d: Array = DATA["hut"]
+	var d: Array = DATA["hut1"]
 	var body := StaticBody2D.new()
 	body.position = Vector2.ZERO
 	var sh := Sprite2D.new()
@@ -284,18 +286,18 @@ func _place_hut() -> void:
 	sh.scale = Vector2(4.4, 1.0)
 	sh.position = Vector2(0, 8)
 	body.add_child(sh)
-	body.add_child(_sprite(_tex("hut"), Vector2.ZERO, Vector2(d[0], d[1])))
+	body.add_child(_sprite(_tex("hut1"), Vector2.ZERO, Vector2(d[0], d[1])))
 	var c := CollisionShape2D.new()
 	var r := RectangleShape2D.new()
-	r.size = Vector2(380.0, 110.0)
+	r.size = Vector2(330.0, 100.0)
 	c.shape = r
 	c.position = Vector2(0, -55)
 	body.add_child(c)
 	# свет окна
 	var g := Sprite2D.new()
 	g.texture = _tex("glow_warm")
-	g.position = Vector2(-98, -112)
-	g.scale = Vector2(2.4, 2.0)
+	g.position = Vector2(-49, -200)
+	g.scale = Vector2(1.6, 1.4)
 	g.modulate = Color(1.0, 0.85, 0.5, 0.55)
 	var m := CanvasItemMaterial.new()
 	m.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
@@ -305,8 +307,10 @@ func _place_hut() -> void:
 
 
 func _scatter() -> void:
-	var kinds := [["tree_a", 0.15], ["tree_b", 0.12], ["pine_a", 0.16], ["pine_b", 0.14],
-		["birch_a", 0.10], ["bush_a", 0.09], ["bush_b", 0.07], ["rock_a", 0.05], ["fern_a", 0.12]]
+	var kinds := [["t_oak1", 0.06], ["t_oak2", 0.06], ["t_oak3", 0.05], ["t_pine1", 0.06], ["t_pine2", 0.06], ["t_pine3", 0.05],
+		["t_birch1", 0.05], ["t_birch2", 0.05], ["t_dead", 0.01], ["b_1", 0.06], ["b_2", 0.05], ["b_3", 0.05],
+		["r_1", 0.02], ["r_2", 0.02], ["r_3", 0.02], ["r_4", 0.02], ["f_1", 0.08], ["f_2", 0.07],
+		["stump", 0.02], ["log", 0.015], ["mush", 0.015]]
 	var grid := {}
 	var placed := 0
 	for t in 7000:
@@ -315,18 +319,18 @@ func _scatter() -> void:
 		if _is_blocked(p):
 			continue
 		var roll := rng.randf()
-		var name := "tree_a"
+		var name := "f_1"
 		var acc := 0.0
 		for k in kinds:
 			acc += k[1]
 			if roll <= acc:
 				name = k[0]
 				break
-		var gap := 150.0
-		if name.begins_with("bush") or name.begins_with("rock"):
-			gap = 100.0
-		elif name.begins_with("fern"):
-			gap = 60.0
+		var gap := 175.0
+		if name.begins_with("b_") or name.begins_with("r_") or name == "stump" or name == "log":
+			gap = 105.0
+		elif name.begins_with("f_") or name == "mush":
+			gap = 65.0
 		var key := Vector2i(int(p.x / 170.0), int(p.y / 170.0))
 		var ok := true
 		for dy in range(-1, 2):
@@ -355,7 +359,7 @@ func _arena_ring() -> void:
 		if dir.y > 0.75:
 			continue
 		var p := ARENA + dir * Vector2(680.0, 560.0)
-		_prop("rock_b", p, rng.randf_range(0.9, 1.3), rng.randf() < 0.5)
+		_prop("r_1" if i % 2 == 0 else "r_2", p, rng.randf_range(1.1, 1.5), rng.randf() < 0.5)
 
 
 func _make_fog() -> void:
@@ -382,3 +386,17 @@ func _make_fog() -> void:
 		s2.vel = Vector2(rng.randf_range(4.0, 9.0), 0.0)
 		s2.area = BOUNDS
 		layer.add_child(s2)
+
+
+func _spawn_enemies() -> void:
+	var groups := [
+		[Vector2(1050, 210), "ch", 2], [Vector2(1850, 330), "ch", 3], [Vector2(2250, 280), "ch", 2],
+		[Vector2(3250, 150), "sh", 2], [Vector2(3350, -150), "ch", 2],
+		[Vector2(3480, -900), "ch", 3], [Vector2(3540, -1000), "sh", 2],
+		[Vector2(3560, -1750), "sh", 2], [Vector2(3500, -1850), "ch", 3]]
+	for g in groups:
+		for i in g[2]:
+			var e = preload("res://enemy.gd").new()
+			e.setup(g[1])
+			e.position = g[0] + Vector2(rng.randf_range(-110, 110), rng.randf_range(-80, 80))
+			world.add_child(e)
