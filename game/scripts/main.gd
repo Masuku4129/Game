@@ -170,6 +170,14 @@ func _ready() -> void:
 	dead_lbl.visible = false
 	ui.add_child(dead_lbl)
 	_update_sky()
+	# --- core: настройки (качество, кадры, звук), сохранение, справочник, меню ---
+	_core_setup(ui)
+	# --- /core ---
+	# --- perf: PERF=1 — замер нагрузки без экрана (perf.gd) ---
+	if OS.get_environment("PERF") != "":
+		var pf: Node = preload("res://scripts/perf.gd").new()
+		pf.set("main", self)
+		add_child(pf)
 
 func _find_start() -> Vector3:
 	for r in range(0, 120, 3):
@@ -237,6 +245,10 @@ func solid_top(x: float, z: float) -> float:
 ## Высота опоры: земля или камень/бревно/пень сверху.
 func ground_at(x: float, z: float) -> float:
 	return maxf(height(x, z), solid_top(x, z))
+
+## perf: опора по сетке рельефа (для зверей — в разы быстрее ground_at, совпадает с видимой землёй).
+func ground_fast(x: float, z: float) -> float:
+	return maxf(grid_height(x, z), solid_top(x, z))
 
 func ground_normal(x: float, z: float) -> Vector3:
 	var e := 0.3
@@ -480,7 +492,8 @@ func _update_sky() -> void:
 		env.fog_height = WATER_Y + 1.6 + mist * 1.6
 		env.fog_height_density = mist * 0.22
 	if hero != null:
-		hero.torch.light_energy = 2.2 * (1.0 - d)
+		hero.torch.light_energy = 2.2 * (1.0 - d) * (1.6 if lamp_lit else 1.0)  # core: жирник
+		hero.torch.omni_range = 17.0 if lamp_lit else 11.0
 	day_factor = d
 
 var hmap_tex: ImageTexture
@@ -706,6 +719,7 @@ func _process(delta: float) -> void:
 		_sky_timer = 0.25
 		_update_sky()
 		_update_stats(0.25)
+		_core_tick(0.25)  # core
 		weather.apply(veg.fade_list + pv.fade_list, terrain_mat, pv.mats["tuft"], water_mat)
 		var lbl: String = hero.action_label()
 		act_btn.visible = lbl != ""
@@ -1164,6 +1178,13 @@ func near_water(p: Vector3) -> bool:
 
 func drink() -> void:
 	thirst = minf(1.0, thirst + 0.35)
+	# --- core: кувшины наполняются у воды (3 глотка на кувшин) ---
+	var jugs := int(inv.get("jug", 0))
+	if jugs > 0 and int(inv.get("water", 0)) < jugs * 3:
+		inv["water"] = jugs * 3
+		_say("Напился и набрал воды в кувшин")
+		return
+	# --- /core ---
 	_say("Напился")
 
 func bandage() -> void:
@@ -1569,6 +1590,14 @@ func _place_cell_records(mm: MultiMesh, xs: Array, r: Array, vi: int, vars: Arra
 
 ## --- tools: места сбора (кусты, ягодники) и бурелом под топор.
 func _tools_records(mm: MultiMesh, xs: Array, kind: String, v: Array) -> void:
+	# --- core: замшелые камни, гнилые пни и валежины — места сбора мха (world_tools.MOSS_KINDS) ---
+	if kind in ["mossrock", "stump_rot", "stump_mush", "mosslog"]:
+		for t: Transform3D in xs:
+			var mk := Vector2i(floori(t.origin.x / 8.0), floori(t.origin.z / 8.0))
+			if not res_spots.has(mk):
+				res_spots[mk] = []
+			res_spots[mk].append([t.origin, kind])
+	# --- /core ---
 	if kind in ["bush", "willow", "alder", "rose", "ernik", "cherry", "fireweed", "raspberry", "currant", "bilberry", "lingon", "cranberry", "cloudberry"]:
 		for t: Transform3D in xs:
 			var k := Vector2i(floori(t.origin.x / 8.0), floori(t.origin.z / 8.0))
@@ -1786,3 +1815,131 @@ func _accept(kind: String, x: float, z: float, rng: RandomNumberGenerator) -> bo
 		"boulder":
 			return slope > 0.3 and rng.randf() < 0.3
 	return true
+
+
+# ======================================================================
+# --- core: сохранение (save.gd), настройки (settings.gd), справочник (guide.gd), меню,
+# утварь (миска, ложка, горячее), жирник. ---
+
+var saver            # save.gd: реестр разделов, автосохранение
+var settings         # settings.gd: качество, кадры, звук; панель
+var guide            # guide.gd: «Справочник»
+var core_ui: CanvasLayer  # слой справочника, настроек и меню
+var lamp_lit := false
+var _lamp_h := 0.0
+
+func _core_setup(_ui: CanvasLayer) -> void:
+	# свой слой поверх листов лагеря (camp_ui — слой 2)
+	var ui := CanvasLayer.new()
+	ui.layer = 5
+	ui.process_mode = Node.PROCESS_MODE_ALWAYS
+	add_child(ui)
+	core_ui = ui
+	settings = preload("res://scripts/settings.gd").new()
+	settings.main = self
+	ui.add_child(settings)
+	guide = preload("res://scripts/guide.gd").new()
+	guide.main = self
+	ui.add_child(guide)
+	saver = preload("res://scripts/save.gd").new()
+	saver.main = self
+	add_child(saver)
+	saver.register("main", self, 10)
+	saver.register("weather", weather, 20)
+	saver.register("feet", feet, 30)
+	saver.register("tools", tools_world, 40)
+	saver.register("camp", camp, 50)
+	saver.register("animals", animals, 80)
+	saver.register("hunt", hunt, 90)
+	# меню «Продолжить / Новая игра» (без экрана и в тестах — сразу в игру)
+	var auto := OS.get_environment("SAVE_AUTO")
+	if OS.get_environment("UI_SHOTS") != "":
+		var us: Node = preload("res://scripts/ui_shots.gd").new()
+		us.set("main", self)
+		add_child(us)
+	if OS.get_environment("SAVE_TEST") != "":
+		var st: Node = preload("res://scripts/save_test.gd").new()
+		st.set("main", self)
+		st.set("mode", OS.get_environment("SAVE_TEST"))
+		add_child(st)
+	if DisplayServer.get_name() == "headless" or OS.get_environment("SHOTS") != "" or OS.get_environment("UI_SHOTS") != "" or auto != "":
+		if auto == "load":
+			saver.load_game()
+		saver.enabled = auto != ""
+		return
+	var menu: Control = preload("res://scripts/start_menu.gd").new()
+	menu.main = self
+	ui.add_child(menu)
+
+## Еда и питьё из короба: из миски (и ложкой) сытнее, горячее греет. Возвращает [сытость, жажда, здоровье].
+func core_eat(id: String, e: Array) -> Array:
+	var d: Dictionary = preload("res://scripts/items.gd").DEF.get(id, {})
+	var k := 1.0
+	var cooked: bool = bool(d.get("bowl", false)) or id in ["meat_cooked", "fish_cooked"]
+	if cooked and float(e[0]) > 0.0 and (int(inv.get("bowl", 0)) > 0 or int(inv.get("clay_bowl", 0)) > 0):
+		k = 1.25 + (0.1 if int(inv.get("spoon", 0)) > 0 else 0.0)
+	if d.has("warm"):
+		warmth = minf(1.0, warmth + float(d["warm"]))
+	return [float(e[0]) * k, e[1], e[2]]
+
+## Раз в 0,25 с: жирник ночью горит, пока есть жир (кусок — на 6 игровых часов).
+func _core_tick(dt: float) -> void:
+	var want: bool = int(inv.get("oil_lamp", 0)) > 0 and day_factor < 0.5 and (int(inv.get("fat", 0)) > 0 or _lamp_h > 0.0)
+	if want:
+		_lamp_h -= dt / 75.0
+		if _lamp_h <= 0.0:
+			if int(inv.get("fat", 0)) > 0:
+				inv["fat"] = int(inv["fat"]) - 1
+				if int(inv["fat"]) <= 0:
+					inv.erase("fat")
+				_lamp_h = 6.0
+			else:
+				want = false
+	if want != lamp_lit:
+		lamp_lit = want
+		if want:
+			_say("Жирник зажжён")
+
+## Раздел «main» сохранения: время, герой, статы, короб, рука и пояс.
+func to_save() -> Dictionary:
+	var SV = preload("res://scripts/save.gd")
+	var t: Node = hero.tools
+	return {"t_hours": t_hours, "day": day_count, "hunger": hunger, "thirst": thirst, "warmth": warmth,
+		"stamina": stamina, "health": health, "bleed": bleed, "injuries": injuries.duplicate(),
+		"inv": inv.duplicate(), "pos": SV.enc(hero.position), "yaw": float(hero.body.rotation.y),
+		"cam_yaw": float(rig.rotation.y), "held": String(t.held) if t != null else "",
+		"belt": (t.belt as Array).duplicate() if t != null else [], "lamp_h": _lamp_h}
+
+func from_save(d: Dictionary) -> void:
+	var SV = preload("res://scripts/save.gd")
+	t_hours = float(d.get("t_hours", t_hours))
+	day_count = int(d.get("day", day_count))
+	hunger = float(d.get("hunger", hunger))
+	thirst = float(d.get("thirst", thirst))
+	warmth = float(d.get("warmth", warmth))
+	stamina = float(d.get("stamina", stamina))
+	health = maxf(0.05, float(d.get("health", health)))
+	bleed = float(d.get("bleed", 0.0))
+	_lamp_h = float(d.get("lamp_h", 0.0))
+	injuries = {}
+	var inj: Dictionary = d.get("injuries", {})
+	for k: String in inj:
+		injuries[k] = float(inj[k])
+	inv = SV.int_dict(d.get("inv", {}))
+	var p: Vector3 = SV.dec(d.get("pos", SV.enc(hero.position)))
+	hero.position = p
+	hero.vel = Vector3.ZERO
+	hero.body.rotation.y = float(d.get("yaw", 0.0))
+	rig.rotation.y = float(d.get("cam_yaw", rig.rotation.y))
+	rig.position = p
+	var t: Node = hero.tools
+	if t != null:
+		t.held = String(d.get("held", ""))
+		var b: Array = []
+		for x: Variant in d.get("belt", []):
+			b.append(String(x))
+		t.belt = b
+		t.sync()
+	_update_near(true)
+	_update_sky()
+# --- /core ---

@@ -4,6 +4,8 @@ extends Node3D
 const Animal = preload("res://scripts/animal.gd")
 const SHOW_R := 75.0
 const NEAR_R := 95.0
+const MID_R := 25.0   # perf: ближе — каждый кадр (камера видит ~25 м)
+const MID_DT := 0.04  # perf: шаг для средних дистанций (25 раз в секунду)
 
 var main: Node3D
 var list: Array = []
@@ -11,6 +13,7 @@ var birds: Array = []
 var groups := {}
 var rng := RandomNumberGenerator.new()
 var _far_acc := 0.0
+var _bird_acc := 0.0
 var _far_i := 0
 var bird_mesh := {}
 # сетка зверей (ячейка GC м), перестраивается раз в 0,5 с: соседей ищем только в ближних ячейках
@@ -383,9 +386,13 @@ func _process(delta: float) -> void:
 		var d := Vector2(a.position.x - hp.x, a.position.z - hp.z).length()
 		var was_far: bool = a.far
 		a.far = d > NEAR_R
+		# perf: вблизи (до MID_R) — каждый кадр; дальше в пределах NEAR_R — ~20 раз в секунду
+		# со сдвигом по зверям (накопленным шагом), чтобы не грелся телефон
 		if not a.far:
-			a.tick(delta)
-			a._acc = 0.0
+			a._acc += delta
+			if d < MID_R or a._acc >= MID_DT:
+				a.tick(a._acc)
+				a._acc = 0.0
 		else:
 			a._acc += delta
 		if was_far and not a.far:
@@ -393,7 +400,8 @@ func _process(delta: float) -> void:
 		a.visible = d < (40.0 if a.kind in ["hare", "squirrel", "beaver"] else SHOW_R) and (not a.dead or a.meat > 0.0) and a.state != "sleep" and a.state != "inlodge"
 		if a.parts.has("ap"):
 			a.parts["ap"].active = a.visible and not a.dead
-	var per := maxi(1, n / 20)
+	# perf: дальние (за NEAR_R) — по кругу, каждый примерно раз в секунду
+	var per := maxi(1, n / 60)
 	for k in per:
 		if n == 0:
 			break
@@ -402,11 +410,18 @@ func _process(delta: float) -> void:
 		if a.far and a._acc > 0.0:
 			a.tick(minf(a._acc, 2.0))
 			a._acc = 0.0
+	# perf: птицы вблизи — каждый кадр, дальше 50 м — раз в 0,2 с (накопленным шагом)
+	_bird_acc += delta
+	var bird_slow := _bird_acc >= 0.2
+	if bird_slow:
+		_bird_acc = 0.0
 	for b in birds:
 		var d := Vector2(b.position.x - hp.x, b.position.z - hp.z).length()
 		b.visible = d < 45.0
-		if d < 90.0:
+		if d < 50.0:
 			b.tick(delta)
+		elif d < 90.0 and bird_slow:
+			b.tick(0.2)
 
 func _make_bird_mesh() -> void:
 	var m := StandardMaterial3D.new()
@@ -642,3 +657,35 @@ func _spot_ring(cond: Callable, start: Vector3, r0: float, r1: float) -> Vector3
 		if cond.call(x, z):
 			return Vector3(x, main.height(x, z), z)
 	return _spot(cond, start, r0)
+
+# --- core: сохранение (save.gd, раздел «animals»): где звери, кто убит, сколько мяса осталось.
+# Порядок зверей в list задаётся генерацией (одинаков при каждом запуске). ---
+func to_save() -> Dictionary:
+	var SV = preload("res://scripts/save.gd")
+	var out: Array = []
+	for a in list:
+		var e := {"p": SV.enc(a.position), "h": float(a.heading)}
+		if a.dead:
+			e["dead"] = true
+			e["meat"] = float(a.meat)
+			e["resp"] = float(a.respawn_at)
+		out.append(e)
+	return {"n": list.size(), "list": out}
+
+func from_save(d: Dictionary) -> void:
+	var SV = preload("res://scripts/save.gd")
+	var arr: Array = d.get("list", [])
+	if int(d.get("n", -1)) != list.size():
+		return
+	for i in arr.size():
+		var a = list[i]
+		var e: Dictionary = arr[i]
+		a.position = SV.dec(e["p"])
+		a.heading = float(e.get("h", 0.0))
+		a.rotation.y = a.heading
+		if bool(e.get("dead", false)):
+			if not a.dead:
+				a.kill()
+			a.meat = float(e.get("meat", a.meat))
+			a.respawn_at = float(e.get("resp", a.respawn_at))
+# --- /core ---

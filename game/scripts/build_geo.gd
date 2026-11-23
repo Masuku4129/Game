@@ -413,6 +413,46 @@ func _split_wood(a: Vector3, b: Vector3, r: float) -> void:
 			tri("end", e + tip, e + pts[k], e + pts[k + 1], C_END, Vector2(0.5, 0.5), Vector2(0.9, 0.4), Vector2(0.9, 0.6))
 	c0 = c0
 
+# --- core: схрон и колода-верстак ---
+
+## Схрон: неглубокая яма, обложенная камнями, накрыта крест-накрест жердями и лапником,
+## сверху придавлена камнями; рядом вешка из жерди с берестой.
+func cache() -> Node3D:
+	rng.seed = 515
+	var root := Node3D.new()
+	for k in 9:
+		var a := TAU * k / 9.0 + rng.randf_range(-0.1, 0.1)
+		stone(Vector3(cos(a) * 0.62, 0.04, sin(a) * 0.5), Vector3(0.16, 0.1, 0.13), a)
+	for k in 5:
+		var z := -0.45 + k * 0.22
+		logp(Vector3(-0.75, 0.1, z), Vector3(0.75, 0.12, z + rng.randf_range(-0.06, 0.06)), 0.03, 0.022, C_LOG, "bark")
+	for k in 4:
+		var x := -0.5 + k * 0.33
+		logp(Vector3(x, 0.15, -0.6), Vector3(x + rng.randf_range(-0.08, 0.08), 0.16, 0.6), 0.026, 0.02, C_LOG, "bark")
+	for k in 7:
+		var a2 := TAU * k / 7.0
+		frond(Vector3(cos(a2) * 0.1, 0.2, sin(a2) * 0.1), Vector3(cos(a2), -0.15, sin(a2)), Vector3.UP, 0.72, 0.3, 0.1)
+	stone(Vector3(0.18, 0.24, 0.05), Vector3(0.13, 0.08, 0.11), 0.3)
+	stone(Vector3(-0.25, 0.23, -0.12), Vector3(0.11, 0.07, 0.1), 1.2)
+	logp(Vector3(0.85, -0.1, 0.35), Vector3(0.88, 0.9, 0.36), 0.02, 0.015, C_LOG, "bark")
+	box("paint", Transform3D(Basis(Vector3.UP, 0.3), Vector3(0.89, 0.78, 0.36)), Vector3(0.02, 0.16, 0.08), Color(0.9, 0.86, 0.76))
+	emit(root, "cache")
+	return root
+
+## Колода-верстак: толстый чурбак с затёсом, рядом половина бревна на двух чурках.
+func chop_block() -> Node3D:
+	rng.seed = 616
+	var root := Node3D.new()
+	logp(Vector3(0, -0.05, 0), Vector3(0, 0.5, 0), 0.3, 0.28, C_LOG, "bark", true, 12, 0.04)
+	tri("end", Vector3(-0.27, 0.505, 0), Vector3(0.27, 0.505, 0.05), Vector3(0, 0.505, 0.27), C_END)
+	logp(Vector3(-0.15, 0.5, -0.05), Vector3(0.12, 0.62, 0.06), 0.012, 0.01, C_LOG, "bark")
+	for sx: float in [-0.55, 0.55]:
+		logp(Vector3(sx, -0.05, 0.75), Vector3(sx, 0.3, 0.75), 0.13, 0.12, C_LOG, "bark")
+	box("wood", Transform3D(Basis(), Vector3(0, 0.33, 0.75)), Vector3(1.5, 0.06, 0.32), C_PLANK)
+	emit(root, "block")
+	return root
+# --- /core ---
+
 ## Дым: мягкие серые клубы вверх, со сносом ветром.
 func smoke(power: float, h: float) -> GPUParticles3D:
 	var p := GPUParticles3D.new()

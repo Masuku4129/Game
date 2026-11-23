@@ -1,11 +1,10 @@
 extends Node3D
-## Лагерь и постройки (main.camp). Точка лагеря («Разбить лагерь») открывает стройку в радиусе
-## CAMP_R. Здесь — данные построек, их столкновения, расчистка растительности, костры и печь,
+## Постройки (main.camp). Стройка открывается кнопкой «Стройка» где угодно (лагеря нет). Здесь — данные построек, их столкновения, расчистка растительности, костры и печь,
 ## готовка, хранилища, тепло и укрытие от ветра, сон, лопата. Режим постановки — build_mode.gd,
 ## изба изнутри и мебель — cabin.gd, интерфейс — camp_ui.gd, геометрия — build_geo.gd.
 ##
 ## Публичное:
-##   has_camp, camp_pos, CAMP_R; set_camp(p)
+##   in_camp(p) — всегда true (лагеря больше нет)
 ##   list — постройки: {type, pos, yaw, node, store, cap, dur, ...}
 ##   warm_bonus() -> float, wind_k() -> float, hidden (герой спрятан в снежной пещере)
 ##   cleared(x, z) -> bool (трава не растёт), has_shovel(), actions() -> Array[[подпись, Callable]]
@@ -13,7 +12,6 @@ extends Node3D
 
 const IT = preload("res://scripts/items.gd")
 const GEO = preload("res://scripts/build_geo.gd")
-const CAMP_R := 25.0
 
 ## Что можно построить. cost — сразу при постановке; у избы — вносится на стройку.
 const DEFS := {
@@ -21,15 +19,15 @@ const DEFS := {
 	"leanto": {"name": "Шалаш-навес", "cost": {"branch": 5, "spruce_twigs": 8}, "desc": "Рогатины, жерди и лапник. Тепло +, ветер вдвое слабее, хранилище 20 кг.", "cap": 20.0, "warm": 0.12, "wind": 0.5, "decay": 0.004},
 	"tree_shelter": {"name": "Шалаш у дерева", "cost": {"branch": 3, "spruce_twigs": 7}, "desc": "Коньковая жердь привязана к стволу. Прочнее вдвое, хранилище 40 кг.", "cap": 40.0, "warm": 0.15, "wind": 0.35, "decay": 0.002},
 	"snow_shelter": {"name": "Снежная пещера", "cost": {"spruce_twigs": 3}, "desc": "Купол из снега (нужна лопата и глубокий снег). Очень тепло, ветра нет, звери не видят.", "cap": 15.0, "warm": 0.35, "wind": 0.0, "decay": 0.003},
+	# --- core: схрон (звери почти не разоряют) и колода-верстак (утварь, доски) ---
+	"cache": {"name": "Схрон", "cost": {"branch": 4, "spruce_twigs": 6, "pebble": 6}, "desc": "Яма под жердями, лапником и камнями. Хранилище 30 кг; звери почти не разоряют, не гниёт.", "cap": 30.0},
+	"chop_block": {"name": "Колода", "cost": {"firewood": 2, "plank": 1}, "desc": "Чурбак и доска на чурках: верстак под небом. Утварь ножом, доски топором."},
 	"cabin": {"name": "Изба", "cost": {}, "need": {"log": 24, "moss": 10, "clay": 8, "plank": 10, "pebble": 12}, "desc": "Сруб в обло с печью. Припасы вносят на стройку, затем «Строить».", "cap": 20.0},
 }
-const ORDER := ["campfire", "leanto", "tree_shelter", "snow_shelter", "cabin"]
+const ORDER := ["campfire", "leanto", "tree_shelter", "snow_shelter", "cache", "chop_block", "cabin"]
 
 var main: Node3D
 var geo
-var has_camp := false
-var camp_pos := Vector3.ZERO
-var camp_marker: Node3D
 var list: Array = []
 var hidden := false
 var ui
@@ -61,24 +59,11 @@ func _ready() -> void:
 	_tdir = OS.get_environment("BUILD_TEST")
 
 # ---------- лагерь ----------
+# Механики «Разбить лагерь» больше нет: стройка открывается кнопкой «Стройка» где угодно.
+# in_camp() оставлен для совместимости (всегда true) — им могут пользоваться другие команды.
 
-func set_camp(p: Vector3) -> void:
-	has_camp = true
-	camp_pos = p
-	if camp_marker != null:
-		camp_marker.queue_free()
-	# вешка: кол с берестяной меткой
-	camp_marker = Node3D.new()
-	geo.rng.seed = 33
-	geo.logp(Vector3(0, -0.1, 0), Vector3(0.02, 1.3, 0), 0.03, 0.025, geo.C_LOG, "bark")
-	geo.box("paint", Transform3D(Basis(Vector3.UP, 0.3), Vector3(0.05, 1.12, 0)), Vector3(0.03, 0.22, 0.12), Color(0.9, 0.86, 0.76))
-	geo.emit(camp_marker, "mark")
-	add_child(camp_marker)
-	camp_marker.position = Vector3(p.x + 0.8, main.height(p.x + 0.8, p.z), p.z)
-	main._say("Лагерь разбит: стройка в радиусе %d м" % int(CAMP_R))
-
-func in_camp(p: Vector3) -> bool:
-	return has_camp and Vector2(p.x - camp_pos.x, p.z - camp_pos.z).length() <= CAMP_R
+func in_camp(_p: Vector3) -> bool:
+	return true
 
 func has_shovel() -> bool:
 	var h = main.hero.get("held")
@@ -116,7 +101,7 @@ func station_near(st: String) -> bool:
 			"fire", "stove":
 				return bool(c.get("stove_lit", false))
 			"camp":
-				return cabin_ctl.has_furn(c, "workbench")
+				return cabin_ctl.has_furn(c, "workbench") or cabin_ctl.has_furn(c, "table")  # core: и стол
 		return false
 	for s: Dictionary in list:
 		var d := Vector2(hp.x - (s["pos"] as Vector3).x, hp.z - (s["pos"] as Vector3).z).length()
@@ -129,6 +114,9 @@ func station_near(st: String) -> bool:
 					return true
 			"camp":
 				if s["type"] == "cabin" and cabin_ctl != null and cabin_ctl.has_furn(s, "workbench") and d < 4.0:
+					return true
+				# core: колода-верстак под открытым небом
+				if s["type"] == "chop_block" and d < 2.5:
 					return true
 	return false
 
@@ -160,6 +148,10 @@ static func footprint(type: String) -> Array:
 			return [Vector3(0, 1.3, 0.75), Vector3(0, 2.2, 0.85), Vector3(0, 3.1, 0.7)]
 		"snow_shelter":
 			return [Vector3(0, 0, 1.5), Vector3(0, 1.75, 0.5)]
+		"cache":
+			return [Vector3(0, 0, 0.85)]
+		"chop_block":
+			return [Vector3(0, 0, 0.4), Vector3(-0.45, 0.75, 0.35), Vector3(0.45, 0.75, 0.35)]
 		"cabin":
 			var a := _rect(2.55, 2.75, 0.0)
 			a.append(Vector3(0, 2.95, 0.6))
@@ -229,6 +221,10 @@ func _rebuild(s: Dictionary) -> void:
 			n = geo.tree_shelter()
 		"snow_shelter":
 			n = geo.snow_shelter()
+		"cache":
+			n = geo.cache()
+		"chop_block":
+			n = geo.chop_block()
 		"cabin":
 			n = Node3D.new()
 			var gh := _cabin_gh(s)
@@ -341,6 +337,11 @@ func _register(s: Dictionary) -> void:
 					continue
 				_add_block(s, Vector3(sin(a) * 1.45, 0, cos(a) * 1.45), 0.3)
 			_add_seat(s, Vector3(0, 0.42, -0.1), 0.0)
+		"cache":
+			_add_block(s, Vector3.ZERO, 0.6)
+		"chop_block":
+			_add_block(s, Vector3.ZERO, 0.32)
+			_add_seat(s, Vector3(0, 0.36, 0.75), PI)
 		"cabin":
 			if String(s["stage"]) == "done" or String(s["stage"]) == "building":
 				var hx := GEO.CW * 0.5
@@ -455,6 +456,7 @@ func _process(delta: float) -> void:
 ## Прожить dh игровых часов (dt — реальные секунды для анимации).
 func _step(dh: float, dt: float) -> void:
 	var w = main.weather
+	_raid_step(dh)  # core
 	for s: Dictionary in list.duplicate():
 		var type: String = s["type"]
 		if type == "campfire" or (type == "cabin" and String(s.get("stage", "")) == "done"):
@@ -927,6 +929,12 @@ func actions() -> Array:
 					out.append(["Разжечь", light.bind(s)])
 					if float(s["fuel"]) < FUEL_MAX - 0.5:
 						out.append(["Положить дрова", add_fuel.bind(s)])
+			"cache":
+				out.append(["Схрон", func(): ui.open_store(s)])
+			"chop_block":
+				if _logs_here().size() > 0 and _has_axe():
+					out.append(["Тесать доски (бревно → 3)", hew_planks])
+				out.append(["Ремесло: утварь", _open_craft])
 			"leanto", "tree_shelter", "snow_shelter":
 				if s["type"] == "snow_shelter" and hero.state != "sit":
 					out.append(["Залезть внутрь", func(): _enter_snow(s)])
@@ -945,9 +953,99 @@ func actions() -> Array:
 					"done":
 						if _near_door(s):
 							out.append(["Войти", func(): cabin_ctl.enter(s)])
+	# --- core: доски из бревна топором где угодно (у колоды — тоже) ---
+	if (s.is_empty() or String(s["type"]) != "chop_block") and _has_axe() and hero.state == "walk" and (_logs_here().size() > 0 or _held_log()):
+		out.append(["Тесать доски (бревно → 2)", hew_planks])
+	# --- /core ---
 	if out.size() < 3 and has_shovel() and snow_here() > 0.06 and hero.state == "walk":
 		out.append(["Расчистить снег", dig_snow])
 	return out
+
+# --- core: доски, разорение хранилищ ---
+
+func _has_axe() -> bool:
+	var t = main.hero.get("tools")
+	if t != null and String(t.held) == "axe":
+		return true
+	return main.hero.has_method("has_tool") and bool(main.hero.has_tool("axe"))
+
+func _logs_here() -> Array:
+	if main.tools_world == null:
+		return []
+	return main.tools_world.logs_near(main.hero.position, 2.0)
+
+func _open_craft() -> void:
+	if main.inventory != null:
+		main.inventory.tab = 1
+		main.inventory.open()
+
+## Тесать доски из бревна (с земли или с плеча): у колоды 3 доски, без неё — 2.
+func hew_planks() -> void:
+	var at_block := false
+	var s := nearest(1.6)
+	if not s.is_empty() and String(s["type"]) == "chop_block":
+		at_block = true
+	if _held_log():
+		var t: Node = main.hero.tools
+		t.held = ""
+		t._refresh()
+	else:
+		var logs := _logs_here()
+		if logs.is_empty() or not main.tools_world.take_item(logs[0]):
+			return
+	var n := 3 if at_block else 2
+	main.stamina = maxf(0.0, float(main.stamina) - 0.15)
+	main.hero.land_t = 1.2
+	main.hero.land_k = 1.0
+	if main.sfx != null:
+		main.sfx.play_at("chop", main.hero.position, 0.0, 1.05)
+	var got := 0
+	for i in n:
+		if not can_carry("plank"):
+			break
+		give("plank", 1)
+		got += 1
+	# что не влезло — доски кладём рядом
+	var hunt = main.get("hunt")
+	for i in n - got:
+		if hunt != null:
+			hunt.drop_item("plank", main.hero.position + Vector3(0.6, 0, 0.3 * i))
+	main._say("Вытесано досок: %d" % n)
+
+## Звери разоряют хранилища с едой: ночью росомаха, лиса или медведь (летом) могут утащить
+## часть съестного. Схрон почти не разоряют, избу — никогда. Шанс — за игровой час.
+const RAID_CHANCE := {"leanto": 0.05, "tree_shelter": 0.04, "snow_shelter": 0.02, "cache": 0.004}
+var _raid_acc := 0.0
+
+func _raid_step(dh: float) -> void:
+	_raid_acc += dh
+	if _raid_acc < 1.0:
+		return
+	_raid_acc -= 1.0
+	var h: float = main.t_hours
+	if h > 6.0 and h < 20.0:
+		return
+	var hp: Vector3 = main.hero.position
+	for s: Dictionary in list:
+		var ch: float = float(RAID_CHANCE.get(String(s["type"]), 0.0))
+		if ch <= 0.0 or Vector2(hp.x - s["pos"].x, hp.z - s["pos"].z).length() < 12.0:
+			continue
+		var st: Dictionary = s["store"]
+		var food: Array = []
+		for id: String in st:
+			if IT.DEF.get(id, {}).has("eat") or id == "carcass_small":
+				food.append(id)
+		if food.is_empty() or randf() > ch:
+			continue
+		var lost := 0
+		for id: String in food:
+			var n := int(ceil(int(st[id]) * 0.5))
+			st[id] = int(st[id]) - n
+			lost += n
+			if int(st[id]) <= 0:
+				st.erase(id)
+		main._say("Зверь разорил %s: пропало съестного %d" % [String(DEFS[s["type"]]["name"]).to_lower(), lost])
+# --- /core ---
 
 func _held_log() -> bool:
 	var t = main.hero.get("tools")
@@ -997,15 +1095,16 @@ var _tf := 0
 var _tdir := ""
 var _tcab: Dictionary = {}
 var _tfire: Dictionary = {}
+var _tcenter := Vector3.ZERO  # точка, вокруг которой тест ищет места
 
 func _find_spot(kind: String, from: float = 3.0) -> bool:
 	build.select(kind)
 	var r := from
-	while r < CAMP_R - 2.0:
+	while r < 23.0:
 		for k in 20:
 			var a := TAU * k / 20.0
 			build.gyaw = a + PI
-			build._move(camp_pos + Vector3(cos(a) * r, 0, sin(a) * r))
+			build._move(_tcenter + Vector3(cos(a) * r, 0, sin(a) * r))
 			if build.valid:
 				return build.confirm()
 		r += 1.5
@@ -1050,7 +1149,7 @@ func _run_test() -> void:
 				if found:
 					break
 			main.hero.position = best
-			set_camp(main.hero.position)
+			_tcenter = main.hero.position
 			build.start()
 			for k: String in ["campfire", "leanto", "tree_shelter"]:
 				print("build test place ", k, " -> ", _find_spot(k, 3.0))
@@ -1147,7 +1246,7 @@ func _run_test() -> void:
 			build.start()
 			print("build test place snow_shelter -> ", _find_spot("snow_shelter", 3.0))
 			build.select("leanto")
-			build._move(camp_pos + Vector3(2, 0, 2))
+			build._move(_tcenter + Vector3(2, 0, 2))
 			ui._fill_build_cards()
 			var sn: Dictionary = {}
 			for s: Dictionary in list:
@@ -1172,3 +1271,55 @@ func _run_test() -> void:
 			_shot("t_winter")
 		440:
 			get_tree().quit()
+
+# ======================================================================
+# --- core: сохранение (save.gd, раздел «camp»): постройки, хранилища, огонь и готовка,
+# стройка и изба (стадия, внесённое, мебель, печь, сушило), прочность ---
+const _SKEEP := ["store", "dur", "fuel", "lit", "cook", "stage", "have", "prog", "furn", "stove_fuel", "stove_lit", "rack"]
+
+func to_save() -> Dictionary:
+	var SV = preload("res://scripts/save.gd")
+	var out: Array = []
+	for s: Dictionary in list:
+		var e := {"type": s["type"], "pos": SV.enc(s["pos"]), "yaw": float(s["yaw"])}
+		for k: String in _SKEEP:
+			if s.has(k):
+				e[k] = SV.enc(s[k])
+		out.append(e)
+	return {"list": out}
+
+func from_save(d: Dictionary) -> void:
+	var SV = preload("res://scripts/save.gd")
+	for s: Dictionary in list.duplicate():
+		remove(s)
+	for e: Dictionary in d.get("list", []):
+		var type := String(e["type"])
+		if not DEFS.has(type):
+			continue
+		var s := place(type, SV.dec(e["pos"]), float(e["yaw"]))
+		for k: String in _SKEEP:
+			if e.has(k):
+				s[k] = SV.dec(e[k])
+		s["store"] = SV.int_dict(s.get("store", {}))
+		if s.has("have"):
+			s["have"] = SV.int_dict(s["have"])
+		for k2: String in ["dur", "fuel", "prog", "stove_fuel"]:
+			if s.has(k2):
+				s[k2] = float(s[k2])
+		var ck: Dictionary = s.get("cook", {})
+		if not ck.is_empty():
+			ck["t"] = float(ck["t"])
+			ck["need"] = float(ck["need"])
+		var fl: Array = []
+		for f: Dictionary in s.get("furn", []):
+			var f2 := f.duplicate()
+			f2["x"] = float(f2.get("x", 0.0))
+			f2["z"] = float(f2.get("z", 0.0))
+			f2["rot"] = int(f2.get("rot", 0))
+			f2["kind"] = String(f2.get("kind", ""))
+			fl.append(f2)
+		if s.has("furn"):
+			s["furn"] = fl
+		_register(s)
+		_rebuild(s)
+# --- /core ---

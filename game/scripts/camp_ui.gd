@@ -1,6 +1,6 @@
 extends Control
 ## Интерфейс лагеря в стиле короба: берестяная шапка, лист-пергамент с рваным краем, кнопки
-## под палец. Кнопка лагеря («Разбить лагерь» / «Стройка»), столбик действий у ближайшей
+## под палец. Кнопка «Стройка» (открывает полосу построек сразу, без лагеря), столбик действий у ближайшей
 ## постройки, полоса построек с ценой, кнопки поворота и постановки, листы: хранилище,
 ## готовка, стройка избы, печь, обстановка, верстак, стол, сушило.
 
@@ -330,10 +330,7 @@ func _camp_pressed() -> void:
 	if b.active:
 		_end_build()
 		return
-	var hp: Vector3 = main.hero.position
-	if not camp.in_camp(hp):
-		camp.set_camp(hp)
-		return
+	# лагеря больше нет: стройка открывается сразу, ставить можно где угодно (проверки места — в build_mode)
 	b.start()
 	_fill_build_cards()
 
@@ -413,7 +410,7 @@ func _process(delta: float) -> void:
 	var placing: bool = (b.active and b.kind != "") or cc.placing
 	# кнопка лагеря
 	camp_btn.visible = not inv_open and not panel.visible and not cc.inside and hero.state == "walk"
-	camp_btn.label = "Готово" if b.active else ("Стройка" if camp.in_camp(hero.position) else "Разбить лагерь")
+	camp_btn.label = "Готово" if b.active else "Стройка"
 	camp_btn.queue_redraw()
 	# полоса построек / мебели
 	bar.visible = (b.active or (cc.inside and cc.placing)) and not panel.visible

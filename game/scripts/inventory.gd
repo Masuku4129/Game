@@ -16,6 +16,7 @@ const GAP := 8.0
 const GRID := Vector2(36, 124)
 const IT = preload("res://scripts/items.gd")
 const ITEMS = IT.DEF
+const ICONS = preload("res://scripts/icons.gd")  # core: значки из моделей
 # рецепты, которых нет в items.gd: расколоть два камня — получить кремнёвый скол
 const EXTRA := {"flint": {"pebble": 2}, "meat_raw": {"carcass_small": 1}}
 # сколько выходит и чем делается (разделать тушку — ножом)
@@ -311,6 +312,11 @@ func missing(id: String) -> Dictionary:
 	return out
 
 func _tool_ok(id: String) -> bool:
+	# --- core: need [id] из items.gd — нужно иметь (нож, горшок, кружка), не тратится ---
+	for t: String in ITEMS.get(id, {}).get("need", []):
+		if count(t) <= 0:
+			return false
+	# --- /core ---
 	return not EXTRA_TOOL.has(id) or main.hero.has_tool(String(EXTRA_TOOL[id]))
 
 func craft(id: String) -> bool:
@@ -319,7 +325,7 @@ func craft(id: String) -> bool:
 	var rc := recipe(id)
 	for k: String in rc:
 		remove_item(k, int(rc[k]))
-	add_item(id, int(EXTRA_OUT.get(id, 1)))
+	add_item(id, int(EXTRA_OUT.get(id, ITEMS.get(id, {}).get("out", 1))))  # core: out из items.gd
 	main._say("Сделано: " + _name(id).to_lower())
 	if main.sfx != null:
 		main.sfx.play_at("chop" if id == "flint" else "cut", main.hero.position + Vector3(0, 0.6, 0), -2.0, 1.3)
@@ -351,6 +357,10 @@ func _use() -> void:
 	if not ITEMS.get(sel, {}).has("eat"):
 		return
 	var e: Array = ITEMS[sel]["eat"]
+	# --- core: миска и ложка (сытнее), горячее греет — main.core_eat() ---
+	if main.has_method("core_eat"):
+		e = main.core_eat(sel, e)
+	# --- /core ---
 	main.hunger = clampf(float(main.hunger) + float(e[0]), 0.0, 1.0)
 	main.thirst = clampf(float(main.thirst) + float(e[1]), 0.0, 1.0)
 	if float(e[2]) < 0.0:
@@ -589,16 +599,30 @@ func _draw_craft(ci: CanvasItem, f: Font) -> void:
 	var st := _station(rsel)
 	if st != "" and not station_ok(st):
 		y2 += 34
-		ci.draw_string(f, Vector2(dr.position.x + 24, y2), "Нужен " + {"fire": "костёр", "stove": "печь", "camp": "лагерь"}.get(st, st), HORIZONTAL_ALIGNMENT_LEFT, -1, 22, BAD_C)
+		ci.draw_string(f, Vector2(dr.position.x + 24, y2), "Нужен " + {"fire": "костёр", "stove": "печь", "camp": "верстак, стол или колода"}.get(st, st), HORIZONTAL_ALIGNMENT_LEFT, -1, 22, BAD_C)
 	elif not _tool_ok(rsel):
 		y2 += 34
-		ci.draw_string(f, Vector2(dr.position.x + 24, y2), "Нужен нож", HORIZONTAL_ALIGNMENT_LEFT, -1, 22, BAD_C)
+		# --- core: перечислить, чего нет из нужного (нож, горшок, кружка…) ---
+		var lack := PackedStringArray()
+		for t: String in ITEMS.get(rsel, {}).get("need", []):
+			if count(t) <= 0:
+				lack.append(_name(t).to_lower())
+		if EXTRA_TOOL.has(rsel):
+			lack.append("нож")
+		ci.draw_string(f, Vector2(dr.position.x + 24, y2), "Нужен: " + ", ".join(lack), HORIZONTAL_ALIGNMENT_LEFT, dr.size.x - 40, 22, BAD_C)
+		# --- /core ---
 	elif not miss2.is_empty():
 		y2 += 34
 		ci.draw_string(f, Vector2(dr.position.x + 24, y2), "Не хватает материала", HORIZONTAL_ALIGNMENT_LEFT, -1, 22, BAD_C)
 
 ## Значок вещи: простой рисунок кистью (круги, эллипсы, штрихи).
 static func icon(ci: CanvasItem, kind: String, c: Vector2, r: float) -> void:
+	# --- core: значок, отрисованный из игровой модели (res://icons, студия STUDIO=icons) ---
+	var png: Texture2D = ICONS.tex(kind)
+	if png != null:
+		ci.draw_texture_rect(png, Rect2(c - Vector2(r, r) * 1.25, Vector2(r, r) * 2.5), false)
+		return
+	# --- /core ---
 	match kind:
 		"berry":
 			ci.draw_colored_polygon(_ell(c + Vector2(-r * 0.35, -r * 0.55), r * 0.38, r * 0.16, -0.6), Color(0.3, 0.45, 0.2))

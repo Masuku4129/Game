@@ -1,6 +1,8 @@
 config_version=5
 
 [application]
+
+run/max_fps=60
 config/name="Taiga"
 run/main_scene="res://scenes/main.tscn"
 config/features=PackedStringArray("4.3", "Mobile")
@@ -14,6 +16,11 @@ window/stretch/mode="canvas_items"
 [input_devices]
 pointing/emulate_touch_from_mouse=true
 
+[physics]
+
+common/physics_ticks_per_second=30
+common/max_physics_steps_per_frame=4
+
 [rendering]
 
 lights_and_shadows/directional_shadow/size=2048
@@ -22,5 +29,6 @@ renderer/rendering_method="mobile"
 textures/vram_compression/import_etc2_astc=true
 anti_aliasing/quality/screen_space_aa=1
 scaling_3d/mode=0
-scaling_3d/scale=0.7
+scaling_3d/scale=0.75
+anti_aliasing/quality/msaa_3d=0
 

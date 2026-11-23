@@ -262,3 +262,19 @@ func apply(mats: Array, terrain: ShaderMaterial, blade: ShaderMaterial, water: S
 	blade.set_shader_parameter("wind", wind)
 	water.set_shader_parameter("ice", ice)
 	water.set_shader_parameter("rain", precip if temp >= 0.5 else 0.0)
+
+# --- core: сохранение (save.gd, раздел «weather») ---
+const _SAVE_KEYS := ["next_change", "cloud", "precip", "fogv", "wind", "temp", "snow", "wet", "autumn", "leaf_drop", "ice", "mist", "blossom", "t_cloud", "t_precip", "t_fog", "t_wind", "_hours_acc"]
+
+func to_save() -> Dictionary:
+	var d := {"kind": kind}
+	for k: String in _SAVE_KEYS:
+		d[k] = float(get(k))
+	return d
+
+func from_save(d: Dictionary) -> void:
+	kind = String(d.get("kind", kind))
+	for k: String in _SAVE_KEYS:
+		if d.has(k):
+			set(k, float(d[k]))
+# --- /core ---

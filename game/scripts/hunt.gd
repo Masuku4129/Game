@@ -670,6 +670,14 @@ func _remove_model(pl: Dictionary, id: String) -> void:
 			(ms[i][0] as Node3D).queue_free()
 			ms.remove_at(i)
 			return
+	# --- core: модели прочих вещей ---
+	var gens: Array = pl.get("gen", [])
+	for i in range(gens.size() - 1, -1, -1):
+		if String(gens[i][1]) == id:
+			(gens[i][0] as Node3D).queue_free()
+			gens.remove_at(i)
+			return
+	# --- /core ---
 	var sm: Variant = pl.get("small")
 	if id == "carcass_small" and sm != null:
 		(sm as Node3D).queue_free()
@@ -678,8 +686,10 @@ func _remove_model(pl: Dictionary, id: String) -> void:
 ## Выложить вещь на землю (из инвентаря): шкура, мясо, тушка — с моделью; true — выложено.
 ## Рядом с другой кучей — в неё.
 func drop_item(id: String, pos: Vector3) -> bool:
+	# --- core: прочие вещи (утварь, глина, доски…) ложатся моделью из item_models.gd ---
 	if not (id in ["hide", "fur", "meat_raw", "meat_cooked", "carcass_small"]):
-		return false
+		return _drop_generic(id, pos)
+	# --- /core ---
 	var pl := {}
 	for p2: Dictionary in piles:
 		if (p2["pos"] as Vector3).distance_to(pos) < 1.0:
@@ -1120,3 +1130,74 @@ func _run_test(delta: float) -> void:
 			Engine.time_scale = 1.0
 			_tlog("готово")
 			_ts = 10
+
+# --- core: вещь на землю моделью (item_models.gd) ---
+var _imodels = null
+func _drop_generic(id: String, pos: Vector3) -> bool:
+	if not IT.DEF.has(id) or id == "log":
+		return false
+	var pl := {}
+	for p2: Dictionary in piles:
+		if (p2["pos"] as Vector3).distance_to(pos) < 1.0:
+			pl = p2
+			break
+	if pl.is_empty():
+		pos.y = surface_y(pos.x, pos.z)
+		pl = _new_pile(pos, rng.randf() * TAU)
+	if _imodels == null:
+		_imodels = preload("res://scripts/item_models.gd").new(main.pv)
+	var gens: Array = pl.get("gen", [])
+	pl["gen"] = gens
+	var it: Dictionary = pl["items"]
+	it[id] = int(it.get(id, 0)) + 1
+	# одна модель на вид и не больше 6 моделей в куче
+	var shown := false
+	for g: Array in gens:
+		if String(g[1]) == id:
+			shown = true
+	if not shown and gens.size() < 6:
+		var n: Node3D = _imodels.make(id)
+		var k := gens.size()
+		n.position = Vector3(cos(k * 2.4) * 0.18 * sqrt(float(k)), 0.0, sin(k * 2.4) * 0.18 * sqrt(float(k)))
+		n.rotation.y = rng.randf() * TAU
+		(pl["node"] as Node3D).add_child(n)
+		gens.append([n, id])
+	pl["r"] = maxf(float(pl["r"]), 0.4)
+	return true
+
+# --- core: сохранение (save.gd, раздел «hunt»): вещи на земле (кучи) и разделка туш ---
+func to_save() -> Dictionary:
+	var SV = preload("res://scripts/save.gd")
+	var ps: Array = []
+	for pl: Dictionary in piles:
+		if not (pl["items"] as Dictionary).is_empty():
+			ps.append({"pos": SV.enc(pl["pos"]), "items": (pl["items"] as Dictionary).duplicate()})
+	var cs: Array = []
+	if main.animals != null:
+		for a in carc.keys():
+			if is_instance_valid(a):
+				var i: int = main.animals.list.find(a)
+				if i >= 0:
+					cs.append({"i": i, "p": float(carc[a]["p"]), "done": bool(carc[a]["done"])})
+	return {"piles": ps, "carc": cs}
+
+func from_save(d: Dictionary) -> void:
+	var SV = preload("res://scripts/save.gd")
+	for pl: Dictionary in piles:
+		(pl["node"] as Node3D).queue_free()
+	piles.clear()
+	for e: Dictionary in d.get("piles", []):
+		var pos: Vector3 = SV.dec(e["pos"])
+		var it := SV.int_dict(e.get("items", {}))
+		for id: String in it:
+			for k in mini(int(it[id]), 40):
+				drop_item(id, pos)
+	if main.animals != null:
+		for e: Dictionary in d.get("carc", []):
+			var i := int(e["i"])
+			if i >= 0 and i < main.animals.list.size():
+				var a = main.animals.list[i]
+				if carc.has(a):
+					carc[a]["p"] = float(e["p"])
+					carc[a]["done"] = bool(e["done"])
+# --- /core ---

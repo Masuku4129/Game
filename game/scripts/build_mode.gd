@@ -1,7 +1,7 @@
 extends Node3D
 ## Режим стройки: призрак выбранной постройки перед героем. Палец, коснувшийся призрака
 ## (или тап по земле), двигает его; кнопки ⟲ ⟳ поворачивают; зелёный — можно ставить,
-## красный — мешают деревья, камни, валежник, другие постройки, вода, крутизна или край лагеря.
+## красный — мешают деревья, камни, валежник, другие постройки, вода, крутизна или даль (больше 30 м от героя). Лагеря нет — строить можно везде.
 ## У шалаша у дерева призрак сам прилипает к ближайшему стволу.
 
 const GEO = preload("res://scripts/build_geo.gd")
@@ -20,7 +20,6 @@ var _press_pos := Vector2.ZERO
 var _press_t := 0
 var _ok_mat := StandardMaterial3D.new()
 var _bad_mat := StandardMaterial3D.new()
-var _ring: MeshInstance3D
 var _tree_r := 0.3
 var _check_t := 0.0
 
@@ -32,31 +31,12 @@ func _ready() -> void:
 		m.no_depth_test = false
 	_ok_mat.albedo_color = Color(0.45, 0.95, 0.45, 0.42)
 	_bad_mat.albedo_color = Color(1.0, 0.3, 0.25, 0.45)
-	# кольцо границы лагеря
-	_ring = MeshInstance3D.new()
-	var tm := TorusMesh.new()
-	tm.inner_radius = camp.CAMP_R - 0.12
-	tm.outer_radius = camp.CAMP_R + 0.12
-	tm.rings = 96
-	_ring.mesh = tm
-	var rm := StandardMaterial3D.new()
-	rm.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	rm.albedo_color = Color(1.0, 0.85, 0.4, 0.5)
-	rm.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	_ring.material_override = rm
-	_ring.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	_ring.visible = false
-	add_child(_ring)
 
 func start() -> void:
 	active = true
-	_ring.visible = true
-	_ring.position = camp.camp_pos + Vector3(0, 0.3, 0)
-	_ring.scale = Vector3(1.0, 0.2, 1.0)
 
 func stop() -> void:
 	active = false
-	_ring.visible = false
 	select("")
 
 ## Выбрать, что строить ("" — снять выбор).
@@ -77,6 +57,10 @@ func select(k: String) -> void:
 			ghost = g.tree_shelter()
 		"snow_shelter":
 			ghost = g.snow_shelter()
+		"cache":
+			ghost = g.cache()
+		"chop_block":
+			ghost = g.chop_block()
 		"cabin":
 			ghost = g.cabin(GEO.NC, 1.0, [])
 	GEO.ghostify(ghost, _ok_mat)
@@ -152,8 +136,9 @@ func _check() -> void:
 func _validate() -> Array:
 	if kind == "":
 		return [false, ""]
-	if not camp.in_camp(gpos):
-		return [false, "Дальше границы лагеря"]
+	# лагеря нет: ставить можно где угодно, но не дальше 30 м от героя
+	if Vector2(gpos.x - main.hero.position.x, gpos.z - main.hero.position.z).length() > 30.0:
+		return [false, "Слишком далеко"]
 	var d: Dictionary = camp.DEFS[kind]
 	if kind != "cabin" and not camp.can_pay(d["cost"]):
 		return [false, "Не хватает припасов"]

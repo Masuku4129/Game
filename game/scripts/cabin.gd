@@ -18,7 +18,7 @@ const FURN := {
 }
 const FURN_ORDER := ["bed", "table", "bench", "shelf", "chest", "rack", "workbench"]
 ## Рецепты верстака: [выход, сколько, {вход}].
-const BENCH := [["plank", 3, {"log": 1}], ["shovel", 1, {"plank": 1, "branch": 1}], ["firewood", 4, {"log": 1}]]
+const BENCH := [["plank", 3, {"log": 1}], ["shovel", 1, {"plank": 1, "handle": 1}], ["firewood", 4, {"log": 1}]]
 
 var camp
 var main: Node3D

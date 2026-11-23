@@ -201,6 +201,7 @@ func chop_trunk(tr: Dictionary, hits: int) -> bool:
 		var g := GenTrunk.new()
 		add_child(g)
 		g.setup(sp, main)
+		g.set_meta("spot", sp)  # core: для сохранения
 		_unblock_spot(sp)
 		trunks.append(g)
 		tr["obj"] = g
@@ -648,6 +649,11 @@ func knife_target(p: Vector3) -> Dictionary:
 			return {"label": "Срезать жердь", "pos": tree_pos(t), "type": "young", "rec": t}
 		if kind_of(t) == "birch" and _spot_left("t%d" % int(t[4]), 2) > 0:
 			return {"label": "Снять бересту", "pos": tree_pos(t), "type": "bark", "key": "t%d" % int(t[4])}
+	# --- core: мох ножом с замшелых камней, пней и валежин ---
+	var ms := _res_near(p, 1.8, MOSS_KINDS)
+	if not ms.is_empty() and _spot_left(_key(ms[0]), 3) > 0:
+		return {"label": "Срезать мох", "pos": ms[0], "type": "moss", "key": _key(ms[0])}
+	# --- /core ---
 	var fs := _res_near(p, 1.5, FIBRE_KINDS)
 	if not fs.is_empty() and _spot_left(_key(fs[0]), 3) > 0:
 		var lbl := "Нарезать лыко" if fs[1] in ["willow", "alder", "fireweed"] else "Нарезать прутья"
@@ -665,7 +671,29 @@ func hand_target(p: Vector3) -> Dictionary:
 	var fs := _res_near(p, 1.4, ["willow", "alder"])
 	if not fs.is_empty() and _spot_left(_key(fs[0]), 3) > 0:
 		return {"label": "Надрать лыка", "pos": fs[0], "type": "fibre", "kind": fs[1], "key": _key(fs[0])}
+	# --- core: мох руками, рыба руками на мелководье, глина на речном берегу ---
+	var ms := _res_near(p, 1.6, MOSS_KINDS)
+	if not ms.is_empty() and _spot_left(_key(ms[0]), 3) > 0:
+		return {"label": "Надрать мха", "pos": ms[0], "type": "moss", "key": _key(ms[0])}
+	return water_target(p)
+
+const MOSS_KINDS := ["mossrock", "stump_rot", "stump_mush", "mosslog"]
+
+## У воды: стоя в воде по щиколотку–колено — ловить рыбу руками; на сыром берегу — копать глину.
+func water_target(p: Vector3) -> Dictionary:
+	var gy: float = main.height(p.x, p.z)
+	var wl: float = main.water_level(p.x, p.z)
+	if float(main.weather.ice) > 0.5:
+		return {}
+	var depth := wl - gy
+	if depth > 0.08 and depth < 0.7 and main.river_dist(p.x, p.z) < 26.0:
+		return {"label": "Ловить рыбу руками", "pos": p, "type": "fish"}
+	if depth <= 0.08 and depth > -0.9 and main.near_water(p) and main.river_dist(p.x, p.z) < 24.0:
+		var k := "clay_%d_%d" % [int(p.x / 6.0), int(p.z / 6.0)]
+		if _spot_left(k, 4) > 0:
+			return {"label": "Накопать глины", "pos": p, "type": "clay", "key": k}
 	return {}
+	# --- /core ---
 
 func _key(p: Vector3) -> String:
 	return "%d_%d" % [int(round(p.x * 4.0)), int(round(p.z * 4.0))]
@@ -708,6 +736,23 @@ func harvest(r: Dictionary, knife: bool) -> void:
 				_give("fiber", 1)
 				_give("twig", 1)
 			_snd("cut", r["pos"], -4.0)
+		# --- core: мох, глина, рыба ---
+		"moss":
+			_spend(r["key"], 3)
+			_give("moss", 2 if knife else 1)
+			_snd("cut", r["pos"], -8.0, 0.7)
+		"clay":
+			_spend(r["key"], 4)
+			_give("clay", 2 if main.hero.has_method("has_tool") and bool(main.hero.has_tool("shovel")) else 1)
+			_snd("thud", r["pos"], -12.0, 1.4)
+		"fish":
+			var fs: Variant = main.animals.get("fish") if main.animals != null else null
+			var ok: bool = fs != null and bool(fs.catch_at(r["pos"], 0.12))
+			if ok:
+				_give("fish_raw", 1)
+			else:
+				main._say("Рыба ушла")
+		# --- /core ---
 
 # ======================================================================
 ## Срубаемое дерево: пень с подрубом, верх на шарнире, падение и разделка на брёвна.
@@ -1150,7 +1195,7 @@ func _test(delta: float) -> void:
 				print("TT animal at ", (_tdata["an"] as Node3D).position, " aim=", aim_target(hero.position, hero.body.rotation.y), " H=", (_tdata["an"] as Node3D).parts.get("H"))
 				var an2: Node3D = _tdata["an"]
 				print("TT after throw: dead=", an2.dead, " hp=", an2.hp_left, " flying=", flying.size(), " items=", items.size())
-			main.inv.merge({"flint": 2, "twig": 1, "fiber": 3, "pebble": 2})
+			main.inv.merge({"flint": 2, "twig": 1, "fiber": 3, "pebble": 2, "handle": 1})
 			print("TT missing axe=", main.inventory.missing("axe"))
 			print("TT craft axe=", main.inventory.craft("axe"), " craft flint=", main.inventory.craft("flint"), " inv=", main.inv)
 		"report":
@@ -1162,3 +1207,108 @@ func _shot(dir: String, n: String) -> void:
 	await RenderingServer.frame_post_draw
 	get_viewport().get_texture().get_image().save_png(dir + "/" + n + ".png")
 	print("TT shot ", n)
+
+# ======================================================================
+# --- core: сохранение (save.gd, раздел «tools») ---
+# hidden — id срубленных деревьев и жердей (экземпляры прячутся); gen — разрубаемый бурелом
+# (клетка, номер, сколько отрублено); logs — брёвна на земле, включая ещё не разрубленные
+# стволы поваленных деревьев (сохраняются готовыми брёвнами); items — воткнутые копья, лопаты;
+# uses — истощённые места сбора.
+func to_save() -> Dictionary:
+	var SV = preload("res://scripts/save.gd")
+	var hidden: Array = []
+	var standing := {}
+	for id: int in fells:
+		var f: FellTree = fells[id]
+		if f.phase == "stand":
+			standing[id] = true
+	for k in main.tree_grid:
+		for rec: Array in main.tree_grid[k]:
+			if (rec[2] as Transform3D).origin.y < -100.0 and not standing.has(int(rec[4])):
+				hidden.append(int(rec[4]))
+	var gen: Array = []
+	for t: Node3D in trunks:
+		if t is GenTrunk:
+			var g: GenTrunk = t
+			for k in main.fallen_spots:
+				var i: int = (main.fallen_spots[k] as Array).find(_spot_of(g))
+				if i >= 0:
+					gen.append({"k": SV.enc(k), "i": i, "cur": g.cur})
+					break
+	var logs: Array = []
+	var others: Array = []
+	for it: Dictionary in items:
+		var n: Node3D = it["node"]
+		if not is_instance_valid(n):
+			continue
+		if it["id"] == "log":
+			logs.append({"xf": SV.enc(n.global_transform), "r": float(it.get("r", 0.13)), "bark": SV.enc(it.get("bark", Color(0.42, 0.33, 0.24)))})
+		else:
+			others.append({"id": it["id"], "xf": SV.enc(n.global_transform)})
+	# поваленные деревья: что осталось в стволе — брёвнами рядом
+	for id: int in fells:
+		var f2: FellTree = fells[id]
+		if f2.phase == "stand":
+			continue
+		var y := f2.clip
+		var lim: float = f2.H * float(CLEAN.get(f2.kind, 0.4))
+		while y + SEG / f2.s < lim and f2.phase == "down":
+			var y1 := y + SEG / f2.s
+			var c := f2._world_y((y + y1) * 0.5)
+			var ax := (f2._world_y(y1) - f2._world_y(y)).normalized()
+			logs.append({"c": SV.enc(c), "ax": SV.enc(ax), "r": f2._r_at((y + y1) * 0.5) * f2.s, "bark": SV.enc(f2.bark)})
+			y = y1
+	return {"hidden": hidden, "gen": gen, "logs": logs, "items": others, "uses": SV.enc(uses)}
+
+func _spot_of(g: GenTrunk) -> Dictionary:
+	return g.get_meta("spot", {})
+
+func from_save(d: Dictionary) -> void:
+	var SV = preload("res://scripts/save.gd")
+	var hid := {}
+	for x: Variant in d.get("hidden", []):
+		hid[int(x)] = true
+	for k in main.tree_grid:
+		for rec: Array in main.tree_grid[k]:
+			if hid.has(int(rec[4])):
+				var o: Vector3 = (rec[2] as Transform3D).origin
+				rec[2] = Transform3D(Basis().scaled(Vector3(0.0001, 0.0001, 0.0001)), Vector3(o.x, -500.0, o.z))
+				(rec[0] as MultiMesh).set_instance_transform(rec[1], rec[2])
+	main._update_near(true)
+	for e: Dictionary in d.get("gen", []):
+		var k: Vector2i = SV.dec(e["k"])
+		var arr: Array = main.fallen_spots.get(k, [])
+		var i := int(e["i"])
+		if i < 0 or i >= arr.size():
+			continue
+		var sp: Dictionary = arr[i]
+		if sp.get("done", false):
+			continue
+		sp["done"] = true
+		var g := GenTrunk.new()
+		add_child(g)
+		g.setup(sp, main)
+		g.set_meta("spot", sp)
+		g.cur = float(e.get("cur", 0.0))
+		g._rebuild()
+		_unblock_spot(sp)
+		trunks.append(g)
+	for e2: Dictionary in d.get("logs", []):
+		if e2.has("xf"):
+			var xf: Transform3D = SV.dec(e2["xf"])
+			var mi := MeshInstance3D.new()
+			var bark: Color = SV.dec(e2.get("bark", SV.enc(Color(0.42, 0.33, 0.24))))
+			mi.mesh = TM.log_mesh(1.25, snappedf(float(e2.get("r", 0.13)), 0.01), bark, rng.randi_range(1, 4))
+			add_child(mi)
+			mi.global_transform = xf
+			items.append({"id": "log", "node": mi, "pos": xf.origin, "r": float(e2.get("r", 0.13)), "bark": bark})
+		else:
+			_spawn_log(SV.dec(e2["c"]), SV.dec(e2["ax"]), SEG, float(e2["r"]), SV.dec(e2["bark"]))
+	for e3: Dictionary in d.get("items", []):
+		place_item(String(e3["id"]), SV.dec(e3["xf"]), false)
+	var u: Variant = SV.dec(d.get("uses", {}))
+	if u is Dictionary:
+		for k2: String in (u as Dictionary):
+			var v: Array = u[k2]
+			uses[k2] = [int(v[0]), int(v[1])]
+# --- /core ---

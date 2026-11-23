@@ -30,6 +30,7 @@ func _ogg(n: String, loop: bool = false) -> AudioStream:
 
 func _ready() -> void:
 	rng.seed = 99
+	_make_buses()  # core: шина шагов
 	for n in ["forest", "night", "wind", "rain", "swim"]:
 		loops[n] = _player(_ogg(n, true))
 	river3d = AudioStreamPlayer3D.new()
@@ -364,7 +365,7 @@ func _play3d(s: AudioStream, p: Vector3, db: float, pitch: float = 1.0) -> void:
 		if not pl.playing:
 			pl.stream = s
 			pl.global_position = p
-			pl.volume_db = db
+			pl.volume_db = db + SFX_DB  # core: общий баланс
 			pl.pitch_scale = pitch
 			pl.play()
 			return
@@ -372,27 +373,74 @@ func _play3d(s: AudioStream, p: Vector3, db: float, pitch: float = 1.0) -> void:
 func _play(s: AudioStream, db: float, pitch: float) -> void:
 	var p := AudioStreamPlayer.new()
 	p.stream = s
-	p.volume_db = db
+	p.volume_db = db + SFX_DB  # core: общий баланс
 	p.pitch_scale = pitch
 	add_child(p)
 	p.play()
 	p.finished.connect(p.queue_free)
 
 ## Шаг героя (зовётся из походки). Вплавь шагов нет — только плеск гребка.
+## --- core: шаги тише и мягче: своя шина «Steps» с фильтром высоких (глухой мягкий шаг),
+## звук — через шаг при ходьбе, без повтора одного и того же сэмпла; поверхность: снег,
+## тропа/земля, грязь (ниже тон), дощатый пол избы (выше и суше), трава ---
+var _step_n := 0
+var _step_last := -1
 func step(swimming: bool, strength: float) -> void:
 	if swimming:
 		return
+	var run := strength > 1.2
+	_step_n += 1
+	if not run and _step_n % 2 == 1:
+		return
 	var w = main.weather
 	var hp: Vector3 = main.hero.position
-	var run := strength > 1.2
 	var kind := "grass"
-	if float(w.snow) > 0.4:
+	var pitch := 1.0
+	var db := STEP_DB
+	var cab: Variant = main.camp.cabin_ctl if main.get("camp") != null else null
+	if cab != null and bool(cab.inside):
+		kind = "dirt"
+		pitch = 1.25
+		db -= 2.0
+	elif main.feet != null and float(main.feet.snow_depth(hp.x, hp.z)) > 0.05 or float(w.snow) > 0.4:
 		kind = "snow"
-	elif main.forest_density(hp.x, hp.z) > 0.55 or main.height(hp.x, hp.z) < main.WATER_Y + 0.8:
+		db -= 1.0
+	elif main.feet != null and float(main.feet.mud_depth(hp.x, hp.z)) > 0.05:
+		kind = "dirt"
+		pitch = 0.8
+	elif (main.feet != null and float(main.feet.path_k) > 0.4) or main.forest_density(hp.x, hp.z) > 0.55 or main.height(hp.x, hp.z) < main.WATER_Y + 0.8:
 		kind = "dirt"
 	var key := kind + ("run" if run and kind != "dirt" else "walk")
 	var arr: Array = steps[key]
-	_play(arr[rng.randi() % arr.size()], -8.0 + (3.0 if run else 0.0), rng.randf_range(0.92, 1.08))
+	var i := rng.randi() % arr.size()
+	if i == _step_last:
+		i = (i + 1) % arr.size()
+	_step_last = i
+	var p := AudioStreamPlayer.new()
+	p.stream = arr[i]
+	p.volume_db = db + (3.0 if run else 0.0) + rng.randf_range(-1.5, 0.5)
+	p.pitch_scale = pitch * rng.randf_range(0.92, 1.06)
+	p.bus = &"Steps" if AudioServer.get_bus_index(&"Steps") >= 0 else &"Master"
+	add_child(p)
+	p.play()
+	p.finished.connect(p.queue_free)
+
+const STEP_DB := -21.0   # было −8 дБ
+const SFX_DB := -4.0     # общий сдвиг разовых звуков (баланс с фоном)
+
+## Шина шагов: фильтр высоких частот и тише остального.
+func _make_buses() -> void:
+	if AudioServer.get_bus_index(&"Steps") >= 0:
+		return
+	AudioServer.add_bus()
+	var i := AudioServer.bus_count - 1
+	AudioServer.set_bus_name(i, &"Steps")
+	AudioServer.set_bus_send(i, &"Master")
+	var lp := AudioEffectLowPassFilter.new()
+	lp.cutoff_hz = 2200.0
+	lp.resonance = 0.4
+	AudioServer.add_bus_effect(i, lp)
+# --- /core ---
 
 func landed(impact: float) -> void:
 	_play(land_s, linear_to_db(clampf(impact / 6.0, 0.2, 1.0)) - 4.0, rng.randf_range(0.9, 1.05))

@@ -68,7 +68,7 @@ var tree := Vector3.ZERO
 var climb_h := 0.0
 var far := false
 var group := -1
-var _acc := 0.0
+var _acc := randf() * 0.05  # perf: сдвиг шага между зверями
 var trk := 0.0       # путь с последнего следа
 var trk_side := 1.0
 var rng := RandomNumberGenerator.new()
@@ -688,7 +688,7 @@ func tick(delta: float) -> void:
 				_new_wander()
 	# глухарь: спугнутый — взлетает и летит низко над землёй, потом садится
 	if kind == "capercaillie":
-		var wet_below: bool = main.height(position.x, position.z) < main.WATER_Y - 0.2
+		var wet_below: bool = main.grid_height(position.x, position.z) < main.WATER_Y - 0.2
 		var up: bool = (state == "flee" and speed > sp["walk"] * 4.0) or wet_below
 		climb_h = move_toward(climb_h, 4.5 if up else 0.0, delta * (3.0 if up else 1.6))
 	# вплавь: бобр быстр и вёрток (до 2,5 м/с); остальные плывут медленно (0,5–1,2 м/с)
@@ -714,8 +714,8 @@ func tick(delta: float) -> void:
 		var np := position + dir * speed * delta
 		# обход стволов и воды; мелкие воду обходят всегда, крупные плывут только
 		# спасаясь, в погоне или на переправе; отвесный уступ не одолеть
-		var gy: float = main.height(np.x, np.z)
-		var g0: float = main.height(position.x, position.z)
+		var gy: float = main.grid_height(np.x, np.z)
+		var g0: float = main.grid_height(position.x, position.z)
 		var wet: bool = gy < main.WATER_Y - 0.3 and not swimmer() and not flying
 		if not wet and swimmer() and kind != "beaver" and not flying and swim_k < 0.2 and not cross and not (state in ["flee", "chase", "charge"]):
 			wet = main.water_level(np.x, np.z) - gy > 0.6
@@ -729,7 +729,7 @@ func tick(delta: float) -> void:
 			position.z = np.z
 	_unstick(delta)
 	# бобр у хатки ныряет под неё (купол хатки — опора только для человека)
-	var g: float = main.height(position.x, position.z) if state == "dive_in" else main.ground_at(position.x, position.z)
+	var g: float = main.grid_height(position.x, position.z) if state == "dive_in" else main.ground_fast(position.x, position.z)
 	var wl: float = main.water_level(position.x, position.z)
 	swim_k = clampf((wl - 0.25 - g) / 0.6, 0.0, 1.0) if swimmer() else 0.0
 	if kind == "beaver":
@@ -742,10 +742,11 @@ func tick(delta: float) -> void:
 		g = lerpf(g, wl - float(parts.get("H", 0.8)) * (1.0 if parts.has("rig") else 0.8), swim_k)
 	position.y = g + climb_h
 	# на снегу: лёгкие бегут поверху, тяжёлые проваливаются; в снегу и грязи — следы
-	if climb_h <= 0.0 and swim_k <= 0.0 and main.feet != null and g < main.height(position.x, position.z) + 0.1:
+	if climb_h <= 0.0 and swim_k <= 0.0 and main.feet != null and g < main.grid_height(position.x, position.z) + 0.1:
 		position.y += main.feet.animal_step(self, speed * delta)
 	rotation.y = heading
-	if not far:
+	# perf: невидимых не анимируем
+	if not far and visible:
 		_animate(delta)
 
 var swim_k := 0.0

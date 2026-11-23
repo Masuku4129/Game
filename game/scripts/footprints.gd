@@ -570,13 +570,13 @@ func _process(delta: float) -> void:
 	# --- build: износ (тропы, расчистка) — в текстуру поля не чаще раза в 0,4 с ---
 	_wear_t -= delta
 	if _wear_dirty and _wear_t <= 0.0:
-		_wear_t = 0.4
+		_wear_t = 1.0  # perf: реже (было 0,4 с)
 		_wear_dirty = false
 		field_tex.update(Image.create_from_data(fn, fn, false, Image.FORMAT_RGBA8, fdata))
 	path_k = smoothstep(0.25, 0.6, wear_at(hp.x, hp.z))
 	_up_t -= delta
 	if dirty and _up_t <= 0.0:
-		_up_t = 0.12
+		_up_t = 0.2  # perf: было 0,12 с
 		dirty = false
 		ttex.update(timg)
 
@@ -630,3 +630,26 @@ func _test_spot(ch: int, want: float) -> void:
 				_spot = main.hero.position
 				main.rig.position = main.hero.position
 				return
+
+# --- core: сохранение (save.gd, раздел «feet»): износ — тропы и расчищенный снег —
+# канал A карты поля, двоичным блоком "feet_wear" (fn×fn байт) ---
+func to_save() -> Dictionary:
+	var w := PackedByteArray()
+	w.resize(fn * fn)
+	for i in fn * fn:
+		w[i] = fdata[i * 4 + 3]
+	if main.get("saver") != null:
+		main.saver.put_bytes("feet_wear", w)
+	return {"fn": fn}
+
+func from_save(d: Dictionary) -> void:
+	if int(d.get("fn", 0)) != fn or main.get("saver") == null:
+		return
+	var w: PackedByteArray = main.saver.get_bytes("feet_wear")
+	if w.size() != fn * fn:
+		return
+	for i in fn * fn:
+		fdata[i * 4 + 3] = w[i]
+	_wear_dirty = true
+	_wear_t = 0.0
+# --- /core ---

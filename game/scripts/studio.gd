@@ -45,6 +45,11 @@ func _ready() -> void:
 		_build_studio()
 	elif who == "tools":
 		_tools()
+	# --- core: значки и миниатюры справочника (studio_icons.gd) ---
+	elif who == "icons":
+		set_process(false)
+		add_child(load("res://scripts/studio_icons.gd").new())
+	# --- /core ---
 
 ## Бобр: ракурсы и позы (шаг, плавание, грызёт, хлопок хвостом). STUDIO=beaver
 var bv: Node3D
