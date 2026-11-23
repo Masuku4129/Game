@@ -31,7 +31,7 @@ for v,info in data.items():
             t=j/(n+1)
             w0=cv2.remap(a0,gx-t*f01[...,0],gy-t*f01[...,1],cv2.INTER_LINEAR,borderMode=cv2.BORDER_CONSTANT)
             w1=cv2.remap(a1,gx-(1-t)*f10[...,0],gy-(1-t)*f10[...,1],cv2.INTER_LINEAR,borderMode=cv2.BORDER_CONSTANT)
-            seq.append((1-t)*w0+t*w1)
+            seq.append(w0 if t<0.5 else w1)   # без смешивания поз: нет двойных ног
         seq.append(a1); key.append(len(seq)-1)
     frames=[]
     for i,p in enumerate(seq):
