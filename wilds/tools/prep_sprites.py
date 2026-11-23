@@ -41,11 +41,31 @@ def split4(a, box):
     return [(y0, y1, xs[i], xs[i + 1]) for i in range(4)]
 
 
+def defringe(im):
+    """Убирает белую кайму на тонких прядях: выбиваем почти белое и вычитаем подмешанный белый фон."""
+    arr = np.asarray(im.convert("RGBA")).astype(np.float32)
+    white = arr[:, :, :3].min(axis=2)
+    arr[:, :, 3] *= np.clip((238.0 - white) / 38.0, 0.0, 1.0)
+    al = arr[:, :, 3:4] / 255.0
+    fg = (arr[:, :, :3] - (1.0 - al) * 255.0) / np.maximum(al, 0.05)
+    fg = np.clip(fg, 0, 255)
+    fg = np.where(al < 0.999, fg, arr[:, :, :3])
+    # полупрозрачные пряди красим в тёмный: светлые остатки белого фона не нужны
+    dark = np.array([16.0, 16.0, 38.0], dtype=np.float32)
+    t = np.clip((al - 0.85) / 0.15, 0.0, 1.0)
+    arr[:, :, :3] = dark * (1.0 - t) + fg * t
+    return Image.fromarray(arr.astype(np.uint8), "RGBA")
+
+
+def resize(im, size):
+    return im.convert("RGBa").resize(size, Image.LANCZOS).convert("RGBA")
+
+
 def crop(img, a, box):
     y0, y1, x0, x1 = box
     sub = a[y0:y1, x0:x1]
     ys, xs = np.where(sub)
-    return img.crop((x0 + xs.min(), y0 + ys.min(), x0 + xs.max() + 1, y0 + ys.max() + 1))
+    return defringe(img.crop((x0 + xs.min(), y0 + ys.min(), x0 + xs.max() + 1, y0 + ys.max() + 1)))
 
 
 views_img, va = cut("art/source/mita_views.png")
@@ -73,9 +93,9 @@ for name, boxes in rows.items():
 
 final = {}
 for n, im in named.items():
-    final[n] = im.resize((round(im.width * k_views), round(im.height * k_views)), Image.LANCZOS)
+    final[n] = resize(im, (round(im.width * k_views), round(im.height * k_views)))
 for n, (im, kw) in walk.items():
-    final[n] = im.resize((round(im.width * kw), round(im.height * kw)), Image.LANCZOS)
+    final[n] = resize(im, (round(im.width * kw), round(im.height * kw)))
 
 lines = ["# Автоматически создано tools/prep_sprites.py. Имя: [центр стоп X, высота] в пикселях.",
          "extends RefCounted", "", "const DATA := {"]
