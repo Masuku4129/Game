@@ -10,7 +10,7 @@ const SPEED := 230.0
 const Y_SCALE := 0.75        # вертикальная скорость меньше (перспектива)
 const DRAW_SCALE := 0.375    # спрайт 320 px -> 120 единиц мира
 const WALK_FPS := 8.0
-const ATTACK_FPS := [16.0, 19.0, 14.0]   # скорость ударов 1-3 (кадров в секунду)
+const ATTACK_FPS := [48.0, 57.0, 42.0]   # скорость ударов 1-3, кадров в секунду (24 кадра на удар)
 const DASH_FPS := 20.0
 const DASH_SPEED := 460.0
 const DASH_FRAMES := [2, 3, 3, 3, 4, 5]  # кадры листа удара, которые играют в рывке
@@ -183,17 +183,18 @@ func _tick_attack(delta: float) -> void:
 		attack_requested = false
 		_queued = true
 	var f := int(_af)
-	if f >= 2 and f <= 5:
+	var key: Array = ATK.DATA[SECTORS[_sector][0]]["key"]
+	if f >= key[2] and f <= key[5]:
 		velocity = _aim_vec(_sector) * 140.0
 		move_and_slide()
 		_clamp_world()
-	if not _vfx_done and f >= 3:
+	if not _vfx_done and f >= key[3]:
 		_vfx_done = true
 		_spawn_slash(_combo)
-	if _queued and _combo < 2 and f >= 6:
+	if _queued and _combo < 2 and f >= key[6]:
 		_combo += 1
 		_start_attack()
-	elif f >= 8:
+	elif f >= 24:
 		_combo = 0
 		_state = "move"
 		_moving = false
@@ -243,9 +244,9 @@ func _refresh() -> void:
 		var av: String = SECTORS[_sector][0]
 		var aflip: bool = SECTORS[_sector][1]
 		var info = ATK.DATA[av]
-		var f: int = clampi(int(_af), 0, 7)
+		var f: int = clampi(int(_af), 0, 23)
 		if _state == "dash":
-			f = DASH_FRAMES[clampi(int(_af), 0, DASH_FRAMES.size() - 1)]
+			f = info["key"][DASH_FRAMES[clampi(int(_af), 0, DASH_FRAMES.size() - 1)]]
 		_spr.texture = _atex[av][f]
 		var fr = info["frames"][f]
 		_spr.offset = Vector2(-fr[1], -fr[2])

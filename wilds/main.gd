@@ -155,7 +155,7 @@ func _shots(dir: String) -> void:
 	var asheet := Image.create(acw * 8, ach * 8, false, Image.FORMAT_RGBA8)
 	for r in 8:
 		for c in 8:
-			player.set_attack_pose(r, c)
+			player.set_attack_pose(r, c * 3)
 			for k in 3:
 				await get_tree().process_frame
 			await RenderingServer.frame_post_draw
