@@ -5,6 +5,12 @@ extends CharacterBody2D
 ## Точка опоры каждого спрайта = центр стоп (art/sprite_data.gd, art/anim/anim_data.gd).
 
 const ATK := preload("res://art/atk/atk_data.gd")
+const M2 = preload("res://art/m2/m2_data.gd").DATA   # новые кадры вида сбоку (ходьба, ожидание, бой, рывок, урон, смерть)
+# комбо вида сбоку: кадров, к/с, кадр взмаха, кадр попадания, рывок вперёд с-по, кадр для следующего удара
+const A2 := [
+	{"n": 12, "fps": 24.0, "slash": 6, "hit": 8, "l0": 6, "l1": 9, "q": 10},
+	{"n": 11, "fps": 26.0, "slash": 5, "hit": 7, "l0": 5, "l1": 8, "q": 9},
+	{"n": 11, "fps": 20.0, "slash": 2, "hit": 3, "l0": 2, "l1": 8, "q": 8}]
 
 const SPEED := 230.0
 const Y_SCALE := 0.75        # вертикальная скорость меньше (перспектива)
@@ -57,6 +63,8 @@ var _inv := 0.0
 var spawn_pos := Vector2.ZERO
 var next_hits_fly := 0   # активное умение: сколько ударов выпускают летящие шлейфы
 var _data := {}
+var _m2tex := {}
+var _hurt_t := 0.0
 var _atex := {}                 # вид -> [Texture2D x8]
 
 
@@ -77,6 +85,9 @@ func _ready() -> void:
 		for f in ATK.DATA[v]["frames"]:
 			r.append(load("res://art/atk/" + f[0]))
 		_atex[v] = r
+
+	for n in M2:
+		_m2tex[n] = load("res://art/m2/%s.png" % n)
 
 	_holder = Node2D.new()
 	add_child(_holder)
@@ -117,14 +128,17 @@ func set_attack_pose(sector: int, frame: int) -> void:
 
 func _physics_process(delta: float) -> void:
 	_inv = maxf(_inv - delta, 0.0)
+	_hurt_t = maxf(_hurt_t - delta, 0.0)
 	if _spr:
-		_spr.modulate = Color(1.0, 0.55, 0.6) if (_inv > 0.0 and int(_inv * 20.0) % 2 == 0) else Color.WHITE
+		_spr.modulate = Color(1.0, 0.7, 0.75) if (_inv > 0.0 and int(_inv * 20.0) % 2 == 0 and _state != "dead") else Color.WHITE
 	if not debug:
 		match _state:
 			"attack":
 				_tick_attack(delta)
 			"dash":
 				_tick_dash(delta)
+			"dead":
+				_tick_dead(delta)
 			_:
 				_tick_move(delta)
 		_refresh()
@@ -207,17 +221,28 @@ func _start_attack() -> void:
 	_hit_done = false
 
 
+func _is_side() -> bool:
+	return SECTORS[_sector][0] == "e"
+
+
+func _atk_spec() -> Dictionary:
+	if _is_side():
+		return A2[_combo]
+	var key: Array = ATK.DATA[SECTORS[_sector][0]]["key"]
+	return {"n": 24, "fps": ATTACK_FPS[_combo], "slash": key[3], "hit": key[4], "l0": key[2], "l1": key[5], "q": key[6]}
+
+
 func _tick_attack(delta: float) -> void:
 	if _hold > 0.0:
 		_hold -= delta
 		return
-	_af += delta * ATTACK_FPS[_combo]
+	var sp := _atk_spec()
+	_af += delta * sp["fps"]
 	if attack_requested:
 		attack_requested = false
 		_queued = true
 	var f := int(_af)
-	var key: Array = ATK.DATA[SECTORS[_sector][0]]["key"]
-	if f >= key[2] and f <= key[5]:
+	if f >= sp["l0"] and f <= sp["l1"]:
 		velocity = _aim_vec(_sector) * 300.0
 		_ghost_t -= delta
 		if _ghost_t <= 0.0:
@@ -225,19 +250,19 @@ func _tick_attack(delta: float) -> void:
 			_ghost()
 		move_and_slide()
 		_clamp_world()
-	if not _hit_done and f >= key[4]:
+	if not _hit_done and f >= sp["hit"]:
 		_hit_done = true
 		_hold = 0.07
 		_shake = 9.0
 		_punch = 1.0
 		_deal_damage()
-	if not _vfx_done and f >= key[3]:
+	if not _vfx_done and f >= sp["slash"]:
 		_vfx_done = true
 		_spawn_slash(_combo)
-	if _queued and _combo < 2 and f >= key[6]:
+	if _queued and _combo < 2 and f >= sp["q"]:
 		_combo += 1
 		_start_attack()
-	elif f >= 24:
+	elif f >= sp["n"]:
 		_combo = 0
 		_state = "move"
 		_moving = false
@@ -252,15 +277,35 @@ func _start_dash(dir: Vector2) -> void:
 
 
 func _tick_dash(delta: float) -> void:
-	_af += delta * DASH_FPS
+	var side := _is_side()
+	_af += delta * (26.0 if side else DASH_FPS)
 	var f := int(_af)
-	if f >= 1 and f <= 5:
+	if f >= 1 and f <= (6 if side else 5):
 		velocity = _dash_dir * DASH_SPEED
 		move_and_slide()
 		_clamp_world()
-	if f >= DASH_FRAMES.size():
+	if f >= (8 if side else DASH_FRAMES.size()):
 		_state = "move"
 		_moving = false
+
+
+func _tick_dead(delta: float) -> void:
+	_af += delta * 7.0
+	if _af >= 11.0:
+		hp = max_hp
+		global_position = spawn_pos
+		_state = "move"
+		_inv = 1.5
+
+
+func _m2set(name: String, flip: bool) -> void:
+	var d: Array = M2[name]
+	_spr.texture = _m2tex[name]
+	_spr.offset = Vector2(-d[0], -d[1])
+	_spr.position = Vector2.ZERO
+	_spr.rotation = 0.0
+	var fx := -1.0 if flip else 1.0
+	_spr.scale = Vector2(fx * d[2], d[2])
 
 
 func _fx(rx: float, ry: float, rot: float, a0: float, a1: float, wm: float, dl: float, hold: float, off: Vector2) -> void:
@@ -315,6 +360,19 @@ func _ghost() -> void:
 # ---------------------------------------------------------------- отображение
 
 func _refresh() -> void:
+	if _state == "dead":
+		_m2set("death_%d" % clampi(int(_af), 0, 7), _face_x < 0.0)
+		return
+	if _state == "attack" and _is_side():
+		var sp: Dictionary = A2[_combo]
+		_m2set("a%d_%d" % [_combo, clampi(int(_af), 0, sp["n"] - 1)], SECTORS[_sector][1])
+		return
+	if _state == "dash" and _is_side():
+		_m2set("dash_%d" % clampi(int(_af), 0, 7), SECTORS[_sector][1])
+		return
+	if _state == "move" and _hurt_t > 0.0:
+		_m2set("hurt_%d" % clampi(int((0.45 - _hurt_t) / 0.45 * 8.0), 0, 7), _face_x < 0.0)
+		return
 	if _state != "move":
 		var av: String = SECTORS[_sector][0]
 		var aflip: bool = SECTORS[_sector][1]
@@ -337,6 +395,15 @@ func _refresh() -> void:
 	var wview := view
 	if view == "se" or view == "ne":
 		wview = "e"      # диагонали: кадры ходьбы вбок, корпус не меняем
+	if wview == "e":
+		if _moving:
+			_m2set("walk_%d" % (int(_wt) % 7), flip)
+			if view != "e":
+				_spr.rotation = 0.0
+			return
+		if view == "e":
+			_m2set("idle_%d" % (int(_idle_t * 2.0) % 8), flip)
+			return
 	var walking := _moving and wview in WALK_SETS
 	if walking:
 		key = "walk_%s_%d" % [wview, int(_wt) % 4]
@@ -366,15 +433,16 @@ func _draw() -> void:
 
 # ---------------------------------------------------------------- урон
 func hurt(amount: float, from: Vector2) -> void:
-	if _inv > 0.0 or _state == "dash":
+	if _inv > 0.0 or _state == "dash" or _state == "dead":
 		return
 	hp -= amount
 	_inv = 0.7
 	_shake = 8.0
+	_hurt_t = 0.45
 	if hp <= 0.0:
-		hp = max_hp
-		global_position = spawn_pos
-		_inv = 1.5
+		hp = 0.0
+		_state = "dead"
+		_af = 0.0
 
 
 func _deal_damage() -> void:
