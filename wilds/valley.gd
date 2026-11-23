@@ -250,7 +250,12 @@ func _is_blocked(p: Vector2) -> bool:
 
 # ------------------------------------------------------------------ объекты
 
-func _prop(name: String, pos: Vector2, sc: float, flip: bool, with_shadow := true) -> void:
+func _prop(name: String, pos: Vector2, sc0: float, flip: bool, with_shadow := true) -> void:
+	var sc := sc0
+	if name.begins_with("t_"):
+		sc *= 0.66
+	elif name.begins_with("r_"):
+		sc *= 0.8
 	var d: Array = DATA[name]
 	var body := StaticBody2D.new()
 	body.position = pos
@@ -326,7 +331,7 @@ func _scatter() -> void:
 			if roll <= acc:
 				name = k[0]
 				break
-		var gap := 175.0
+		var gap := 135.0
 		if name.begins_with("b_") or name.begins_with("r_") or name == "stump" or name == "log":
 			gap = 105.0
 		elif name.begins_with("f_") or name == "mush":
@@ -372,7 +377,7 @@ func _make_fog() -> void:
 		s.position = Vector2(rng.randf_range(BOUNDS.position.x, BOUNDS.end.x), rng.randf_range(BOUNDS.position.y, BOUNDS.end.y))
 		var k := rng.randf_range(3.0, 6.0)
 		s.scale = Vector2(k, k * 0.8)
-		s.modulate.a = rng.randf_range(0.14, 0.26)
+		s.modulate.a = rng.randf_range(0.06, 0.13)
 		s.vel = Vector2(rng.randf_range(6.0, 16.0), rng.randf_range(-2.0, 2.0))
 		s.area = BOUNDS
 		layer.add_child(s)
@@ -382,7 +387,7 @@ func _make_fog() -> void:
 		s2.texture = _tex("fog%d" % (i % 3))
 		s2.position = river[i] + Vector2(rng.randf_range(-120, 120), rng.randf_range(-60, 60))
 		s2.scale = Vector2(4.5, 3.0)
-		s2.modulate.a = 0.28
+		s2.modulate.a = 0.15
 		s2.vel = Vector2(rng.randf_range(4.0, 9.0), 0.0)
 		s2.area = BOUNDS
 		layer.add_child(s2)
