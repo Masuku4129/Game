@@ -29,6 +29,7 @@ jobs:
           cd game
           SHOTS=/tmp/pv timeout 600 xvfb-run -a -s "-screen 0 1920x864x24" godot --rendering-driver vulkan --resolution 1920x864 res://scenes/style_test.tscn 2>&1 | grep -iE "error|shot" | head -40 || true
           SHOTS=/tmp/pv timeout 900 xvfb-run -a -s "-screen 0 1920x864x24" godot --rendering-driver vulkan --resolution 1920x864 2>&1 | grep -iE "SCRIPT ERROR|shot" | head -20 || true
+          COLONY_SHOTS=/tmp/pv timeout 900 xvfb-run -a -s "-screen 0 1920x864x24" godot --rendering-driver vulkan --resolution 1920x864 2>&1 | grep -iE "SCRIPT ERROR|CL " | head -30 || true
           ls /tmp/pv
       - name: Publish preview frames to branch
         run: |
