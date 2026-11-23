@@ -1,7 +1,7 @@
 extends Node2D
 ## Светящийся полумесяц по дуге взмаха, рисуется кодом (аддитивное смешивание).
-var rx := 108.0
-var ry := 84.0
+var rx := 70.0
+var ry := 54.0
 var rot := 0.0
 var a0 := -1.4
 var a1 := 1.4
@@ -62,7 +62,7 @@ func _draw() -> void:
 			var u := float(i) / n
 			var pos := _pt(lerpf(tail, head, u))
 			var lw: float = L[0]
-			var w: float = pow(sin(PI * u), 0.75) * 26.0 * lw
+			var w: float = pow(sin(PI * u), 0.75) * 17.0 * lw
 			var nrm := pos.normalized()
 			outer.append(pos + nrm * w * 0.30)
 			inner.append(pos - nrm * w * 0.70)

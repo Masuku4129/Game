@@ -223,16 +223,16 @@ func _spawn_slash(combo: int, hold := -1.0) -> void:
 	var s = preload("res://slash_fx.gd").new()
 	var th := _sector * PI / 4.0
 	var sgn := 1.0 if combo != 1 else -1.0
-	s.a0 = th - 1.45 * sgn
-	s.a1 = th + 1.45 * sgn
+	s.a0 = th - 1.15 * sgn
+	s.a1 = th + 1.15 * sgn
 	s.rot = [-0.35, 0.35, 0.0][combo] * (-1.0 if cos(th) < -0.1 else 1.0)
 	if combo == 2:
-		s.rx = 90.0
-		s.ry = 120.0
-		s.a0 = th - 1.7 * sgn - PI * 0.5
-		s.a1 = th + 1.1 * sgn - PI * 0.5
+		s.rx = 58.0
+		s.ry = 80.0
+		s.a0 = th - 1.4 * sgn - PI * 0.5
+		s.a1 = th + 0.9 * sgn - PI * 0.5
 	s.hold = hold
-	s.position = Vector2(0.0, -62.0)
+	s.position = Vector2(cos(th) * 22.0, sin(th) * 16.0 - 66.0)
 	add_child(s)
 
 
