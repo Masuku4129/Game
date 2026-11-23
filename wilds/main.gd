@@ -3,6 +3,7 @@ extends Node2D
 ## Вид как в Don't Starve: плоские 2D-спрайты, камера 3/4 сверху,
 ## порядок отрисовки по Y (кто ниже на экране, тот ближе к камере).
 
+const G := preload("res://geo.gd")
 const WORLD_RADIUS := 12000.0
 
 var world: Node2D
@@ -89,7 +90,6 @@ func _shots(dir: String) -> void:
 
 	cam.position_smoothing_enabled = false
 	# обзор всей карты
-	var G = preload("res://geo.gd")
 	player.set_pose(2, false, 0.0)
 	var mid := Vector2(G.GW * G.W * 0.5, G.GH * G.H * 0.5) + level.origin
 	player.position = mid
