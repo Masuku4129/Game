@@ -749,7 +749,7 @@ func _site_near() -> Dictionary:
 	var s: Dictionary = camp.nearest(3.5)
 	if s.is_empty() or String(s.get("type", "")) != "cabin" or String(s.get("stage", "")) != "site":
 		return {}
-	var need := int(camp.DEFS["cabin"]["need"]["log"])
+	var need := int(camp.need_of(s).get("log", 0))
 	if int((s["have"] as Dictionary).get("log", 0)) >= need:
 		return {}
 	return s
@@ -1103,12 +1103,12 @@ func _deposit_now(s: Dictionary) -> void:
 	if bundle == null or s.is_empty() or hero.main.get("camp") == null:
 		return
 	var camp: Node = hero.main.camp
-	var need := int(camp.DEFS["cabin"]["need"]["log"])
+	var need := int(camp.need_of(s).get("log", 0))
 	var have: Dictionary = s["have"]
 	var k := mini(need - int(have.get("log", 0)), bundle.count())
 	if k <= 0:
 		return
-	have["log"] = int(have.get("log", 0)) + k
+	camp.deposit_item(s, "log", k)
 	bundle.remove(k)
 	if bundle.count() == 0:
 		bundle.queue_free()

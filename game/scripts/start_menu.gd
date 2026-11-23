@@ -45,8 +45,18 @@ func _ready() -> void:
 		l.add_theme_color_override("font_color", Color(0.24, 0.15, 0.08, 0.8))
 		sh.add_child(l)
 		y += 30.0
-	_new_btn = _btn(sh, "Новая игра", y)
+	# --- colony: новая игра — сценарий «Первая зима» (в режиме острога) ---
+	var is_colony: bool = main.colony_mode
+	_new_btn = _btn(sh, "Первая зима" if is_colony else "Новая игра", y)
 	_new_btn.pressed.connect(_new)
+	if is_colony:
+		var hint := Label.new()
+		hint.text = "Острог на реке: трое землепроходцев, осень, день 1"
+		hint.position = Vector2(60, y + 118)
+		hint.add_theme_font_size_override("font_size", 22)
+		hint.add_theme_color_override("font_color", Color(0.24, 0.15, 0.08, 0.8))
+		sh.add_child(hint)
+	# --- /colony ---
 	get_tree().paused = true
 
 func _btn(sh: Control, t: String, y: float) -> Button:

@@ -57,8 +57,14 @@ var fallen_spots := {}   # клетка 16 м → [{kind, mm, i, xf, a, b, r}] �
 var hunt  # --- hunt: туши, разделка, кровь, запах крови (hunt.gd) ---
 var camp  # --- build: лагерь и постройки (structures.gd) ---
 var combat  # --- combat: удары, прицел, стрелы (combat.gd) ---
+# --- colony: отряд землепроходцев, изометрическая камера, сценарий (colony.gd).
+# colony_mode = true — новая игра про острог; false — старый режим героя с джойстиком
+# (отладочный переключатель в настройках и переменная окружения HERO_MODE=1). ---
+var colony
+var colony_mode := true
 
 func _ready() -> void:
+	_colony_pick_mode()
 	_setup_noise()
 	weather = preload("res://scripts/weather.gd").new()
 	weather.main = self
@@ -93,25 +99,38 @@ func _ready() -> void:
 	# с собой только кремнёвый нож на поясе
 	inv["knife"] = 1
 	hero.tools.to_belt("knife")
-	rig = preload("res://scripts/camera_rig.gd").new()
-	rig.target = hero
-	add_child(rig)
-	rig.position = hero.position
-	player_rig = hero
+	# --- colony: в режиме острога — изометрическая камера (rts_camera.gd) вместо
+	# привязанной к герою; поля те же, поэтому старый код работает по-прежнему ---
+	if colony_mode:
+		rig = preload("res://scripts/rts_camera.gd").new()
+		rig.main = self
+		add_child(rig)
+		rig.snap_to(hero.position, 30.0, 0.6)
+		player_rig = rig
+		hero.visible = false
+		hero.process_mode = Node.PROCESS_MODE_DISABLED
+	else:
+		rig = preload("res://scripts/camera_rig.gd").new()
+		rig.target = hero
+		add_child(rig)
+		rig.position = hero.position
+		player_rig = hero
+	# --- /colony ---
 	var ui := CanvasLayer.new()
 	add_child(ui)
-	hud = preload("res://scripts/hud.gd").new()
-	hud.anchor_right = 1.0
-	hud.anchor_bottom = 1.0
-	ui.add_child(hud)
-	joy = preload("res://scripts/joystick.gd").new()
-	joy.anchor_top = 1.0
-	joy.anchor_bottom = 1.0
-	joy.offset_left = 40.0
-	joy.offset_right = 400.0
-	joy.offset_top = -400.0
-	joy.offset_bottom = -40.0
-	ui.add_child(joy)
+	if not colony_mode:
+		hud = preload("res://scripts/hud.gd").new()
+		hud.anchor_right = 1.0
+		hud.anchor_bottom = 1.0
+		ui.add_child(hud)
+		joy = preload("res://scripts/joystick.gd").new()
+		joy.anchor_top = 1.0
+		joy.anchor_bottom = 1.0
+		joy.offset_left = 40.0
+		joy.offset_right = 400.0
+		joy.offset_top = -400.0
+		joy.offset_bottom = -40.0
+		ui.add_child(joy)
 	act_btn = Button.new()
 	act_btn.anchor_left = 1.0
 	act_btn.anchor_right = 1.0
@@ -126,11 +145,14 @@ func _ready() -> void:
 	act_btn.visible = false
 	act_btn.pressed.connect(func(): hero.do_action())
 	ui.add_child(act_btn)
-	# --- инвентарь (короб): кнопка «Рюкзак» на HUD, лист вещей, анимация снятия короба ---
-	inventory = preload("res://scripts/inventory.gd").new()
-	inventory.main = self
-	ui.add_child(inventory)
-	hud.setup(self)
+	if colony_mode:
+		act_btn.visible = false
+	else:
+		# --- инвентарь (короб): кнопка «Рюкзак» на HUD, лист вещей, анимация снятия короба ---
+		inventory = preload("res://scripts/inventory.gd").new()
+		inventory.main = self
+		ui.add_child(inventory)
+		hud.setup(self)
 	# --- hunt: разделка туш, кровь, запах крови (hunt.gd) ---
 	hunt = preload("res://scripts/hunt.gd").new()
 	hunt.main = self
@@ -148,6 +170,12 @@ func _ready() -> void:
 	camp.main = self
 	add_child(camp)
 	# --- /build ---
+	# --- colony: лист лагеря (camp_ui) заменён листом острога ---
+	if colony_mode and camp.ui != null:
+		camp.ui.visible = false
+		camp.ui.set_process(false)
+		camp.ui.set_process_unhandled_input(false)
+	# --- /colony ---
 	fps_lbl = Label.new()
 	fps_lbl.anchor_left = 0.5
 	fps_lbl.anchor_right = 0.5
@@ -180,11 +208,41 @@ func _ready() -> void:
 	# --- core: настройки (качество, кадры, звук), сохранение, справочник, меню ---
 	_core_setup(ui)
 	# --- /core ---
+	# --- colony: отряд, лист острога и сценарий «Первая зима» ---
+	if colony_mode:
+		fps_lbl.offset_top = 120.0
+		var cl := CanvasLayer.new()
+		cl.layer = 3
+		add_child(cl)
+		colony = preload("res://scripts/colony.gd").new()
+		colony.rig = rig
+		add_child(colony)
+		colony.setup(self, cl)
+		rig.colony = colony
+		if OS.get_environment("COLONY_TEST") != "" or OS.get_environment("COLONY_SHOTS") != "":
+			var ct: Node = preload("res://scripts/colony_test.gd").new()
+			ct.set("main", self)
+			add_child(ct)
+	# --- /colony ---
 	# --- perf: PERF=1 — замер нагрузки без экрана (perf.gd) ---
 	if OS.get_environment("PERF") != "":
 		var pf: Node = preload("res://scripts/perf.gd").new()
 		pf.set("main", self)
 		add_child(pf)
+
+## --- colony: какой режим запускать. Старые проверки (бой, инструменты, охота, стройка,
+## сохранение, кадры, замер) идут по-прежнему от героя, поэтому для них — режим героя. ---
+func _colony_pick_mode() -> void:
+	colony_mode = true
+	var cf := ConfigFile.new()
+	if cf.load("user://settings.cfg") == OK:
+		colony_mode = not bool(cf.get_value("game", "hero_mode", false))
+	for e: String in ["COMBAT_TEST", "TOOLS_TEST", "HUNT_TEST", "BUILD_TEST", "SAVE_TEST", "UI_SHOTS", "SHOTS", "PERF", "HERO_MODE"]:
+		if OS.get_environment(e) != "":
+			colony_mode = false
+	for e2: String in ["COLONY_TEST", "COLONY_SHOTS"]:
+		if OS.get_environment(e2) != "":
+			colony_mode = true
 
 func _find_start() -> Vector3:
 	for r in range(0, 120, 3):
@@ -501,6 +559,10 @@ func _update_sky() -> void:
 	if hero != null:
 		hero.torch.light_energy = 2.2 * (1.0 - d) * (1.6 if lamp_lit else 1.0)  # core: жирник
 		hero.torch.omni_range = 17.0 if lamp_lit else 11.0
+	# --- colony: на отъезде дымка отступает — видна вся долина ---
+	if colony != null:
+		colony.fog_adjust()
+	# --- /colony ---
 	day_factor = d
 
 var hmap_tex: ImageTexture
@@ -681,12 +743,18 @@ func _shots() -> void:
 		get_tree().quit()
 
 func _process(delta: float) -> void:
-	if hero == null or joy == null:
+	if hero == null or (joy == null and colony == null):
 		return
 	if OS.get_environment("SHOTS") != "":
 		_shots()
+	# --- colony: далёкая камера — растворение растений считаем от середины взгляда,
+	# а не от камеры: иначе на отъезде пропала бы вся долина ---
 	var hp: Vector3 = hero.position + Vector3(0, 1.0, 0)
 	var cp: Vector3 = rig.cam.global_position
+	if colony != null:
+		hp = Vector3(0, -1000.0, 0)
+		cp = colony.veg_focus()
+	# --- /colony ---
 	for m in veg.fade_list:
 		m.set_shader_parameter("hero_pos", hp)
 		m.set_shader_parameter("cam_pos", cp)
@@ -697,7 +765,7 @@ func _process(delta: float) -> void:
 	pv.mats["tuft"].set_shader_parameter("cam_pos", cp)
 	pv.mats["tuft"].set_shader_parameter("grass_now", Time.get_ticks_msec() * 0.001)
 	water_mat.set_shader_parameter("hero_pos", hero.position)
-	water_mat.set_shader_parameter("swim", hero.swimb)
+	water_mat.set_shader_parameter("swim", hero.swimb if colony == null else 0.0)
 	water_mat.set_shader_parameter("swim_move", clampf(hero.run_mag, 0.0, 1.0))
 	_fps_t -= delta
 	if _fps_t <= 0.0:
@@ -712,8 +780,9 @@ func _process(delta: float) -> void:
 	if _near_t <= 0.0:
 		_near_t = 0.25
 		_update_near()
-	hero.move_vec = joy.value if health > 0.0 else Vector2.ZERO
-	hero.cam_yaw = rig.rotation.y
+	if joy != null:
+		hero.move_vec = joy.value if health > 0.0 else Vector2.ZERO
+		hero.cam_yaw = rig.rotation.y
 	# время суток: 1 игровой час за 75 секунд
 	t_hours += delta / 75.0
 	weather.step(delta / 75.0)
@@ -728,9 +797,10 @@ func _process(delta: float) -> void:
 		_update_stats(0.25)
 		_core_tick(0.25)  # core
 		weather.apply(veg.fade_list + pv.fade_list, terrain_mat, pv.mats["tuft"], water_mat)
-		var lbl: String = hero.action_label()
-		act_btn.visible = lbl != ""
-		act_btn.text = lbl
+		if joy != null:
+			var lbl: String = hero.action_label()
+			act_btn.visible = lbl != ""
+			act_btn.text = lbl
 	if player_rig == null:
 		return
 	# недостроенная клетка травы: следующая полоса за кадр
@@ -770,6 +840,8 @@ func _process(delta: float) -> void:
 
 ## Проверка сезонов: тап по часам в правом верхнем углу перематывает время на 2 дня вперёд.
 func _unhandled_input(e: InputEvent) -> void:
+	if colony != null:
+		return  # colony: палец разбирают камера и лист острога
 	if e is InputEventScreenTouch and e.pressed:
 		var vs := get_viewport().get_visible_rect().size
 		if e.position.x > vs.x - 520.0 and e.position.y < 90.0:
@@ -777,6 +849,11 @@ func _unhandled_input(e: InputEvent) -> void:
 			get_viewport().set_input_as_handled()
 
 func _update_stats(dt: float) -> void:
+	# --- colony: голод, тепло и усталость — у каждого свои (unit.needs_tick) ---
+	if colony != null:
+		msg_t -= dt
+		return
+	# --- /colony ---
 	hunger = maxf(0.0, hunger - 0.0004 * dt)
 	thirst = maxf(0.0, thirst - 0.0007 * dt * (1.5 if hero.running else 1.0))
 	var gh := dt / 75.0
@@ -1234,6 +1311,11 @@ func nearest_tree(p: Vector3, r: float) -> Vector3:
 
 ## Удар зверя: часть тела, кровотечение, переломы, отбрасывание.
 func hurt(amount: float, from: Vector3, kind: String) -> void:
+	# --- colony: бьют не героя, а того из отряда, кто ближе и слабее ---
+	if colony != null:
+		colony.hurt_nearest(amount, from, kind)
+		return
+	# --- /colony ---
 	if health <= 0.0:
 		return
 	var big := kind in ["bear", "tiger"]

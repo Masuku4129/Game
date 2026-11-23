@@ -28,6 +28,8 @@ var _vol: HSlider
 var _vol_lbl: Label
 var _info: Label
 var _was_paused := false
+var _hero_btn: Button      # colony: режим героя (отладка)
+var hero_mode := false     # colony: читается при запуске (main._colony_pick_mode)
 
 class GearBtn extends Button:
 	var kind := "gear"   # gear | book
@@ -89,6 +91,7 @@ func _load() -> void:
 		preset = clampi(int(c.get_value("video", "preset", 1)), 0, 2)
 		fps = int(c.get_value("video", "fps", PRESETS[preset]["fps"]))
 		volume = clampf(float(c.get_value("audio", "volume", 0.8)), 0.0, 1.0)
+		hero_mode = bool(c.get_value("game", "hero_mode", false))  # colony
 	else:
 		fps = int(PRESETS[preset]["fps"])
 
@@ -97,6 +100,7 @@ func _store() -> void:
 	c.set_value("video", "preset", preset)
 	c.set_value("video", "fps", fps)
 	c.set_value("audio", "volume", volume)
+	c.set_value("game", "hero_mode", hero_mode)  # colony
 	c.save(CFG)
 
 ## Применить всё к движку.
@@ -171,6 +175,11 @@ func _build_sheet() -> void:
 	sv.pressed.connect(_save_now)
 	var cl := _btn("Закрыть", Rect2(480, 540, 420, 84), 28)
 	cl.pressed.connect(close)
+	# --- colony: отладочный переключатель старого режима героя (джойстик, от первого лица) ---
+	_hero_btn = _btn(_hero_text(), Rect2(40, 636, 860, 76), 24)
+	_hero_btn.pressed.connect(_toggle_hero_mode)
+	sheet.offset_top = -380.0
+	sheet.offset_bottom = 380.0
 
 func _label(t: String, p: Vector2, fs: int) -> Label:
 	var l := Label.new()
@@ -218,6 +227,19 @@ func _set_vol(v: float) -> void:
 	_store()
 	apply()
 
+# --- colony: старый режим героя — для отладки; меняется при следующем запуске ---
+func _hero_text() -> String:
+	return "Режим героя (отладка): %s · нужен перезапуск" % ("да" if hero_mode else "нет")
+
+func _toggle_hero_mode() -> void:
+	hero_mode = not hero_mode
+	_store()
+	if _hero_btn != null:
+		_hero_btn.text = _hero_text()
+	if main != null:
+		main._say("Режим героя включён — перезапустите игру" if hero_mode else "Режим острога — перезапустите игру")
+# --- /colony ---
+
 func _save_now() -> void:
 	if main != null and main.saver != null:
 		main.saver.enabled = true
@@ -247,4 +269,5 @@ func _process(_d: float) -> void:
 	if main == null or main.hero == null:
 		return
 	var inv_open: bool = main.inventory != null and (main.inventory.is_open() or main.hero.pack_stage != "")
-	gear.visible = not inv_open and main.hero.state != "dead"
+	# colony: в режиме острога шестерёнка всегда на месте
+	gear.visible = main.colony != null or (not inv_open and main.hero.state != "dead")

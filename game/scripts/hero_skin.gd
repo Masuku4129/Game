@@ -27,8 +27,10 @@ static func _tex_of(m: Material) -> Texture2D:
 		return (m as BaseMaterial3D).albedo_texture
 	return null
 
-## Сборка: возвращает {model, ap, sk}
-static func build(parent: Node3D) -> Dictionary:
+## Сборка: возвращает {model, ap, sk}.
+## --- colony: pal — своя раскраска для каждого землепроходца (ключи jacket, pants,
+## boots, fur, hair); пусто — цвета героя. ---
+static func build(parent: Node3D, pal: Dictionary = {}) -> Dictionary:
 	var model: Node3D = load(BODY).instantiate()
 	parent.add_child(model)
 	var sk: Skeleton3D = model.find_child("Skeleton3D", true, false)
@@ -43,7 +45,7 @@ static func build(parent: Node3D) -> Dictionary:
 			elif mi.name == "Eyebrows":
 				tint = Color(0.45, 0.32, 0.22)
 			mi.set_surface_override_material(s, mat(tint, _tex_of(om), false, 0.4 if mi.name == "Eyebrows" else 0.0))
-	_dress(sk, body)
+	_dress(sk, body, pal)
 	# причёска и борода — неподвижные модели, крепим к голове
 	var hb := sk.find_bone("Head")
 	var ba := BoneAttachment3D.new()
@@ -51,9 +53,10 @@ static func build(parent: Node3D) -> Dictionary:
 	sk.add_child(ba)
 	for h in HAIR:
 		var hn: Node3D = load(h).instantiate()
+		var hair_c: Color = pal.get("hair", Color(0.5, 0.36, 0.26))
 		for mi: MeshInstance3D in hn.find_children("*", "MeshInstance3D", true, false):
 			for s in mi.mesh.get_surface_count():
-				mi.set_surface_override_material(s, mat(Color(0.5, 0.36, 0.26), _tex_of(mi.mesh.surface_get_material(s)), false, 0.35))
+				mi.set_surface_override_material(s, mat(hair_c, _tex_of(mi.mesh.surface_get_material(s)), false, 0.35))
 		hn.transform = sk.get_bone_global_rest(hb).affine_inverse()
 		ba.add_child(hn)
 	# анимации: обе библиотеки в один проигрыватель; позиции костей оставляем только у таза
@@ -82,7 +85,7 @@ static func build(parent: Node3D) -> Dictionary:
 
 ## Одежда из тела: куртка-полушубок до бёдер с меховым воротом и обшлагами, штаны, сапоги.
 ## Каждый треугольник тела принадлежит ровно одному слою — без щелей; под одеждой тело убирается.
-static func _dress(sk: Skeleton3D, body: MeshInstance3D) -> void:
+static func _dress(sk: Skeleton3D, body: MeshInstance3D, pal: Dictionary = {}) -> void:
 	var mesh: ArrayMesh = body.mesh
 	var arr := mesh.surface_get_arrays(0)
 	var vs: PackedVector3Array = arr[Mesh.ARRAY_VERTEX]
@@ -132,7 +135,8 @@ static func _dress(sk: Skeleton3D, body: MeshInstance3D) -> void:
 		elif b.begins_with("foot") or b.begins_with("ball"):
 			r = 3
 		region[i] = r
-	var lay := {1: [0.032, Color(0.5, 0.41, 0.31)], 2: [0.014, Color(0.44, 0.43, 0.37)], 3: [0.018, Color(0.3, 0.22, 0.16)], 4: [0.03, Color(0.82, 0.76, 0.64)]}
+	var lay := {1: [0.032, pal.get("jacket", Color(0.5, 0.41, 0.31))], 2: [0.014, pal.get("pants", Color(0.44, 0.43, 0.37))],
+		3: [0.018, pal.get("boots", Color(0.3, 0.22, 0.16))], 4: [0.03, pal.get("fur", Color(0.82, 0.76, 0.64))]}
 	var tris := {0: PackedInt32Array(), 1: PackedInt32Array(), 2: PackedInt32Array(), 3: PackedInt32Array(), 4: PackedInt32Array()}
 	for t in range(0, idx.size(), 3):
 		# слой треугольника — наибольший номер среди вершин (мех и одежда перекрывают кожу)

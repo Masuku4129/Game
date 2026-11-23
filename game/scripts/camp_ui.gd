@@ -576,7 +576,7 @@ func open_stove(s: Dictionary) -> void:
 func open_site(s: Dictionary) -> void:
 	_open(func() -> Dictionary:
 		var rows: Array = []
-		var need: Dictionary = camp.DEFS["cabin"]["need"]
+		var need: Dictionary = camp.need_of(s)
 		var have: Dictionary = s["have"]
 		for id: String in need:
 			rows.append(["%s: на стройке %d из %d   (в коробе %d)" % [IT.name_of(id), int(have.get(id, 0)), int(need[id]), camp.count(id)]])
