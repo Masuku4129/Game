@@ -215,7 +215,7 @@ func _shot(nm: String) -> void:
 func _shot_step() -> void:
 	var rig = colony.rig
 	match _n:
-		20:
+		10:
 			# работа: двое рубят и носят, третий собирает
 			colony.give("log", 6)
 			colony.give("plank", 4)
@@ -225,29 +225,29 @@ func _shot_step() -> void:
 			var r2: Dictionary = colony.find_res_near(colony.center(), 40.0)
 			if not r2.is_empty():
 				colony.jobs.start(colony.units[2], "gather", {"res": r2, "pos": r2["pos"]})
-		60:
+		20:
 			rig.snap_to(colony.units[0].position, 12.0, 0.7)
-		90:
+		30:
 			_shot("1_vblizi")
-		95:
+		34:
 			rig.snap_to(colony.center(), 42.0, 0.7)
-		125:
+		44:
 			_shot("2_lager")
-		130:
+		48:
 			rig.snap_to(colony.center(), 140.0, 0.9)
-		168:
+		58:
 			_shot("3_daleko")
-		174:
+		62:
 			rig.snap_to(colony.center(), 36.0, 0.4)
 			colony.ui._open_build()
-		198:
+		72:
 			_shot("4_stroika")
-		203:
+		76:
 			colony.ui._pick_type("storehouse")
 			colony.build_move(colony.nav.nearest_free(colony.center() + Vector3(5, 0, -4), 8.0))
-		218:
+		84:
 			_shot("5_prizrak")
-		223:
+		88:
 			colony.ui._close_build()
 			var hit: Dictionary = {}
 			var rec2: Array = colony.find_tree_near(colony.center(), 40.0)
@@ -255,9 +255,9 @@ func _shot_step() -> void:
 				hit = {"what": "tree", "rec": rec2, "pos": (rec2[2] as Transform3D).origin}
 				colony.ui.open_radial(Vector2(900, 420), colony.jobs.commands(hit) + [["Нести в амбар", "move"], ["Погреться", "move"]], hit)
 			colony.scenario.say("Волки! Стая идёт к лагерю")
-		243:
+		98:
 			_shot("6_prikazy")
-		248:
+		102:
 			colony.ui.close_radial()
 			# зима: снег, метель, вечер
 			main.weather.fast_forward(24.0 * 13.0)
@@ -265,8 +265,8 @@ func _shot_step() -> void:
 			main.t_hours = 17.0
 			main._update_sky()
 			rig.snap_to(colony.center(), 30.0, 1.2)
-		288:
+		118:
 			_shot("7_zima")
-		300:
+		124:
 			print("CL shots done")
 			get_tree().quit()
