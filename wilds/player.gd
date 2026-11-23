@@ -253,9 +253,12 @@ func _refresh() -> void:
 	var view: String = SECTORS[_sector][0]
 	var flip: bool = SECTORS[_sector][1]
 	var key := "idle_" + view
-	var walking := _moving and view in WALK_SETS
+	var wview := view
+	if view == "se" or view == "ne":
+		wview = "e"      # диагонали: кадры ходьбы вбок, корпус не меняем
+	var walking := _moving and wview in WALK_SETS
 	if walking:
-		key = "walk_%s_%d" % [view, int(_wt) % 4]
+		key = "walk_%s_%d" % [wview, int(_wt) % 4]
 	var d: Array = _data[key]
 	_spr.texture = _tex[key]
 	_spr.offset = Vector2(-d[0], -d[1])
