@@ -14,7 +14,6 @@ const ATTACK_FPS := [16.0, 19.0, 14.0]   # скорость ударов 1-3 (к
 const DASH_FPS := 20.0
 const DASH_SPEED := 460.0
 const DASH_FRAMES := [2, 3, 3, 3, 4, 5]  # кадры листа удара, которые играют в рывке
-const VFX_ROWS := [0, 1, 3]              # ряды эффектов для ударов 1-3
 
 # сектор (0=вправо, по часовой на экране) -> [вид, зеркалить]
 const SECTORS := [
@@ -46,7 +45,6 @@ var _spr: Sprite2D
 var _tex := {}
 var _data := {}
 var _atex := {}                 # вид -> [Texture2D x8]
-var _vfx_tex: Texture2D
 
 
 func _ready() -> void:
@@ -65,7 +63,6 @@ func _ready() -> void:
 		for f in ATK.DATA[v]["frames"]:
 			r.append(load("res://art/atk/" + f[0]))
 		_atex[v] = r
-	_vfx_tex = load("res://art/vfx/vfx_light1.png")
 
 	_spr = Sprite2D.new()
 	_spr.centered = false
@@ -192,7 +189,7 @@ func _tick_attack(delta: float) -> void:
 		_clamp_world()
 	if not _vfx_done and f >= 3:
 		_vfx_done = true
-		_spawn_vfx(VFX_ROWS[_combo])
+		_spawn_slash(_combo)
 	if _queued and _combo < 2 and f >= 6:
 		_combo += 1
 		_start_attack()
@@ -208,7 +205,6 @@ func _start_dash(dir: Vector2) -> void:
 	if dir.length() > 0.3:
 		_sector = posmod(roundi(dir.angle() / (PI / 4.0)), 8)
 	_dash_dir = _aim_vec(_sector).normalized()
-	_spawn_vfx(1)
 
 
 func _tick_dash(delta: float) -> void:
@@ -223,19 +219,20 @@ func _tick_dash(delta: float) -> void:
 		_moving = false
 
 
-func _spawn_vfx(row: int) -> void:
-	var s = preload("res://vfx_once.gd").new()
-	s.texture = _vfx_tex
-	s.hframes = 13
-	s.vframes = 4
-	s.row = row
-	s.frame = row * 13
-	var m := CanvasItemMaterial.new()
-	m.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
-	s.material = m
-	var v := Vector2.from_angle(_sector * PI / 4.0)
-	s.position = Vector2(v.x * 62.0, v.y * 62.0 * Y_SCALE - 64.0)
-	s.rotation = v.angle()
+func _spawn_slash(combo: int, hold := -1.0) -> void:
+	var s = preload("res://slash_fx.gd").new()
+	var th := _sector * PI / 4.0
+	var sgn := 1.0 if combo != 1 else -1.0
+	s.a0 = th - 1.45 * sgn
+	s.a1 = th + 1.45 * sgn
+	s.rot = [-0.35, 0.35, 0.0][combo] * (-1.0 if cos(th) < -0.1 else 1.0)
+	if combo == 2:
+		s.rx = 90.0
+		s.ry = 120.0
+		s.a0 = th - 1.7 * sgn - PI * 0.5
+		s.a1 = th + 1.1 * sgn - PI * 0.5
+	s.hold = hold
+	s.position = Vector2(0.0, -62.0)
 	add_child(s)
 
 

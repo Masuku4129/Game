@@ -165,4 +165,24 @@ func _shots(dir: String) -> void:
 			var ay := im2.get_height() / 2 - 200
 			asheet.blit_rect(im2, Rect2i(ax, maxi(ay, 0), acw, ach), Vector2i(c * acw, r * ach))
 	asheet.save_png(dir + "/attack_sheet.png")
+
+	# полумесяцы: три удара x три вида
+	var fw := 420
+	var fh := 300
+	var fxs := Image.create(fw * 3, fh * 3, false, Image.FORMAT_RGBA8)
+	var vs := [0, 2, 6]
+	for r in 3:
+		for c in 3:
+			for ch in player.get_children():
+				if ch.get_script() and ch.has_method("_pt"):
+					ch.queue_free()
+			player.set_attack_pose(vs[r], 4)
+			player._spawn_slash(c, 0.62)
+			for k in 3:
+				await get_tree().process_frame
+			await RenderingServer.frame_post_draw
+			var im3 := get_viewport().get_texture().get_image()
+			im3.convert(Image.FORMAT_RGBA8)
+			fxs.blit_rect(im3, Rect2i(im3.get_width() / 2 - fw / 2, im3.get_height() / 2 - 230, fw, fh), Vector2i(c * fw, r * fh))
+	fxs.save_png(dir + "/slash_fx.png")
 	get_tree().quit()
