@@ -1,0 +1,372 @@
+{
+ "rows": [
+  [
+   {
+    "file": "anim/mita_anim1_r0_00.png",
+    "px": 51.2,
+    "py": 233,
+    "h": 256
+   },
+   {
+    "file": "anim/mita_anim1_r0_01.png",
+    "px": 54.6,
+    "py": 233,
+    "h": 256
+   },
+   {
+    "file": "anim/mita_anim1_r0_02.png",
+    "px": 64.0,
+    "py": 233,
+    "h": 256
+   },
+   {
+    "file": "anim/mita_anim1_r0_03.png",
+    "px": 68.4,
+    "py": 233,
+    "h": 256
+   },
+   {
+    "file": "anim/mita_anim1_r0_04.png",
+    "px": 66.8,
+    "py": 233,
+    "h": 256
+   },
+   {
+    "file": "anim/mita_anim1_r0_05.png",
+    "px": 74.2,
+    "py": 233,
+    "h": 256
+   },
+   {
+    "file": "anim/mita_anim1_r0_06.png",
+    "px": 70.6,
+    "py": 233,
+    "h": 256
+   },
+   {
+    "file": "anim/mita_anim1_r0_07.png",
+    "px": 70.0,
+    "py": 233,
+    "h": 256
+   },
+   {
+    "file": "anim/mita_anim1_r0_08.png",
+    "px": 67.4,
+    "py": 233,
+    "h": 256
+   },
+   {
+    "file": "anim/mita_anim1_r0_09.png",
+    "px": 61.8,
+    "py": 233,
+    "h": 256
+   },
+   {
+    "file": "anim/mita_anim1_r0_10.png",
+    "px": 61.2,
+    "py": 233,
+    "h": 256
+   },
+   {
+    "file": "anim/mita_anim1_r0_11.png",
+    "px": 62.6,
+    "py": 233,
+    "h": 256
+   },
+   {
+    "file": "anim/mita_anim1_r0_12.png",
+    "px": 62.0,
+    "py": 233,
+    "h": 256
+   },
+   {
+    "file": "anim/mita_anim1_r0_13.png",
+    "px": 56.4,
+    "py": 233,
+    "h": 256
+   },
+   {
+    "file": "anim/mita_anim1_r0_14.png",
+    "px": 52.8,
+    "py": 233,
+    "h": 256
+   }
+  ],
+  [
+   {
+    "file": "anim/mita_anim1_r1_00.png",
+    "px": 51.2,
+    "py": 230,
+    "h": 256
+   },
+   {
+    "file": "anim/mita_anim1_r1_01.png",
+    "px": 58.6,
+    "py": 230,
+    "h": 256
+   },
+   {
+    "file": "anim/mita_anim1_r1_02.png",
+    "px": 68.0,
+    "py": 230,
+    "h": 256
+   },
+   {
+    "file": "anim/mita_anim1_r1_03.png",
+    "px": 73.4,
+    "py": 230,
+    "h": 256
+   },
+   {
+    "file": "anim/mita_anim1_r1_04.png",
+    "px": 69.8,
+    "py": 230,
+    "h": 256
+   },
+   {
+    "file": "anim/mita_anim1_r1_05.png",
+    "px": 71.2,
+    "py": 230,
+    "h": 256
+   },
+   {
+    "file": "anim/mita_anim1_r1_06.png",
+    "px": 81.6,
+    "py": 230,
+    "h": 256
+   },
+   {
+    "file": "anim/mita_anim1_r1_07.png",
+    "px": 81.0,
+    "py": 230,
+    "h": 256
+   },
+   {
+    "file": "anim/mita_anim1_r1_08.png",
+    "px": 52.4,
+    "py": 230,
+    "h": 256
+   },
+   {
+    "file": "anim/mita_anim1_r1_09.png",
+    "px": 53.8,
+    "py": 230,
+    "h": 256
+   },
+   {
+    "file": "anim/mita_anim1_r1_10.png",
+    "px": 49.2,
+    "py": 230,
+    "h": 256
+   },
+   {
+    "file": "anim/mita_anim1_r1_11.png",
+    "px": 53.6,
+    "py": 230,
+    "h": 256
+   },
+   {
+    "file": "anim/mita_anim1_r1_12.png",
+    "px": 46.0,
+    "py": 230,
+    "h": 256
+   },
+   {
+    "file": "anim/mita_anim1_r1_13.png",
+    "px": 44.4,
+    "py": 230,
+    "h": 256
+   },
+   {
+    "file": "anim/mita_anim1_r1_14.png",
+    "px": 51.8,
+    "py": 230,
+    "h": 256
+   }
+  ],
+  [
+   {
+    "file": "anim/mita_anim1_r2_00.png",
+    "px": 51.2,
+    "py": 217,
+    "h": 256
+   },
+   {
+    "file": "anim/mita_anim1_r2_01.png",
+    "px": 57.6,
+    "py": 217,
+    "h": 256
+   },
+   {
+    "file": "anim/mita_anim1_r2_02.png",
+    "px": 67.0,
+    "py": 217,
+    "h": 256
+   },
+   {
+    "file": "anim/mita_anim1_r2_03.png",
+    "px": 65.4,
+    "py": 217,
+    "h": 256
+   },
+   {
+    "file": "anim/mita_anim1_r2_04.png",
+    "px": 69.8,
+    "py": 217,
+    "h": 256
+   },
+   {
+    "file": "anim/mita_anim1_r2_05.png",
+    "px": 72.2,
+    "py": 217,
+    "h": 256
+   },
+   {
+    "file": "anim/mita_anim1_r2_06.png",
+    "px": 60.6,
+    "py": 217,
+    "h": 256
+   },
+   {
+    "file": "anim/mita_anim1_r2_07.png",
+    "px": 42.0,
+    "py": 217,
+    "h": 256
+   },
+   {
+    "file": "anim/mita_anim1_r2_08.png",
+    "px": 22.4,
+    "py": 217,
+    "h": 256
+   },
+   {
+    "file": "anim/mita_anim1_r2_09.png",
+    "px": 25.8,
+    "py": 217,
+    "h": 256
+   },
+   {
+    "file": "anim/mita_anim1_r2_10.png",
+    "px": 81.2,
+    "py": 217,
+    "h": 256
+   },
+   {
+    "file": "anim/mita_anim1_r2_11.png",
+    "px": 22.6,
+    "py": 217,
+    "h": 256
+   },
+   {
+    "file": "anim/mita_anim1_r2_12.png",
+    "px": 37.0,
+    "py": 217,
+    "h": 256
+   },
+   {
+    "file": "anim/mita_anim1_r2_13.png",
+    "px": 22.4,
+    "py": 217,
+    "h": 256
+   },
+   {
+    "file": "anim/mita_anim1_r2_14.png",
+    "px": 34.8,
+    "py": 217,
+    "h": 256
+   }
+  ],
+  [
+   {
+    "file": "anim/mita_anim1_r3_00.png",
+    "px": 51.2,
+    "py": 198,
+    "h": 256
+   },
+   {
+    "file": "anim/mita_anim1_r3_01.png",
+    "px": 55.6,
+    "py": 198,
+    "h": 256
+   },
+   {
+    "file": "anim/mita_anim1_r3_02.png",
+    "px": 78.0,
+    "py": 198,
+    "h": 256
+   },
+   {
+    "file": "anim/mita_anim1_r3_03.png",
+    "px": 27.4,
+    "py": 198,
+    "h": 256
+   },
+   {
+    "file": "anim/mita_anim1_r3_04.png",
+    "px": 23.8,
+    "py": 198,
+    "h": 256
+   },
+   {
+    "file": "anim/mita_anim1_r3_05.png",
+    "px": 81.2,
+    "py": 198,
+    "h": 256
+   },
+   {
+    "file": "anim/mita_anim1_r3_06.png",
+    "px": 67.6,
+    "py": 198,
+    "h": 256
+   },
+   {
+    "file": "anim/mita_anim1_r3_07.png",
+    "px": 67.0,
+    "py": 198,
+    "h": 256
+   },
+   {
+    "file": "anim/mita_anim1_r3_08.png",
+    "px": 72.4,
+    "py": 198,
+    "h": 256
+   },
+   {
+    "file": "anim/mita_anim1_r3_09.png",
+    "px": 78.8,
+    "py": 198,
+    "h": 256
+   },
+   {
+    "file": "anim/mita_anim1_r3_10.png",
+    "px": 59.2,
+    "py": 198,
+    "h": 256
+   },
+   {
+    "file": "anim/mita_anim1_r3_11.png",
+    "px": 48.6,
+    "py": 198,
+    "h": 256
+   },
+   {
+    "file": "anim/mita_anim1_r3_12.png",
+    "px": 47.0,
+    "py": 198,
+    "h": 256
+   },
+   {
+    "file": "anim/mita_anim1_r3_13.png",
+    "px": 32.4,
+    "py": 198,
+    "h": 256
+   },
+   {
+    "file": "anim/mita_anim1_r3_14.png",
+    "px": 43.8,
+    "py": 198,
+    "h": 256
+   }
+  ]
+ ]
+}

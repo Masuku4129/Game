@@ -1,0 +1,3 @@
+Лист эффектов (чёрный фон, 4 ряда x 13 кадров) приведён к 1768x888:
+  python -c "from PIL import Image; Image.open('art/source/vfx_light1.png').convert('RGB').resize((1768,888)).save('art/vfx/vfx_light1.png')"
+В игре рисуется с аддитивным смешиванием, чёрный фон исчезает. Ряды: 0 серп, 1 диагональ, 2 вспышка, 3 вихрь.

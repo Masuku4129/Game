@@ -44,6 +44,9 @@ func _ready() -> void:
 	var stick = preload("res://joystick.gd").new()
 	ui.add_child(stick)
 	player.stick = stick
+	var buttons = preload("res://action_buttons.gd").new()
+	buttons.player = player
+	ui.add_child(buttons)
 
 	fps_label = Label.new()
 	fps_label.position = Vector2(12, 8)
@@ -144,4 +147,22 @@ func _shots(dir: String) -> void:
 		sheet.blit_rect(img, Rect2i(x0, maxi(y0, 0), cw, ch), Vector2i(idx * cw, 0))
 		idx += 1
 	sheet.save_png(dir + "/mita_sheet.png")
+
+	# кадры боя: 4 ряда по 5 кадров, камера ближе
+	cam.zoom = Vector2(2.0, 2.0)
+	var acw := 200
+	var ach := 280
+	var asheet := Image.create(acw * 8, ach * 4, false, Image.FORMAT_RGBA8)
+	for r in 4:
+		for c in 8:
+			player.set_attack_pose(r, c * 2)
+			for k in 4:
+				await get_tree().process_frame
+			await RenderingServer.frame_post_draw
+			var im2 := get_viewport().get_texture().get_image()
+			im2.convert(Image.FORMAT_RGBA8)
+			var ax := im2.get_width() / 2 - acw / 2
+			var ay := im2.get_height() / 2 - 230
+			asheet.blit_rect(im2, Rect2i(ax, maxi(ay, 0), acw, ach), Vector2i(c * acw, r * ach))
+	asheet.save_png(dir + "/attack_sheet.png")
 	get_tree().quit()
