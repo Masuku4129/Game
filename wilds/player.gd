@@ -236,6 +236,11 @@ func _start_attack() -> void:
 	_queued = false
 	_vfx_done = false
 	_hit_done = false
+	# звук удара
+	for snd in get_tree().get_nodes_in_group("sound"):
+		if snd.has_method("play_sound"):
+			snd.play_sound("attack")
+			break
 
 
 func _is_side() -> bool:

@@ -475,6 +475,8 @@ func _make_bridge_trigger() -> void:
 	# при наложении любого тела проверяем что это игрок
 	area.body_entered.connect(_on_bridge_body(area))
 	add_child(area)
+	# --- арена босса ---
+	_make_arena_trigger()
 
 
 func _on_bridge_body(area: Area2D) -> Callable:
@@ -489,3 +491,39 @@ func _on_bridge_body(area: Area2D) -> Callable:
 		var main := get_tree().current_scene
 		if main.has_method("on_skill_unlocked"):
 			main.on_skill_unlocked()
+
+
+# ------------------------------------------------------------------ арена босса
+func _make_arena_trigger() -> void:
+	# Триггер входа в арену: спавним hd-босса и уведомляем HUD
+	var area := Area2D.new()
+	area.collision_layer = 0
+	area.collision_mask  = 1
+	var cs := CollisionShape2D.new()
+	var circ := CircleShape2D.new()
+	circ.radius = 500.0
+	cs.shape = circ
+	cs.position = ARENA
+	area.add_child(cs)
+	var triggered := [false]
+	area.body_entered.connect(func(body: Node2D) -> void:
+		if triggered[0] or not body.is_in_group("player"):
+			return
+		triggered[0] = true
+		area.set_deferred("monitoring", false)
+		_spawn_boss()
+	)
+	add_child(area)
+
+
+func _spawn_boss() -> void:
+	var e = preload("res://enemy.gd").new()
+	e.setup("hd")
+	e.position = ARENA + Vector2(0, -180)
+	world.add_child(e)
+	# уведомляем HUD
+	await get_tree().process_frame
+	for n in get_tree().get_nodes_in_group("hud"):
+		if n.has_method("show_boss"):
+			n.show_boss(e)
+			break

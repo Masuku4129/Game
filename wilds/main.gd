@@ -11,6 +11,7 @@ var player
 var cam: Camera2D
 var fps_label: Label
 var kills := 0
+var _snd: AudioStreamPlayer   # звуковой движок
 
 
 func _ready() -> void:
@@ -56,6 +57,11 @@ func _ready() -> void:
 	fps_label.add_theme_font_size_override("font_size", 18)
 	ui.add_child(fps_label)
 
+	# звуки
+	_snd = AudioStreamPlayer.new()
+	add_child(_snd)
+	add_to_group("sound")
+
 	var shots := OS.get_environment("SHOTS")
 	if shots != "":
 		_shots(shots)
@@ -63,6 +69,84 @@ func _ready() -> void:
 
 func on_kill(_kind: String) -> void:
 	kills += 1
+	play_sound("kill")
+
+
+## Воспроизводит процедурный звук по имени
+func play_sound(name: String) -> void:
+	var gen := AudioStreamGenerator.new()
+	gen.mix_rate = 22050.0
+	gen.buffer_length = 0.12
+	_snd.stream = gen
+	_snd.play()
+	var pb := _snd.get_stream_playback() as AudioStreamGeneratorPlayback
+	if pb == null:
+		return
+	var frames := int(gen.mix_rate * gen.buffer_length)
+	var buf := PackedVector2Array()
+	buf.resize(frames)
+	match name:
+		"hit":        _gen_hit(buf, frames, gen.mix_rate)
+		"kill":       _gen_kill(buf, frames, gen.mix_rate)
+		"attack":     _gen_attack(buf, frames, gen.mix_rate)
+		"skill":      _gen_skill(buf, frames, gen.mix_rate)
+		"boss_rage":  _gen_boss_rage(buf, frames, gen.mix_rate)
+		_:            _gen_hit(buf, frames, gen.mix_rate)
+	pb.push_buffer(buf)
+
+
+func _gen_hit(buf: PackedVector2Array, n: int, sr: float) -> void:
+	# Короткий удар: белый шум + падающий тон
+	for i in n:
+		var t := float(i) / sr
+		var env := exp(-t * 28.0)
+		var tone := sin(TAU * (320.0 - t * 800.0) * t) * 0.4
+		var noise := randf_range(-1.0, 1.0) * 0.3
+		var v := (tone + noise) * env * 0.6
+		buf[i] = Vector2(v, v)
+
+
+func _gen_kill(buf: PackedVector2Array, n: int, sr: float) -> void:
+	# Убийство: короткий glitch + нисходящий свист
+	for i in n:
+		var t := float(i) / sr
+		var env := exp(-t * 15.0)
+		var freq := 480.0 * exp(-t * 6.0)
+		var v := sin(TAU * freq * t) * env * 0.55
+		buf[i] = Vector2(v, v)
+
+
+func _gen_attack(buf: PackedVector2Array, n: int, sr: float) -> void:
+	# Выпад: короткий свист воздуха
+	for i in n:
+		var t := float(i) / sr
+		var env := exp(-t * 20.0)
+		var v := randf_range(-1.0, 1.0) * env * sin(TAU * 220.0 * t) * 0.4
+		buf[i] = Vector2(v, v)
+
+
+func _gen_skill(buf: PackedVector2Array, n: int, sr: float) -> void:
+	# Умение: восходящий арпеджио
+	var notes := [261.6, 329.6, 392.0, 523.3]
+	for i in n:
+		var t := float(i) / sr
+		var idx := clampi(int(t / (gen_duration(buf, sr) / 4.0)), 0, 3)
+		var env := sin(PI * t / gen_duration(buf, sr))
+		var v := sin(TAU * notes[idx] * t) * env * 0.45
+		buf[i] = Vector2(v, v)
+
+
+func gen_duration(buf: PackedVector2Array, sr: float) -> float:
+	return buf.size() / sr
+
+
+func _gen_boss_rage(buf: PackedVector2Array, n: int, sr: float) -> void:
+	# Вой босса: низкий рёв
+	for i in n:
+		var t := float(i) / sr
+		var env := sin(PI * t / (n / sr))
+		var v := (sin(TAU * 80.0 * t) + sin(TAU * 160.0 * t) * 0.5) * env * 0.5
+		buf[i] = Vector2(v, v)
 
 
 func on_skill_unlocked() -> void:
