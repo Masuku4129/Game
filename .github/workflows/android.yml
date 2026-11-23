@@ -11,7 +11,7 @@ permissions:
 jobs:
   preview:
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 45
     continue-on-error: true
     container:
       image: barichello/godot-ci:4.3
@@ -27,9 +27,8 @@ jobs:
         run: |
           mkdir -p /tmp/pv
           cd game
-          SHOTS=/tmp/pv timeout 600 xvfb-run -a -s "-screen 0 1920x864x24" godot --rendering-driver vulkan --resolution 1920x864 res://scenes/style_test.tscn 2>&1 | grep -iE "error|shot" | head -40 || true
-          SHOTS=/tmp/pv timeout 900 xvfb-run -a -s "-screen 0 1920x864x24" godot --rendering-driver vulkan --resolution 1920x864 2>&1 | grep -iE "SCRIPT ERROR|shot" | head -20 || true
-          COLONY_SHOTS=/tmp/pv timeout 1500 xvfb-run -a -s "-screen 0 1920x864x24" godot --rendering-driver vulkan --resolution 1920x864 2>&1 | grep -iE "SCRIPT ERROR|CL " | head -30 || true
+          COLONY_SHOTS=/tmp/pv timeout 1200 xvfb-run -a -s "-screen 0 1920x864x24" godot --rendering-driver vulkan --resolution 1920x864 2>&1 | grep -iE "SCRIPT ERROR|CL " | head -30 || true
+          SHOTS=/tmp/pv timeout 600 xvfb-run -a -s "-screen 0 1920x864x24" godot --rendering-driver vulkan --resolution 1920x864 2>&1 | grep -iE "SCRIPT ERROR|shot" | head -20 || true
           ls /tmp/pv
       - name: Publish preview frames to branch
         run: |
