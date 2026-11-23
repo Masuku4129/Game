@@ -32,7 +32,8 @@ var main_btns: Array = []
 var plan_sheet: Control
 var zone_bar: Control
 var cards: Array = []
-var card_box := HBoxContainer.new()
+var build_sheet: Control
+var build_rows: Array = []
 var rot_l: Button
 var rot_r: Button
 var place_btn: Button
@@ -115,18 +116,6 @@ func _ready() -> void:
 	auto_btn = _grid("Сам: да", 1, 3)
 	auto_btn.pressed.connect(_toggle_auto)
 	main_btns = [order_btn, build_btn, plan_btn, zone_btn, desig_btn, box_btn, stop_btn, auto_btn]
-	# полоса построек
-	card_box.anchor_left = 0.0
-	card_box.anchor_right = 1.0
-	card_box.anchor_top = 1.0
-	card_box.anchor_bottom = 1.0
-	card_box.offset_left = 24.0
-	card_box.offset_right = -24.0
-	card_box.offset_top = -300.0
-	card_box.offset_bottom = -160.0
-	card_box.add_theme_constant_override("separation", 12)
-	card_box.visible = false
-	add_child(card_box)
 	rot_l = _btn("⟲", -620.0, -150.0, 130.0, 100.0)
 	rot_r = _btn("⟳", -470.0, -150.0, 130.0, 100.0)
 	place_btn = _btn("Ставить", -300.0, -150.0, 270.0, 100.0)
@@ -183,22 +172,76 @@ func _show_main(on: bool) -> void:
 
 func _open_build() -> void:
 	_close_tools()
-	card_box.visible = true
 	_show_main(false)
-	for c in cards:
-		(c as Node).queue_free()
-	cards = []
+	_free_build_sheet()
+	var sh: Control = SHEET.new()
+	sh.set("title", "Стройка")
+	sh.set("info", "листай, тап — выбрать")
+	sh.anchor_left = 0.0
+	sh.anchor_right = 0.0
+	sh.anchor_top = 0.0
+	sh.anchor_bottom = 1.0
+	sh.offset_left = 24.0
+	sh.offset_right = 824.0
+	sh.offset_top = 110.0
+	sh.offset_bottom = -170.0
+	sh.mouse_filter = Control.MOUSE_FILTER_STOP
+	add_child(sh)
+	build_sheet = sh
+	var sc := ScrollContainer.new()
+	sc.anchor_right = 1.0
+	sc.anchor_bottom = 1.0
+	sc.offset_left = 24.0
+	sc.offset_top = 100.0
+	sc.offset_right = -24.0
+	sc.offset_bottom = -24.0
+	sc.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	sc.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_AUTO
+	sc.scroll_deadzone = 12
+	sh.add_child(sc)
+	var vb := VBoxContainer.new()
+	vb.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	vb.custom_minimum_size = Vector2(720, 0)
+	vb.add_theme_constant_override("separation", 12)
+	sc.add_child(vb)
+	build_rows = []
 	for type: String in main.camp.ORDER_COLONY:
-		var d: Dictionary = main.camp.DEFS[type]
 		var b := Button.new()
-		b.custom_minimum_size = Vector2(230, 130)
+		b.custom_minimum_size = Vector2(0, 150)
+		b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		b.focus_mode = Control.FOCUS_NONE
-		b.text = "%s\n%s" % [String(d["name"]), _cost_text(d)]
+		b.alignment = HORIZONTAL_ALIGNMENT_LEFT
 		b.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		INV.style_button(b, 24)
+		b.mouse_filter = Control.MOUSE_FILTER_PASS
+		INV.style_button(b, 26)
 		b.pressed.connect(_pick_type.bind(type))
-		card_box.add_child(b)
-		cards.append(b)
+		vb.add_child(b)
+		build_rows.append([type, b])
+	_refresh_build_rows()
+	var x := _btn("Закрыть", 0.0, 0.0, 200.0, 70.0)
+	remove_child(x)
+	x.anchor_left = 1.0
+	x.anchor_right = 1.0
+	x.anchor_top = 0.0
+	x.anchor_bottom = 0.0
+	x.offset_left = -214.0
+	x.offset_right = -22.0
+	x.offset_top = 14.0
+	x.offset_bottom = 78.0
+	INV.style_button(x, 26)
+	x.pressed.connect(_close_build)
+	sh.add_child(x)
+
+func _refresh_build_rows() -> void:
+	for r: Array in build_rows:
+		var d: Dictionary = main.camp.DEFS[String(r[0])]
+		(r[1] as Button).text = "%s\n%s\n%s" % [String(d["name"]), String(d.get("desc", "")), _cost_text(d)]
+
+func _free_build_sheet() -> void:
+	if build_sheet != null:
+		build_sheet.queue_free()
+		build_sheet = null
+	build_rows = []
 
 func _cost_text(d: Dictionary) -> String:
 	var parts: Array = []
@@ -207,14 +250,14 @@ func _cost_text(d: Dictionary) -> String:
 		src = d.get("cost", {})
 	for k: String in src:
 		var have: int = colony.count(k)
-		parts.append("%s %d/%d" % [preload("res://scripts/items.gd").name_of(k).to_lower(), have, int(src[k])])
+		parts.append("%s %d/%d%s" % [preload("res://scripts/items.gd").name_of(k).to_lower(), have, int(src[k]), " ✓" if have >= int(src[k]) else ""])
 	if parts.is_empty():
 		return "даром"
 	return " · ".join(PackedStringArray(parts))
 
 func _pick_type(type: String) -> void:
 	colony.build_begin(type)
-	card_box.visible = false
+	_free_build_sheet()
 	for b: Button in [rot_l, rot_r, place_btn, cancel_btn]:
 		b.visible = true
 
@@ -224,7 +267,7 @@ func _place() -> void:
 
 func _close_build() -> void:
 	colony.build_cancel()
-	card_box.visible = false
+	_free_build_sheet()
 	for b: Button in [rot_l, rot_r, place_btn, cancel_btn]:
 		b.visible = false
 	_show_main(true)
@@ -534,13 +577,8 @@ func _process(delta: float) -> void:
 	_t -= delta
 	if _t <= 0.0:
 		_t = 0.2
-		if card_box.visible:
-			var i := 0
-			for type: String in main.camp.ORDER_COLONY:
-				if i < cards.size():
-					var d: Dictionary = main.camp.DEFS[type]
-					(cards[i] as Button).text = "%s\n%s" % [String(d["name"]), _cost_text(d)]
-				i += 1
+		if build_sheet != null:
+			_refresh_build_rows()
 		queue_redraw()
 	if order_t > 0.0 or String(colony.tool_mode) != "":
 		queue_redraw()

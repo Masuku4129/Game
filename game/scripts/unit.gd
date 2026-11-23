@@ -22,8 +22,8 @@ const SK = preload("res://scripts/skin.gd")
 const TM = preload("res://scripts/tool_models.gd")
 const IT = preload("res://scripts/items.gd")
 
-const SPEED := 1.65
-const RUN := 3.1
+const SPEED := 2.7            # темп игры: быстрее, чтобы люди не ползали
+const RUN := 4.6
 const CARRY_KG := 32.0        # сколько человек несёт (кг); бревно — на плече, одно
 
 var main: Node3D
@@ -288,6 +288,7 @@ func tick(dt: float) -> void:
 	if state == "dead":
 		_animate(dt)
 		return
+	_free_self(dt)
 	if state == "walk":
 		_walk(dt)
 	else:
@@ -296,6 +297,26 @@ func tick(dt: float) -> void:
 		_turn = lerpf(_turn, 0.0, minf(1.0, dt * 8.0))
 	position.y = main.ground_fast(position.x, position.z)
 	_animate(dt)
+
+## Не застревать в постройках, стволах и камнях: если стоим на непроходимом месте
+## дольше 0.4 с — выходим на ближайшую свободную точку.
+var _inside_t := 0.0
+func _free_self(dt: float) -> void:
+	if not nav.passable(position.x, position.z) or main.blocked(position.x, position.z, 0.22):
+		_inside_t += dt
+		if _inside_t > 0.4:
+			_inside_t = 0.0
+			var q: Vector3 = nav.nearest_free(position, 14.0)
+			position.x = q.x
+			position.z = q.z
+			vel = Vector3.ZERO
+			if state == "walk" and _goal != Vector3.INF:
+				var pts: Array = nav.find_path(position, _goal, area_lock)
+				path = pts
+				if pts.is_empty():
+					state = "idle"
+	else:
+		_inside_t = 0.0
 
 func _walk(dt: float) -> void:
 	if path.is_empty():
@@ -444,13 +465,15 @@ func _animate(dt: float) -> void:
 			_:
 				_play("Interact", 1.0, 0.2)
 		return
-	if _hspeed > 2.3:
-		_play("Jog_Fwd", clampf(_hspeed / 3.1, 0.75, 1.2))
+	if _hspeed > 3.7:
+		_play("Sprint", clampf(_hspeed / 5.2, 0.8, 1.25))
+	elif _hspeed > 2.0 and carry_kind != "log":
+		_play("Jog_Fwd", clampf(_hspeed / 3.0, 0.75, 1.25))
 	elif _hspeed > 0.2:
 		if carry_kind == "log":
-			_play("Walk_Carry", clampf(_hspeed / 1.2, 0.7, 1.3))
+			_play("Walk_Carry", clampf(_hspeed / 1.2, 0.7, 1.7))
 		else:
-			_play("Walk", clampf(_hspeed / 1.6, 0.65, 1.25))
+			_play("Walk", clampf(_hspeed / 1.6, 0.65, 1.3))
 	else:
 		if carry_kind == "log":
 			_play("Walk_Carry", 0.0)

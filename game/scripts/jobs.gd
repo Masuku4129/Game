@@ -257,8 +257,9 @@ func _face(u, p: Vector3) -> void:
 		u.rotation.y = u.yaw
 
 ## Работа на месте: раз в period делаем один «удар» или шаг работы.
+const WORK_K := 1.5             # темп работы: быстрее, чтобы дело не тянулось
 func _work(u, j: Dictionary, dt: float) -> void:
-	j["t"] = float(j["t"]) + dt
+	j["t"] = float(j["t"]) + dt * WORK_K
 	var kind := String(j["kind"])
 	var w: Node = _w()
 	match kind:
