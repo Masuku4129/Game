@@ -3,34 +3,30 @@ extends Node2D
 ## Вид как в Don't Starve: плоские 2D-спрайты, камера 3/4 сверху,
 ## порядок отрисовки по Y (кто ниже на экране, тот ближе к камере).
 
-const WORLD_RADIUS := 2400.0
-const MIN_GAP := 90.0
-const PROP_TRIES := 900
+const WORLD_RADIUS := 12000.0
 
 var world: Node2D
+var level
 var player
 var cam: Camera2D
 var fps_label: Label
 
 
 func _ready() -> void:
-	var rng := RandomNumberGenerator.new()
-	rng.seed = 20261123
-
-	var ground = preload("res://ground.gd").new()
-	ground.radius = WORLD_RADIUS
-	ground.seed_value = rng.seed
-	add_child(ground)
+	RenderingServer.set_default_clear_color(Color(0.01, 0.01, 0.035))
+	level = preload("res://level.gd").new()
+	add_child(level)
 
 	# узел с y_sort_enabled сортирует детей по position.y
 	world = Node2D.new()
 	world.y_sort_enabled = true
 	add_child(world)
-
-	_spawn_props(rng)
+	level.build(world)
 
 	player = preload("res://player.gd").new()
 	player.world_radius = WORLD_RADIUS
+	player.lift_fn = Callable(level, "lift_at")
+	player.position = Vector2.ZERO
 	world.add_child(player)
 
 	cam = Camera2D.new()
@@ -84,40 +80,6 @@ func _make_vignette() -> TextureRect:
 	return r
 
 
-func _spawn_props(rng: RandomNumberGenerator) -> void:
-	var placed: Array[Vector2] = []
-	var prop_script := preload("res://prop.gd")
-	for i in PROP_TRIES:
-		var ang := rng.randf() * TAU
-		var dist := sqrt(rng.randf()) * (WORLD_RADIUS - 40.0)
-		var pos := Vector2(cos(ang), sin(ang)) * dist
-		# стартовая площадка свободна
-		if absf(pos.x) < 420.0 and absf(pos.y) < 240.0:
-			continue
-		var ok := true
-		for q in placed:
-			if q.distance_squared_to(pos) < MIN_GAP * MIN_GAP:
-				ok = false
-				break
-		if not ok:
-			continue
-		placed.append(pos)
-		var p = prop_script.new()
-		var roll := rng.randf()
-		if roll < 0.45:
-			p.kind = prop_script.TREE
-		elif roll < 0.67:
-			p.kind = prop_script.ROCK
-		elif roll < 0.92:
-			p.kind = prop_script.BUSH
-		else:
-			p.kind = prop_script.PILLAR
-		p.variant = rng.randf_range(0.85, 1.25)
-		p.flip = rng.randf() < 0.5
-		p.position = pos
-		world.add_child(p)
-
-
 # Кадры предпросмотра для CI: общий вид и лист с позами Миты.
 func _shots(dir: String) -> void:
 	for i in 40:
@@ -126,64 +88,32 @@ func _shots(dir: String) -> void:
 	get_viewport().get_texture().get_image().save_png(dir + "/world.png")
 
 	cam.position_smoothing_enabled = false
-	cam.zoom = Vector2(2.6, 2.6)
-	var poses := [[0, false, 0.0], [1, false, 0.0], [2, false, 0.0], [3, false, 0.0],
-		[4, false, 0.0], [5, false, 0.0], [6, false, 0.0], [7, false, 0.0],
-		[0, true, 0.5], [0, true, 1.5], [0, true, 2.5], [2, true, 1.5], [6, true, 1.5]]
-	var cw := 150
-	var ch := 350
-	var sheet: Image = null
-	var idx := 0
-	for p in poses:
-		player.set_pose(p[0], p[1], p[2])
-		for k in 12:
+	# обзор всей карты
+	var G = preload("res://geo.gd")
+	player.set_pose(2, false, 0.0)
+	var mid := Vector2(G.GW * G.W * 0.5, G.GH * G.H * 0.5) + level.origin
+	player.position = mid
+	cam.zoom = Vector2(0.135, 0.135)
+	for k in 6:
+		await get_tree().process_frame
+	await RenderingServer.frame_post_draw
+	get_viewport().get_texture().get_image().save_png(dir + "/map_overview.png")
+
+	# места: ворота, зал, мост, лестница, библиотека, терраса, камеры, снаружи
+	cam.zoom = Vector2(0.75, 0.75)
+	var places := [[45.0, 46.0], [45.0, 10.0], [68.0, 33.0], [81.5, 24.0],
+		[14.0, 31.0], [79.0, 13.0], [12.0, 52.0], [50.0, 55.0]]
+	var pw := 640
+	var ph := 360
+	var pimg := Image.create(pw * 4, ph * 2, false, Image.FORMAT_RGBA8)
+	for n in places.size():
+		player.position = Vector2(places[n][0] * G.W, places[n][1] * G.H) + level.origin
+		for k in 8:
 			await get_tree().process_frame
 		await RenderingServer.frame_post_draw
-		var img := get_viewport().get_texture().get_image()
-		if sheet == null:
-			sheet = Image.create(cw * poses.size(), ch, false, img.get_format())
-		var x0 := img.get_width() / 2 - cw / 2
-		var y0 := img.get_height() / 2 - 325
-		sheet.blit_rect(img, Rect2i(x0, maxi(y0, 0), cw, ch), Vector2i(idx * cw, 0))
-		idx += 1
-	sheet.save_png(dir + "/mita_sheet.png")
-
-	# кадры боя: 8 направлений x 8 кадров
-	cam.zoom = Vector2(1.6, 1.6)
-	var acw := 190
-	var ach := 250
-	var asheet := Image.create(acw * 8, ach * 8, false, Image.FORMAT_RGBA8)
-	for r in 8:
-		for c in 8:
-			player.set_attack_pose(r, c * 3)
-			for k in 3:
-				await get_tree().process_frame
-			await RenderingServer.frame_post_draw
-			var im2 := get_viewport().get_texture().get_image()
-			im2.convert(Image.FORMAT_RGBA8)
-			var ax := im2.get_width() / 2 - acw / 2
-			var ay := im2.get_height() / 2 - 200
-			asheet.blit_rect(im2, Rect2i(ax, maxi(ay, 0), acw, ach), Vector2i(c * acw, r * ach))
-	asheet.save_png(dir + "/attack_sheet.png")
-
-	# полумесяцы: три удара x три вида
-	cam.zoom = Vector2(0.8, 0.8)
-	var fw := 640
-	var fh := 440
-	var fxs := Image.create(fw * 3, fh * 3, false, Image.FORMAT_RGBA8)
-	var vs := [0, 2, 6]
-	for r in 3:
-		for c in 3:
-			for fxn in player.get_children():
-				if fxn.get_script() and fxn.has_method("_pt"):
-					fxn.queue_free()
-			player.set_attack_pose(vs[r], 4)
-			player._spawn_slash(c, 0.62)
-			for k in 3:
-				await get_tree().process_frame
-			await RenderingServer.frame_post_draw
-			var im3 := get_viewport().get_texture().get_image()
-			im3.convert(Image.FORMAT_RGBA8)
-			fxs.blit_rect(im3, Rect2i(im3.get_width() / 2 - fw / 2, im3.get_height() / 2 - 300, fw, fh), Vector2i(c * fw, r * fh))
-	fxs.save_png(dir + "/slash_fx.png")
+		var pi := get_viewport().get_texture().get_image()
+		pi.convert(Image.FORMAT_RGBA8)
+		pi.resize(pw, ph)
+		pimg.blit_rect(pi, Rect2i(0, 0, pw, ph), Vector2i((n % 4) * pw, (n / 4) * ph))
+	pimg.save_png(dir + "/places.png")
 	get_tree().quit()

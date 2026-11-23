@@ -22,6 +22,9 @@ const SECTORS := [
 const WALK_SETS := ["e", "s", "n"]   # для этих видов есть кадры ходьбы
 
 var stick                       # джойстик, выставляется из main.gd
+var lift_fn := Callable()       # высота пола под ногами (лестницы, терраса)
+var _lift := 0.0
+var _holder: Node2D
 var world_radius := 2400.0
 var debug := false              # для кадров предпросмотра: поза задаётся вручную
 var attack_requested := false
@@ -69,10 +72,12 @@ func _ready() -> void:
 			r.append(load("res://art/atk/" + f[0]))
 		_atex[v] = r
 
+	_holder = Node2D.new()
+	add_child(_holder)
 	_spr = Sprite2D.new()
 	_spr.centered = false
 	_spr.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
-	add_child(_spr)
+	_holder.add_child(_spr)
 	_refresh()
 
 
@@ -114,6 +119,9 @@ func _physics_process(delta: float) -> void:
 			_:
 				_tick_move(delta)
 		_refresh()
+	if lift_fn.is_valid():
+		_lift = lift_fn.call(global_position)
+	_holder.position.y = -_lift
 	var cam := get_viewport().get_camera_2d()
 	if cam:
 		_shake = move_toward(_shake, 0.0, delta * 60.0)
@@ -255,7 +263,7 @@ func _fx(rx: float, ry: float, rot: float, a0: float, a1: float, wm: float, dl: 
 	s.wmul = wm
 	s.delay = dl
 	s.hold = hold
-	s.position = off
+	s.position = off + Vector2(0.0, -_lift)
 	add_child(s)
 
 
@@ -283,7 +291,7 @@ func _ghost() -> void:
 	g.centered = false
 	g.offset = _spr.offset
 	g.scale = _spr.scale
-	g.position = position
+	g.position = position + Vector2(0.0, -_lift)
 	g.modulate = Color(0.75, 0.65, 1.0, 0.45)
 	var m := CanvasItemMaterial.new()
 	m.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
@@ -341,6 +349,6 @@ func _refresh() -> void:
 
 func _draw() -> void:
 	# тень на земле: сплюснутый эллипс
-	draw_set_transform(Vector2.ZERO, 0.0, Vector2(1.0, 0.4))
+	draw_set_transform(Vector2(0.0, -_lift), 0.0, Vector2(1.0, 0.4))
 	draw_circle(Vector2.ZERO, 26.0, Color(0, 0, 0, 0.45))
 	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
