@@ -80,6 +80,7 @@ var lean := Vector2.ZERO         # наклон корпуса (x - вперёд
 var lean_v := Vector2.ZERO
 var prev_state := "idle"
 var land_fx := false
+var attack_buffered := false
 const ACCEL := 16.0
 const DECEL := 11.0
 const LOCO_WALK_REF := 1.9
@@ -383,8 +384,20 @@ func _on_attack() -> void:
 		if state_time >= state_len * COMBO_WINDOW and combo < COMBO_ROLES.size() - 1:
 			combo_queued = true
 		return
-	if _busy():
+	if state in ["dash_in", "dash_beam"]:
+		attack_buffered = true      # нажал во время рывка: удар вылетит сразу на выходе
 		return
+	if _busy() and state != "dash_out":
+		return
+	attack_buffered = false
+	combo = 0
+	combo_queued = false
+	_face_input()
+	_set_state("attack", true)
+
+
+func _on_attack_from_dash() -> void:
+	attack_buffered = false
 	combo = 0
 	combo_queued = false
 	_face_input()
@@ -482,6 +495,9 @@ func _process(delta: float) -> void:
 			if state_time >= DASH_TIME:
 				_end_beam()
 		"dash_out":
+			if attack_buffered:
+				_on_attack_from_dash()
+				return
 			_move_window(delta, 0.0, 0.18, 0.45)
 			if state_time >= state_len:
 				_set_state("idle", true)
