@@ -20,7 +20,7 @@ func _mat(name: String, bright: float) -> StandardMaterial3D:
 	m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA_SCISSOR
 	m.alpha_scissor_threshold = 0.5
 	m.alpha_antialiasing_mode = BaseMaterial3D.ALPHA_ANTIALIASING_ALPHA_TO_COVERAGE
-	m.billboard_mode = BaseMaterial3D.BILLBOARD_ENABLED
+	m.billboard_mode = BaseMaterial3D.BILLBOARD_FIXED_Y
 	m.billboard_keep_scale = true
 	m.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS_ANISOTROPIC
 	m.cull_mode = BaseMaterial3D.CULL_DISABLED
@@ -109,74 +109,19 @@ func _ok(x: float, z: float, r: float, rmin := 0.0) -> bool:
 func build(v: Valley) -> void:
 	valley = v
 	rng.seed = 777
-	var c := Valley.RING_C
-	# --- композиция: у дальней стены (север) святилище, статуя, жаровни
-	put("shrine", 0.0, -26.0, 9.5, 1.0, 3.0)
-	put("statue", c.x, c.y - 14.0, 5.2, 1.0, 1.2)
-	for s: float in [-1.0, 1.0]:
-		put("brazier", c.x + s * 4.2, c.y - 12.6, 2.1, 1.1, 0.6)
-		glow(c.x + s * 4.2, 1.9, c.y - 12.6, Color(0.7, 0.4, 1.0), 4.0, 2.6, 8.0)
-		put("column_a", c.x + s * 8.0, c.y - 15.5, 6.6, 1.0, 0.8, s < 0.0)
-	# --- колонны полукругом вокруг площадки
-	for k in range(9):
-		var a := PI * 0.15 + PI * 0.70 * float(k) / 8.0 + PI
-		var x := c.x + cos(a) * 15.5
-		var z := c.y + sin(a) * 15.5
-		if _ok(x, z, 0.6):
-			put("column_a" if k % 2 == 0 else "column_b", x, z, 6.2 if k % 2 == 0 else 5.8, 1.0, 0.7, k % 3 == 0)
-	# --- фонари и баннеры по краям плиты
-	for k in range(8):
-		var a := TAU * float(k) / 8.0 + 0.2
-		var x := c.x + cos(a) * 11.0
-		var z := c.y + sin(a) * 11.0
-		if _ok(x, z, 0.5):
-			if k % 2 == 0:
-				put("lamp_a" if k % 4 == 0 else "lamp_b", x, z, 4.4, 1.0, 0.3)
-				glow(x, 3.6, z, Color(1.0, 0.68, 0.35), 3.4, 2.4, 9.0)
-			else:
-				put("banner_b", x, z, 5.4, 1.0, 0.3)
-	# --- руины-стены и обломки по кольцу
-	for k in range(14):
-		var a := TAU * float(k) / 14.0 + 0.1
-		var r := 21.0 + rng.randf_range(-1.5, 1.5)
-		var x := cos(a) * r
-		var z := sin(a) * r
-		if _ok(x, z, 1.2):
-			if k % 3 == 0:
-				put("ruin_wall", x, z, 5.4, 1.0, 1.8, rng.randf() < 0.5)
-			elif k % 3 == 1:
-				put("stonewall", x, z, 3.8, 1.0, 1.5, rng.randf() < 0.5)
-			else:
-				put("rubble", x, z, 2.2, 1.0, 1.0, rng.randf() < 0.5)
-	# --- кристаллы
-	for p in [Vector2(-9.0, 8.0), Vector2(10.0, 7.0), Vector2(-14.0, -6.0), Vector2(15.0, -8.0), Vector2(-4.0, 17.0)]:
-		if _ok(p.x, p.y, 0.7):
-			put("crystal", p.x, p.y, 3.0, 1.1, 0.7)
-			glow(p.x, 1.5, p.y, Color(0.6, 0.35, 1.0), 4.0, 3.0, 7.0)
-	put("cage", 12.0, 12.0, 3.0, 1.0, 0.5)
-	# --- лес по краю двора (не проходим: ARENA ограничивает, плюс препятствия)
-	var trees := ["tree_green", "tree_purple", "tree_pine", "tree_dead", "tree_purple", "tree_green"]
-	for i in range(260):
-		var a := rng.randf() * TAU
-		var r := rng.randf_range(Valley.ARENA - 7.0, Valley.ARENA + 14.0)
-		var x := cos(a) * r
-		var z := sin(a) * r
-		if _ok(x, z, 1.0):
-			var nm: String = trees[rng.randi() % trees.size()]
-			var h := rng.randf_range(8.0, 13.0) if nm != "tree_pine" else rng.randf_range(10.0, 16.0)
-			put(nm, x, z, h, rng.randf_range(0.8, 1.0), 0.9 if r < Valley.ARENA + 1.0 else 0.0, rng.randf() < 0.5)
+	var cc := Valley.RING_C
 	# --- цветы, лаванда, грибы, трава, камни: густо у краёв и вокруг колонн, редко на плите
-	var small := ["flowers", "lavender", "lavender", "mushroom", "grass", "flowers", "grass", "rock_big"]
-	for i in range(420):
+	var small := ["flowers", "lavender", "lavender", "mushroom", "grass", "flowers", "grass", "mushroom"]
+	for i in range(300):
 		var a := rng.randf() * TAU
 		var r := (Valley.ARENA - 1.0) * pow(rng.randf(), 0.45)
 		var x := cos(a) * r
 		var z := sin(a) * r
 		if r < 7.5 and rng.randf() < 0.85:
 			continue
-		if _ok(x, z, 0.2):
+		if _ok(x, z, 0.35) and absf(z - Valley.STREAM_Z) > 3.2:
 			var nm: String = small[rng.randi() % small.size()]
-			var h: float = {"flowers": 1.0, "lavender": 1.1, "mushroom": 1.1, "grass": 0.9, "rock_big": 1.4}[nm]
+			var h: float = {"flowers": 1.0, "lavender": 1.1, "mushroom": 1.1, "grass": 0.9}[nm]
 			h *= rng.randf_range(0.8, 1.6)
 			put(nm, x, z, h, rng.randf_range(0.85, 1.15), 0.0, rng.randf() < 0.5)
 			if nm == "mushroom" and rng.randf() < 0.5:
@@ -186,7 +131,7 @@ func build(v: Valley) -> void:
 	comp.texture = load("res://sprites/compass.png")
 	comp.axis = Vector3.AXIS_Y
 	comp.pixel_size = 9.0 / float(comp.texture.get_width())
-	comp.position = Vector3(c.x, valley.height_at(c.x, c.y) + 0.05, c.y)
+	comp.position = Vector3(cc.x, valley.height_at(cc.x, cc.y) + 0.05, cc.y)
 	comp.shaded = false
 	comp.transparent = true
 	comp.modulate = Color(0.8, 0.8, 1.0, 0.6)

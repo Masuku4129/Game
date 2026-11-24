@@ -12,6 +12,10 @@ const START_POS := Vector3(0.0, 0.0, 5.0)
 const RING_C := Vector2(0.0, -4.0)
 const MAX_SLOPE := 1.15          # круче этого пешком не залезть (около 49 градусов)
 const OBST_CELL := 8.0
+const STREAM_Z := -17.0           # ручей поперёк двора
+const BRIDGE_X := 0.0
+const BR_HALF_V := 1.45           # полуширина проезда моста
+const BR_HALF_U := 5.9            # полудлина моста вместе с лестницами
 
 var N := int(HALF * 2.0 / CELL)
 var hgrid := PackedFloat32Array()
@@ -79,6 +83,7 @@ func _height_raw(x: float, z: float) -> float:
 	var h := _fbm(x * 0.05, z * 0.05, 11, 2) * 0.35 * smoothstep(8.0, 16.0, r)
 	h += _fbm(x * 0.7, z * 0.7, 61, 2) * 0.04
 	h += smoothstep(27.0, 48.0, r) * (5.0 + _fbm(x * 0.08, z * 0.08, 71, 2) * 3.0)
+	h -= 0.95 * (1.0 - smoothstep(1.1, 2.9, absf(z - STREAM_Z))) * (1.0 - smoothstep(30.0, 45.0, r))
 	return h
 
 
@@ -94,7 +99,22 @@ func _g(i: int, j: int) -> float:
 
 
 ## высота земли в точке: точно по тем же треугольникам, что в меше
+func bridge_h(x: float, z: float) -> float:
+	var v := absf(x - BRIDGE_X)
+	var u := absf(z - STREAM_Z)
+	if v > BR_HALF_V or u > BR_HALF_U:
+		return -99.0
+	if u <= 3.3:
+		var k := u / 3.3
+		return 1.3 + 1.2 * (1.0 - k * k)
+	return 1.3 * (1.0 - (u - 3.3) / (BR_HALF_U - 3.3))
+
+
 func height_at(x: float, z: float) -> float:
+	return maxf(terrain_h(x, z), bridge_h(x, z))
+
+
+func terrain_h(x: float, z: float) -> float:
 	var u := (x + HALF) / CELL
 	var v := (z + HALF) / CELL
 	var i := clampi(floori(u), 0, N - 1)
@@ -322,6 +342,9 @@ func build() -> void:
 	_compute_grid()
 	_build_terrain()
 	_scatter()
+	var rb := Ruins3D.new()
+	add_child(rb)
+	rb.build(self)
 	var ps := PropSprites.new()
 	add_child(ps)
 	ps.build(self)
