@@ -72,6 +72,14 @@ var hits_log := []
 var sim_move := Vector2.ZERO
 var sim_active := false
 var cur_speed := 0.0
+var vel := Vector3.ZERO          # инерция: текущая скорость тела
+var lean := Vector2.ZERO         # наклон корпуса (x - вперёд, y - вбок)
+var lean_v := Vector2.ZERO
+var prev_state := "idle"
+const ACCEL := 16.0
+const DECEL := 11.0
+const LOCO_WALK_REF := 1.9
+const LOCO_RUN_REF := 6.2
 
 
 func _ready() -> void:
@@ -325,9 +333,26 @@ func _play(role: String, blend: float) -> void:
 		state_len = anim.get_animation(anim_of[role]).length
 
 
+func _blend_for(old: String, new: String) -> float:
+	if new == "attack":
+		return 0.07 if old == "attack" else 0.10
+	if new == "idle":
+		return 0.32 if old in ["attack", "jump", "dodge", "dash_out", "block"] else 0.22
+	if new in ["walk", "run"]:
+		return 0.22 if old in ["idle", "walk", "run"] else 0.30
+	if new == "block":
+		return 0.16
+	if new == "jump" or new == "dodge":
+		return 0.10
+	if new == "dash_in":
+		return 0.10
+	return BLEND
+
+
 func _set_state(new_state: String, force := false) -> void:
 	if new_state == state and not force:
 		return
+	prev_state = state
 	state = new_state
 	state_time = 0.0
 	fx_done = false
@@ -335,10 +360,10 @@ func _set_state(new_state: String, force := false) -> void:
 		trail.active = false
 	match state:
 		"idle", "walk", "run", "block", "jump", "dodge", "dash_in", "dash_out":
-			_play(state, 0.06 if state in ["block", "jump", "dodge", "dash_in"] else BLEND)
+			_play(state, _blend_for(prev_state, state))
 		"attack":
 			var role: String = COMBO_ROLES[combo]
-			_play(role, 0.05)
+			_play(role, _blend_for(prev_state, "attack"))
 			hit_done = false
 			lunge_left = float(HIT_INFO[role][1])
 			move_dir = _forward()
@@ -400,10 +425,13 @@ func _move(delta_pos: Vector3) -> void:
 
 ## равномерное перемещение на dist за окно [t0, t1] анимации
 func _move_window(delta: float, t0: float, t1: float, dist: float) -> void:
-	var a := clampf(state_time - delta, t0, t1)
-	var b := clampf(state_time, t0, t1)
+	var a := (clampf(state_time - delta, t0, t1) - t0) / (t1 - t0)
+	var b := (clampf(state_time, t0, t1) - t0) / (t1 - t0)
 	if b > a:
-		_move(move_dir * dist * (b - a) / (t1 - t0))
+		# плавный разгон и торможение (smoothstep), а не равномерный сдвиг
+		var sa := a * a * (3.0 - 2.0 * a)
+		var sb := b * b * (3.0 - 2.0 * b)
+		_move(move_dir * dist * (sb - sa))
 
 
 func _process(delta: float) -> void:
@@ -442,18 +470,56 @@ func _process(delta: float) -> void:
 				_set_state("idle", true)
 		_:
 			if block_held:
+				vel = vel.move_toward(Vector3.ZERO, DECEL * 1.6 * delta)
+				_move(vel * delta)
 				_set_state("block")
 			elif mag > DEAD_ZONE:
 				var dir := _world_dir(v).normalized()
 				player.rotation.y = lerp_angle(player.rotation.y, atan2(dir.x, dir.z), 1.0 - exp(-TURN_SPEED * delta))
 				var running := mag >= RUN_THRESHOLD
-				cur_speed = RUN_SPEED if running else WALK_SPEED
-				_move(dir * cur_speed * delta)
-				_set_state("run" if running else "walk")
+				var target := RUN_SPEED if running else WALK_SPEED
+				vel = vel.move_toward(dir * target, ACCEL * delta)
+				_move(vel * delta)
+				cur_speed = vel.length()
+				_set_state("run" if cur_speed > 3.4 or (running and cur_speed > 2.6) else "walk")
 			else:
-				_set_state("idle")
+				vel = vel.move_toward(Vector3.ZERO, DECEL * delta)
+				_move(vel * delta)
+				cur_speed = vel.length()
+				if cur_speed > 0.5:
+					_set_state("run" if cur_speed > 4.0 else "walk")
+				else:
+					_set_state("idle")
+			if anim != null:
+				if state == "walk":
+					anim.speed_scale = clampf(cur_speed / LOCO_WALK_REF, 0.6, 1.25)
+				elif state == "run":
+					anim.speed_scale = clampf(cur_speed / LOCO_RUN_REF, 0.65, 1.15)
+				else:
+					anim.speed_scale = 1.0
+	if state in ["attack", "jump", "dodge", "dash_in", "dash_out"]:
+		if anim != null:
+			anim.speed_scale = 1.0
+		vel = vel.move_toward(Vector3.ZERO, 14.0 * delta)
+		_move(vel * delta * 0.5)
+	_update_lean(delta)
 	_update_camera(delta)
 	_update_hud()
+
+
+## корпус наклоняется по ускорению и в поворотах (пружина с затуханием) - даёт ощущение веса
+func _update_lean(delta: float) -> void:
+	if model == null:
+		return
+	var local_v := player.global_transform.basis.inverse() * vel
+	var target := Vector2(0.0, 0.0)
+	if state in ["walk", "run"]:
+		target = Vector2(clampf(local_v.z * 0.012, -0.12, 0.14), clampf(-local_v.x * 0.02, -0.1, 0.1))
+	var acc := (target - lean) * 90.0 - lean_v * 13.0
+	lean_v += acc * delta
+	lean += lean_v * delta
+	model.rotation.x = lean.x
+	model.rotation.z = lean.y
 
 
 func _process_attack(delta: float, v: Vector2, mag: float) -> void:
@@ -465,7 +531,9 @@ func _process_attack(delta: float, v: Vector2, mag: float) -> void:
 		move_dir = _forward()
 	var t_hit := float(info[0])
 	if state_time < t_hit + 0.06 and lunge_left > 0.0:
-		var step := minf(lunge_left, float(info[1]) * delta / (t_hit + 0.06))
+		var u := clampf(state_time / (t_hit + 0.06), 0.0, 1.0)
+		var w := 6.0 * u * (1.0 - u) + 0.15     # колоколообразный профиль скорости рывка
+		var step := minf(lunge_left, float(info[1]) * delta / (t_hit + 0.06) * w)
 		lunge_left -= step
 		_move(move_dir * step)
 	if trail != null:
