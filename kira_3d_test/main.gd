@@ -12,7 +12,6 @@ const RUN_SPEED := 6.2
 const RUN_THRESHOLD := 0.65
 const DEAD_ZONE := 0.18
 const TURN_SPEED := 14.0
-const ARENA_LIMIT := 36.0
 const BLEND := 0.12
 # камера: ближе и вращается
 const CAM_DIST := 5.6
@@ -80,6 +79,10 @@ var lean := Vector2.ZERO         # наклон корпуса (x - вперёд
 var lean_v := Vector2.ZERO
 var prev_state := "idle"
 var land_fx := false
+var valley: Valley
+var jump_y0 := 0.0
+var vy := 0.0
+const GRAVITY := 30.0
 var attack_buffered := false
 const ACCEL := 16.0
 const DECEL := 11.0
@@ -90,6 +93,7 @@ const LOCO_RUN_REF := 6.2
 func _ready() -> void:
 	_build_world()
 	_build_player()
+	valley.focus = player
 	_build_ui()
 	_set_state("idle", true)
 	_report()
@@ -132,34 +136,13 @@ func _build_world() -> void:
 	sun.shadow_enabled = true
 	sun.directional_shadow_max_distance = 30.0
 	add_child(sun)
-	var ground := MeshInstance3D.new()
-	var pm := PlaneMesh.new()
-	pm.size = Vector2(ARENA_LIMIT * 2.0 + 8.0, ARENA_LIMIT * 2.0 + 8.0)
-	ground.mesh = pm
-	var gm := StandardMaterial3D.new()
-	gm.albedo_texture = _checker_texture()
-	gm.uv1_scale = Vector3(40.0, 40.0, 1.0)
-	gm.roughness = 0.95
-	ground.material_override = gm
-	add_child(ground)
-	var rng := RandomNumberGenerator.new()
-	rng.seed = 7
-	for i in range(18):
-		var ang := rng.randf() * TAU
-		var dist := rng.randf_range(7.0, 24.0)
-		var box := MeshInstance3D.new()
-		var bm := BoxMesh.new()
-		bm.size = Vector3(rng.randf_range(0.8, 2.2), rng.randf_range(0.6, 3.4), rng.randf_range(0.8, 2.2))
-		box.mesh = bm
-		var m := StandardMaterial3D.new()
-		m.albedo_color = Color(0.22, 0.2, 0.3)
-		m.roughness = 0.9
-		box.material_override = m
-		box.position = Vector3(cos(ang) * dist, bm.size.y * 0.5, sin(ang) * dist)
-		box.rotation.y = rng.randf() * TAU
-		add_child(box)
+	valley = Valley.new()
+	add_child(valley)
+	valley.build()
+	valley.setup_atmosphere(we, sun)
 	cam = Camera3D.new()
 	cam.fov = 50.0
+	cam.far = 500.0
 	add_child(cam)
 	cam.current = true
 
@@ -358,8 +341,6 @@ func _set_state(new_state: String, force := false) -> void:
 	if new_state == state and not force:
 		return
 	prev_state = state
-	if prev_state == "jump":
-		player.position.y = 0.0
 	land_fx = false
 	state = new_state
 	state_time = 0.0
@@ -409,6 +390,8 @@ func _on_jump() -> void:
 		return
 	_face_input()
 	move_dir = _forward()
+	jump_y0 = player.position.y
+	vy = 0.0
 	_set_state("jump", true)
 
 
@@ -437,10 +420,27 @@ func _on_block(held: bool) -> void:
 
 
 func _move(delta_pos: Vector3) -> void:
-	var p := player.position + delta_pos
-	p.x = clampf(p.x, -ARENA_LIMIT, ARENA_LIMIT)
-	p.z = clampf(p.z, -ARENA_LIMIT, ARENA_LIMIT)
-	player.position = p
+	var p := valley.move_xz(player.position, delta_pos)
+	player.position.x = p.x
+	player.position.z = p.z
+
+
+## вертикаль: плавное следование рельефу, падение со скал под действием гравитации
+func _apply_ground(delta: float) -> void:
+	var gh := valley.height_at(player.position.x, player.position.z)
+	var y := player.position.y
+	if y > gh + 0.05:
+		vy -= GRAVITY * delta
+		y += vy * delta
+		if y <= gh:
+			y = gh
+			vy = 0.0
+	else:
+		vy = 0.0
+		y = lerpf(y, gh, 1.0 - exp(-28.0 * delta))
+		if absf(y - gh) < 0.003:
+			y = gh
+	player.position.y = y
 
 
 ## равномерное перемещение на dist за окно [t0, t1] анимации
@@ -469,7 +469,9 @@ func _process(delta: float) -> void:
 			var v0 := g * t_air * 0.5
 			var prev_tau := clampf(state_time - delta - JUMP_MOVE[0], 0.0, t_air)
 			_move(move_dir * JUMP_MOVE[2] * (tau - prev_tau) / t_air)
-			player.position.y = maxf(0.0, v0 * tau - 0.5 * g * tau * tau)
+			var gh_j := valley.height_at(player.position.x, player.position.z)
+			if state_time < JUMP_MOVE[1]:
+				player.position.y = maxf(gh_j, jump_y0 + maxf(0.0, v0 * tau - 0.5 * g * tau * tau))
 			if not fx_done and state_time >= JUMP_MOVE[0]:
 				fx_done = true
 				_spawn_ripple(player.global_position + Vector3(0.0, 0.05, 0.0), 3.2, true)
@@ -478,7 +480,6 @@ func _process(delta: float) -> void:
 				land_fx = true
 				_spawn_ripple(player.global_position + Vector3(0.0, 0.05, 0.0), 2.6, true)
 			if state_time >= state_len:
-				player.position.y = 0.0
 				_set_state("idle", true)
 		"dodge":
 			_move_window(delta, DODGE_MOVE[0], DODGE_MOVE[1], DODGE_MOVE[2])
@@ -530,6 +531,8 @@ func _process(delta: float) -> void:
 					anim.speed_scale = clampf(cur_speed / LOCO_RUN_REF, 0.65, 1.15)
 				else:
 					anim.speed_scale = 1.0
+	if state != "jump" or state_time >= JUMP_MOVE[1]:
+		_apply_ground(delta)
 	if state in ["attack", "jump", "dodge", "dash_in", "dash_out"]:
 		if anim != null:
 			anim.speed_scale = 1.0
@@ -597,6 +600,9 @@ func _update_camera(delta: float) -> void:
 	var pr := deg_to_rad(cam_pitch)
 	var off := Vector3(0.0, sin(pr), cos(pr)) * CAM_DIST
 	var want := target + off.rotated(Vector3.UP, deg_to_rad(cam_yaw))
+	var floor_y := valley.height_at(want.x, want.z) + 0.9
+	if want.y < floor_y:
+		want.y = floor_y
 	cam.position = cam.position.lerp(want, 1.0 - exp(-10.0 * delta))
 	cam.look_at(target, Vector3.UP)
 
