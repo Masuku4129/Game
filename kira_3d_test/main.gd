@@ -688,6 +688,8 @@ func _end_beam() -> void:
 func _update_hud() -> void:
 	var cur := anim.current_animation if anim != null else "-"
 	var tip := trail.get_tip_speed() if trail != null else 0.0
+	if state == "attack":
+		cur = "удар %d из %d" % [combo + 1, COMBO_ROLES.size()]
 	var txt := "состояние: %s   анимация: %s\nскорость: %.2f   кончик меча: %.1f   FPS: %d" % [state, cur, cur_speed, tip, Engine.get_frames_per_second()]
 	if problems.size() > 0:
 		txt += "\nПРОБЛЕМЫ: " + ", ".join(problems)
