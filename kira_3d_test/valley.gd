@@ -837,6 +837,11 @@ func _build_fx() -> void:
 	low.color_ramp = g1
 	add_child(low)
 	lowmist = low
+	if FLAT:
+		wisps.emitting = false
+		wisps.visible = false
+		low.emitting = false
+		low.visible = false
 
 
 func _build_shafts() -> void:

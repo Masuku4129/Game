@@ -11,7 +11,7 @@ void fragment() {
 	vec2 uv = SCREEN_UV;
 	vec2 c = uv - 0.5;
 	float r2 = dot(c, c);
-	vec2 off = c * r2 * 0.012;
+	vec2 off = vec2(0.0);
 	vec3 col;
 	col.r = textureLod(screen_tex, uv + off, 0.0).r;
 	col.g = textureLod(screen_tex, uv, 0.0).g;
@@ -22,7 +22,7 @@ void fragment() {
 	col = mix(col, col * vec3(1.14, 1.02, 0.86), smoothstep(0.45, 1.0, lum) * 0.35);
 	col += vec3(0.30, 0.20, 0.55) * flash * 0.25;
 	float vig = smoothstep(0.80, 0.18, sqrt(r2) * 1.25);
-	col *= mix(0.42, 1.0, vig);
+	col *= mix(0.62, 1.0, vig);
 	col += (hash(uv * vec2(1920.0, 1080.0) + TIME) - 0.5) * 0.028;
 	float pulse = 0.5 + 0.5 * sin(TIME * 5.0);
 	col = mix(col, col * vec3(1.5, 0.45, 0.55), clamp(hurt + low_hp * 0.25 * pulse, 0.0, 1.0) * smoothstep(0.05, 0.7, sqrt(r2) * 1.4));

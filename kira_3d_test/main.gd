@@ -15,8 +15,8 @@ const TURN_SPEED := 14.0
 const BLEND := 0.12
 # камера: закреплена сверху под 40 градусов, без вращения
 const CAM_DIST := 60.0
-const CAM_PITCH := 33.0
-const CAM_ORTHO := 16.0         # высота кадра в метрах: изометрия как в 2D-играх
+const CAM_PITCH := 36.0
+const CAM_ORTHO := 17.0         # высота кадра в метрах: изометрия как в 2D-играх
 const MAX_HP := 100.0
 const WAVE_PAUSE := 3.0
 # Положение катаны в системе правой кисти (прямой хват, под анимации)
@@ -54,7 +54,7 @@ var skeleton: Skeleton3D
 var anim: AnimationPlayer
 var trail: SlashTrail
 var cam: Camera3D
-var cam_yaw := 45.0
+var cam_yaw := 0.0
 var hp := MAX_HP
 var wave := 0
 var alive_hounds := 0
