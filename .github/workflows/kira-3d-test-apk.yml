@@ -1,0 +1,57 @@
+name: Kira 3D test APK
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'kira_3d_test/**'
+      - '.github/workflows/kira-3d-test-apk.yml'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    container:
+      image: barichello/godot-ci:4.3
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Установка шаблонов экспорта и Android SDK
+        run: |
+          mkdir -p ~/.local/share/godot/export_templates ~/.config/godot
+          mv /root/.local/share/godot/export_templates/${GODOT_VERSION}.stable ~/.local/share/godot/export_templates/${GODOT_VERSION}.stable || true
+
+      - name: Отладочный keystore
+        run: |
+          keytool -keyalg RSA -genkeypair -alias androiddebugkey -keypass android -keystore debug.keystore -storepass android -dname "CN=Android Debug,O=Android,C=US" -validity 9999 -deststoretype pkcs12
+          cat > ~/.config/godot/editor_settings-4.3.tres <<EOT
+          [gd_resource type="EditorSettings" format=3]
+          [resource]
+          export/android/java_sdk_path = "/usr/lib/jvm/java-17-openjdk-amd64"
+          export/android/android_sdk_path = "/usr/lib/android-sdk"
+          export/android/debug_keystore = "$GITHUB_WORKSPACE/debug.keystore"
+          export/android/debug_keystore_user = "androiddebugkey"
+          export/android/debug_keystore_pass = "android"
+          EOT
+
+      - name: Импорт ресурсов
+        working-directory: kira_3d_test
+        run: godot --headless --import || true
+
+      - name: Самопроверка (ходьба, бег, удар)
+        working-directory: kira_3d_test
+        run: |
+          timeout 120 godot --headless -- --selftest 2>&1 | tee ../selftest.log || true
+          grep -E "KIRA_" ../selftest.log || true
+
+      - name: Сборка APK
+        working-directory: kira_3d_test
+        run: |
+          mkdir -p build
+          godot --headless --export-debug "Android" build/kira_test.apk
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: kira-test-apk
+          path: |
+            kira_3d_test/build/kira_test.apk
+            selftest.log
