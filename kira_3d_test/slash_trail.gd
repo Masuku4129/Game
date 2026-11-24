@@ -22,6 +22,7 @@ var _base_local := Vector3.ZERO
 var _last_tip := Vector3.ZERO
 var _has_last := false
 var _tip_speed := 0.0
+var active := false          # шлейф рисуется только пока включён (окно самого мощного замаха)
 
 
 func _ready() -> void:
@@ -62,7 +63,7 @@ func _process(delta: float) -> void:
 	_last_tip = tip
 	_has_last = true
 	_tip_speed = speed
-	_samples.append({"xf": xf, "t": now, "moving": speed >= speed_per_height * character_height})
+	_samples.append({"xf": xf, "t": now, "moving": active and speed >= speed_per_height * character_height})
 	while _samples.size() > 0 and now - float(_samples[0]["t"]) > lifetime:
 		_samples.pop_front()
 	_rebuild(now)

@@ -4,16 +4,20 @@ extends Control
 ## Лёгкий наклон джойстика = ходьба, сильный наклон (кольцо) = бег.
 
 signal attack_pressed
+signal jump_pressed
 
 const JOY_RADIUS := 120.0
 const RUN_RING := 0.65
 const ATTACK_RADIUS := 78.0
+const JUMP_RADIUS := 62.0
 
 var move_vector := Vector2.ZERO
 var _joy_index := -1
 var _joy_center := Vector2.ZERO
 var _attack_index := -1
 var _attack_center := Vector2.ZERO
+var _jump_index := -1
+var _jump_center := Vector2.ZERO
 var _hint_center := Vector2.ZERO
 
 
@@ -27,6 +31,7 @@ func _ready() -> void:
 func _layout() -> void:
 	var s := get_viewport_rect().size
 	_attack_center = Vector2(s.x - 170.0, s.y - 170.0)
+	_jump_center = Vector2(s.x - 360.0, s.y - 120.0)
 	_hint_center = Vector2(210.0, s.y - 190.0)
 	queue_redraw()
 
@@ -40,7 +45,11 @@ func _input(event: InputEvent) -> void:
 		var t := event as InputEventScreenTouch
 		if t.pressed:
 			var p := t.position
-			if _attack_index == -1 and p.distance_to(_attack_center) <= ATTACK_RADIUS * 1.5:
+			if _jump_index == -1 and p.distance_to(_jump_center) <= JUMP_RADIUS * 1.4:
+				_jump_index = t.index
+				jump_pressed.emit()
+				queue_redraw()
+			elif _attack_index == -1 and p.distance_to(_attack_center) <= ATTACK_RADIUS * 1.5:
 				_attack_index = t.index
 				attack_pressed.emit()
 				queue_redraw()
@@ -56,6 +65,9 @@ func _input(event: InputEvent) -> void:
 				queue_redraw()
 			elif t.index == _attack_index:
 				_attack_index = -1
+				queue_redraw()
+			elif t.index == _jump_index:
+				_jump_index = -1
 				queue_redraw()
 	elif event is InputEventScreenDrag:
 		var d := event as InputEventScreenDrag
@@ -74,5 +86,9 @@ func _draw() -> void:
 	var pressed := _attack_index != -1
 	draw_circle(_attack_center, ATTACK_RADIUS, Color(0.75, 0.3, 1.0, 0.65 if pressed else 0.32))
 	draw_arc(_attack_center, ATTACK_RADIUS, 0.0, TAU, 64, Color(1, 1, 1, 0.6), 3.0)
+	var jp := _jump_index != -1
+	draw_circle(_jump_center, JUMP_RADIUS, Color(0.35, 0.55, 1.0, 0.6 if jp else 0.3))
+	draw_arc(_jump_center, JUMP_RADIUS, 0.0, TAU, 64, Color(1, 1, 1, 0.6), 3.0)
 	var font := ThemeDB.fallback_font
+	draw_string(font, _jump_center + Vector2(-JUMP_RADIUS, 9.0), "ПРЫЖОК", HORIZONTAL_ALIGNMENT_CENTER, JUMP_RADIUS * 2.0, 22, Color(1, 1, 1, 0.95))
 	draw_string(font, _attack_center + Vector2(-ATTACK_RADIUS, 11.0), "УДАР", HORIZONTAL_ALIGNMENT_CENTER, ATTACK_RADIUS * 2.0, 32, Color(1, 1, 1, 0.95))
