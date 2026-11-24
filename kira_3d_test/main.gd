@@ -1,21 +1,48 @@
 extends Node3D
-## Тестовая сцена управления персонажем: ходьба, бег, удар катаной.
-## Телефон: левый джойстик (слабый наклон = ходьба, сильный = бег), справа кнопка УДАР.
-## Компьютер: WASD или стрелки, Shift = бег, Space или J = удар.
+## Тестовая сцена боевого управления Миты.
+## Телефон: левый джойстик (слабый наклон = ходьба, сильный = бег), справа УДАР, ПРЫЖОК,
+## ОТСКОК, РЫВОК, БЛОК (держать). Свайп по свободной правой части экрана вращает камеру.
+## Компьютер: WASD, Shift = бег, Space/J = удар, K = прыжок, U = отскок, I = рывок,
+## L = блок (держать), Q/E = поворот камеры.
 
 const MODEL_PATH := "res://assets/kira_rigged.glb"
 const KATANA_PATH := "res://assets/katana.glb"
-const WALK_SPEED := 1.33
-const RUN_SPEED := 3.7
+const WALK_SPEED := 1.5
+const RUN_SPEED := 6.2
 const RUN_THRESHOLD := 0.65
 const DEAD_ZONE := 0.18
-const TURN_SPEED := 12.0
+const TURN_SPEED := 14.0
 const ARENA_LIMIT := 36.0
-const CAMERA_OFFSET := Vector3(0.0, 8.5, 7.5)
-const BLEND := 0.18
-# Положение катаны в системе правой кисти (под хват в анимациях)
-const KATANA_POS := Vector3(-0.03431, -0.08436, -0.11899)
-const KATANA_QUAT := Quaternion(0.58072, -0.40344, 0.58072, -0.40344)
+const BLEND := 0.12
+# камера: ближе и вращается
+const CAM_DIST := 5.6
+const CAM_PITCH_MIN := 18.0
+const CAM_PITCH_MAX := 70.0
+const CAM_DRAG_SENS := 0.25
+# Положение катаны в системе правой кисти (прямой хват, под анимации)
+const KATANA_POS := Vector3(-0.03431, -0.08436, 0.10592)
+const KATANA_QUAT := Quaternion(0.58072, -0.40344, -0.58072, 0.40344)
+
+# комбо: удар 3 (круговой) -> удар ногой с разворота -> апперкот -> финал
+const COMBO_ROLES := ["slash", "slash2", "slash4", "kick", "slash5", "slash3"]
+const COMBO_WINDOW := 0.30
+const ATTACK_RANGE := 2.4
+# [время попадания, рывок вперёд (м), множитель зоны, шлейф от, до (с), наклон плоскости волны (град), высота волны (м)]
+const HIT_INFO := {
+	"slash":  [0.21, 0.9, 1.0, 0.16, 0.30, 38.0, 1.0],
+	"slash2": [0.22, 0.9, 1.0, 0.15, 0.31, -8.0, 1.0],
+	"slash4": [0.30, 0.7, 1.35, 0.16, 0.40, 0.0, 0.55],
+	"kick":   [0.28, 0.6, 1.0, -1.0, -1.0, 0.0, 0.9],
+	"slash5": [0.26, 0.8, 1.1, 0.16, 0.34, -62.0, 1.1],
+	"slash3": [0.30, 1.4, 1.3, 0.26, 0.38, 90.0, 1.2]}
+const ALL_ROLES := ["idle", "walk", "run", "block", "jump", "dodge", "dash_in", "dash_out",
+	"slash", "slash2", "slash4", "kick", "slash5", "slash3"]
+const LOOPED := ["idle", "walk", "run", "block"]
+# перемещения спецдвижений: [начало, конец (с), дистанция (м); минус = назад]
+const JUMP_MOVE := [0.20, 0.93, 3.0]
+const DODGE_MOVE := [0.06, 0.54, -3.4]
+const DASH_DIST := 8.0
+const DASH_TIME := 0.20
 
 var player: Node3D
 var model: Node3D
@@ -23,49 +50,41 @@ var skeleton: Skeleton3D
 var anim: AnimationPlayer
 var trail: SlashTrail
 var cam: Camera3D
+var cam_yaw := 0.0
+var cam_pitch := 48.0
 var ui: TouchUI
 var hud: Label
 var state := "idle"
-var attack_time := 0.0
-var attack_len := 1.1
-var combo := 0               # номер удара в комбо: 0, 1, 2
+var state_time := 0.0
+var state_len := 1.0
+var combo := 0
 var combo_queued := false
-const COMBO_ROLES := ["slash", "slash2", "slash4", "slash5", "slash3"]
-const COMBO_WINDOW := 0.30
-const ATTACK_RANGE := 2.4        # радиус зоны поражения (было ~1.6, +50%)
-# для каждого удара: [время попадания (с), рывок вперёд (м), множитель радиуса ударной волны]
-# для каждого удара: [время попадания, рывок вперёд (м), множитель радиуса волны, окно шлейфа от, до, наклон плоскости волны (град), высота волны (м)]
-const HIT_INFO := {
-	"slash":  [0.21, 0.9, 1.0, 0.16, 0.30, 38.0, 1.0],
-	"slash2": [0.22, 0.9, 1.0, 0.15, 0.31, -8.0, 1.0],
-	"slash4": [0.30, 0.7, 1.35, 0.16, 0.40, 0.0, 0.55],
-	"slash5": [0.26, 0.8, 1.1, 0.16, 0.34, -62.0, 1.1],
-	"slash3": [0.30, 1.4, 1.3, 0.26, 0.38, 90.0, 1.2]}
-const JUMP_DIST := 1.9
+var anim_of := {}
+var problems: PackedStringArray = PackedStringArray()
 var hit_done := false
 var lunge_left := 0.0
-var lunge_dir := Vector3.ZERO
-var hits_log := []   # доля анимации, после которой повторное нажатие ставит следующий удар в очередь
-var anim_of := {}            # роль -> имя анимации
-var problems: PackedStringArray = PackedStringArray()
-var sim_move := Vector2.ZERO # для самопроверки без экрана
+var move_dir := Vector3.ZERO
+var block_held := false
+var fx_done := false
+var dash_from := Vector3.ZERO
+var dash_beam: Node3D
+var hits_log := []
+var sim_move := Vector2.ZERO
 var sim_active := false
-var selftest := false
 var cur_speed := 0.0
 
 
 func _ready() -> void:
-	selftest = "--selftest" in OS.get_cmdline_user_args()
 	_build_world()
 	_build_player()
 	_build_ui()
 	_set_state("idle", true)
 	_report()
-	if selftest:
+	if "--selftest" in OS.get_cmdline_user_args():
 		_run_selftest()
 
 
-# ---------------------------------------------------------------- мир
+# ================================================================ мир
 func _checker_texture() -> ImageTexture:
 	var img := Image.create(128, 128, true, Image.FORMAT_RGB8)
 	for y in range(128):
@@ -92,7 +111,6 @@ func _build_world() -> void:
 	var we := WorldEnvironment.new()
 	we.environment = env
 	add_child(we)
-
 	var sun := DirectionalLight3D.new()
 	sun.rotation_degrees = Vector3(-55.0, -35.0, 0.0)
 	sun.light_color = Color(0.85, 0.86, 1.0)
@@ -100,7 +118,6 @@ func _build_world() -> void:
 	sun.shadow_enabled = true
 	sun.directional_shadow_max_distance = 30.0
 	add_child(sun)
-
 	var ground := MeshInstance3D.new()
 	var pm := PlaneMesh.new()
 	pm.size = Vector2(ARENA_LIMIT * 2.0 + 8.0, ARENA_LIMIT * 2.0 + 8.0)
@@ -111,12 +128,11 @@ func _build_world() -> void:
 	gm.roughness = 0.95
 	ground.material_override = gm
 	add_child(ground)
-
 	var rng := RandomNumberGenerator.new()
 	rng.seed = 7
 	for i in range(18):
 		var ang := rng.randf() * TAU
-		var dist := rng.randf_range(6.0, 24.0)
+		var dist := rng.randf_range(7.0, 24.0)
 		var box := MeshInstance3D.new()
 		var bm := BoxMesh.new()
 		bm.size = Vector3(rng.randf_range(0.8, 2.2), rng.randf_range(0.6, 3.4), rng.randf_range(0.8, 2.2))
@@ -128,14 +144,13 @@ func _build_world() -> void:
 		box.position = Vector3(cos(ang) * dist, bm.size.y * 0.5, sin(ang) * dist)
 		box.rotation.y = rng.randf() * TAU
 		add_child(box)
-
 	cam = Camera3D.new()
-	cam.fov = 40.0
+	cam.fov = 50.0
 	add_child(cam)
 	cam.current = true
 
 
-# ---------------------------------------------------------------- персонаж
+# ================================================================ персонаж
 func _find_first(root: Node, type_name: String) -> Node:
 	if root.get_class() == type_name:
 		return root
@@ -153,7 +168,7 @@ func _build_player() -> void:
 	add_child(player)
 	var scene := load(MODEL_PATH) as PackedScene
 	if scene == null:
-		problems.append("НЕТ МОДЕЛИ " + MODEL_PATH)
+		problems.append("НЕТ МОДЕЛИ")
 		return
 	model = scene.instantiate() as Node3D
 	model.position = Vector3(0.0, 1.0, 0.0)  # ноги модели стоят на y = -1
@@ -164,27 +179,16 @@ func _build_player() -> void:
 		problems.append("НЕТ Skeleton3D")
 	if anim == null:
 		problems.append("НЕТ AnimationPlayer")
-	else:
-		for n in anim.get_animation_list():
-			var low := String(n).to_lower()
-			var a := anim.get_animation(n)
-			var role := ""
-			if low.contains("idle"): role = "idle"
-			elif low.contains("walk"): role = "walk"
-			elif low.contains("run"): role = "run"
-			elif low == "jump": role = "jump"
-			elif low == "slash5": role = "slash5"
-			elif low == "slash4": role = "slash4"
-			elif low == "slash3": role = "slash3"
-			elif low == "slash2": role = "slash2"
-			elif low == "slash": role = "slash"
-			if role == "":
-				continue
-			anim_of[role] = n
-			a.loop_mode = Animation.LOOP_NONE if (role.begins_with("slash") or role == "jump") else Animation.LOOP_LINEAR
-		for role in ["idle", "walk", "run", "jump", "slash", "slash2", "slash4", "slash5", "slash3"]:
-			if not anim_of.has(role):
-				problems.append("НЕТ анимации " + role)
+		return
+	for n in anim.get_animation_list():
+		var role := String(n).to_lower().replace("-loop", "")
+		if not (role in ALL_ROLES):
+			continue
+		anim_of[role] = n
+		anim.get_animation(n).loop_mode = Animation.LOOP_LINEAR if role in LOOPED else Animation.LOOP_NONE
+	for role in ALL_ROLES:
+		if not anim_of.has(role):
+			problems.append("НЕТ анимации " + role)
 	_attach_katana()
 
 
@@ -205,11 +209,8 @@ func _attach_katana() -> void:
 	if skeleton == null:
 		return
 	var ks := load(KATANA_PATH) as PackedScene
-	if ks == null:
-		problems.append("НЕТ КАТАНЫ")
-		return
-	if skeleton.find_bone("mixamorig_RightHand") < 0:
-		problems.append("НЕТ кости mixamorig_RightHand")
+	if ks == null or skeleton.find_bone("mixamorig_RightHand") < 0:
+		problems.append("НЕТ катаны или кости кисти")
 		return
 	var att := BoneAttachment3D.new()
 	att.bone_name = "mixamorig_RightHand"
@@ -229,7 +230,7 @@ func _attach_katana() -> void:
 	add_child(trail)
 
 
-# ---------------------------------------------------------------- интерфейс
+# ================================================================ ввод
 func _build_ui() -> void:
 	var layer := CanvasLayer.new()
 	add_child(layer)
@@ -237,6 +238,10 @@ func _build_ui() -> void:
 	layer.add_child(ui)
 	ui.attack_pressed.connect(_on_attack)
 	ui.jump_pressed.connect(_on_jump)
+	ui.dodge_pressed.connect(_on_dodge)
+	ui.dash_pressed.connect(_on_dash)
+	ui.block_changed.connect(_on_block)
+	ui.camera_drag.connect(_on_camera_drag)
 	hud = Label.new()
 	hud.position = Vector2(18.0, 10.0)
 	hud.add_theme_font_size_override("font_size", 22)
@@ -246,12 +251,30 @@ func _build_ui() -> void:
 
 
 func _unhandled_input(event: InputEvent) -> void:
-	if event is InputEventKey:
-		var k := event as InputEventKey
-		if k.pressed and not k.echo and (k.keycode == KEY_SPACE or k.keycode == KEY_J):
-			_on_attack()
-		if k.pressed and not k.echo and k.keycode == KEY_K:
-			_on_jump()
+	if not (event is InputEventKey):
+		return
+	var k := event as InputEventKey
+	if k.echo:
+		return
+	if k.pressed:
+		match k.keycode:
+			KEY_SPACE, KEY_J:
+				_on_attack()
+			KEY_K:
+				_on_jump()
+			KEY_U:
+				_on_dodge()
+			KEY_I:
+				_on_dash()
+			KEY_L:
+				_on_block(true)
+	elif k.keycode == KEY_L:
+		_on_block(false)
+
+
+func _on_camera_drag(d: Vector2) -> void:
+	cam_yaw -= d.x * CAM_DRAG_SENS
+	cam_pitch = clampf(cam_pitch + d.y * CAM_DRAG_SENS * 0.6, CAM_PITCH_MIN, CAM_PITCH_MAX)
 
 
 func _input_vector() -> Vector2:
@@ -267,142 +290,218 @@ func _input_vector() -> Vector2:
 	if Input.is_key_pressed(KEY_D) or Input.is_key_pressed(KEY_RIGHT):
 		kv.x += 1.0
 	if kv != Vector2.ZERO:
-		var run := Input.is_key_pressed(KEY_SHIFT)
-		return kv.normalized() * (1.0 if run else 0.45)
+		return kv.normalized() * (1.0 if Input.is_key_pressed(KEY_SHIFT) else 0.45)
 	return ui.move_vector
 
 
-# ---------------------------------------------------------------- логика
+## направление на земле в мире с учётом поворота камеры
+func _world_dir(v: Vector2) -> Vector3:
+	var d := Vector3(v.x, 0.0, v.y)
+	return d.rotated(Vector3.UP, deg_to_rad(cam_yaw))
+
+
+func _face_input() -> void:
+	var v := _input_vector()
+	if v.length() > DEAD_ZONE:
+		var d := _world_dir(v)
+		player.rotation.y = atan2(d.x, d.z)
+
+
+func _forward() -> Vector3:
+	return Vector3(sin(player.rotation.y), 0.0, cos(player.rotation.y))
+
+
+func _busy() -> bool:
+	return state in ["attack", "jump", "dodge", "dash_in", "dash_beam", "dash_out"]
+
+
+# ================================================================ состояния
 func _play(role: String, blend: float) -> void:
 	if anim == null or not anim_of.has(role):
 		return
 	anim.play(anim_of[role], blend)
+	if not (role in LOOPED):
+		state_len = anim.get_animation(anim_of[role]).length
 
 
 func _set_state(new_state: String, force := false) -> void:
 	if new_state == state and not force:
 		return
 	state = new_state
+	state_time = 0.0
+	fx_done = false
+	if trail != null:
+		trail.active = false
 	match state:
-		"idle":
-			_play("idle", BLEND)
-		"walk":
-			_play("walk", BLEND)
-		"run":
-			_play("run", BLEND)
-		"jump":
-			_play("jump", 0.06)
-			if anim_of.has("jump"):
-				attack_len = anim.get_animation(anim_of["jump"]).length
+		"idle", "walk", "run", "block", "jump", "dodge", "dash_in", "dash_out":
+			_play(state, 0.06 if state in ["block", "jump", "dodge", "dash_in"] else BLEND)
 		"attack":
-			_play(COMBO_ROLES[combo], 0.05)
+			var role: String = COMBO_ROLES[combo]
+			_play(role, 0.05)
 			hit_done = false
-			lunge_left = HIT_INFO[COMBO_ROLES[combo]][1]
-			lunge_dir = Vector3(sin(player.rotation.y), 0.0, cos(player.rotation.y))
-			if anim_of.has(COMBO_ROLES[combo]):
-				attack_len = anim.get_animation(anim_of[COMBO_ROLES[combo]]).length
-
-
-func _on_jump() -> void:
-	if state == "attack" or state == "jump":
-		return
-	var v := _input_vector()
-	if v.length() > DEAD_ZONE:
-		player.rotation.y = atan2(v.x, v.y)
-	attack_time = 0.0
-	lunge_dir = Vector3(sin(player.rotation.y), 0.0, cos(player.rotation.y))
-	_set_state("jump", true)
+			lunge_left = float(HIT_INFO[role][1])
+			move_dir = _forward()
+		"dash_beam":
+			state_len = DASH_TIME
 
 
 func _on_attack() -> void:
-	if state == "jump":
-		return
 	if state == "attack":
-		if attack_time >= attack_len * COMBO_WINDOW and combo < COMBO_ROLES.size() - 1:
+		if state_time >= state_len * COMBO_WINDOW and combo < COMBO_ROLES.size() - 1:
 			combo_queued = true
+		return
+	if _busy():
 		return
 	combo = 0
 	combo_queued = false
-	var v := _input_vector()
-	if v.length() > DEAD_ZONE:  # удар в сторону, куда направлен джойстик
-		player.rotation.y = atan2(v.x, v.y)
-	attack_time = 0.0
-	_set_state("attack")
+	_face_input()
+	_set_state("attack", true)
+
+
+func _on_jump() -> void:
+	if _busy():
+		return
+	_face_input()
+	move_dir = _forward()
+	_set_state("jump", true)
+
+
+func _on_dodge() -> void:
+	if _busy() and state != "attack":
+		return
+	_face_input()
+	move_dir = _forward()
+	_set_state("dodge", true)
+
+
+func _on_dash() -> void:
+	if _busy() and state != "attack":
+		return
+	_face_input()
+	move_dir = _forward()
+	_set_state("dash_in", true)
+
+
+func _on_block(held: bool) -> void:
+	block_held = held
+	if held and not _busy():
+		_set_state("block")
+	elif not held and state == "block":
+		_set_state("idle")
+
+
+func _move(delta_pos: Vector3) -> void:
+	var p := player.position + delta_pos
+	p.x = clampf(p.x, -ARENA_LIMIT, ARENA_LIMIT)
+	p.z = clampf(p.z, -ARENA_LIMIT, ARENA_LIMIT)
+	player.position = p
+
+
+## равномерное перемещение на dist за окно [t0, t1] анимации
+func _move_window(delta: float, t0: float, t1: float, dist: float) -> void:
+	var a := clampf(state_time - delta, t0, t1)
+	var b := clampf(state_time, t0, t1)
+	if b > a:
+		_move(move_dir * dist * (b - a) / (t1 - t0))
 
 
 func _process(delta: float) -> void:
+	state_time += delta
 	var v := _input_vector()
 	var mag := v.length()
 	cur_speed = 0.0
-	if state == "jump":
-		attack_time += delta
-		# вперёд на время полёта (самая активная часть анимации 0.16..0.62 с)
-		if attack_time > 0.16 and attack_time < 0.62:
-			var js := JUMP_DIST * delta / 0.46
-			var jp := player.position + lunge_dir * js
-			jp.x = clampf(jp.x, -ARENA_LIMIT, ARENA_LIMIT)
-			jp.z = clampf(jp.z, -ARENA_LIMIT, ARENA_LIMIT)
-			player.position = jp
-		if attack_time >= attack_len:
-			_set_state("idle", true)
-	elif state == "attack":
-		attack_time += delta
-		# в начале удара можно довернуть персонажа джойстиком
-		if mag > DEAD_ZONE and attack_time < attack_len * 0.25:
-			player.rotation.y = lerp_angle(player.rotation.y, atan2(v.x, v.y), 1.0 - exp(-10.0 * delta))
-		# рывок вперёд до момента попадания и ударная волна-полумесяц на земле
-		var info: Array = HIT_INFO[COMBO_ROLES[combo]]
-		if attack_time < float(info[0]) + 0.06 and lunge_left > 0.0:
-			var step := minf(lunge_left, float(info[1]) * delta / (float(info[0]) + 0.06))
-			lunge_left -= step
-			var np := player.position + lunge_dir * step
-			np.x = clampf(np.x, -ARENA_LIMIT, ARENA_LIMIT)
-			np.z = clampf(np.z, -ARENA_LIMIT, ARENA_LIMIT)
-			player.position = np
-		if trail != null:
-			trail.active = attack_time >= float(info[3]) and attack_time <= float(info[4])
-		if not hit_done and attack_time >= float(info[0]):
-			hit_done = true
-			_spawn_crescent(float(info[2]), float(info[5]), float(info[6]))
-			hits_log.append(COMBO_ROLES[combo])
-		if attack_time >= attack_len * 0.90 and combo_queued:
-			combo += 1
-			combo_queued = false
-			attack_time = 0.0
-			if mag > DEAD_ZONE:
-				player.rotation.y = atan2(v.x, v.y)
-			_set_state("attack", true)
-		elif attack_time >= attack_len:
-			combo = 0
-			_set_state("idle", true)
-	elif mag > DEAD_ZONE:
-		if trail != null:
-			trail.active = false
-		var dir := Vector3(v.x, 0.0, v.y).normalized()
-		var target_yaw := atan2(dir.x, dir.z)
-		player.rotation.y = lerp_angle(player.rotation.y, target_yaw, 1.0 - exp(-TURN_SPEED * delta))
-		var running := mag >= RUN_THRESHOLD
-		cur_speed = RUN_SPEED if running else WALK_SPEED
-		var p := player.position + dir * cur_speed * delta
-		p.x = clampf(p.x, -ARENA_LIMIT, ARENA_LIMIT)
-		p.z = clampf(p.z, -ARENA_LIMIT, ARENA_LIMIT)
-		player.position = p
-		_set_state("run" if running else "walk")
-	else:
-		if trail != null:
-			trail.active = false
-		_set_state("idle")
-	# камера сверху под 45°
-	var target := player.position + Vector3(0.0, 1.0, 0.0)
-	var want := target + CAMERA_OFFSET
-	cam.position = cam.position.lerp(want, 1.0 - exp(-8.0 * delta))
-	cam.look_at(target, Vector3.UP)
+	match state:
+		"attack":
+			_process_attack(delta, v, mag)
+		"jump":
+			_move_window(delta, JUMP_MOVE[0], JUMP_MOVE[1], JUMP_MOVE[2])
+			if not fx_done and state_time >= 0.19:
+				fx_done = true
+				_spawn_ripple(player.global_position + Vector3(0.0, 0.05, 0.0), 3.2, true)
+				_spawn_ripple(player.global_position + Vector3(0.0, 1.0, 0.0), 2.4, false)
+			if state_time >= state_len:
+				_set_state("idle", true)
+		"dodge":
+			_move_window(delta, DODGE_MOVE[0], DODGE_MOVE[1], DODGE_MOVE[2])
+			if state_time >= state_len:
+				_set_state("idle", true)
+		"dash_in":
+			_move_window(delta, 0.05, 0.20, 0.5)
+			if state_time >= state_len:
+				_start_beam()
+		"dash_beam":
+			_move_window(delta, 0.0, DASH_TIME, DASH_DIST)
+			if dash_beam != null:
+				dash_beam.call("set_head", player.global_position + Vector3(0.0, 1.0, 0.0))
+			if state_time >= DASH_TIME:
+				_end_beam()
+		"dash_out":
+			_move_window(delta, 0.0, 0.18, 0.45)
+			if state_time >= state_len:
+				_set_state("idle", true)
+		_:
+			if block_held:
+				_set_state("block")
+			elif mag > DEAD_ZONE:
+				var dir := _world_dir(v).normalized()
+				player.rotation.y = lerp_angle(player.rotation.y, atan2(dir.x, dir.z), 1.0 - exp(-TURN_SPEED * delta))
+				var running := mag >= RUN_THRESHOLD
+				cur_speed = RUN_SPEED if running else WALK_SPEED
+				_move(dir * cur_speed * delta)
+				_set_state("run" if running else "walk")
+			else:
+				_set_state("idle")
+	_update_camera(delta)
 	_update_hud()
 
 
+func _process_attack(delta: float, v: Vector2, mag: float) -> void:
+	var role: String = COMBO_ROLES[combo]
+	var info: Array = HIT_INFO[role]
+	if mag > DEAD_ZONE and state_time < state_len * 0.2:
+		var d := _world_dir(v)
+		player.rotation.y = lerp_angle(player.rotation.y, atan2(d.x, d.z), 1.0 - exp(-12.0 * delta))
+		move_dir = _forward()
+	var t_hit := float(info[0])
+	if state_time < t_hit + 0.06 and lunge_left > 0.0:
+		var step := minf(lunge_left, float(info[1]) * delta / (t_hit + 0.06))
+		lunge_left -= step
+		_move(move_dir * step)
+	if trail != null:
+		trail.active = state_time >= float(info[3]) and state_time <= float(info[4])
+	if not hit_done and state_time >= t_hit:
+		hit_done = true
+		hits_log.append(role)
+		if role == "kick":
+			_spawn_ripple(player.global_position + _forward() * 1.1 + Vector3(0.0, 0.9, 0.0), 2.0, false)
+		else:
+			_spawn_crescent(float(info[2]), float(info[5]), float(info[6]))
+	if state_time >= state_len * 0.90 and combo_queued:
+		combo += 1
+		combo_queued = false
+		_face_input()
+		_set_state("attack", true)
+	elif state_time >= state_len:
+		combo = 0
+		_set_state("idle", true)
+
+
+func _update_camera(delta: float) -> void:
+	if Input.is_key_pressed(KEY_Q):
+		cam_yaw += 90.0 * delta
+	if Input.is_key_pressed(KEY_E):
+		cam_yaw -= 90.0 * delta
+	var target := player.position + Vector3(0.0, 1.0, 0.0)
+	var pr := deg_to_rad(cam_pitch)
+	var off := Vector3(0.0, sin(pr), cos(pr)) * CAM_DIST
+	var want := target + off.rotated(Vector3.UP, deg_to_rad(cam_yaw))
+	cam.position = cam.position.lerp(want, 1.0 - exp(-10.0 * delta))
+	cam.look_at(target, Vector3.UP)
+
+
+# ================================================================ эффекты
 func _spawn_crescent(scale_f: float, roll_deg: float, height: float) -> void:
 	# Волна-полумесяц в плоскости удара: вылетает вперёд, расширяется и рассыпается.
-	# Её размер = зона поражения (ATTACK_RANGE * scale_f).
 	var size := ATTACK_RANGE * scale_f * 2.0
 	var mi := MeshInstance3D.new()
 	var quad := QuadMesh.new()
@@ -415,12 +514,9 @@ func _spawn_crescent(scale_f: float, roll_deg: float, height: float) -> void:
 	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	mi.top_level = true
 	add_child(mi)
-	var fwd := Vector3(sin(player.rotation.y), 0.0, cos(player.rotation.y))
-	# плоскость лежит горизонтально (нормаль вверх), затем наклоняется вокруг направления удара
+	var fwd := _forward()
 	var base := Basis(Vector3(1, 0, 0), Vector3(0, 0, 1), Vector3(0, -1, 0))
-	var yaw_b := Basis(Vector3.UP, player.rotation.y)
-	var roll_b := Basis(Vector3(0, 0, 1), deg_to_rad(roll_deg))
-	var b := yaw_b * roll_b * base
+	var b := Basis(Vector3.UP, player.rotation.y) * Basis(Vector3(0, 0, 1), deg_to_rad(roll_deg)) * base
 	var start := player.global_position + fwd * 0.5 + Vector3(0.0, height, 0.0)
 	mi.global_transform = Transform3D(b, start)
 	var tw := create_tween()
@@ -431,6 +527,52 @@ func _spawn_crescent(scale_f: float, roll_deg: float, height: float) -> void:
 	tw.tween_callback(mi.queue_free)
 
 
+## Содрогание воздуха: кольцо искажения (горизонтальное у земли или обращённое к камере)
+func _spawn_ripple(pos: Vector3, size: float, flat: bool) -> void:
+	var mi := MeshInstance3D.new()
+	var quad := QuadMesh.new()
+	quad.size = Vector2(size, size)
+	mi.mesh = quad
+	var mat := ShaderMaterial.new()
+	mat.shader = load("res://ripple.gdshader")
+	mi.material_override = mat
+	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	mi.top_level = true
+	add_child(mi)
+	if flat:
+		mi.global_transform = Transform3D(Basis(Vector3(1, 0, 0), Vector3(0, 0, 1), Vector3(0, -1, 0)), pos)
+	else:
+		mi.global_position = pos
+		mi.look_at(cam.global_position, Vector3.UP)
+		mi.rotate_object_local(Vector3.UP, PI)
+	var tw := create_tween()
+	tw.tween_method(func(p: float) -> void:
+		mat.set_shader_parameter("progress", p), 0.0, 1.0, 0.38)
+	tw.tween_callback(mi.queue_free)
+
+
+func _start_beam() -> void:
+	_set_state("dash_beam", true)
+	if model != null:
+		model.visible = false
+	dash_from = player.global_position + Vector3(0.0, 1.0, 0.0)
+	dash_beam = DashBeam.new()
+	add_child(dash_beam)
+	dash_beam.call("setup", dash_from, _forward())
+	_spawn_ripple(dash_from, 2.2, false)
+
+
+func _end_beam() -> void:
+	if dash_beam != null:
+		dash_beam.call("finish")
+		dash_beam = null
+	if model != null:
+		model.visible = true
+	_spawn_ripple(player.global_position + Vector3(0.0, 1.0, 0.0), 2.0, false)
+	_set_state("dash_out", true)
+
+
+# ================================================================ HUD и самопроверка
 func _update_hud() -> void:
 	var cur := anim.current_animation if anim != null else "-"
 	var tip := trail.get_tip_speed() if trail != null else 0.0
@@ -441,41 +583,60 @@ func _update_hud() -> void:
 
 
 func _report() -> void:
-	print("KIRA_CHECK anims=", anim_of, " skeleton=", skeleton != null, " trail=", trail != null, " problems=", problems)
-	if anim != null:
-		print("KIRA_CHECK animation_list=", anim.get_animation_list())
-	if skeleton != null:
-		print("KIRA_CHECK bones=", skeleton.get_bone_count())
+	print("KIRA_CHECK anims=", anim_of.keys(), " skeleton=", skeleton != null, " trail=", trail != null, " problems=", problems)
 
 
-# ---------------------------------------------------------------- самопроверка (CI)
+func _log(tag: String) -> void:
+	print("KIRA_TEST ", tag, " state=", state, " anim=", anim.current_animation if anim != null else "-", " pos=", player.position.snapped(Vector3(0.01, 0.01, 0.01)))
+
+
+func _wait(t: float) -> void:
+	await get_tree().create_timer(t).timeout
+
+
 func _run_selftest() -> void:
-	var log := func(tag: String) -> void:
-		print("KIRA_TEST ", tag, " state=", state, " anim=", anim.current_animation if anim != null else "-", " pos=", player.position)
 	sim_active = true
-	await get_tree().create_timer(0.5).timeout
-	log.call("idle")
+	await _wait(0.4)
+	_log("idle")
 	sim_move = Vector2(0.0, -0.4)
-	await get_tree().create_timer(0.8).timeout
-	log.call("walk")
+	await _wait(0.6)
+	_log("walk")
 	sim_move = Vector2(0.0, -1.0)
-	await get_tree().create_timer(0.8).timeout
-	log.call("run")
+	await _wait(0.6)
+	_log("run")
 	sim_move = Vector2.ZERO
-	await get_tree().create_timer(0.4).timeout
-	_on_attack()
-	for i in range(4):
-		await get_tree().create_timer(0.30).timeout
+	await _wait(0.3)
+	# жмём удар часто, как игрок: комбо должно пройти все 6 ударов
+	var seen := []
+	for i in range(60):
 		_on_attack()
-		await get_tree().create_timer(0.30).timeout
-		log.call("attack%d" % (i + 1))
-	await get_tree().create_timer(1.2).timeout
-	log.call("after_combo")
-	print("KIRA_TEST hits=", hits_log)
+		if state == "attack" and not (COMBO_ROLES[combo] in seen):
+			seen.append(COMBO_ROLES[combo])
+		await _wait(0.08)
+	await _wait(1.0)
+	print("KIRA_TEST combo_seen=", seen, " hits=", hits_log)
+	_log("after_combo")
 	_on_jump()
-	await get_tree().create_timer(0.4).timeout
-	log.call("jump_mid")
-	await get_tree().create_timer(0.9).timeout
-	log.call("after_jump")
+	await _wait(0.5)
+	_log("jump_mid")
+	await _wait(1.0)
+	_log("after_jump")
+	_on_dodge()
+	await _wait(0.3)
+	_log("dodge_mid")
+	await _wait(0.8)
+	_log("after_dodge")
+	_on_block(true)
+	await _wait(0.4)
+	_log("block")
+	_on_block(false)
+	await _wait(0.2)
+	_on_dash()
+	await _wait(0.3)
+	_log("dash_mid")
+	await _wait(0.8)
+	_log("after_dash")
+	if seen.size() < COMBO_ROLES.size():
+		problems.append("комбо прошло не полностью")
 	print("KIRA_TEST_DONE problems=", problems)
 	get_tree().quit(1 if problems.size() > 0 else 0)
