@@ -404,7 +404,7 @@ func _play(role: String, blend: float) -> void:
 
 func _blend_for(old: String, new: String) -> float:
 	if new == "attack":
-		return 0.11 if old == "attack" else 0.10
+		return 0.20 if old == "attack" else 0.16
 	if new == "idle":
 		return 0.32 if old in ["attack", "jump", "dodge", "dash_out", "block"] else 0.22
 	if new in ["walk", "run"]:
@@ -472,8 +472,6 @@ func _on_attack() -> void:
 func _begin_attack(rel: Vector2) -> void:
 	cur_atk = _pick_attack(rel)
 	last_atk = cur_atk
-	if String(AtkData.D[cur_atk]["tag"]) != "b":
-		_face_input()
 	_set_state("attack", true)
 
 
@@ -700,15 +698,16 @@ func _process_attack(delta: float, v: Vector2, mag: float) -> void:
 	var data: Dictionary = AtkData.D[cur_atk]
 	var hits: Array = data["hits"]
 	var t_last: float = float((hits[hits.size() - 1] as Array)[0])
-	if mag > DEAD_ZONE and state_time < state_len * 0.2 and lunge_sign > 0.0:
+	if mag > DEAD_ZONE and state_time < 0.34 and lunge_sign > 0.0:
 		var d := _world_dir(v)
-		player.rotation.y = lerp_angle(player.rotation.y, atan2(d.x, d.z), 1.0 - exp(-12.0 * delta))
+		player.rotation.y = lerp_angle(player.rotation.y, atan2(d.x, d.z), 1.0 - exp(-16.0 * delta))
 		move_dir = _forward()
 	var t_first: float = float((hits[0] as Array)[0])
-	if state_time < t_first + 0.06 and lunge_left > 0.0:
-		var u := clampf(state_time / (t_first + 0.06), 0.0, 1.0)
+	var l0 := t_first * 0.3
+	if state_time >= l0 and state_time < t_first + 0.06 and lunge_left > 0.0:
+		var u := clampf((state_time - l0) / (t_first + 0.06 - l0), 0.0, 1.0)
 		var w := 6.0 * u * (1.0 - u) + 0.15     # колоколообразный профиль скорости рывка
-		var step := minf(lunge_left, absf(float(data["lunge"])) * delta / (t_first + 0.06) * w)
+		var step := minf(lunge_left, absf(float(data["lunge"])) * delta / (t_first + 0.06 - l0) * w)
 		lunge_left -= step
 		_move(move_dir * step)
 	if trail != null:
@@ -730,7 +729,7 @@ func _process_attack(delta: float, v: Vector2, mag: float) -> void:
 			_spawn_ripple(player.global_position + _forward() * 1.1 + Vector3(0.0, 0.9, 0.0), 2.0, false)
 		else:
 			_spawn_crescent(float(data["zone"]), float(hi[1]), float(hi[2]))
-	if hit_done and state_time >= t_last + CHAIN_AFTER_HIT and combo_queued:
+	if hit_done and state_time >= t_last + maxf(CHAIN_AFTER_HIT, (state_len - t_last) * 0.40) and combo_queued:
 		combo += 1
 		combo_queued = false
 		_begin_attack(atk_rel)
