@@ -13,11 +13,11 @@ const RUN_THRESHOLD := 0.65
 const DEAD_ZONE := 0.18
 const TURN_SPEED := 14.0
 const BLEND := 0.12
-# камера: ближе и вращается
-const CAM_DIST := 5.6
-const CAM_PITCH_MIN := 18.0
-const CAM_PITCH_MAX := 70.0
-const CAM_DRAG_SENS := 0.25
+# камера: закреплена сверху под 40 градусов, без вращения
+const CAM_DIST := 11.2
+const CAM_PITCH := 40.0
+const MAX_HP := 100.0
+const WAVE_PAUSE := 3.0
 # Положение катаны в системе правой кисти (прямой хват, под анимации)
 const KATANA_POS := Vector3(-0.03431, -0.08436, 0.10592)
 const KATANA_QUAT := Quaternion(0.58072, -0.40344, -0.58072, 0.40344)
@@ -53,7 +53,16 @@ var anim: AnimationPlayer
 var trail: SlashTrail
 var cam: Camera3D
 var cam_yaw := 0.0
-var cam_pitch := 48.0
+var hp := MAX_HP
+var wave := 0
+var alive_hounds := 0
+var waves_enabled := true
+var wave_timer := 3.0
+var invuln := 0.0
+var dead_timer := 0.0
+var hp_fill: ColorRect
+var hp_label: Label
+var kills := 0
 var ui: TouchUI
 var hud: Label
 var state := "idle"
@@ -93,12 +102,14 @@ const LOCO_RUN_REF := 6.2
 func _ready() -> void:
 	_build_world()
 	_build_player()
+	player.position = Vector3(Valley.START_POS.x, valley.height_at(Valley.START_POS.x, Valley.START_POS.z), Valley.START_POS.z)
 	valley.focus = player
 	_build_ui()
 	_set_state("idle", true)
 	_report()
 	_prewarm()
 	if "--selftest" in OS.get_cmdline_user_args():
+		waves_enabled = false
 		_run_selftest()
 
 
@@ -134,7 +145,7 @@ func _build_world() -> void:
 	sun.light_color = Color(0.85, 0.86, 1.0)
 	sun.light_energy = 1.1
 	sun.shadow_enabled = true
-	sun.directional_shadow_max_distance = 30.0
+	sun.directional_shadow_max_distance = 40.0
 	add_child(sun)
 	valley = Valley.new()
 	add_child(valley)
@@ -142,7 +153,8 @@ func _build_world() -> void:
 	valley.setup_atmosphere(we, sun)
 	cam = Camera3D.new()
 	cam.fov = 50.0
-	cam.far = 500.0
+	cam.far = 600.0
+	cam.position = Vector3(Valley.START_POS.x, 12.0, Valley.START_POS.z + 11.0)
 	add_child(cam)
 	cam.current = true
 
@@ -245,6 +257,22 @@ func _build_ui() -> void:
 	hud.add_theme_color_override("font_outline_color", Color(0, 0, 0, 1))
 	hud.add_theme_constant_override("outline_size", 6)
 	layer.add_child(hud)
+	var back := ColorRect.new()
+	back.color = Color(0, 0, 0, 0.55)
+	back.position = Vector2(18.0, 100.0)
+	back.size = Vector2(360.0, 26.0)
+	layer.add_child(back)
+	hp_fill = ColorRect.new()
+	hp_fill.color = Color(0.75, 0.2, 0.55, 0.95)
+	hp_fill.position = Vector2(21.0, 103.0)
+	hp_fill.size = Vector2(354.0, 20.0)
+	layer.add_child(hp_fill)
+	hp_label = Label.new()
+	hp_label.position = Vector2(390.0, 96.0)
+	hp_label.add_theme_font_size_override("font_size", 22)
+	hp_label.add_theme_color_override("font_outline_color", Color(0, 0, 0, 1))
+	hp_label.add_theme_constant_override("outline_size", 6)
+	layer.add_child(hp_label)
 
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -269,9 +297,8 @@ func _unhandled_input(event: InputEvent) -> void:
 		_on_block(false)
 
 
-func _on_camera_drag(d: Vector2) -> void:
-	cam_yaw -= d.x * CAM_DRAG_SENS
-	cam_pitch = clampf(cam_pitch + d.y * CAM_DRAG_SENS * 0.6, CAM_PITCH_MIN, CAM_PITCH_MAX)
+func _on_camera_drag(_d: Vector2) -> void:
+	pass                                    # камера закреплена
 
 
 func _input_vector() -> Vector2:
@@ -539,6 +566,7 @@ func _process(delta: float) -> void:
 		vel = vel.move_toward(Vector3.ZERO, 14.0 * delta)
 		_move(vel * delta * 0.5)
 	_update_lean(delta)
+	_update_game(delta)
 	_update_camera(delta)
 	_update_hud()
 
@@ -577,6 +605,7 @@ func _process_attack(delta: float, v: Vector2, mag: float) -> void:
 	if not hit_done and state_time >= t_hit:
 		hit_done = true
 		hits_log.append(role)
+		_hit_hounds(role, float(info[2]))
 		if role == "kick":
 			_spawn_ripple(player.global_position + _forward() * 1.1 + Vector3(0.0, 0.9, 0.0), 2.0, false)
 		else:
@@ -591,13 +620,86 @@ func _process_attack(delta: float, v: Vector2, mag: float) -> void:
 		_set_state("idle", true)
 
 
+func _hit_hounds(role: String, zone: float) -> void:
+	var fwd := _forward()
+	var dmg := 40.0 if role == "slash3" else (30.0 if role == "slash4" else 24.0)
+	for h in get_tree().get_nodes_in_group("hounds"):
+		var hh := h as Hound
+		var off := hh.position - player.position
+		off.y = 0.0
+		var dist := off.length()
+		if dist > ATTACK_RANGE * zone + 0.8:
+			continue
+		if dist > 0.5 and fwd.dot(off / dist) < -0.1:
+			continue
+		hh.take_hit(dmg, player.position, 7.0 if role == "slash3" else 5.0)
+		hits_log.append("hound_hit")
+
+
+func on_hound_killed() -> void:
+	alive_hounds -= 1
+	kills += 1
+
+
+func damage_player(amount: float, from: Vector3) -> void:
+	if hp <= 0.0 or invuln > 0.0:
+		return
+	if state in ["dodge", "dash_in", "dash_beam"]:
+		return
+	var k := 1.0
+	if state == "block":
+		k = 0.25
+	hp = maxf(0.0, hp - amount * k)
+	invuln = 0.35
+	var away := player.position - from
+	away.y = 0.0
+	if away.length() > 0.01:
+		vel += away.normalized() * (3.0 if k < 1.0 else 7.0)
+	_spawn_ripple(player.global_position + Vector3(0.0, 1.0, 0.0), 1.6, false)
+	if hp <= 0.0:
+		dead_timer = 2.0
+
+
+func _spawn_wave() -> void:
+	wave += 1
+	var n := mini(2 + wave, 7)
+	for i in range(n):
+		var a := randf() * TAU
+		var r := Valley.ARENA - 1.6
+		var pos := Vector3(cos(a) * r, 0.0, sin(a) * r)
+		if pos.distance_to(player.position) < 9.0:
+			pos = Vector3(-pos.x, 0.0, -pos.z)
+		var h := Hound.new()
+		add_child(h)
+		h.setup(valley, player, self, pos)
+		alive_hounds += 1
+
+
+func _update_game(delta: float) -> void:
+	invuln = maxf(0.0, invuln - delta)
+	if hp <= 0.0:
+		dead_timer -= delta
+		if dead_timer <= 0.0:
+			for h in get_tree().get_nodes_in_group("hounds"):
+				h.queue_free()
+			alive_hounds = 0
+			hp = MAX_HP
+			wave = 0
+			wave_timer = 2.0
+			vel = Vector3.ZERO
+			player.position = Vector3(Valley.START_POS.x, valley.height_at(Valley.START_POS.x, Valley.START_POS.z), Valley.START_POS.z)
+			_set_state("idle", true)
+		return
+	if waves_enabled and alive_hounds <= 0:
+		wave_timer -= delta
+		if wave_timer <= 0.0:
+			_spawn_wave()
+			wave_timer = WAVE_PAUSE
+
+
 func _update_camera(delta: float) -> void:
-	if Input.is_key_pressed(KEY_Q):
-		cam_yaw += 90.0 * delta
-	if Input.is_key_pressed(KEY_E):
-		cam_yaw -= 90.0 * delta
 	var target := player.position + Vector3(0.0, 1.0, 0.0)
-	var pr := deg_to_rad(cam_pitch)
+	var pr := deg_to_rad(CAM_PITCH)
 	var off := Vector3(0.0, sin(pr), cos(pr)) * CAM_DIST
 	var want := target + off.rotated(Vector3.UP, deg_to_rad(cam_yaw))
 	var floor_y := valley.height_at(want.x, want.z) + 0.9
@@ -716,6 +818,9 @@ func _update_hud() -> void:
 	if problems.size() > 0:
 		txt += "\nПРОБЛЕМЫ: " + ", ".join(problems)
 	hud.text = txt
+	if hp_fill != null:
+		hp_fill.size.x = 354.0 * clampf(hp / MAX_HP, 0.0, 1.0)
+		hp_label.text = "Волна %d   Врагов: %d   %s" % [wave, maxi(alive_hounds, 0), "ПАЛА - возрождение..." if hp <= 0.0 else ""]
 
 
 func _report() -> void:
@@ -772,6 +877,24 @@ func _run_selftest() -> void:
 	_log("dash_mid")
 	await _wait(0.8)
 	_log("after_dash")
+	# враг: появляется рядом, должен получить урон от ударов
+	var th := Hound.new()
+	add_child(th)
+	th.setup(valley, player, self, player.position + Vector3(0.0, 0.0, 4.0))
+	alive_hounds += 1
+	await _wait(1.8)
+	_log("hound_" + th.state)
+	for i in range(40):
+		_face_input()
+		if is_instance_valid(th):
+			var dd := th.position - player.position
+			player.rotation.y = atan2(dd.x, dd.z)
+		_on_attack()
+		await _wait(0.1)
+	await _wait(1.0)
+	print("KIRA_TEST hound_killed=", kills, " player_hp=", hp, " hits=", hits_log.count("hound_hit"))
+	if kills < 1:
+		problems.append("гончая не убита")
 	if seen.size() < COMBO_ROLES.size():
 		problems.append("комбо прошло не полностью")
 	print("KIRA_TEST_DONE problems=", problems)

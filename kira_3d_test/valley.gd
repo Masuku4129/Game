@@ -5,8 +5,11 @@ extends Node3D
 
 const HALF := 60.0               # половина размера карты, м
 const CELL := 1.25               # шаг сетки рельефа, м
-const ARENA := 52.0              # граница, дальше горы-стена
-const PLAYER_R := 0.35
+const ARENA := 26.0              # граница поляны, дальше непроходимый лес
+const PLAYER_R := 0.42
+const HOUSE_POS := Vector3(0.0, 0.0, -15.0)
+const START_POS := Vector3(0.0, 0.0, -8.5)
+const RING_C := Vector2(0.0, 4.0)
 const MAX_SLOPE := 1.15          # круче этого пешком не залезть (около 49 градусов)
 const OBST_CELL := 8.0
 
@@ -62,24 +65,25 @@ func _fbm(x: float, z: float, s: int, octaves: int) -> float:
 	return t / n
 
 
+func _blob(x: float, z: float, cx: float, cz: float, rx: float, rz: float, hgt: float) -> float:
+	var dx := (x - cx) / rx
+	var dz := (z - cz) / rz
+	var d := sqrt(dx * dx + dz * dz) + _fbm(x * 0.21, z * 0.21, 51, 2) * 0.16
+	var t := 1.0 - smoothstep(0.92, 1.08, d)
+	return t * (hgt + _fbm(x * 0.35, z * 0.35, 52, 2) * 0.35)
+
+
 func _height_raw(x: float, z: float) -> float:
 	var r := sqrt(x * x + z * z)
-	var hill := _fbm(x * 0.022, z * 0.022, 11, 3) * 9.0
-	var c1 := _fbm(x * 0.016, z * 0.016, 23, 2)
-	var c2 := _fbm(x * 0.021 + 40.0, z * 0.021 - 17.0, 37, 2)
-	var c3 := _fbm(x * 0.019 - 70.0, z * 0.019 + 33.0, 77, 2)
-	var cm := smoothstep(14.0, 24.0, r)
-	var t1 := smoothstep(0.34, 0.39, c1) * cm
-	var t2 := smoothstep(0.10, 0.15, c2) * t1
-	var t3 := smoothstep(-0.40, -0.46, c2) * cm * (1.0 - t1)
-	var t4 := smoothstep(0.22, 0.27, c3) * cm * (1.0 - t1)
-	var rough := _fbm(x * 0.16, z * 0.16, 51, 3)
-	var h := hill * 0.5 * cm + hill * 0.08 + t1 * 6.5 + t2 * 5.0 + t4 * 4.5 - t3 * 4.0
-	var edge := t1 * (1.0 - t1) * 4.0 + t2 * (1.0 - t2) * 4.0 + t3 * (1.0 - t3) * 4.0 + t4 * (1.0 - t4) * 4.0
-	h += rough * 1.6 * (edge + 0.12)
-	h += _fbm(x * 0.7, z * 0.7, 61, 2) * 0.14
-	h += smoothstep(46.0, 60.0, r) * (22.0 + rough * 6.0)
-	return h * smoothstep(5.0, 12.0, r)
+	var dh := sqrt(x * x + (z + 15.0) * (z + 15.0) * 0.7)
+	var hill := _fbm(x * 0.03, z * 0.03, 11, 3) * 1.4
+	var h := hill * smoothstep(5.0, 12.0, r) * smoothstep(8.0, 14.0, dh)
+	h += _blob(x, z, 17.0, -3.0, 6.0, 8.0, 3.4)          # скальный уступ на востоке
+	h += _blob(x, z, -17.5, 6.0, 5.5, 6.5, 2.6)          # и на западе
+	h += _fbm(x * 0.7, z * 0.7, 61, 2) * 0.10
+	var rim := smoothstep(25.0, 50.0, r)
+	h += rim * (9.0 + _fbm(x * 0.08, z * 0.08, 71, 2) * 5.0)
+	return h
 
 
 func _compute_grid() -> void:
@@ -122,14 +126,33 @@ func normal_at(x: float, z: float) -> Vector3:
 
 
 # ================================================================ коллизии
-func add_obstacle(x: float, z: float, r: float) -> void:
+func add_obstacle(x: float, z: float, r: float, top := 99.0) -> void:
 	var key := Vector2i(floori(x / OBST_CELL), floori(z / OBST_CELL))
 	if not obstacles.has(key):
 		obstacles[key] = []
-	(obstacles[key] as Array).append(Vector3(x, z, r))
+	(obstacles[key] as Array).append(Vector4(x, z, r, height_at(x, z) + top))
 
 
-## выталкивает точку из деревьев, камней и брёвен
+## свободна ли точка от препятствий в радиусе rad
+func is_free(x: float, z: float, rad: float) -> bool:
+	var cx := floori(x / OBST_CELL)
+	var cz := floori(z / OBST_CELL)
+	for dz in range(-1, 2):
+		for dx in range(-1, 2):
+			var key := Vector2i(cx + dx, cz + dz)
+			if not obstacles.has(key):
+				continue
+			for o in (obstacles[key] as Array):
+				var ov: Vector4 = o
+				var ddx := x - ov.x
+				var ddz := z - ov.y
+				var rr := ov.z + rad
+				if ddx * ddx + ddz * ddz < rr * rr:
+					return false
+	return true
+
+
+## выталкивает точку из деревьев, камней, брёвен и стен дома (в прыжке выше препятствия - пролетает над ним)
 func push(p: Vector3, pr: float) -> Vector3:
 	var cx := floori(p.x / OBST_CELL)
 	var cz := floori(p.z / OBST_CELL)
@@ -139,16 +162,20 @@ func push(p: Vector3, pr: float) -> Vector3:
 			if not obstacles.has(key):
 				continue
 			for o in (obstacles[key] as Array):
-				var ox: float = (o as Vector3).x
-				var oz: float = (o as Vector3).y
-				var rr: float = (o as Vector3).z + pr
-				var ddx := p.x - ox
-				var ddz := p.z - oz
+				var ov: Vector4 = o
+				if p.y > ov.w:
+					continue
+				var rr := ov.z + pr
+				var ddx := p.x - ov.x
+				var ddz := p.z - ov.y
 				var d2 := ddx * ddx + ddz * ddz
-				if d2 < rr * rr and d2 > 1e-8:
-					var d := sqrt(d2)
-					p.x += ddx / d * (rr - d)
-					p.z += ddz / d * (rr - d)
+				if d2 < rr * rr:
+					if d2 > 1e-8:
+						var d := sqrt(d2)
+						p.x += ddx / d * (rr - d)
+						p.z += ddz / d * (rr - d)
+					else:
+						p.x += rr
 	return p
 
 
@@ -253,20 +280,32 @@ func _shader_mat(path: String) -> ShaderMaterial:
 	return m
 
 
+func _path_mask(x: float, z: float) -> float:
+	var n := _vn(x * 0.3, z * 0.3, 8) * 0.5 + 0.5
+	var xc := 1.6 * sin(z * 0.13)
+	var d := absf(x - xc)
+	var m := 1.0 - smoothstep(0.9 + 0.5 * n, 1.9 + 0.7 * n, d)
+	return m * smoothstep(-12.6, -11.0, z) * (1.0 - smoothstep(12.0, 16.0, z))
+
+
 func _ground_color(p: Vector3, nrm: Vector3) -> Color:
 	var r := Vector2(p.x, p.z).length()
-	var rock := 1.0 - smoothstep(0.60, 0.80, nrm.y)
+	var rock := 1.0 - smoothstep(0.62, 0.82, nrm.y)
 	var n1 := _vn(p.x * 0.09, p.z * 0.09, 5) * 0.5 + 0.5
 	var n2 := _vn(p.x * 0.31 + 9.0, p.z * 0.31, 6) * 0.5 + 0.5
-	var moss := Color(0.050, 0.135, 0.105).lerp(Color(0.075, 0.175, 0.110), n1)
-	moss = moss.lerp(Color(0.140, 0.095, 0.065), smoothstep(0.55, 0.80, n2) * 0.8)       # хвойная подстилка
-	moss = moss.lerp(Color(0.130, 0.120, 0.215), smoothstep(0.62, 0.9, n1) * 0.55)       # фиолетовый мох
-	moss = moss.lerp(Color(0.200, 0.175, 0.155), 1.0 - smoothstep(6.0, 12.0, r))          # утоптанная поляна
+	var moss := Color(0.050, 0.140, 0.100).lerp(Color(0.085, 0.185, 0.105), n1)
+	moss = moss.lerp(Color(0.140, 0.100, 0.065), smoothstep(0.58, 0.82, n2) * 0.75)       # хвойная подстилка
+	moss = moss.lerp(Color(0.125, 0.115, 0.205), smoothstep(0.66, 0.92, n1) * 0.45)       # фиолетовый мох
+	var ring_d := Vector2(p.x - RING_C.x, p.z - RING_C.y).length()
+	moss = moss.lerp(Color(0.185, 0.160, 0.150), (1.0 - smoothstep(7.5, 10.5, ring_d)) * 0.8)   # боевая площадка, утоптанная земля
+	moss = moss.lerp(Color(0.210, 0.170, 0.130), _path_mask(p.x, p.z) * 0.9)                    # тропа от дома
+	var dh := Vector2(p.x - HOUSE_POS.x, p.z - HOUSE_POS.z).length()
+	moss = moss.lerp(Color(0.180, 0.150, 0.125), (1.0 - smoothstep(6.0, 9.5, dh)) * 0.6)       # двор
+	moss = moss.lerp(Color(0.040, 0.075, 0.060), smoothstep(21.0, 29.0, r))                    # лесная подстилка темнее
 	var stone := Color(0.165, 0.175, 0.230).lerp(Color(0.095, 0.100, 0.150), n2)
 	var c := moss.lerp(stone, rock)
-	var j := 0.9 + 0.2 * (_h(floori(p.x * 3.1), floori(p.z * 3.1), 3) * 0.5 + 0.5)       # яркость граней
-	c = Color(c.r * j * 1.5, c.g * j * 1.5, c.b * j * 1.5, rock)
-	return c
+	var j := 0.9 + 0.2 * (_h(floori(p.x * 3.1), floori(p.z * 3.1), 3) * 0.5 + 0.5)
+	return Color(c.r * j * 1.5, c.g * j * 1.5, c.b * j * 1.5, rock)
 
 
 func _build_terrain() -> void:
@@ -472,8 +511,8 @@ func _mesh_grass() -> ArrayMesh:
 		var ang := TAU * float(k) / 6.0 + float(k) * 0.4
 		var dist := 0.10 + 0.08 * float(k % 3)
 		var base := Vector3(cos(ang) * dist, 0.0, sin(ang) * dist)
-		var h := 0.55 + 0.35 * float(k % 2) + 0.12 * float(k % 3)
-		var lean := Vector3(cos(ang) * 0.22, 0.0, sin(ang) * 0.22)
+		var h := 0.26 + 0.14 * float(k % 2) + 0.06 * float(k % 3)
+		var lean := Vector3(cos(ang) * 0.10, 0.0, sin(ang) * 0.10)
 		var side := Vector3(-sin(ang), 0.0, cos(ang)) * 0.06
 		var tp := base + lean + Vector3(0.0, h, 0.0)
 		mb.tri(base - side, base + side, tp, cb, cb, ct, Vector3(cos(ang), 0.2, sin(ang)))
@@ -565,7 +604,6 @@ func _tint(lo: float, hi: float) -> Color:
 
 
 func _scatter() -> void:
-	# --- деревья: четыре вида, группами и с полянами
 	var meshes: Array[ArrayMesh] = [
 		_mesh_spruce(8, 1.7, 14.0, 9, Color(0.080, 0.060, 0.055)),
 		_mesh_spruce(5, 2.5, 9.0, 10, Color(0.090, 0.065, 0.055)),
@@ -573,161 +611,183 @@ func _scatter() -> void:
 		_mesh_spruce(4, 1.3, 4.6, 8, Color(0.080, 0.060, 0.055))]
 	var txf: Array = [[], [], [], []]
 	var tcu: Array = [[], [], [], []]
-	var gx := -56.0
-	while gx < 56.0:
-		var gz := -56.0
-		while gz < 56.0:
-			var x := gx + rng.randf_range(-1.2, 1.2)
-			var z := gz + rng.randf_range(-1.2, 1.2)
-			gz += 2.7
-			var r := sqrt(x * x + z * z)
-			if r < 13.0 or r > 58.0:
-				continue
-			var dens := clampf(0.5 + 0.7 * _fbm(x * 0.05, z * 0.05, 91, 2), 0.0, 1.0)
-			if rng.randf() > dens * dens + 0.10:
-				continue
-			var nrm := normal_at(x, z)
-			if nrm.y < 0.82:
-				continue
-			var u := rng.randf()
-			var sp := 0 if u < 0.42 else (1 if u < 0.70 else (3 if u < 0.92 else 2))
-			var s := rng.randf_range(0.85, 1.30)
-			var bs := Basis(Vector3.UP, rng.randf() * TAU) * Basis(Vector3(1, 0, 0), rng.randf_range(-0.05, 0.05))
-			bs = bs.scaled(Vector3(s, s * rng.randf_range(0.9, 1.15), s))
-			(txf[sp] as Array).append(Transform3D(bs, Vector3(x, height_at(x, z) - 0.2, z)))
-			(tcu[sp] as Array).append(_tint(0.82, 1.18))
-			add_obstacle(x, z, 0.40 * s)
-		gx += 2.7
-	for i in range(4):
-		_mm(meshes[i], mat_tree, txf[i], tcu[i], false)
 
-	# --- валуны
+	# --- 1) круг древних камней (боевая площадка), дом строится отдельно
+	var house := House.new()
+	add_child(house)
+	house.build(self, Vector3(HOUSE_POS.x, height_at(HOUSE_POS.x, HOUSE_POS.z), HOUSE_POS.z))
+	var sxf: Array = []
+	var scu: Array = []
+	var rxf: Array = []
+	var rcu: Array = []
+	for k in range(8):
+		var a := TAU * float(k) / 8.0 + 0.2
+		var x := RING_C.x + cos(a) * 10.0
+		var z := RING_C.y + sin(a) * 10.0
+		var s := rng.randf_range(0.85, 1.15)
+		var bs := Basis(Vector3.UP, rng.randf() * TAU) * Basis(Vector3(1, 0, 0), rng.randf_range(-0.05, 0.05))
+		bs = bs.scaled(Vector3(s, s, s))
+		var y := height_at(x, z)
+		sxf.append(Transform3D(bs, Vector3(x, y, z)))
+		scu.append(_tint(0.9, 1.1))
+		add_obstacle(x, z, 0.72 * s, 3.4 * s)
+		rxf.append(Transform3D(Basis(Vector3.UP, a).scaled(Vector3(1.5, 1.5, 1.5)), Vector3(x + 0.12, y + 3.45 * s, z)))
+		rcu.append(Color(0.75, 0.35, 1.0, 1.0))
+	_mm(_monolith(), mat_rigid, sxf, scu, true)
+
+	# --- 2) валуны: группами у уступов и по краям поляны
 	var bm: Array[ArrayMesh] = [_mesh_boulder(1), _mesh_boulder(2), _mesh_boulder(3)]
 	var bxf: Array = [[], [], []]
 	var bcu: Array = [[], [], []]
-	var placed := 0
-	var tries := 0
-	while placed < 130 and tries < 2000:
-		tries += 1
-		var x := rng.randf_range(-ARENA, ARENA)
-		var z := rng.randf_range(-ARENA, ARENA)
-		var r := sqrt(x * x + z * z)
-		if r < 9.0 or r > ARENA:
-			continue
-		var s := rng.randf_range(0.7, 2.6) if rng.randf() < 0.85 else rng.randf_range(2.6, 4.0)
-		var k := rng.randi() % 3
-		var bs := Basis(Vector3.UP, rng.randf() * TAU).scaled(Vector3(s, s * rng.randf_range(0.8, 1.2), s))
-		(bxf[k] as Array).append(Transform3D(bs, Vector3(x, height_at(x, z) + 0.15 * s, z)))
-		(bcu[k] as Array).append(_tint(0.85, 1.15))
-		add_obstacle(x, z, 0.85 * s)
-		placed += 1
+	var centers: Array[Vector2] = [Vector2(12.0, -9.0), Vector2(12.5, 5.0), Vector2(-12.5, 0.0), Vector2(-12.0, 12.5), Vector2(6.0, 18.0), Vector2(-7.0, 19.0),
+		Vector2(20.0, 10.0), Vector2(-20.0, -8.0), Vector2(8.0, -21.0), Vector2(-9.0, -22.0)]
+	for cc in centers:
+		for q in range(rng.randi_range(3, 5)):
+			var x := cc.x + rng.randf_range(-3.0, 3.0)
+			var z := cc.y + rng.randf_range(-3.0, 3.0)
+			if Vector2(x, z).length() > ARENA - 1.0 or Vector2(x - START_POS.x, z - START_POS.z).length() < 4.5 or _path_mask(x, z) > 0.3:
+				continue
+			if not is_free(x, z, 1.4):
+				continue
+			var s := rng.randf_range(0.8, 2.0) if rng.randf() < 0.8 else rng.randf_range(2.0, 3.0)
+			var k := rng.randi() % 3
+			var bs := Basis(Vector3.UP, rng.randf() * TAU).scaled(Vector3(s, s * rng.randf_range(0.8, 1.15), s))
+			(bxf[k] as Array).append(Transform3D(bs, Vector3(x, height_at(x, z) + 0.12 * s, z)))
+			(bcu[k] as Array).append(_tint(0.85, 1.15))
+			add_obstacle(x, z, 1.02 * s, 1.5 * s)
 	for i in range(3):
 		_mm(bm[i], mat_rigid, bxf[i], bcu[i], true)
 
-	# --- поваленные брёвна
+	# --- 3) поваленные брёвна у кромки леса
 	var lxf: Array = []
 	var lcu: Array = []
-	placed = 0
-	tries = 0
-	while placed < 16 and tries < 600:
+	var tries := 0
+	while lxf.size() < 8 and tries < 400:
 		tries += 1
-		var x := rng.randf_range(-48.0, 48.0)
-		var z := rng.randf_range(-48.0, 48.0)
-		if sqrt(x * x + z * z) < 12.0 or normal_at(x, z).y < 0.93:
+		var a := rng.randf() * TAU
+		var rr := rng.randf_range(19.0, 24.0)
+		var x := cos(a) * rr
+		var z := sin(a) * rr
+		if normal_at(x, z).y < 0.95 or not is_free(x, z, 3.2):
 			continue
-		var s := rng.randf_range(0.8, 1.3)
+		var s := rng.randf_range(0.8, 1.2)
 		var yaw := rng.randf() * TAU
 		var bs := Basis(Vector3.UP, yaw).scaled(Vector3(s, s, s))
-		lxf.append(Transform3D(bs, Vector3(x, height_at(x, z) + 0.30 * s, z)))
+		lxf.append(Transform3D(bs, Vector3(x, height_at(x, z) + 0.32 * s, z)))
 		lcu.append(_tint(0.85, 1.15))
 		var dir := Vector3(cos(yaw), 0.0, -sin(yaw))
-		for q in range(-2, 3):
-			add_obstacle(x + dir.x * float(q) * 1.15 * s, z + dir.z * float(q) * 1.15 * s, 0.52 * s)
-		placed += 1
+		for q in range(-3, 4):
+			add_obstacle(x + dir.x * float(q) * 0.9 * s, z + dir.z * float(q) * 0.9 * s, 0.6 * s, 0.9 * s)
 	_mm(_mesh_log(), mat_rigid, lxf, lcu, true)
 
-	# --- трава
+	# --- 4) деревья: несколько у дома, а за краем поляны плотная непроходимая стена леса
+	var fixed: Array[Vector3] = [Vector3(-9.5, -12.0, 0), Vector3(9.5, -13.5, 1), Vector3(-11.5, -19.0, 0), Vector3(11.0, -20.0, 0), Vector3(-4.5, -22.5, 1), Vector3(5.5, -23.0, 0), Vector3(-18.0, -15.0, 0), Vector3(18.5, -16.0, 1)]
+	var cand: Array[Vector3] = []
+	for f in fixed:
+		cand.append(f)
+	var gx := -52.0
+	while gx < 52.0:
+		var gz := -52.0
+		while gz < 52.0:
+			var x := gx + rng.randf_range(-1.0, 1.0)
+			var z := gz + rng.randf_range(-1.0, 1.0)
+			gz += 2.5
+			var r := sqrt(x * x + z * z)
+			if r < 22.0 or r > 52.0:
+				continue
+			var p := smoothstep(22.0, 27.0, r) * 0.97
+			if rng.randf() > p:
+				continue
+			cand.append(Vector3(x, z, -1))
+		gx += 2.5
+	for c in cand:
+		var x := c.x
+		var z := c.y
+		if c.z >= 0.0:
+			x = c.x
+			z = c.y
+		var r2 := sqrt(x * x + z * z)
+		if r2 < 22.0 and c.z < 0.0:
+			continue
+		if not is_free(x, z, 1.5):
+			continue
+		if r2 < 27.0 and normal_at(x, z).y < 0.93:
+			continue                                # на поляне не ставим деревья на склоны и в скалы
+		var u := rng.randf()
+		var sp := 0 if u < 0.45 else (1 if u < 0.72 else (3 if u < 0.93 else 2))
+		var s := rng.randf_range(0.85, 1.35)
+		var bs := Basis(Vector3.UP, rng.randf() * TAU) * Basis(Vector3(1, 0, 0), rng.randf_range(-0.05, 0.05))
+		bs = bs.scaled(Vector3(s, s * rng.randf_range(0.9, 1.2), s))
+		(txf[sp] as Array).append(Transform3D(bs, Vector3(x, height_at(x, z) - 0.2, z)))
+		(tcu[sp] as Array).append(_tint(0.82, 1.18))
+		add_obstacle(x, z, 0.48 * s, 99.0)
+	for i in range(4):
+		_mm(meshes[i], mat_tree, txf[i], tcu[i], false)
+
+	# --- 5) трава: невысокая, пятнами, не на тропе и не на площадке
 	var gxf: Array = []
 	var gcu: Array = []
 	tries = 0
-	while gxf.size() < 4200 and tries < 12000:
+	while gxf.size() < 750 and tries < 9000:
 		tries += 1
-		var x := rng.randf_range(-48.0, 48.0)
-		var z := rng.randf_range(-48.0, 48.0)
-		if normal_at(x, z).y < 0.88:
+		var x := rng.randf_range(-ARENA, ARENA)
+		var z := rng.randf_range(-ARENA, ARENA)
+		if Vector2(x, z).length() > ARENA - 1.0 or normal_at(x, z).y < 0.9:
 			continue
-		var s := rng.randf_range(0.7, 1.6)
-		var bs := Basis(Vector3.UP, rng.randf() * TAU).scaled(Vector3(s, s * rng.randf_range(0.8, 1.4), s))
+		if _vn(x * 0.12, z * 0.12, 13) < 0.0 or _path_mask(x, z) > 0.15:
+			continue
+		if Vector2(x - RING_C.x, z - RING_C.y).length() < 8.5 or not is_free(x, z, 0.2):
+			continue
+		var s := rng.randf_range(0.6, 1.1)
+		var bs := Basis(Vector3.UP, rng.randf() * TAU).scaled(Vector3(s, s * rng.randf_range(0.8, 1.3), s))
 		gxf.append(Transform3D(bs, Vector3(x, height_at(x, z) - 0.02, z)))
 		var warm := rng.randf()
 		gcu.append(Color(0.8 + 0.5 * warm, 0.9 + 0.2 * rng.randf(), 0.8 + 0.3 * (1.0 - warm), 1.0))
 	_mm(_mesh_grass(), mat_grass, gxf, gcu, false)
 
-	# --- светящиеся грибы и цветы
+	# --- 6) светящиеся грибы у кромки леса и камней, кристаллы на скалах
 	var mxf: Array = []
 	var mcu: Array = []
 	var cols: Array[Color] = [Color(0.25, 1.0, 0.95), Color(0.75, 0.35, 1.0), Color(0.95, 0.40, 0.85)]
 	tries = 0
-	while mxf.size() < 190 and tries < 3000:
+	while mxf.size() < 70 and tries < 3000:
 		tries += 1
-		var cx := rng.randf_range(-46.0, 46.0)
-		var cz := rng.randf_range(-46.0, 46.0)
-		if sqrt(cx * cx + cz * cz) < 8.0 or normal_at(cx, cz).y < 0.85:
+		var a := rng.randf() * TAU
+		var rr := rng.randf_range(15.0, 25.0)
+		var cx := cos(a) * rr
+		var cz := sin(a) * rr
+		if normal_at(cx, cz).y < 0.9 or _path_mask(cx, cz) > 0.1:
 			continue
-		var cc: Color = cols[rng.randi() % 3]
-		for q in range(rng.randi_range(2, 6)):
-			var x := cx + rng.randf_range(-1.1, 1.1)
-			var z := cz + rng.randf_range(-1.1, 1.1)
-			var s := rng.randf_range(0.7, 1.9)
-			var bs := Basis(Vector3.UP, rng.randf() * TAU).scaled(Vector3(s, s, s))
-			mxf.append(Transform3D(bs, Vector3(x, height_at(x, z) - 0.02, z)))
-			mcu.append(Color(cc.r, cc.g, cc.b, 1.0))
+		var cc2: Color = cols[rng.randi() % 3]
+		for q in range(rng.randi_range(2, 5)):
+			var x := cx + rng.randf_range(-0.9, 0.9)
+			var z := cz + rng.randf_range(-0.9, 0.9)
+			if not is_free(x, z, 0.1):
+				continue
+			var s := rng.randf_range(0.7, 1.6)
+			mxf.append(Transform3D(Basis(Vector3.UP, rng.randf() * TAU).scaled(Vector3(s, s, s)), Vector3(x, height_at(x, z) - 0.02, z)))
+			mcu.append(Color(cc2.r, cc2.g, cc2.b, 1.0))
 	_mm(_mesh_mushroom(), mat_glow, mxf, mcu, false)
-
-	# --- кристаллы на скалах
-	var kxf: Array = []
-	var kcu: Array = []
+	var kxf: Array = rxf.duplicate()
+	var kcu: Array = rcu.duplicate()
 	tries = 0
-	while kxf.size() < 150 and tries < 6000:
+	var shards := 0
+	while shards < 40 and tries < 6000:
 		tries += 1
 		var x := rng.randf_range(-ARENA, ARENA)
 		var z := rng.randf_range(-ARENA, ARENA)
 		var nrm := normal_at(x, z)
-		if nrm.y > 0.62 or sqrt(x * x + z * z) < 12.0:
+		if nrm.y > 0.55 or Vector2(x, z).length() > ARENA - 1.0 or Vector2(x, z).length() < 9.0:
 			continue
-		var cc: Color = cols[1] if rng.randf() < 0.65 else cols[0]
-		for q in range(rng.randi_range(2, 4)):
-			var s := rng.randf_range(0.6, 1.7)
+		var cc3: Color = cols[1] if rng.randf() < 0.65 else cols[0]
+		for q in range(rng.randi_range(2, 3)):
+			var s := rng.randf_range(0.5, 1.3)
 			var dir := (nrm + Vector3(rng.randf_range(-0.5, 0.5), rng.randf_range(0.0, 0.7), rng.randf_range(-0.5, 0.5))).normalized()
 			var bs := Basis(Quaternion(Vector3.UP, dir)).scaled(Vector3(s, s, s))
 			kxf.append(Transform3D(bs, Vector3(x + rng.randf_range(-0.4, 0.4), height_at(x, z) + 0.05, z + rng.randf_range(-0.4, 0.4))))
-			kcu.append(Color(cc.r, cc.g, cc.b, 1.0))
+			kcu.append(Color(cc3.r, cc3.g, cc3.b, 1.0))
+		shards += 1
 	_mm(_mesh_crystal(), mat_glow, kxf, kcu, false)
-
-	# --- круг древних камней на поляне
-	var sxf: Array = []
-	var scu: Array = []
-	for k in range(9):
-		var a := TAU * float(k) / 9.0
-		var x := cos(a) * 9.5
-		var z := sin(a) * 9.5
-		var s := rng.randf_range(0.9, 1.25)
-		var bs := Basis(Vector3.UP, rng.randf() * TAU) * Basis(Vector3(1, 0, 0), rng.randf_range(-0.06, 0.06))
-		bs = bs.scaled(Vector3(s, s, s))
-		sxf.append(Transform3D(bs, Vector3(x, height_at(x, z), z)))
-		scu.append(_tint(0.9, 1.1))
-		add_obstacle(x, z, 0.65 * s)
-	_mm(_monolith(), mat_rigid, sxf, scu, true)
-	var rxf: Array = []
-	var rcu: Array = []
-	for k in range(9):
-		var a := TAU * float(k) / 9.0
-		var x := cos(a) * 9.5
-		var z := sin(a) * 9.5
-		var bs := Basis(Vector3.UP, a).scaled(Vector3(1.6, 1.6, 1.6))
-		rxf.append(Transform3D(bs, Vector3(x + 0.12, height_at(x, z) + 3.4, z)))
-		rcu.append(Color(0.75, 0.35, 1.0, 1.0))
-	_mm(_mesh_crystal(), mat_glow, rxf, rcu, false)
 
 
 # ================================================================ далёкие горы
@@ -791,7 +851,7 @@ func setup_atmosphere(we: WorldEnvironment, sun: DirectionalLight3D) -> void:
 	sun.rotation_degrees = Vector3(-32.0, -50.0, 0.0)
 	sun.light_color = Color(0.80, 0.82, 1.0)
 	sun.light_energy = 1.05
-	sun.directional_shadow_max_distance = 42.0
+	sun.directional_shadow_max_distance = 40.0
 
 
 func _build_fx() -> void:
