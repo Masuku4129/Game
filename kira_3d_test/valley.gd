@@ -5,6 +5,7 @@ extends Node3D
 
 const HALF := 60.0               # половина размера карты, м
 const CELL := 1.25               # шаг сетки рельефа, м
+const FLAT := true               # изометрический 2D-режим: плоская земля, арт-спрайты
 const ARENA := 26.0              # граница поляны, дальше непроходимый лес
 const PLAYER_R := 0.42
 const HOUSE_POS := Vector3(0.0, 0.0, 15.0)
@@ -79,6 +80,8 @@ func _blob(x: float, z: float, cx: float, cz: float, rx: float, rz: float, hgt: 
 
 
 func _height_raw(x: float, z: float) -> float:
+	if FLAT:
+		return 0.0
 	var r := sqrt(x * x + z * z)
 	var h := _fbm(x * 0.05, z * 0.05, 11, 2) * 0.35 * smoothstep(8.0, 16.0, r)
 	h += _fbm(x * 0.7, z * 0.7, 61, 2) * 0.04
@@ -100,6 +103,8 @@ func _g(i: int, j: int) -> float:
 
 ## высота земли в точке: точно по тем же треугольникам, что в меше
 func bridge_h(x: float, z: float) -> float:
+	if FLAT:
+		return -99.0
 	var v := absf(x - BRIDGE_X)
 	var u := absf(z - STREAM_Z)
 	if v > BR_HALF_V or u > BR_HALF_U:
@@ -342,15 +347,14 @@ func build() -> void:
 	_compute_grid()
 	_build_terrain()
 	_scatter()
-	var rb := Ruins3D.new()
-	add_child(rb)
-	rb.build(self)
 	var ps := PropSprites.new()
 	add_child(ps)
 	ps.build(self)
-	_build_mountains()
+	if not FLAT:
+		_build_mountains()
 	_build_fx()
-	_build_shafts()
+	if not FLAT:
+		_build_shafts()
 
 
 func _shader_mat(path: String) -> ShaderMaterial:
@@ -742,7 +746,7 @@ func setup_atmosphere(we: WorldEnvironment, sun: DirectionalLight3D) -> void:
 	env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
 	env.ambient_light_color = Color(0.340, 0.380, 0.560)
 	env.ambient_light_energy = 0.55
-	env.fog_enabled = true
+	env.fog_enabled = not FLAT
 	env.fog_light_color = Color(0.150, 0.190, 0.320)
 	env.fog_density = 0.011
 	env.fog_sky_affect = 0.55

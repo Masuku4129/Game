@@ -14,8 +14,9 @@ const DEAD_ZONE := 0.18
 const TURN_SPEED := 14.0
 const BLEND := 0.12
 # камера: закреплена сверху под 40 градусов, без вращения
-const CAM_DIST := 11.2
-const CAM_PITCH := 40.0
+const CAM_DIST := 60.0
+const CAM_PITCH := 33.0
+const CAM_ORTHO := 16.0         # высота кадра в метрах: изометрия как в 2D-играх
 const MAX_HP := 100.0
 const WAVE_PAUSE := 3.0
 # Положение катаны в системе правой кисти (прямой хват, под анимации)
@@ -53,7 +54,7 @@ var skeleton: Skeleton3D
 var anim: AnimationPlayer
 var trail: SlashTrail
 var cam: Camera3D
-var cam_yaw := 0.0
+var cam_yaw := 45.0
 var hp := MAX_HP
 var wave := 0
 var alive_hounds := 0
@@ -167,8 +168,10 @@ func _build_world() -> void:
 	valley.build()
 	valley.setup_atmosphere(we, sun)
 	cam = Camera3D.new()
-	cam.fov = 50.0
-	cam.far = 600.0
+	cam.projection = Camera3D.PROJECTION_ORTHOGONAL
+	cam.size = CAM_ORTHO
+	cam.near = 2.0
+	cam.far = 200.0
 	cam.position = Vector3(Valley.START_POS.x, 12.0, Valley.START_POS.z + 11.0)
 	add_child(cam)
 	cam.current = true
@@ -951,9 +954,6 @@ func _update_camera(delta: float) -> void:
 	var pr := deg_to_rad(CAM_PITCH)
 	var off := Vector3(0.0, sin(pr), cos(pr)) * CAM_DIST
 	var want := target + off.rotated(Vector3.UP, deg_to_rad(cam_yaw))
-	var floor_y := valley.height_at(want.x, want.z) + 0.9
-	if want.y < floor_y:
-		want.y = floor_y
 	cam.position = cam.position.lerp(want, 1.0 - exp(-10.0 * delta))
 	if shake > 0.0:
 		cam.position += Vector3(randf_range(-1.0, 1.0), randf_range(-1.0, 1.0), randf_range(-1.0, 1.0)) * shake * 0.3
