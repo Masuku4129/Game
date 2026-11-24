@@ -39,8 +39,8 @@ const ALL_ROLES := ["idle", "walk", "run", "block", "jump", "dodge", "dash_in", 
 	"slash", "slash2", "slash4", "kick", "slash5", "slash3"]
 const LOOPED := ["idle", "walk", "run", "block"]
 # перемещения спецдвижений: [начало, конец (с), дистанция (м); минус = назад]
-const JUMP_MOVE := [0.20, 0.93, 3.0]
-const DODGE_MOVE := [0.06, 0.54, -3.4]
+const JUMP_MOVE := [0.20, 0.93, 5.0]
+const DODGE_MOVE := [0.06, 0.54, -5.0]
 const DASH_DIST := 8.0
 const DASH_TIME := 0.20
 
@@ -80,6 +80,7 @@ func _ready() -> void:
 	_build_ui()
 	_set_state("idle", true)
 	_report()
+	_prewarm()
 	if "--selftest" in OS.get_cmdline_user_args():
 		_run_selftest()
 
@@ -500,6 +501,32 @@ func _update_camera(delta: float) -> void:
 
 
 # ================================================================ эффекты
+## Прогрев: при первом показе шейдера/частиц телефон компилирует их и кадр зависает (микрофриз).
+## Поэтому всё это один раз рисуется крошечным перед камерой на старте и сразу удаляется.
+func _prewarm() -> void:
+	var holder := Node3D.new()
+	add_child(holder)
+	var q := QuadMesh.new()
+	q.size = Vector2(0.05, 0.05)
+	for path in ["res://crescent.gdshader", "res://ripple.gdshader"]:
+		var mi := MeshInstance3D.new()
+		mi.mesh = q
+		var mat := ShaderMaterial.new()
+		mat.shader = load(path)
+		mat.set_shader_parameter("progress", 0.5)
+		mi.material_override = mat
+		holder.add_child(mi)
+		mi.global_position = cam.global_position + Vector3(0.0, -0.5, -3.0)
+	var beam := DashBeam.new()
+	holder.add_child(beam)
+	var p0 := player.global_position + Vector3(0.0, 1.0, 0.0)
+	beam.call("setup", p0, Vector3(0.0, 0.0, 1.0))
+	beam.call("set_head", p0 + Vector3(0.0, 0.0, 0.05))
+	beam.scale = Vector3(0.05, 0.05, 0.05)
+	await get_tree().create_timer(0.35).timeout
+	holder.queue_free()
+
+
 func _spawn_crescent(scale_f: float, roll_deg: float, height: float) -> void:
 	# Волна-полумесяц в плоскости удара: вылетает вперёд, расширяется и рассыпается.
 	var size := ATTACK_RANGE * scale_f * 2.0
