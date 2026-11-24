@@ -28,14 +28,14 @@ const CHAIN_AFTER_HIT := 0.05
 const ATTACK_RANGE := 2.4
 const MAX_COMBO := 6
 const GAME_SPEED := 0.85
-const A_START := ["cut_rl", "cut_lr", "diag_dl", "diag_dr", "flick", "rise_l", "rise_r"]
-const A_FWD := ["thrust", "step_cut", "lunge_low", "slide_cut", "chop", "flying_kick", "flip_cut"]
-const A_BACK := ["back_cut", "back_flip_cut", "spin_r", "spin_l", "whirl_low", "heel_sweep"]
-const A_LEFT := ["cut_rl", "diag_dl", "rise_l", "crescent", "spin_l", "cartwheel_cut", "roundhouse"]
-const A_RIGHT := ["cut_lr", "diag_dr", "rise_r", "spin_r", "flick", "cartwheel_cut", "roundhouse"]
-const A_MID := ["cut_rl", "cut_lr", "diag_dl", "diag_dr", "rise_l", "rise_r", "flick", "uppercut", "low_sweep", "x_cut", "kick", "spin_r", "spin_l", "roundhouse", "axe_kick", "corkscrew"]
-const A_FIN := ["heavy_overhead", "crescent", "whirl_high", "dive_slam", "flurry3", "whirlwind", "flip_cut", "corkscrew", "axe_kick"]
-const A_AIR := ["air_chop", "air_rise", "whirl_high", "dive_slam", "corkscrew", "flip_cut"]
+const A_START := ["slash", "slash2", "mo_cut1", "mo_cut4", "slash4"]
+const A_FWD := ["slash5", "mo_kick_front", "mo_cut6", "mo_punch_kick", "mo_kick_front2", "slash3"]
+const A_BACK := ["mo_jump_kick", "mo_spin_kick", "mo_kick_heel", "slash2"]
+const A_LEFT := ["slash2", "mo_cut2", "mo_cut5", "mo_kick_round", "mo_kick_side"]
+const A_RIGHT := ["slash", "mo_cut1", "mo_cut3", "mo_kick_round", "mo_kick_side"]
+const A_MID := ["slash", "slash2", "slash4", "mo_cut1", "mo_cut2", "mo_cut3", "mo_cut4", "mo_cut5", "mo_kick_front", "mo_kick_round", "mo_kick_side", "mo_punch_kick", "kick"]
+const A_FIN := ["slash3", "mo_cut6", "mo_spin_kick", "mo_spin_kick2", "mo_kick_heel", "slash5"]
+const A_AIR := ["mo_spin_kick2", "mo_spin_kick", "mo_jump_kick", "slash3"]
 const BASE_ROLES := ["idle", "walk", "run", "block", "jump", "dodge", "dash_in", "dash_out"]
 const LOOPED := ["idle", "walk", "run", "block"]
 # перемещения спецдвижений: [начало, конец (с), дистанция (м); минус = назад]
@@ -82,7 +82,7 @@ var anim_of := {}
 var problems: PackedStringArray = PackedStringArray()
 var hit_done := false
 var hit_idx := 0
-var cur_atk := "cut_rl"
+var cur_atk := "slash"
 var last_atk := ""
 var lunge_sign := 1.0
 var atk_rel := Vector2.ZERO
@@ -822,7 +822,7 @@ func _update_waves(delta: float) -> void:
 func _hit_hounds(role: String, zone: float) -> void:
 	var fwd := _forward()
 	var dmg := 24.0
-	if role in ["heavy_overhead", "dive_slam", "crescent", "whirl_high"]:
+	if role in ["slash3", "mo_cut6"]:
 		dmg = 38.0
 	elif role in ["x_cut", "flurry3", "flick"]:
 		dmg = 16.0

@@ -7,11 +7,11 @@ extends Node3D
 @export var base_node: Node3D                # TrailBase из katana.glb
 @export var character_height := 2.0          # высота персонажа в единицах сцены (в модели 2.0)
 @export var speed_per_height := 14.0   # порог скорости кончика (единиц/с на 1 высоту): шлейф только на быстрых рассечениях         # порог скорости кончика: единиц/с на 1 высоту персонажа
-@export var lifetime := 0.30                 # сколько секунд живёт хвост шлейфа
-@export var subdivisions := 8                # сглаживание дуги между кадрами
-@export var color := Color(0.78, 0.62, 1.0, 1.0)   # цвет внешнего свечения
+@export var lifetime := 0.42                 # сколько секунд живёт хвост шлейфа
+@export var subdivisions := 10                # сглаживание дуги между кадрами
+@export var color := Color(0.62, 0.38, 1.0, 1.0)   # цвет внешнего свечения
 @export var core_color := Color(1, 1, 1, 1)          # белое ядро
-@export var overshoot := 0.30                        # насколько шлейф вылетает за кончик клинка
+@export var overshoot := 0.12                        # насколько шлейф вылетает за кончик клинка
 
 var _mesh := ImmediateMesh.new()
 var _mi := MeshInstance3D.new()
@@ -63,7 +63,7 @@ func _process(delta: float) -> void:
 	_last_tip = tip
 	_has_last = true
 	_tip_speed = speed
-	_samples.append({"xf": xf, "t": now, "moving": active and speed >= speed_per_height * character_height})
+	_samples.append({"xf": xf, "t": now, "moving": active and speed >= 5.0 * character_height})
 	while _samples.size() > 0 and now - float(_samples[0]["t"]) > lifetime:
 		_samples.pop_front()
 	_rebuild(now)
@@ -74,7 +74,7 @@ func _rebuild(now: float) -> void:
 	var outer_tip := _tip_local + (_tip_local - _base_local) * overshoot
 	# широкий полумесяц свечения и узкое белое ядро внутри него
 	_add_layer(now, outer_tip, _base_local, color, 1.0, 0.95)
-	_add_layer(now, outer_tip, _base_local, core_color, 1.5, 0.45)
+	_add_layer(now, outer_tip, _base_local, core_color, 1.3, 0.28)
 
 
 # Форма полумесяца: внешний край идёт по траектории кончика клинка, внутренний
@@ -82,7 +82,7 @@ func _rebuild(now: float) -> void:
 # части максимум -> заострённые концы.
 func _width(age_n: float) -> float:
 	var a := clampf(age_n, 0.0, 1.0)
-	return sin(PI * pow(a, 0.55))
+	return pow(sin(PI * pow(a, 0.7)), 0.8) * 0.8
 
 
 func _add_layer(now: float, p_out: Vector3, p_in: Vector3, col: Color, boost: float, width_scale: float) -> void:
