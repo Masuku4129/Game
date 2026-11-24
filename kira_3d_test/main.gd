@@ -7,7 +7,7 @@ extends Node3D
 
 const MODEL_PATH := "res://assets/kira_rigged.glb"
 const KATANA_PATH := "res://assets/katana.glb"
-const WALK_SPEED := 1.5
+const WALK_SPEED := 1.9
 const RUN_SPEED := 6.2
 const RUN_THRESHOLD := 0.65
 const DEAD_ZONE := 0.18
