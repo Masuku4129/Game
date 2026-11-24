@@ -31,7 +31,14 @@ var attack_len := 1.1
 var combo := 0               # номер удара в комбо: 0, 1, 2
 var combo_queued := false
 const COMBO_ROLES := ["slash", "slash2", "slash3"]
-const COMBO_WINDOW := 0.45   # доля анимации, после которой повторное нажатие ставит следующий удар в очередь
+const COMBO_WINDOW := 0.30
+const ATTACK_RANGE := 2.4        # радиус зоны поражения (было ~1.6, +50%)
+# для каждого удара: [время попадания (с), рывок вперёд (м), множитель радиуса ударной волны]
+const HIT_INFO := {"slash": [0.22, 0.9, 1.0], "slash2": [0.23, 0.9, 1.0], "slash3": [0.50, 1.4, 1.25]}
+var hit_done := false
+var lunge_left := 0.0
+var lunge_dir := Vector3.ZERO
+var hits_log := []   # доля анимации, после которой повторное нажатие ставит следующий удар в очередь
 var anim_of := {}            # роль -> имя анимации
 var problems: PackedStringArray = PackedStringArray()
 var sim_move := Vector2.ZERO # для самопроверки без экрана
@@ -69,7 +76,7 @@ func _build_world() -> void:
 	env.background_color = Color(0.05, 0.04, 0.09)
 	env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
 	env.ambient_light_color = Color(0.45, 0.42, 0.65)
-	env.ambient_light_energy = 0.9
+	env.ambient_light_energy = 0.65
 	env.tonemap_mode = Environment.TONE_MAPPER_FILMIC
 	env.glow_enabled = true
 	env.glow_intensity = 0.9
@@ -271,7 +278,10 @@ func _set_state(new_state: String, force := false) -> void:
 		"run":
 			_play("run", BLEND)
 		"attack":
-			_play(COMBO_ROLES[combo], 0.07)
+			_play(COMBO_ROLES[combo], 0.05)
+			hit_done = false
+			lunge_left = HIT_INFO[COMBO_ROLES[combo]][1]
+			lunge_dir = Vector3(sin(player.rotation.y), 0.0, cos(player.rotation.y))
 			if anim_of.has(COMBO_ROLES[combo]):
 				attack_len = anim.get_animation(anim_of[COMBO_ROLES[combo]]).length
 
@@ -299,7 +309,20 @@ func _process(delta: float) -> void:
 		# в начале удара можно довернуть персонажа джойстиком
 		if mag > DEAD_ZONE and attack_time < attack_len * 0.25:
 			player.rotation.y = lerp_angle(player.rotation.y, atan2(v.x, v.y), 1.0 - exp(-10.0 * delta))
-		if attack_time >= attack_len * 0.92 and combo_queued:
+		# рывок вперёд до момента попадания и ударная волна-полумесяц на земле
+		var info: Array = HIT_INFO[COMBO_ROLES[combo]]
+		if attack_time < float(info[0]) + 0.06 and lunge_left > 0.0:
+			var step := minf(lunge_left, float(info[1]) * delta / (float(info[0]) + 0.06))
+			lunge_left -= step
+			var np := player.position + lunge_dir * step
+			np.x = clampf(np.x, -ARENA_LIMIT, ARENA_LIMIT)
+			np.z = clampf(np.z, -ARENA_LIMIT, ARENA_LIMIT)
+			player.position = np
+		if not hit_done and attack_time >= float(info[0]):
+			hit_done = true
+			_spawn_shockwave(float(info[2]))
+			hits_log.append(COMBO_ROLES[combo])
+		if attack_time >= attack_len * 0.90 and combo_queued:
 			combo += 1
 			combo_queued = false
 			attack_time = 0.0
@@ -328,6 +351,46 @@ func _process(delta: float) -> void:
 	cam.position = cam.position.lerp(want, 1.0 - exp(-8.0 * delta))
 	cam.look_at(target, Vector3.UP)
 	_update_hud()
+
+
+func _spawn_shockwave(scale_f: float) -> void:
+	# полумесяц на земле: показывает зону поражения (радиус ATTACK_RANGE), быстро гаснет
+	var r := ATTACK_RANGE * scale_f
+	var mi := MeshInstance3D.new()
+	var im := ImmediateMesh.new()
+	var segs := 28
+	var half := 1.15   # половина угла дуги, рад
+	im.surface_begin(Mesh.PRIMITIVE_TRIANGLES)
+	for i in range(segs):
+		var a0 := -half + 2.0 * half * float(i) / float(segs)
+		var a1 := -half + 2.0 * half * float(i + 1) / float(segs)
+		var w0 := sin(PI * float(i) / float(segs))
+		var w1 := sin(PI * float(i + 1) / float(segs))
+		var o0 := Vector3(sin(a0), 0.04, cos(a0)) * r
+		var o1 := Vector3(sin(a1), 0.04, cos(a1)) * r
+		var i0 := Vector3(sin(a0), 0.04, cos(a0)) * (r - 0.9 * w0 * scale_f)
+		var i1 := Vector3(sin(a1), 0.04, cos(a1)) * (r - 0.9 * w1 * scale_f)
+		for v in [[o0, 1.0], [i0, 0.0], [o1, 1.0], [i0, 0.0], [i1, 0.0], [o1, 1.0]]:
+			im.surface_set_color(Color(0.8, 0.65, 1.0, float(v[1]) * 0.85))
+			im.surface_add_vertex(v[0])
+	im.surface_end()
+	mi.mesh = im
+	var mat := StandardMaterial3D.new()
+	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	mat.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
+	mat.cull_mode = BaseMaterial3D.CULL_DISABLED
+	mat.vertex_color_use_as_albedo = true
+	mi.material_override = mat
+	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	mi.top_level = true
+	add_child(mi)
+	mi.global_position = player.global_position
+	mi.global_rotation = Vector3(0.0, player.rotation.y, 0.0)
+	var tw := create_tween()
+	tw.tween_property(mat, "albedo_color:a", 0.0, 0.28)
+	tw.parallel().tween_property(mi, "scale", Vector3(1.12, 1.0, 1.12), 0.28)
+	tw.tween_callback(mi.queue_free)
 
 
 func _update_hud() -> void:
@@ -363,15 +426,16 @@ func _run_selftest() -> void:
 	sim_move = Vector2.ZERO
 	await get_tree().create_timer(0.4).timeout
 	_on_attack()
-	await get_tree().create_timer(0.45).timeout
+	await get_tree().create_timer(0.30).timeout
 	log.call("attack1_mid")
 	_on_attack()
-	await get_tree().create_timer(0.95).timeout
+	await get_tree().create_timer(0.50).timeout
 	log.call("attack2_expected")
 	_on_attack()
-	await get_tree().create_timer(0.8).timeout
+	await get_tree().create_timer(0.55).timeout
 	log.call("attack3_expected")
-	await get_tree().create_timer(1.6).timeout
+	await get_tree().create_timer(1.2).timeout
 	log.call("after_combo")
+	print("KIRA_TEST hits=", hits_log)
 	print("KIRA_TEST_DONE problems=", problems)
 	get_tree().quit(1 if problems.size() > 0 else 0)
