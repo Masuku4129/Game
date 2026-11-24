@@ -6,10 +6,12 @@ extends Node3D
 @export var tip_node: Node3D                 # TrailTip из katana.glb
 @export var base_node: Node3D                # TrailBase из katana.glb
 @export var character_height := 2.0          # высота персонажа в единицах сцены (в модели 2.0)
-@export var speed_per_height := 11.0         # порог скорости кончика: единиц/с на 1 высоту персонажа
-@export var lifetime := 0.22                 # сколько секунд живёт хвост шлейфа
-@export var subdivisions := 6                # сглаживание дуги между кадрами
-@export var color := Color(1, 1, 1, 1)
+@export var speed_per_height := 7.0         # порог скорости кончика: единиц/с на 1 высоту персонажа
+@export var lifetime := 0.42                 # сколько секунд живёт хвост шлейфа
+@export var subdivisions := 8                # сглаживание дуги между кадрами
+@export var color := Color(0.78, 0.62, 1.0, 1.0)   # цвет внешнего свечения
+@export var core_color := Color(1, 1, 1, 1)          # белое ядро
+@export var overshoot := 0.22                        # насколько шлейф вылетает за кончик клинка
 
 var _mesh := ImmediateMesh.new()
 var _mi := MeshInstance3D.new()
@@ -29,6 +31,7 @@ func _ready() -> void:
 	var mat := StandardMaterial3D.new()
 	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	mat.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
 	mat.cull_mode = BaseMaterial3D.CULL_DISABLED
 	mat.vertex_color_use_as_albedo = true
 	_mi.mesh = _mesh
@@ -43,9 +46,10 @@ func get_tip_speed() -> float:
 	return _tip_speed
 
 
-func _fade(age: float) -> Color:
+func _fade(age: float, col: Color) -> Color:
 	var f := clampf(1.0 - age / lifetime, 0.0, 1.0)
-	return Color(color.r, color.g, color.b, color.a * pow(f, 1.4))
+	# резкий яркий старт и длинный тающий хвост
+	return Color(col.r, col.g, col.b, col.a * pow(f, 1.6))
 
 
 func _process(delta: float) -> void:
@@ -66,6 +70,14 @@ func _process(delta: float) -> void:
 
 func _rebuild(now: float) -> void:
 	_mesh.clear_surfaces()
+	# внешняя полоса: от точки за кончиком до середины клинка; ядро: узкая полоса у кончика
+	var outer_tip := _tip_local + (_tip_local - _base_local) * overshoot
+	_add_layer(now, outer_tip, _base_local, color, 1.0)
+	var core_base := _base_local.lerp(_tip_local, 0.62)
+	_add_layer(now, _tip_local, core_base, core_color, 1.35)
+
+
+func _add_layer(now: float, p_out: Vector3, p_in: Vector3, col: Color, boost: float) -> void:
 	var verts := []
 	var cols := []
 	for i in range(1, _samples.size()):
@@ -80,24 +92,23 @@ func _rebuild(now: float) -> void:
 			var u1 := float(s + 1) / float(subdivisions)
 			var x0: Transform3D = xa.interpolate_with(xb, u0)
 			var x1: Transform3D = xa.interpolate_with(xb, u1)
-			var c0 := _fade(now - lerpf(float(a["t"]), float(b["t"]), u0))
-			var c1 := _fade(now - lerpf(float(a["t"]), float(b["t"]), u1))
-			var t0: Vector3 = x0 * _tip_local
-			var b0: Vector3 = x0 * _base_local
-			var t1: Vector3 = x1 * _tip_local
-			var b1: Vector3 = x1 * _base_local
-			verts.append(t0)
-			cols.append(c0)
-			verts.append(b0)
-			cols.append(c0)
-			verts.append(t1)
-			cols.append(c1)
-			verts.append(b0)
-			cols.append(c0)
-			verts.append(b1)
-			cols.append(c1)
-			verts.append(t1)
-			cols.append(c1)
+			var c0 := _fade(now - lerpf(float(a["t"]), float(b["t"]), u0), col)
+			var c1 := _fade(now - lerpf(float(a["t"]), float(b["t"]), u1), col)
+			c0.a *= boost
+			c1.a *= boost
+			# внутренний край гаснет раньше -> дуга сужается к хвосту
+			var c0i := Color(c0.r, c0.g, c0.b, c0.a * 0.15)
+			var c1i := Color(c1.r, c1.g, c1.b, c1.a * 0.15)
+			var t0: Vector3 = x0 * p_out
+			var b0: Vector3 = x0 * p_in
+			var t1: Vector3 = x1 * p_out
+			var b1: Vector3 = x1 * p_in
+			verts.append(t0); cols.append(c0)
+			verts.append(b0); cols.append(c0i)
+			verts.append(t1); cols.append(c1)
+			verts.append(b0); cols.append(c0i)
+			verts.append(b1); cols.append(c1i)
+			verts.append(t1); cols.append(c1)
 	if verts.is_empty():
 		return
 	_mesh.surface_begin(Mesh.PRIMITIVE_TRIANGLES)

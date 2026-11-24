@@ -28,6 +28,10 @@ var hud: Label
 var state := "idle"
 var attack_time := 0.0
 var attack_len := 1.1
+var combo := 0               # номер удара в комбо: 0, 1, 2
+var combo_queued := false
+const COMBO_ROLES := ["slash", "slash2", "slash3"]
+const COMBO_WINDOW := 0.45   # доля анимации, после которой повторное нажатие ставит следующий удар в очередь
 var anim_of := {}            # роль -> имя анимации
 var problems: PackedStringArray = PackedStringArray()
 var sim_move := Vector2.ZERO # для самопроверки без экрана
@@ -150,15 +154,20 @@ func _build_player() -> void:
 		for n in anim.get_animation_list():
 			var low := String(n).to_lower()
 			var a := anim.get_animation(n)
-			for role in ["idle", "walk", "run", "slash"]:
-				if low.contains(role):
-					anim_of[role] = n
-					a.loop_mode = Animation.LOOP_NONE if role == "slash" else Animation.LOOP_LINEAR
-		for role in ["idle", "walk", "run", "slash"]:
+			var role := ""
+			if low.contains("idle"): role = "idle"
+			elif low.contains("walk"): role = "walk"
+			elif low.contains("run"): role = "run"
+			elif low == "slash3": role = "slash3"
+			elif low == "slash2": role = "slash2"
+			elif low == "slash": role = "slash"
+			if role == "":
+				continue
+			anim_of[role] = n
+			a.loop_mode = Animation.LOOP_NONE if role.begins_with("slash") else Animation.LOOP_LINEAR
+		for role in ["idle", "walk", "run", "slash", "slash2", "slash3"]:
 			if not anim_of.has(role):
 				problems.append("НЕТ анимации " + role)
-		if anim_of.has("slash"):
-			attack_len = anim.get_animation(anim_of["slash"]).length
 	_attach_katana()
 
 
@@ -262,12 +271,18 @@ func _set_state(new_state: String, force := false) -> void:
 		"run":
 			_play("run", BLEND)
 		"attack":
-			_play("slash", 0.08)
+			_play(COMBO_ROLES[combo], 0.07)
+			if anim_of.has(COMBO_ROLES[combo]):
+				attack_len = anim.get_animation(anim_of[COMBO_ROLES[combo]]).length
 
 
 func _on_attack() -> void:
 	if state == "attack":
+		if attack_time >= attack_len * COMBO_WINDOW and combo < COMBO_ROLES.size() - 1:
+			combo_queued = true
 		return
+	combo = 0
+	combo_queued = false
 	var v := _input_vector()
 	if v.length() > DEAD_ZONE:  # удар в сторону, куда направлен джойстик
 		player.rotation.y = atan2(v.x, v.y)
@@ -281,7 +296,18 @@ func _process(delta: float) -> void:
 	cur_speed = 0.0
 	if state == "attack":
 		attack_time += delta
-		if attack_time >= attack_len:
+		# в начале удара можно довернуть персонажа джойстиком
+		if mag > DEAD_ZONE and attack_time < attack_len * 0.25:
+			player.rotation.y = lerp_angle(player.rotation.y, atan2(v.x, v.y), 1.0 - exp(-10.0 * delta))
+		if attack_time >= attack_len * 0.92 and combo_queued:
+			combo += 1
+			combo_queued = false
+			attack_time = 0.0
+			if mag > DEAD_ZONE:
+				player.rotation.y = atan2(v.x, v.y)
+			_set_state("attack", true)
+		elif attack_time >= attack_len:
+			combo = 0
 			_set_state("idle", true)
 	elif mag > DEAD_ZONE:
 		var dir := Vector3(v.x, 0.0, v.y).normalized()
@@ -337,9 +363,15 @@ func _run_selftest() -> void:
 	sim_move = Vector2.ZERO
 	await get_tree().create_timer(0.4).timeout
 	_on_attack()
-	await get_tree().create_timer(0.35).timeout
-	log.call("attack_mid")
-	await get_tree().create_timer(1.1).timeout
-	log.call("after_attack")
+	await get_tree().create_timer(0.45).timeout
+	log.call("attack1_mid")
+	_on_attack()
+	await get_tree().create_timer(0.95).timeout
+	log.call("attack2_expected")
+	_on_attack()
+	await get_tree().create_timer(0.8).timeout
+	log.call("attack3_expected")
+	await get_tree().create_timer(1.6).timeout
+	log.call("after_combo")
 	print("KIRA_TEST_DONE problems=", problems)
 	get_tree().quit(1 if problems.size() > 0 else 0)
