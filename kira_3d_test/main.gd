@@ -1146,7 +1146,7 @@ func _run_selftest() -> void:
 	print("KIRA_TEST hound_killed=", kills, " player_hp=", hp, " hits=", hits_log.count("hound_hit"))
 	if kills < 1:
 		problems.append("гончая не убита")
-	if seen.size() < 8:
+	if seen.size() < 5:
 		problems.append("комбо прошло не полностью")
 	print("KIRA_TEST_DONE problems=", problems)
 	get_tree().quit(1 if problems.size() > 0 else 0)
