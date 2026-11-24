@@ -6,10 +6,10 @@ extends Node3D
 const HALF := 60.0               # половина размера карты, м
 const CELL := 1.25               # шаг сетки рельефа, м
 const FLAT := true               # изометрический 2D-режим: плоская земля, арт-спрайты
-const ARENA := 26.0              # граница поляны, дальше непроходимый лес
+const ARENA := 60.0              # граница поляны, дальше непроходимый лес
 const PLAYER_R := 0.42
 const HOUSE_POS := Vector3(0.0, 0.0, 15.0)
-const START_POS := Vector3(0.0, 0.0, 5.0)
+const START_POS := Vector3(0.0, 0.0, 28.0)
 const RING_C := Vector2(0.0, -4.0)
 const MAX_SLOPE := 1.15          # круче этого пешком не залезть (около 49 градусов)
 const OBST_CELL := 8.0

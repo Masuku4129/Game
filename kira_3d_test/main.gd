@@ -16,7 +16,7 @@ const BLEND := 0.12
 # камера: закреплена сверху под 40 градусов, без вращения
 const CAM_DIST := 60.0
 const CAM_PITCH := 36.0
-const CAM_ORTHO := 17.0         # высота кадра в метрах: изометрия как в 2D-играх
+const CAM_ORTHO := 15.0         # высота кадра в метрах: изометрия как в 2D-играх
 const MAX_HP := 100.0
 const WAVE_PAUSE := 3.0
 # Положение катаны в системе правой кисти (прямой хват, под анимации)
@@ -54,7 +54,7 @@ var skeleton: Skeleton3D
 var anim: AnimationPlayer
 var trail: SlashTrail
 var cam: Camera3D
-var cam_yaw := 0.0
+var cam_yaw := 25.0
 var hp := MAX_HP
 var wave := 0
 var alive_hounds := 0
@@ -858,11 +858,11 @@ func _spawn_wave() -> void:
 	wave += 1
 	var n := mini(2 + wave, 7)
 	for i in range(n):
-		var a := randf() * TAU
-		var r := Valley.ARENA - 1.6
-		var pos := Vector3(cos(a) * r, 0.0, sin(a) * r)
-		if pos.distance_to(player.position) < 9.0:
-			pos = Vector3(-pos.x, 0.0, -pos.z)
+		var dz := (12.0 + randf() * 6.0) * (1.0 if randf() < 0.5 else -1.0)
+		var pz := clampf(player.position.z + dz, -32.0, 33.0)
+		if absf(pz - player.position.z) < 8.0:
+			pz = clampf(player.position.z - signf(dz) * 14.0, -32.0, 33.0)
+		var pos := Vector3(randf_range(-2.0, 2.0), 0.0, pz)
 		var h := Hound.new()
 		add_child(h)
 		h.setup(valley, player, self, pos)
