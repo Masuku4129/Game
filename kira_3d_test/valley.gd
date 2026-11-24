@@ -76,14 +76,9 @@ func _blob(x: float, z: float, cx: float, cz: float, rx: float, rz: float, hgt: 
 
 func _height_raw(x: float, z: float) -> float:
 	var r := sqrt(x * x + z * z)
-	var dh := sqrt(x * x + (z - 15.0) * (z - 15.0) * 0.7)
-	var hill := _fbm(x * 0.03, z * 0.03, 11, 3) * 1.4
-	var h := hill * smoothstep(5.0, 12.0, r) * smoothstep(8.0, 14.0, dh)
-	h += _blob(x, z, 17.0, 3.0, 6.0, 8.0, 3.4)          # скальный уступ на востоке
-	h += _blob(x, z, -17.5, -6.0, 5.5, 6.5, 2.6)          # и на западе
-	h += _fbm(x * 0.7, z * 0.7, 61, 2) * 0.10
-	var rim := smoothstep(25.0, 50.0, r)
-	h += rim * (9.0 + _fbm(x * 0.08, z * 0.08, 71, 2) * 5.0)
+	var h := _fbm(x * 0.05, z * 0.05, 11, 2) * 0.35 * smoothstep(8.0, 16.0, r)
+	h += _fbm(x * 0.7, z * 0.7, 61, 2) * 0.04
+	h += smoothstep(27.0, 48.0, r) * (5.0 + _fbm(x * 0.08, z * 0.08, 71, 2) * 3.0)
 	return h
 
 
@@ -311,6 +306,7 @@ class MeshBuilder:
 func build() -> void:
 	rng.seed = 4242
 	mat_terrain = _shader_mat("res://terrain.gdshader")
+	mat_terrain.set_shader_parameter("floor_tex", load("res://sprites/floor_atlas.png"))
 	mat_tree = _shader_mat("res://foliage.gdshader")
 	mat_tree.set_shader_parameter("sway", 0.45)
 	mat_tree.set_shader_parameter("height_ref", 14.0)
@@ -668,190 +664,7 @@ func _tint(lo: float, hi: float) -> Color:
 
 
 func _scatter() -> void:
-	var meshes: Array[ArrayMesh] = [
-		_mesh_spruce(8, 1.7, 14.0, 9, Color(0.080, 0.060, 0.055)),
-		_mesh_spruce(5, 2.5, 9.0, 10, Color(0.090, 0.065, 0.055)),
-		_mesh_dead(10.0),
-		_mesh_spruce(4, 1.3, 4.6, 8, Color(0.080, 0.060, 0.055))]
-	var txf: Array = [[], [], [], []]
-	var tcu: Array = [[], [], [], []]
-
-	# --- 1) круг древних камней (боевая площадка), дом строится отдельно
-	var house := House.new()
-	add_child(house)
-	house.build(self, Vector3(HOUSE_POS.x, height_at(HOUSE_POS.x, HOUSE_POS.z), HOUSE_POS.z))
-	var sxf: Array = []
-	var scu: Array = []
-	var rxf: Array = []
-	var rcu: Array = []
-	for k in range(8):
-		var a := TAU * float(k) / 8.0 + 0.2
-		var x := RING_C.x + cos(a) * 10.0
-		var z := RING_C.y + sin(a) * 10.0
-		var s := rng.randf_range(0.85, 1.15)
-		var bs := Basis(Vector3.UP, rng.randf() * TAU) * Basis(Vector3(1, 0, 0), rng.randf_range(-0.05, 0.05))
-		bs = bs.scaled(Vector3(s, s, s))
-		var y := height_at(x, z)
-		sxf.append(Transform3D(bs, Vector3(x, y, z)))
-		scu.append(_tint(0.9, 1.1))
-		add_obstacle(x, z, 0.72 * s, 3.4 * s)
-		rxf.append(Transform3D(Basis(Vector3.UP, a).scaled(Vector3(1.5, 1.5, 1.5)), Vector3(x + 0.12, y + 3.45 * s, z)))
-		rcu.append(Color(0.75, 0.35, 1.0, 1.0))
-	_mm(_monolith(), mat_rigid, sxf, scu, true)
-
-	# --- 2) валуны: группами у уступов и по краям поляны
-	var bm: Array[ArrayMesh] = [_mesh_boulder(1), _mesh_boulder(2), _mesh_boulder(3)]
-	var bxf: Array = [[], [], []]
-	var bcu: Array = [[], [], []]
-	var centers: Array[Vector2] = [Vector2(12.0, 9.0), Vector2(12.5, -5.0), Vector2(-12.5, 0.0), Vector2(-12.0, -12.5), Vector2(6.0, -18.0), Vector2(-7.0, -19.0),
-		Vector2(20.0, -10.0), Vector2(-20.0, 8.0), Vector2(8.0, 21.0), Vector2(-9.0, 22.0)]
-	for cc in centers:
-		for q in range(rng.randi_range(3, 5)):
-			var x := cc.x + rng.randf_range(-3.0, 3.0)
-			var z := cc.y + rng.randf_range(-3.0, 3.0)
-			if Vector2(x, z).length() > ARENA - 1.0 or Vector2(x - START_POS.x, z - START_POS.z).length() < 4.5 or _path_mask(x, z) > 0.3:
-				continue
-			if not is_free(x, z, 1.4):
-				continue
-			var s := rng.randf_range(0.8, 2.0) if rng.randf() < 0.8 else rng.randf_range(2.0, 3.0)
-			var k := rng.randi() % 3
-			var bs := Basis(Vector3.UP, rng.randf() * TAU).scaled(Vector3(s, s * rng.randf_range(0.8, 1.15), s))
-			(bxf[k] as Array).append(Transform3D(bs, Vector3(x, height_at(x, z) + 0.12 * s, z)))
-			(bcu[k] as Array).append(_tint(0.85, 1.15))
-			add_obstacle(x, z, 1.02 * s, 1.5 * s)
-	for i in range(3):
-		_mm(bm[i], mat_rigid, bxf[i], bcu[i], true)
-
-	# --- 3) поваленные брёвна у кромки леса
-	var lxf: Array = []
-	var lcu: Array = []
-	var tries := 0
-	while lxf.size() < 8 and tries < 400:
-		tries += 1
-		var a := rng.randf() * TAU
-		var rr := rng.randf_range(19.0, 24.0)
-		var x := cos(a) * rr
-		var z := sin(a) * rr
-		if normal_at(x, z).y < 0.95 or not is_free(x, z, 3.2):
-			continue
-		var s := rng.randf_range(0.8, 1.2)
-		var yaw := rng.randf() * TAU
-		var bs := Basis(Vector3.UP, yaw).scaled(Vector3(s, s, s))
-		lxf.append(Transform3D(bs, Vector3(x, height_at(x, z) + 0.32 * s, z)))
-		lcu.append(_tint(0.85, 1.15))
-		var dir := Vector3(cos(yaw), 0.0, -sin(yaw))
-		for q in range(-3, 4):
-			add_obstacle(x + dir.x * float(q) * 0.9 * s, z + dir.z * float(q) * 0.9 * s, 0.6 * s, 0.9 * s)
-	_mm(_mesh_log(), mat_rigid, lxf, lcu, true)
-
-	# --- 4) деревья: несколько у дома, а за краем поляны плотная непроходимая стена леса
-	var fixed: Array[Vector3] = [Vector3(-9.5, 12.0, 0), Vector3(9.5, 13.5, 1), Vector3(-11.5, 19.0, 0), Vector3(11.0, 20.0, 0), Vector3(-4.5, 22.5, 1), Vector3(5.5, 23.0, 0), Vector3(-18.0, 15.0, 0), Vector3(18.5, 16.0, 1)]
-	var cand: Array[Vector3] = []
-	for f in fixed:
-		cand.append(f)
-	var gx := -52.0
-	while gx < 52.0:
-		var gz := -52.0
-		while gz < 52.0:
-			var x := gx + rng.randf_range(-1.0, 1.0)
-			var z := gz + rng.randf_range(-1.0, 1.0)
-			gz += 2.5
-			var r := sqrt(x * x + z * z)
-			if r < 22.0 or r > 52.0:
-				continue
-			var p := smoothstep(22.0, 27.0, r) * 0.97
-			if rng.randf() > p:
-				continue
-			cand.append(Vector3(x, z, -1))
-		gx += 2.5
-	for c in cand:
-		var x := c.x
-		var z := c.y
-		if c.z >= 0.0:
-			x = c.x
-			z = c.y
-		var r2 := sqrt(x * x + z * z)
-		if r2 < 22.0 and c.z < 0.0:
-			continue
-		if not is_free(x, z, 1.5):
-			continue
-		if r2 < 27.0 and normal_at(x, z).y < 0.93:
-			continue                                # на поляне не ставим деревья на склоны и в скалы
-		var u := rng.randf()
-		var sp := 0 if u < 0.45 else (1 if u < 0.72 else (3 if u < 0.93 else 2))
-		var s := rng.randf_range(0.85, 1.35)
-		var bs := Basis(Vector3.UP, rng.randf() * TAU) * Basis(Vector3(1, 0, 0), rng.randf_range(-0.05, 0.05))
-		bs = bs.scaled(Vector3(s, s * rng.randf_range(0.9, 1.2), s))
-		(txf[sp] as Array).append(Transform3D(bs, Vector3(x, height_at(x, z) - 0.2, z)))
-		(tcu[sp] as Array).append(_tint(0.82, 1.18))
-		add_obstacle(x, z, 0.48 * s, 99.0)
-	for i in range(4):
-		_mm(meshes[i], mat_tree, txf[i], tcu[i], false)
-
-	# --- 5) трава: невысокая, пятнами, не на тропе и не на площадке
-	var gxf: Array = []
-	var gcu: Array = []
-	tries = 0
-	while gxf.size() < 750 and tries < 9000:
-		tries += 1
-		var x := rng.randf_range(-ARENA, ARENA)
-		var z := rng.randf_range(-ARENA, ARENA)
-		if Vector2(x, z).length() > ARENA - 1.0 or normal_at(x, z).y < 0.9:
-			continue
-		if _vn(x * 0.12, z * 0.12, 13) < 0.0 or _path_mask(x, z) > 0.15:
-			continue
-		if Vector2(x - RING_C.x, z - RING_C.y).length() < 8.5 or not is_free(x, z, 0.2):
-			continue
-		var s := rng.randf_range(0.6, 1.1)
-		var bs := Basis(Vector3.UP, rng.randf() * TAU).scaled(Vector3(s, s * rng.randf_range(0.8, 1.3), s))
-		gxf.append(Transform3D(bs, Vector3(x, height_at(x, z) - 0.02, z)))
-		var warm := rng.randf()
-		gcu.append(Color(0.8 + 0.5 * warm, 0.9 + 0.2 * rng.randf(), 0.8 + 0.3 * (1.0 - warm), 1.0))
-	_mm(_mesh_grass(), mat_grass, gxf, gcu, false)
-
-	# --- 6) светящиеся грибы у кромки леса и камней, кристаллы на скалах
-	var mxf: Array = []
-	var mcu: Array = []
-	var cols: Array[Color] = [Color(0.25, 1.0, 0.95), Color(0.75, 0.35, 1.0), Color(0.95, 0.40, 0.85)]
-	tries = 0
-	while mxf.size() < 70 and tries < 3000:
-		tries += 1
-		var a := rng.randf() * TAU
-		var rr := rng.randf_range(15.0, 25.0)
-		var cx := cos(a) * rr
-		var cz := sin(a) * rr
-		if normal_at(cx, cz).y < 0.9 or _path_mask(cx, cz) > 0.1:
-			continue
-		var cc2: Color = cols[rng.randi() % 3]
-		for q in range(rng.randi_range(2, 5)):
-			var x := cx + rng.randf_range(-0.9, 0.9)
-			var z := cz + rng.randf_range(-0.9, 0.9)
-			if not is_free(x, z, 0.1):
-				continue
-			var s := rng.randf_range(0.7, 1.6)
-			mxf.append(Transform3D(Basis(Vector3.UP, rng.randf() * TAU).scaled(Vector3(s, s, s)), Vector3(x, height_at(x, z) - 0.02, z)))
-			mcu.append(Color(cc2.r, cc2.g, cc2.b, 1.0))
-	_mm(_mesh_mushroom(), mat_glow, mxf, mcu, false)
-	var kxf: Array = rxf.duplicate()
-	var kcu: Array = rcu.duplicate()
-	tries = 0
-	var shards := 0
-	while shards < 40 and tries < 6000:
-		tries += 1
-		var x := rng.randf_range(-ARENA, ARENA)
-		var z := rng.randf_range(-ARENA, ARENA)
-		var nrm := normal_at(x, z)
-		if nrm.y > 0.55 or Vector2(x, z).length() > ARENA - 1.0 or Vector2(x, z).length() < 9.0:
-			continue
-		var cc3: Color = cols[1] if rng.randf() < 0.65 else cols[0]
-		for q in range(rng.randi_range(2, 3)):
-			var s := rng.randf_range(0.5, 1.3)
-			var dir := (nrm + Vector3(rng.randf_range(-0.5, 0.5), rng.randf_range(0.0, 0.7), rng.randf_range(-0.5, 0.5))).normalized()
-			var bs := Basis(Quaternion(Vector3.UP, dir)).scaled(Vector3(s, s, s))
-			kxf.append(Transform3D(bs, Vector3(x + rng.randf_range(-0.4, 0.4), height_at(x, z) + 0.05, z + rng.randf_range(-0.4, 0.4))))
-			kcu.append(Color(cc3.r, cc3.g, cc3.b, 1.0))
-		shards += 1
-	_mm(_mesh_crystal(), mat_glow, kxf, kcu, false)
+	pass
 
 
 # ================================================================ далёкие горы

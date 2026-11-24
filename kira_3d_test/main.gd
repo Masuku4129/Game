@@ -398,7 +398,10 @@ func _busy() -> bool:
 func _play(role: String, blend: float) -> void:
 	if anim == null or not anim_of.has(role):
 		return
-	anim.play(anim_of[role], blend)
+	if anim.current_animation == anim_of[role] and anim.is_playing() and not (role in LOOPED):
+		anim.seek(0.0, true)      # тот же клип подряд (второй отскок, повтор удара): проигрывать заново
+	else:
+		anim.play(anim_of[role], blend)
 	if not (role in LOOPED):
 		state_len = anim.get_animation(anim_of[role]).length
 
