@@ -28,14 +28,15 @@ const CHAIN_AFTER_HIT := 0.05
 const ATTACK_RANGE := 2.4
 const MAX_COMBO := 6
 const GAME_SPEED := 0.85
-const A_START := ["slash", "slash2", "mo_cut1", "mo_cut4", "slash4"]
-const A_FWD := ["slash5", "mo_kick_front", "mo_cut6", "mo_punch_kick", "mo_kick_front2", "slash3"]
-const A_BACK := ["mo_jump_kick", "mo_spin_kick", "mo_kick_heel", "slash2"]
-const A_LEFT := ["slash2", "mo_cut2", "mo_cut5", "mo_kick_round", "mo_kick_side"]
-const A_RIGHT := ["slash", "mo_cut1", "mo_cut3", "mo_kick_round", "mo_kick_side"]
-const A_MID := ["slash", "slash2", "slash4", "mo_cut1", "mo_cut2", "mo_cut3", "mo_cut4", "mo_cut5", "mo_kick_front", "mo_kick_round", "mo_kick_side", "mo_punch_kick", "kick"]
-const A_FIN := ["slash3", "mo_cut6", "mo_spin_kick", "mo_spin_kick2", "mo_kick_heel", "slash5"]
-const A_AIR := ["mo_spin_kick2", "mo_spin_kick", "mo_jump_kick", "slash3"]
+const A_CHAIN := ["slash", "slash2", "slash4", "slash5", "slash3"]
+const A_START := ["slash"]
+const A_FWD := A_CHAIN
+const A_BACK := ["kick"]
+const A_LEFT := A_CHAIN
+const A_RIGHT := A_CHAIN
+const A_MID := A_CHAIN
+const A_FIN := ["slash3"]
+const A_AIR := ["slash3", "slash5"]
 const BASE_ROLES := ["idle", "walk", "run", "block", "jump", "dodge", "dash_in", "dash_out"]
 const LOOPED := ["idle", "walk", "run", "block"]
 # перемещения спецдвижений: [начало, конец (с), дистанция (м); минус = назад]
@@ -404,7 +405,7 @@ func _play(role: String, blend: float) -> void:
 
 func _blend_for(old: String, new: String) -> float:
 	if new == "attack":
-		return 0.20 if old == "attack" else 0.16
+		return 0.13 if old == "attack" else 0.12
 	if new == "idle":
 		return 0.32 if old in ["attack", "jump", "dodge", "dash_out", "block"] else 0.22
 	if new in ["walk", "run"]:
@@ -487,26 +488,9 @@ func _input_rel() -> Vector2:
 
 
 func _pick_attack(rel: Vector2) -> String:
-	var pool: Array = A_MID
-	if combo >= 4:
-		pool = A_FIN
-	elif rel.length() > 0.5:
-		if rel.y > 0.55:
-			pool = A_FWD
-		elif rel.y < -0.55:
-			pool = A_BACK
-		elif rel.x > 0.0:
-			pool = A_LEFT
-		else:
-			pool = A_RIGHT
-	elif combo == 0:
-		pool = A_START
-	var pick: String = pool[randi() % pool.size()]
-	for i in range(5):
-		if pick != last_atk:
-			break
-		pick = pool[randi() % pool.size()]
-	return pick
+	if rel.length() > 0.5 and rel.y < -0.55:
+		return "kick"
+	return A_CHAIN[combo % A_CHAIN.size()]
 
 
 func _on_attack_from_dash() -> void:
@@ -729,7 +713,7 @@ func _process_attack(delta: float, v: Vector2, mag: float) -> void:
 			_spawn_ripple(player.global_position + _forward() * 1.1 + Vector3(0.0, 0.9, 0.0), 2.0, false)
 		else:
 			_spawn_crescent(float(data["zone"]), float(hi[1]), float(hi[2]))
-	if hit_done and state_time >= t_last + maxf(CHAIN_AFTER_HIT, (state_len - t_last) * 0.40) and combo_queued:
+	if hit_done and state_time >= t_last + CHAIN_AFTER_HIT and combo_queued:
 		combo += 1
 		combo_queued = false
 		_begin_attack(atk_rel)
