@@ -362,7 +362,7 @@ func _ground_color(p: Vector3, nrm: Vector3) -> Color:
 	var stone := Color(0.165, 0.175, 0.230).lerp(Color(0.095, 0.100, 0.150), n2)
 	var c := moss.lerp(stone, rock)
 	var j := 0.9 + 0.2 * (_h(floori(p.x * 3.1), floori(p.z * 3.1), 3) * 0.5 + 0.5)
-	return Color(c.r * j * 1.5, c.g * j * 1.5, c.b * j * 1.5, rock)
+	return Color(c.r * j * 1.15, c.g * j * 1.15, c.b * j * 1.15, rock)
 
 
 func _vnormal(i: int, j: int) -> Vector3:
@@ -902,13 +902,13 @@ func setup_atmosphere(we: WorldEnvironment, sun: DirectionalLight3D) -> void:
 	env.sky = sky
 	env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
 	env.ambient_light_color = Color(0.340, 0.380, 0.560)
-	env.ambient_light_energy = 0.85
+	env.ambient_light_energy = 0.55
 	env.fog_enabled = true
-	env.fog_light_color = Color(0.300, 0.340, 0.500)
-	env.fog_density = 0.022
+	env.fog_light_color = Color(0.150, 0.190, 0.320)
+	env.fog_density = 0.011
 	env.fog_sky_affect = 0.55
 	env.fog_height = 5.0
-	env.fog_height_density = 0.05
+	env.fog_height_density = 0.06
 	env.glow_bloom = 0.14
 	env.glow_intensity = 1.1
 	env.adjustment_enabled = true
@@ -916,7 +916,10 @@ func setup_atmosphere(we: WorldEnvironment, sun: DirectionalLight3D) -> void:
 	env.adjustment_saturation = 1.12
 	sun.rotation_degrees = Vector3(-32.0, -50.0, 0.0)
 	sun.light_color = Color(0.80, 0.82, 1.0)
-	sun.light_energy = 1.05
+	sun.light_energy = 1.35
+	sun.directional_shadow_mode = DirectionalLight3D.SHADOW_PARALLEL_2_SPLITS
+	sun.shadow_blur = 2.0
+	sun.directional_shadow_max_distance = 30.0
 	sun.directional_shadow_max_distance = 40.0
 
 

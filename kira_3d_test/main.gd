@@ -8,7 +8,7 @@ extends Node3D
 const MODEL_PATH := "res://assets/kira_rigged.glb"
 const KATANA_PATH := "res://assets/katana.glb"
 const WALK_SPEED := 1.9
-const RUN_SPEED := 6.2
+const RUN_SPEED := 7.6
 const RUN_THRESHOLD := 0.65
 const DEAD_ZONE := 0.18
 const TURN_SPEED := 14.0
@@ -29,12 +29,13 @@ const ATTACK_RANGE := 2.4
 const MAX_COMBO := 6
 const GAME_SPEED := 0.85
 const A_START := ["cut_rl", "cut_lr", "diag_dl", "diag_dr", "flick", "rise_l", "rise_r"]
-const A_FWD := ["thrust", "step_cut", "lunge_low", "slide_cut", "chop"]
-const A_BACK := ["back_cut", "spin_r", "spin_l", "whirl_low"]
-const A_LEFT := ["cut_rl", "diag_dl", "rise_l", "crescent", "spin_l"]
-const A_RIGHT := ["cut_lr", "diag_dr", "rise_r", "spin_r", "flick"]
-const A_MID := ["cut_rl", "cut_lr", "diag_dl", "diag_dr", "rise_l", "rise_r", "flick", "uppercut", "low_sweep", "x_cut", "kick", "spin_r", "spin_l"]
-const A_FIN := ["heavy_overhead", "crescent", "whirl_high", "dive_slam", "flurry3", "air_chop", "air_rise"]
+const A_FWD := ["thrust", "step_cut", "lunge_low", "slide_cut", "chop", "flying_kick", "flip_cut"]
+const A_BACK := ["back_cut", "back_flip_cut", "spin_r", "spin_l", "whirl_low", "heel_sweep"]
+const A_LEFT := ["cut_rl", "diag_dl", "rise_l", "crescent", "spin_l", "cartwheel_cut", "roundhouse"]
+const A_RIGHT := ["cut_lr", "diag_dr", "rise_r", "spin_r", "flick", "cartwheel_cut", "roundhouse"]
+const A_MID := ["cut_rl", "cut_lr", "diag_dl", "diag_dr", "rise_l", "rise_r", "flick", "uppercut", "low_sweep", "x_cut", "kick", "spin_r", "spin_l", "roundhouse", "axe_kick", "corkscrew"]
+const A_FIN := ["heavy_overhead", "crescent", "whirl_high", "dive_slam", "flurry3", "whirlwind", "flip_cut", "corkscrew", "axe_kick"]
+const A_AIR := ["air_chop", "air_rise", "whirl_high", "dive_slam", "corkscrew", "flip_cut"]
 const BASE_ROLES := ["idle", "walk", "run", "block", "jump", "dodge", "dash_in", "dash_out"]
 const LOOPED := ["idle", "walk", "run", "block"]
 # перемещения спецдвижений: [начало, конец (с), дистанция (м); минус = назад]
@@ -68,6 +69,8 @@ var flash_v := 0.0
 var katana_light: OmniLight3D
 var hit_light: OmniLight3D
 var hitstop_active := false
+var shake := 0.0
+var waves: Array = []
 var ui: TouchUI
 var hud: Label
 var state := "idle"
@@ -103,10 +106,10 @@ var jump_y0 := 0.0
 var vy := 0.0
 const GRAVITY := 30.0
 var attack_buffered := false
-const ACCEL := 16.0
-const DECEL := 11.0
+const ACCEL := 24.0
+const DECEL := 14.0
 const LOCO_WALK_REF := 1.9
-const LOCO_RUN_REF := 6.2
+const LOCO_RUN_REF := 7.6
 
 
 func _ready() -> void:
@@ -376,6 +379,16 @@ func _forward() -> Vector3:
 	return Vector3(sin(player.rotation.y), 0.0, cos(player.rotation.y))
 
 
+func _can_act() -> bool:
+	if state == "dash_out":
+		return state_time > 0.06
+	if state == "jump":
+		return state_time > JUMP_MOVE[1] + 0.10
+	if state == "dodge":
+		return state_time > 0.58
+	return not _busy()
+
+
 func _busy() -> bool:
 	return state in ["attack", "jump", "dodge", "dash_in", "dash_beam", "dash_out"]
 
@@ -439,7 +452,16 @@ func _on_attack() -> void:
 	if state in ["dash_in", "dash_beam"]:
 		attack_buffered = true      # нажал во время рывка: удар вылетит сразу на выходе
 		return
-	if _busy() and state != "dash_out":
+	if state == "jump" and state_time > JUMP_MOVE[0] + 0.08 and state_time < JUMP_MOVE[1] - 0.12 and player.position.y > valley.height_at(player.position.x, player.position.z) + 0.7:
+		attack_buffered = false
+		combo = 0
+		combo_queued = false
+		cur_atk = A_AIR[randi() % A_AIR.size()]
+		last_atk = cur_atk
+		vy = 0.0
+		_set_state("attack", true)
+		return
+	if not _can_act():
 		return
 	attack_buffered = false
 	combo = 0
@@ -497,7 +519,7 @@ func _on_attack_from_dash() -> void:
 
 
 func _on_jump() -> void:
-	if _busy():
+	if not _can_act():
 		return
 	_face_input()
 	move_dir = _forward()
@@ -507,7 +529,7 @@ func _on_jump() -> void:
 
 
 func _on_dodge() -> void:
-	if _busy() and state != "attack":
+	if not _can_act() and state != "attack":
 		return
 	_face_input()
 	move_dir = _forward()
@@ -515,7 +537,7 @@ func _on_dodge() -> void:
 
 
 func _on_dash() -> void:
-	if _busy() and state != "attack":
+	if not _can_act() and state != "attack":
 		return
 	_face_input()
 	move_dir = _forward()
@@ -610,8 +632,11 @@ func _process(delta: float) -> void:
 			if attack_buffered:
 				_on_attack_from_dash()
 				return
-			_move_window(delta, 0.0, 0.18, 0.45)
-			if state_time >= state_len:
+			_move_window(delta, 0.0, 0.09, 0.3)
+			if state_time > 0.07 and _input_vector().length() > DEAD_ZONE:
+				vel = _forward() * RUN_SPEED * 0.85
+				_set_state("run", true)
+			elif state_time >= state_len:
 				_set_state("idle", true)
 		_:
 			if block_held:
@@ -700,6 +725,7 @@ func _process_attack(delta: float, v: Vector2, mag: float) -> void:
 			hit_done = true
 		hits_log.append(cur_atk)
 		_hit_hounds(cur_atk, float(data["zone"]))
+		_apply_fx(String(data["fx"]), hi, float(data["zone"]))
 		if cur_atk == "kick":
 			_spawn_ripple(player.global_position + _forward() * 1.1 + Vector3(0.0, 0.9, 0.0), 2.0, false)
 		else:
@@ -711,6 +737,86 @@ func _process_attack(delta: float, v: Vector2, mag: float) -> void:
 	elif state_time >= state_len:
 		combo = 0
 		_set_state("idle", true)
+
+
+func _apply_fx(fx: String, hi: Array, zone: float) -> void:
+	match fx:
+		"wave":
+			_fire_wave(float(hi[1]), float(hi[2]), zone)
+		"slam":
+			_aoe(5.5, 30.0, 13.0)
+			shake = 0.9
+			_spawn_ripple(player.global_position + Vector3(0.0, 0.08, 0.0), 8.0, true)
+			_spawn_ripple(player.global_position + _forward() * 1.2 + Vector3(0.0, 0.1, 0.0), 5.0, true)
+		"slam_s":
+			_aoe(3.4, 20.0, 9.0)
+			shake = 0.4
+			_spawn_ripple(player.global_position + _forward() * 1.2 + Vector3(0.0, 0.08, 0.0), 4.5, true)
+		"burst":
+			_aoe(4.2, 14.0, 8.0)
+			shake = 0.25
+			_spawn_ripple(player.global_position + Vector3(0.0, 0.1, 0.0), 6.5, true)
+
+
+func _aoe(radius: float, dmg: float, power: float) -> void:
+	for h in get_tree().get_nodes_in_group("hounds"):
+		var hh := h as Hound
+		var off := hh.position - player.position
+		off.y = 0.0
+		if off.length() < radius:
+			hh.take_hit(dmg, player.position, power)
+			_impact(hh.position, dmg > 25.0)
+
+
+## световая волна катаны: летит вперёд и рубит всех на пути
+func _fire_wave(tilt: float, height: float, zone: float) -> void:
+	var size := ATTACK_RANGE * zone * 2.6
+	var mi := MeshInstance3D.new()
+	var quad := QuadMesh.new()
+	quad.size = Vector2(size, size)
+	mi.mesh = quad
+	var mat := ShaderMaterial.new()
+	mat.shader = load("res://crescent.gdshader")
+	mat.set_shader_parameter("progress", 0.0)
+	mi.material_override = mat
+	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	mi.top_level = true
+	add_child(mi)
+	var base := Basis(Vector3(1, 0, 0), Vector3(0, 0, 1), Vector3(0, -1, 0))
+	var b := Basis(Vector3.UP, player.rotation.y) * Basis(Vector3(0, 0, 1), deg_to_rad(tilt)) * base
+	var pos := player.global_position + _forward() * 0.8 + Vector3(0.0, height, 0.0)
+	mi.global_transform = Transform3D(b, pos)
+	waves.append({"node": mi, "mat": mat, "basis": b, "pos": pos, "dir": _forward(), "t": 0.0, "hit": []})
+
+
+func _update_waves(delta: float) -> void:
+	for i in range(waves.size() - 1, -1, -1):
+		var w: Dictionary = waves[i]
+		w["t"] = float(w["t"]) + delta
+		var t: float = w["t"]
+		var dir: Vector3 = w["dir"]
+		var pos: Vector3 = w["pos"]
+		pos += dir * 15.0 * delta
+		w["pos"] = pos
+		var node: MeshInstance3D = w["node"]
+		var p := clampf(t / 0.75, 0.0, 1.0)
+		(w["mat"] as ShaderMaterial).set_shader_parameter("progress", p)
+		var s := lerpf(0.7, 1.1, p)
+		node.global_transform = Transform3D((w["basis"] as Basis).scaled(Vector3(s, s, s)), pos)
+		var hitl: Array = w["hit"]
+		for h in get_tree().get_nodes_in_group("hounds"):
+			var hh := h as Hound
+			if hitl.has(hh):
+				continue
+			var off := hh.position - pos
+			off.y = 0.0
+			if off.length() < 1.9:
+				hitl.append(hh)
+				hh.take_hit(20.0, pos - dir * 2.0, 8.0)
+				_impact(hh.position, false)
+		if t >= 0.75:
+			node.queue_free()
+			waves.remove_at(i)
 
 
 func _hit_hounds(role: String, zone: float) -> void:
@@ -775,6 +881,8 @@ func _spawn_wave() -> void:
 
 
 func _update_fx(delta: float) -> void:
+	_update_waves(delta)
+	shake = maxf(0.0, shake - delta * 2.2)
 	hurt_v = maxf(0.0, hurt_v - delta * 2.4)
 	flash_v = maxf(0.0, flash_v - delta * 6.0)
 	if post_mat != null:
@@ -861,6 +969,8 @@ func _update_camera(delta: float) -> void:
 	if want.y < floor_y:
 		want.y = floor_y
 	cam.position = cam.position.lerp(want, 1.0 - exp(-10.0 * delta))
+	if shake > 0.0:
+		cam.position += Vector3(randf_range(-1.0, 1.0), randf_range(-1.0, 1.0), randf_range(-1.0, 1.0)) * shake * 0.3
 	cam.look_at(target, Vector3.UP)
 
 

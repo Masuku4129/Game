@@ -5,7 +5,7 @@ extends Node3D
 const MODEL := "res://assets/hound.glb"
 const SPEED := 4.4
 const MAX_HP := 70.0
-const SCALE := 1.25
+const SCALE := 1.0
 
 var valley: Valley
 var target: Node3D

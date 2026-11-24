@@ -3,5 +3,5 @@ render_mode cull_disabled, unshaded, blend_mix, depth_draw_never, shadows_disabl
 uniform float dissolve : hint_range(0.0, 1.0) = 0.0;
 void fragment() {
 	ALBEDO = COLOR.rgb * vec3(1.1, 0.8, 1.6);
-	ALPHA = clamp(COLOR.a, 0.0, 1.0) * 0.55 * (1.0 - dissolve);
+	ALPHA = clamp(COLOR.a, 0.0, 1.0) * 0.30 * (1.0 - dissolve);
 }
