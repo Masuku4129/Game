@@ -25,7 +25,7 @@ func _box(mb: Valley.MeshBuilder, c: Vector3, s: Vector3, col: Color, yaw := 0.0
 	var h := s * 0.5
 	var rot := Basis(Vector3.UP, yaw)
 	for axis in range(3):
-		for sgn in [-1.0, 1.0]:
+		for sgn: float in [-1.0, 1.0]:
 			var n := Vector3.ZERO
 			n[axis] = sgn
 			var u := Vector3.ZERO
@@ -76,8 +76,8 @@ func build(v: Valley, pos: Vector3) -> void:
 		_box(body, Vector3(W, y, 0), Vector3(0.42, 0.40, D * 2), _jit(col, 0.1, float(i) + 3.0))
 		_box(body, Vector3(-W, y, 0), Vector3(0.42, 0.40, D * 2), _jit(col, 0.1, float(i) + 7.0))
 		var ext := 0.34 if i % 2 == 0 else -0.05
-		for cx in [-1.0, 1.0]:
-			for cz in [-1.0, 1.0]:
+		for cx: float in [-1.0, 1.0]:
+			for cz: float in [-1.0, 1.0]:
 				_box(body, Vector3(cx * (W + ext * 0.5), y, cz * (D + ext * 0.5)), Vector3(0.50 + ext, 0.40, 0.50 + ext), _jit(col, 0.12, float(i) * 2.0 + cx + cz))
 	# внутренний объём, чтобы не просвечивало
 	_box(body, Vector3(0, 1.8, 0), Vector3(W * 2 - 0.4, 2.8, D * 2 - 0.4), WOOD_D)
@@ -88,7 +88,7 @@ func build(v: Valley, pos: Vector3) -> void:
 	var x0 := -W - 0.65
 	var x1 := W + 0.65
 	var rows := 8
-	for sgn in [-1.0, 1.0]:
+	for sgn: float in [-1.0, 1.0]:
 		for i in range(rows):
 			var u0 := float(i) / float(rows)
 			var u1 := float(i + 1) / float(rows)
@@ -111,10 +111,10 @@ func build(v: Valley, pos: Vector3) -> void:
 		body.quad(Vector3(x0, eave_y - 0.1, sgn * over_z), Vector3(x1, eave_y - 0.1, sgn * over_z), Vector3(x1, ridge_y - 0.1, 0.0), Vector3(x0, ridge_y - 0.1, 0.0), WOOD_D, Vector3(0.0, -1.0, 0.0))
 	_box(body, Vector3(0, ridge_y + 0.04, 0), Vector3(x1 - x0 + 0.1, 0.22, 0.34), ROOF_B * 0.8)
 	# фронтоны из досок
-	for sx in [-1.0, 1.0]:
+	for sx: float in [-1.0, 1.0]:
 		var gx: float = sx * W
 		body.tri(Vector3(gx, 3.40, D + 0.05), Vector3(gx, 3.40, -D - 0.05), Vector3(gx, ridge_y - 0.1, 0.0), WOOD, WOOD, WOOD_D, Vector3(sx, 0.0, 0.0))
-	for sz in [-1.0, 1.0]:
+	for sz: float in [-1.0, 1.0]:
 		var gz: float = sz * (D + 0.02)
 		for k in range(6):
 			var xa := -W + (2.0 * W) * float(k) / 6.0
@@ -125,16 +125,16 @@ func build(v: Valley, pos: Vector3) -> void:
 	var dz := D + 0.24
 	_box(body, Vector3(0, 1.0, dz - 0.02), Vector3(1.55, 2.25, 0.16), WOOD * 1.5)
 	_box(body, Vector3(0, 0.98, dz + 0.04), Vector3(1.25, 2.05, 0.10), Color(0.060, 0.040, 0.035))
-	for yy in [0.55, 1.40]:
+	for yy: float in [0.55, 1.40]:
 		_box(body, Vector3(0, yy, dz + 0.10), Vector3(1.20, 0.10, 0.05), Color(0.10, 0.10, 0.13))
 	_box(body, Vector3(0.45, 1.0, dz + 0.12), Vector3(0.09, 0.09, 0.07), Color(0.40, 0.36, 0.28))
 	# окна: рама и тёплое стекло
-	for wx in [-2.25, 2.25]:
+	for wx: float in [-2.25, 2.25]:
 		_box(body, Vector3(wx, 1.75, dz - 0.02), Vector3(1.20, 0.95, 0.14), WOOD * 1.6)
 		glow.quad(Vector3(wx - 0.48, 1.30, dz + 0.07), Vector3(wx + 0.48, 1.30, dz + 0.07), Vector3(wx + 0.48, 2.18, dz + 0.07), Vector3(wx - 0.48, 2.18, dz + 0.07), WARM, Vector3(0, 0, 1))
 		_box(body, Vector3(wx, 1.75, dz + 0.09), Vector3(1.0, 0.07, 0.04), WOOD * 1.8)
 		_box(body, Vector3(wx, 1.75, dz + 0.09), Vector3(0.07, 0.9, 0.04), WOOD * 1.8)
-	for sx in [-1.0, 1.0]:
+	for sx: float in [-1.0, 1.0]:
 		var wxx: float = sx * (W + 0.26)
 		_box(body, Vector3(wxx, 1.75, 0.0), Vector3(0.14, 0.95, 1.2), WOOD * 1.6)
 		glow.quad(Vector3(wxx + sx * 0.08, 1.30, 0.48), Vector3(wxx + sx * 0.08, 1.30, -0.48), Vector3(wxx + sx * 0.08, 2.18, -0.48), Vector3(wxx + sx * 0.08, 2.18, 0.48), WARM * 0.9, Vector3(sx, 0, 0))
@@ -144,10 +144,10 @@ func build(v: Valley, pos: Vector3) -> void:
 	# крыльцо: настил, ступень, столбы, навес-козырёк и фонарь
 	_box(body, Vector3(0, 0.12, D + 1.1), Vector3(3.2, 0.24, 1.9), WOOD * 1.1)
 	_box(body, Vector3(0, 0.04, D + 2.3), Vector3(2.2, 0.12, 0.7), WOOD_D * 1.3)
-	for px in [-1.45, 1.45]:
+	for px: float in [-1.45, 1.45]:
 		_box(body, Vector3(px, 1.5, D + 1.85), Vector3(0.2, 2.8, 0.2), WOOD * 1.2)
 	_box(body, Vector3(0, 2.92, D + 1.15), Vector3(3.5, 0.18, 2.3), WOOD_D)
-	for sgn2 in [-1.0, 1.0]:
+	for sgn2: float in [-1.0, 1.0]:
 		body.quad(Vector3(-1.9, 3.0, D + 0.05), Vector3(1.9, 3.0, D + 0.05), Vector3(1.9, 2.7, D + 2.4), Vector3(-1.9, 2.7, D + 2.4), ROOF_A, Vector3(0, 1, 0.3))
 		break
 	_prism(glow, Vector3(1.15, 2.30, D + 1.85), 0.12, 0.30, WARM, 6)
@@ -168,14 +168,14 @@ func build(v: Valley, pos: Vector3) -> void:
 		_box(body, Vector3(lp.x, gh + 1.95, lp.z), Vector3(0.40, 0.08, 0.40), Color(0.09, 0.09, 0.12))
 		_prism(glow, Vector3(lp.x, gh + 1.62, lp.z), 0.13, 0.30, WARM, 6)
 		valley.add_obstacle(base.x + lp.x, base.z + lp.z, 0.2, 3.0)
-	for fx in [-1.0, 1.0]:
+	for fx: float in [-1.0, 1.0]:
 		for k in range(7):
 			var fz := D + 3.0 + 1.1 * float(k)
 			var xx := fx * (4.6 + 0.0)
 			var gh2 := valley.height_at(base.x + xx, base.z + fz) - base.y
 			_box(body, Vector3(xx, gh2 + 0.55, fz), Vector3(0.14, 1.1, 0.14), WOOD_D * 1.5)
 			if k < 6:
-				for ry in [0.45, 0.85]:
+				for ry: float in [0.45, 0.85]:
 					_box(body, Vector3(xx, gh2 + ry, fz + 0.55), Vector3(0.08, 0.08, 1.12), WOOD * 1.1)
 			valley.add_obstacle(base.x + xx, base.z + fz, 0.2, 1.2)
 	# собираем меши
