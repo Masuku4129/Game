@@ -25,7 +25,8 @@ const KATANA_QUAT := Quaternion(0.58072, -0.40344, -0.58072, 0.40344)
 
 # комбо: удар 3 (круговой) -> удар ногой с разворота -> апперкот -> финал
 const COMBO_ROLES := ["slash", "slash2", "slash4", "kick", "slash5", "slash3"]
-const COMBO_WINDOW := 0.30
+const COMBO_WINDOW := 0.08
+const CHAIN_AFTER_HIT := 0.07
 const ATTACK_RANGE := 2.4
 # [время попадания, рывок вперёд (м), множитель зоны, шлейф от, до (с), наклон плоскости волны (град), высота волны (м)]
 const HIT_INFO := {
@@ -39,7 +40,9 @@ const ALL_ROLES := ["idle", "walk", "run", "block", "jump", "dodge", "dash_in", 
 	"slash", "slash2", "slash4", "kick", "slash5", "slash3"]
 const LOOPED := ["idle", "walk", "run", "block"]
 # перемещения спецдвижений: [начало, конец (с), дистанция (м); минус = назад]
-const JUMP_MOVE := [0.20, 0.93, 5.0]
+# прыжок: баллистика. взлёт на 0.24 с анимации, приземление на 1.22 с; высота и дальность задаются здесь
+const JUMP_MOVE := [0.24, 1.22, 7.0]
+const JUMP_HEIGHT := 4.0
 const DODGE_MOVE := [0.06, 0.54, -5.0]
 const DASH_DIST := 8.0
 const DASH_TIME := 0.20
@@ -76,6 +79,7 @@ var vel := Vector3.ZERO          # инерция: текущая скорост
 var lean := Vector2.ZERO         # наклон корпуса (x - вперёд, y - вбок)
 var lean_v := Vector2.ZERO
 var prev_state := "idle"
+var land_fx := false
 const ACCEL := 16.0
 const DECEL := 11.0
 const LOCO_WALK_REF := 1.9
@@ -335,7 +339,7 @@ func _play(role: String, blend: float) -> void:
 
 func _blend_for(old: String, new: String) -> float:
 	if new == "attack":
-		return 0.07 if old == "attack" else 0.10
+		return 0.11 if old == "attack" else 0.10
 	if new == "idle":
 		return 0.32 if old in ["attack", "jump", "dodge", "dash_out", "block"] else 0.22
 	if new in ["walk", "run"]:
@@ -353,6 +357,9 @@ func _set_state(new_state: String, force := false) -> void:
 	if new_state == state and not force:
 		return
 	prev_state = state
+	if prev_state == "jump":
+		player.position.y = 0.0
+	land_fx = false
 	state = new_state
 	state_time = 0.0
 	fx_done = false
@@ -443,12 +450,22 @@ func _process(delta: float) -> void:
 		"attack":
 			_process_attack(delta, v, mag)
 		"jump":
-			_move_window(delta, JUMP_MOVE[0], JUMP_MOVE[1], JUMP_MOVE[2])
-			if not fx_done and state_time >= 0.19:
+			var t_air: float = JUMP_MOVE[1] - JUMP_MOVE[0]
+			var tau := clampf(state_time - JUMP_MOVE[0], 0.0, t_air)
+			var g := 8.0 * JUMP_HEIGHT / (t_air * t_air)
+			var v0 := g * t_air * 0.5
+			var prev_tau := clampf(state_time - delta - JUMP_MOVE[0], 0.0, t_air)
+			_move(move_dir * JUMP_MOVE[2] * (tau - prev_tau) / t_air)
+			player.position.y = maxf(0.0, v0 * tau - 0.5 * g * tau * tau)
+			if not fx_done and state_time >= JUMP_MOVE[0]:
 				fx_done = true
 				_spawn_ripple(player.global_position + Vector3(0.0, 0.05, 0.0), 3.2, true)
 				_spawn_ripple(player.global_position + Vector3(0.0, 1.0, 0.0), 2.4, false)
+			if not land_fx and state_time >= JUMP_MOVE[1]:
+				land_fx = true
+				_spawn_ripple(player.global_position + Vector3(0.0, 0.05, 0.0), 2.6, true)
 			if state_time >= state_len:
+				player.position.y = 0.0
 				_set_state("idle", true)
 		"dodge":
 			_move_window(delta, DODGE_MOVE[0], DODGE_MOVE[1], DODGE_MOVE[2])
@@ -545,7 +562,7 @@ func _process_attack(delta: float, v: Vector2, mag: float) -> void:
 			_spawn_ripple(player.global_position + _forward() * 1.1 + Vector3(0.0, 0.9, 0.0), 2.0, false)
 		else:
 			_spawn_crescent(float(info[2]), float(info[5]), float(info[6]))
-	if state_time >= state_len * 0.90 and combo_queued:
+	if hit_done and state_time >= t_hit + CHAIN_AFTER_HIT and combo_queued:
 		combo += 1
 		combo_queued = false
 		_face_input()
