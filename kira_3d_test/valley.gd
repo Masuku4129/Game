@@ -7,9 +7,9 @@ const HALF := 60.0               # половина размера карты, �
 const CELL := 1.25               # шаг сетки рельефа, м
 const ARENA := 26.0              # граница поляны, дальше непроходимый лес
 const PLAYER_R := 0.42
-const HOUSE_POS := Vector3(0.0, 0.0, -15.0)
-const START_POS := Vector3(0.0, 0.0, -8.5)
-const RING_C := Vector2(0.0, 4.0)
+const HOUSE_POS := Vector3(0.0, 0.0, 15.0)
+const START_POS := Vector3(0.0, 0.0, 5.0)
+const RING_C := Vector2(0.0, -4.0)
 const MAX_SLOPE := 1.15          # круче этого пешком не залезть (около 49 градусов)
 const OBST_CELL := 8.0
 
@@ -19,6 +19,7 @@ var obstacles := {}              # Vector2i -> Array из Vector3(x, z, r)
 var focus: Node3D
 var wisps: CPUParticles3D
 var flies: CPUParticles3D
+var lowmist: CPUParticles3D
 var rng := RandomNumberGenerator.new()
 
 var mat_terrain: ShaderMaterial
@@ -75,11 +76,11 @@ func _blob(x: float, z: float, cx: float, cz: float, rx: float, rz: float, hgt: 
 
 func _height_raw(x: float, z: float) -> float:
 	var r := sqrt(x * x + z * z)
-	var dh := sqrt(x * x + (z + 15.0) * (z + 15.0) * 0.7)
+	var dh := sqrt(x * x + (z - 15.0) * (z - 15.0) * 0.7)
 	var hill := _fbm(x * 0.03, z * 0.03, 11, 3) * 1.4
 	var h := hill * smoothstep(5.0, 12.0, r) * smoothstep(8.0, 14.0, dh)
-	h += _blob(x, z, 17.0, -3.0, 6.0, 8.0, 3.4)          # скальный уступ на востоке
-	h += _blob(x, z, -17.5, 6.0, 5.5, 6.5, 2.6)          # и на западе
+	h += _blob(x, z, 17.0, 3.0, 6.0, 8.0, 3.4)          # скальный уступ на востоке
+	h += _blob(x, z, -17.5, -6.0, 5.5, 6.5, 2.6)          # и на западе
 	h += _fbm(x * 0.7, z * 0.7, 61, 2) * 0.10
 	var rim := smoothstep(25.0, 50.0, r)
 	h += rim * (9.0 + _fbm(x * 0.08, z * 0.08, 71, 2) * 5.0)
@@ -243,6 +244,58 @@ class MeshBuilder:
 		tri(a, b, c, col, col, col, hint)
 		tri(a, c, d, col, col, col, hint)
 
+	func tri_n(a: Vector3, b: Vector3, c: Vector3, na: Vector3, nb: Vector3, nc: Vector3, ca: Color, cb: Color, cc: Color) -> void:
+		var n := (b - a).cross(c - a)
+		if n.y > 0.0:
+			var tv := b
+			b = c
+			c = tv
+			var tn := nb
+			nb = nc
+			nc = tn
+			var tc := cb
+			cb = cc
+			cc = tc
+		verts.append(a)
+		verts.append(b)
+		verts.append(c)
+		norms.append(na)
+		norms.append(nb)
+		norms.append(nc)
+		cols.append(ca)
+		cols.append(cb)
+		cols.append(cc)
+
+	## сглаженные нормали: грани, сходящиеся в одной точке под малым углом, смешиваются (нет видимых плоскостей)
+	func build_smooth(cos_t: float) -> ArrayMesh:
+		var groups := {}
+		for i in range(verts.size()):
+			var p := verts[i]
+			var key := Vector3i(roundi(p.x * 400.0), roundi(p.y * 400.0), roundi(p.z * 400.0))
+			if not groups.has(key):
+				groups[key] = []
+			(groups[key] as Array).append(i)
+		var sm := PackedVector3Array()
+		sm.resize(verts.size())
+		for i in range(verts.size()):
+			var p := verts[i]
+			var key := Vector3i(roundi(p.x * 400.0), roundi(p.y * 400.0), roundi(p.z * 400.0))
+			var own := norms[i]
+			var acc := Vector3.ZERO
+			for j in (groups[key] as Array):
+				var nj := norms[j]
+				if nj.dot(own) > cos_t:
+					acc += nj
+			sm[i] = acc.normalized() if acc.length_squared() > 1e-8 else own
+		var arr := []
+		arr.resize(Mesh.ARRAY_MAX)
+		arr[Mesh.ARRAY_VERTEX] = verts
+		arr[Mesh.ARRAY_NORMAL] = sm
+		arr[Mesh.ARRAY_COLOR] = cols
+		var m := ArrayMesh.new()
+		m.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arr)
+		return m
+
 	func build() -> ArrayMesh:
 		var arr := []
 		arr.resize(Mesh.ARRAY_MAX)
@@ -261,17 +314,21 @@ func build() -> void:
 	mat_tree = _shader_mat("res://foliage.gdshader")
 	mat_tree.set_shader_parameter("sway", 0.45)
 	mat_tree.set_shader_parameter("height_ref", 14.0)
+	mat_tree.set_shader_parameter("ao_height", 2.6)
 	mat_grass = _shader_mat("res://foliage.gdshader")
 	mat_grass.set_shader_parameter("sway", 0.14)
 	mat_grass.set_shader_parameter("height_ref", 1.0)
+	mat_grass.set_shader_parameter("ao_height", 0.35)
 	mat_rigid = _shader_mat("res://foliage.gdshader")
 	mat_rigid.set_shader_parameter("sway", 0.0)
+	mat_rigid.set_shader_parameter("ao_height", 0.9)
 	mat_glow = _shader_mat("res://glow.gdshader")
 	_compute_grid()
 	_build_terrain()
 	_scatter()
 	_build_mountains()
 	_build_fx()
+	_build_shafts()
 
 
 func _shader_mat(path: String) -> ShaderMaterial:
@@ -285,7 +342,7 @@ func _path_mask(x: float, z: float) -> float:
 	var xc := 1.6 * sin(z * 0.13)
 	var d := absf(x - xc)
 	var m := 1.0 - smoothstep(0.9 + 0.5 * n, 1.9 + 0.7 * n, d)
-	return m * smoothstep(-12.6, -11.0, z) * (1.0 - smoothstep(12.0, 16.0, z))
+	return m * smoothstep(-12.6, -11.0, -z) * (1.0 - smoothstep(12.0, 16.0, -z))
 
 
 func _ground_color(p: Vector3, nrm: Vector3) -> Color:
@@ -308,37 +365,41 @@ func _ground_color(p: Vector3, nrm: Vector3) -> Color:
 	return Color(c.r * j * 1.5, c.g * j * 1.5, c.b * j * 1.5, rock)
 
 
+func _vnormal(i: int, j: int) -> Vector3:
+	var dx := (_g(i + 1, j) - _g(i - 1, j)) / (2.0 * CELL)
+	var dz := (_g(i, j + 1) - _g(i, j - 1)) / (2.0 * CELL)
+	return Vector3(-dx, 1.0, -dz).normalized()
+
+
+func _vcol(i: int, j: int) -> Color:
+	var p := Vector3(-HALF + float(i) * CELL, _g(i, j), -HALF + float(j) * CELL)
+	return _ground_color(p, _vnormal(i, j))
+
+
 func _build_terrain() -> void:
 	var mb := MeshBuilder.new()
-	var up := Vector3.UP
 	for j in range(N):
 		for i in range(N):
 			var x0 := -HALF + float(i) * CELL
 			var z0 := -HALF + float(j) * CELL
-			var x1 := x0 + CELL
-			var z1 := z0 + CELL
 			var p00 := Vector3(x0, _g(i, j), z0)
-			var p10 := Vector3(x1, _g(i + 1, j), z0)
-			var p01 := Vector3(x0, _g(i, j + 1), z1)
-			var p11 := Vector3(x1, _g(i + 1, j + 1), z1)
-			var t1: Array[Vector3]
-			var t2: Array[Vector3]
+			var p10 := Vector3(x0 + CELL, _g(i + 1, j), z0)
+			var p01 := Vector3(x0, _g(i, j + 1), z0 + CELL)
+			var p11 := Vector3(x0 + CELL, _g(i + 1, j + 1), z0 + CELL)
+			var n00 := _vnormal(i, j)
+			var n10 := _vnormal(i + 1, j)
+			var n01 := _vnormal(i, j + 1)
+			var n11 := _vnormal(i + 1, j + 1)
+			var c00 := _vcol(i, j)
+			var c10 := _vcol(i + 1, j)
+			var c01 := _vcol(i, j + 1)
+			var c11 := _vcol(i + 1, j + 1)
 			if (i + j) % 2 == 0:
-				t1 = [p00, p01, p11]
-				t2 = [p00, p11, p10]
+				mb.tri_n(p00, p01, p11, n00, n01, n11, c00, c01, c11)
+				mb.tri_n(p00, p11, p10, n00, n11, n10, c00, c11, c10)
 			else:
-				t1 = [p00, p01, p10]
-				t2 = [p10, p01, p11]
-			for t in [t1, t2]:
-				var a: Vector3 = t[0]
-				var b: Vector3 = t[1]
-				var c: Vector3 = t[2]
-				var nrm := (b - a).cross(c - a)
-				if nrm.y < 0.0:
-					nrm = -nrm
-				nrm = nrm.normalized()
-				var col := _ground_color((a + b + c) / 3.0, nrm)
-				mb.tri(a, b, c, col, col, col, up)
+				mb.tri_n(p00, p01, p10, n00, n01, n10, c00, c01, c10)
+				mb.tri_n(p10, p01, p11, n10, n01, n11, c10, c01, c11)
 	var mesh := mb.build()
 	var mi := MeshInstance3D.new()
 	mi.mesh = mesh
@@ -399,7 +460,7 @@ func _mesh_spruce(tiers: int, base_r: float, height: float, sides: int, trunk_co
 			var mid2 := (a_pt + b_pt) * 0.5
 			mb.tri(a_pt, tip, b_pt, cb, ct, cb, Vector3(mid2.x, 0.45 * r, mid2.z))
 			mb.tri(a_pt, b_pt, under, cu, cu, cu, Vector3(0.0, -1.0, 0.0))
-	return mb.build()
+	return mb.build_smooth(0.50)
 
 
 func _mesh_dead(height: float) -> ArrayMesh:
@@ -425,7 +486,7 @@ func _mesh_dead(height: float) -> ArrayMesh:
 		var side := dir.cross(Vector3.UP).normalized() * 0.07
 		mb.tri(base - side, base + side, tipp, col, col, col2, Vector3(dir.x, 0.8, dir.z))
 		mb.tri(base + side, base - side, tipp, col, col, col2, Vector3(-dir.x, -0.8, -dir.z))
-	return mb.build()
+	return mb.build_smooth(0.50)
 
 
 func _ico(sub: int) -> Array:
@@ -481,7 +542,7 @@ func _mesh_boulder(seed_v: int) -> ArrayMesh:
 		col = col * (0.85 + 0.3 * (_h(floori(cen.x * 40.0), floori(cen.z * 40.0), seed_v) * 0.5 + 0.5))
 		col.a = 1.0
 		mb.tri(a, b, c, col, col, col, cen)
-	return mb.build()
+	return mb.build_smooth(0.50)
 
 
 func _mesh_log() -> ArrayMesh:
@@ -500,7 +561,7 @@ func _mesh_log() -> ArrayMesh:
 		var top := smoothstep(0.2, 1.0, mid.y)
 		var col := Color(0.120, 0.085, 0.065).lerp(Color(0.070, 0.170, 0.110), top)
 		mb.quad(p0, p1, q1, q0, col, mid)
-	return mb.build()
+	return mb.build_smooth(0.50)
 
 
 func _mesh_grass() -> ArrayMesh:
@@ -559,7 +620,7 @@ func _mesh_mushroom() -> ArrayMesh:
 		var c1 := Vector3(cos(a1) * 0.16, 0.18, sin(a1) * 0.16)
 		mb.tri(c0, top, c1, cap2, cap, cap2, Vector3(mid.x, 0.5, mid.z))
 		mb.tri(c0, c1, Vector3(0.0, 0.2, 0.0), cap2, cap2, cap2, Vector3(0.0, -1.0, 0.0))
-	return mb.build()
+	return mb.build_smooth(0.50)
 
 
 func _monolith() -> ArrayMesh:
@@ -578,7 +639,7 @@ func _monolith() -> ArrayMesh:
 		mb.tri(b0, b1, t1, col2, col2, col, mid)
 		mb.tri(b0, t1, t0, col2, col, col, mid)
 		mb.tri(t0, t1, Vector3(0.12, 3.5, 0.0), col, col, col, Vector3(0.0, 1.0, 0.0))
-	return mb.build()
+	return mb.build_smooth(0.50)
 
 
 func _mm(mesh: Mesh, mat: Material, xf: Array, custom: Array, shadow: bool) -> void:
@@ -639,8 +700,8 @@ func _scatter() -> void:
 	var bm: Array[ArrayMesh] = [_mesh_boulder(1), _mesh_boulder(2), _mesh_boulder(3)]
 	var bxf: Array = [[], [], []]
 	var bcu: Array = [[], [], []]
-	var centers: Array[Vector2] = [Vector2(12.0, -9.0), Vector2(12.5, 5.0), Vector2(-12.5, 0.0), Vector2(-12.0, 12.5), Vector2(6.0, 18.0), Vector2(-7.0, 19.0),
-		Vector2(20.0, 10.0), Vector2(-20.0, -8.0), Vector2(8.0, -21.0), Vector2(-9.0, -22.0)]
+	var centers: Array[Vector2] = [Vector2(12.0, 9.0), Vector2(12.5, -5.0), Vector2(-12.5, 0.0), Vector2(-12.0, -12.5), Vector2(6.0, -18.0), Vector2(-7.0, -19.0),
+		Vector2(20.0, -10.0), Vector2(-20.0, 8.0), Vector2(8.0, 21.0), Vector2(-9.0, 22.0)]
 	for cc in centers:
 		for q in range(rng.randi_range(3, 5)):
 			var x := cc.x + rng.randf_range(-3.0, 3.0)
@@ -681,7 +742,7 @@ func _scatter() -> void:
 	_mm(_mesh_log(), mat_rigid, lxf, lcu, true)
 
 	# --- 4) деревья: несколько у дома, а за краем поляны плотная непроходимая стена леса
-	var fixed: Array[Vector3] = [Vector3(-9.5, -12.0, 0), Vector3(9.5, -13.5, 1), Vector3(-11.5, -19.0, 0), Vector3(11.0, -20.0, 0), Vector3(-4.5, -22.5, 1), Vector3(5.5, -23.0, 0), Vector3(-18.0, -15.0, 0), Vector3(18.5, -16.0, 1)]
+	var fixed: Array[Vector3] = [Vector3(-9.5, 12.0, 0), Vector3(9.5, 13.5, 1), Vector3(-11.5, 19.0, 0), Vector3(11.0, 20.0, 0), Vector3(-4.5, 22.5, 1), Vector3(5.5, 23.0, 0), Vector3(-18.0, 15.0, 0), Vector3(18.5, 16.0, 1)]
 	var cand: Array[Vector3] = []
 	for f in fixed:
 		cand.append(f)
@@ -844,10 +905,15 @@ func setup_atmosphere(we: WorldEnvironment, sun: DirectionalLight3D) -> void:
 	env.ambient_light_energy = 0.85
 	env.fog_enabled = true
 	env.fog_light_color = Color(0.300, 0.340, 0.500)
-	env.fog_density = 0.016
+	env.fog_density = 0.022
 	env.fog_sky_affect = 0.55
 	env.fog_height = 5.0
 	env.fog_height_density = 0.05
+	env.glow_bloom = 0.14
+	env.glow_intensity = 1.1
+	env.adjustment_enabled = true
+	env.adjustment_contrast = 1.10
+	env.adjustment_saturation = 1.12
 	sun.rotation_degrees = Vector3(-32.0, -50.0, 0.0)
 	sun.light_color = Color(0.80, 0.82, 1.0)
 	sun.light_energy = 1.05
@@ -903,6 +969,55 @@ func _build_fx() -> void:
 	g2.colors = PackedColorArray([Color(1, 1, 1, 0), Color(1, 1, 1, 1), Color(1, 1, 1, 1), Color(1, 1, 1, 0)])
 	flies.color_ramp = g2
 	add_child(flies)
+	var low := CPUParticles3D.new()
+	low.amount = 46
+	low.lifetime = 14.0
+	low.preprocess = 14.0
+	low.local_coords = false
+	low.mesh = quad
+	var lm := _shader_mat("res://mist.gdshader")
+	lm.set_shader_parameter("tint", Color(0.42, 0.50, 0.78, 0.20))
+	low.material_override = lm
+	low.emission_shape = CPUParticles3D.EMISSION_SHAPE_BOX
+	low.emission_box_extents = Vector3(30.0, 0.25, 30.0)
+	low.direction = Vector3(1.0, 0.0, 0.2)
+	low.spread = 25.0
+	low.initial_velocity_min = 0.15
+	low.initial_velocity_max = 0.4
+	low.gravity = Vector3.ZERO
+	low.scale_amount_min = 5.0
+	low.scale_amount_max = 9.0
+	low.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	low.color_ramp = g1
+	add_child(low)
+	lowmist = low
+
+
+func _build_shafts() -> void:
+	var dir := (Basis.from_euler(Vector3(deg_to_rad(-32.0), deg_to_rad(-50.0), 0.0)) * Vector3(0, 0, -1)).normalized()
+	var up_axis := -dir
+	var mat := _shader_mat("res://shaft.gdshader")
+	var quad := QuadMesh.new()
+	quad.size = Vector2(1.0, 1.0)
+	var r2 := RandomNumberGenerator.new()
+	r2.seed = 77
+	for k in range(16):
+		var a := r2.randf() * TAU
+		var rr := r2.randf_range(3.0, 24.0)
+		var p := Vector3(cos(a) * rr, 0.0, sin(a) * rr)
+		p.y = height_at(p.x, p.z)
+		var length := r2.randf_range(14.0, 22.0)
+		var width := r2.randf_range(1.6, 4.2)
+		var mi := MeshInstance3D.new()
+		mi.mesh = quad
+		mi.material_override = mat
+		mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		mi.extra_cull_margin = 30.0
+		var xa := up_axis.cross(Vector3.UP).normalized()
+		var b := Basis(xa * width, up_axis * length, xa.cross(up_axis) * 1.0)
+		mi.transform = Transform3D(b, p + up_axis * length * 0.5 - up_axis * 1.0)
+		mi.set_instance_shader_parameter("seed", r2.randf() * 10.0)
+		add_child(mi)
 
 
 func _process(_delta: float) -> void:
@@ -911,5 +1026,7 @@ func _process(_delta: float) -> void:
 	var p := focus.global_position
 	if wisps != null:
 		wisps.global_position = Vector3(p.x, p.y + 1.4, p.z)
+	if lowmist != null:
+		lowmist.global_position = Vector3(p.x, p.y + 0.6, p.z)
 	if flies != null:
 		flies.global_position = Vector3(p.x, p.y + 1.6, p.z)

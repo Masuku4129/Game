@@ -14,6 +14,8 @@ var body := Valley.MeshBuilder.new()
 var glow := Valley.MeshBuilder.new()
 var valley: Valley
 var base := Vector3.ZERO
+var lights: Array[OmniLight3D] = []
+var light_base: Array[float] = []
 
 
 func _jit(c: Color, k: float, seed_v: float) -> Color:
@@ -57,6 +59,7 @@ func build(v: Valley, pos: Vector3) -> void:
 	valley = v
 	base = pos
 	position = pos
+	rotation.y = PI                # дверь смотрит в -Z, на поляну
 	var W := 3.5          # полуширина по X
 	var D := 3.0          # полуглубина по Z (дверь на +Z)
 	# каменный фундамент
@@ -163,21 +166,21 @@ func build(v: Valley, pos: Vector3) -> void:
 	_box(body, Vector3(W + 1.25, 0.85, D + 1.25), Vector3(0.5, 0.5, 0.5), WOOD * 1.1, 0.9)
 	# фонарные столбы вдоль тропы и забор
 	for lp in [Vector3(-2.0, 0.0, D + 4.0), Vector3(2.0, 0.0, D + 8.5), Vector3(-2.0, 0.0, D + 13.0)]:
-		var gh := valley.height_at(base.x + lp.x, base.z + lp.z) - base.y
+		var gh := valley.height_at(base.x - lp.x, base.z - lp.z) - base.y
 		_box(body, Vector3(lp.x, gh + 0.9, lp.z), Vector3(0.14, 1.8, 0.14), WOOD_D * 1.4)
 		_box(body, Vector3(lp.x, gh + 1.95, lp.z), Vector3(0.40, 0.08, 0.40), Color(0.09, 0.09, 0.12))
 		_prism(glow, Vector3(lp.x, gh + 1.62, lp.z), 0.13, 0.30, WARM, 6)
-		valley.add_obstacle(base.x + lp.x, base.z + lp.z, 0.2, 3.0)
+		valley.add_obstacle(base.x - lp.x, base.z - lp.z, 0.2, 3.0)
 	for fx: float in [-1.0, 1.0]:
 		for k in range(7):
 			var fz := D + 3.0 + 1.1 * float(k)
 			var xx := fx * (4.6 + 0.0)
-			var gh2 := valley.height_at(base.x + xx, base.z + fz) - base.y
+			var gh2 := valley.height_at(base.x - xx, base.z - fz) - base.y
 			_box(body, Vector3(xx, gh2 + 0.55, fz), Vector3(0.14, 1.1, 0.14), WOOD_D * 1.5)
 			if k < 6:
 				for ry: float in [0.45, 0.85]:
 					_box(body, Vector3(xx, gh2 + ry, fz + 0.55), Vector3(0.08, 0.08, 1.12), WOOD * 1.1)
-			valley.add_obstacle(base.x + xx, base.z + fz, 0.2, 1.2)
+			valley.add_obstacle(base.x - xx, base.z - fz, 0.2, 1.2)
 	# собираем меши
 	var mi := MeshInstance3D.new()
 	mi.mesh = body.build()
@@ -224,7 +227,33 @@ func build(v: Valley, pos: Vector3) -> void:
 	while ox <= W + 0.31:
 		var oz := -D - 0.3
 		while oz <= D + 0.31:
-			valley.add_obstacle(base.x + ox, base.z + oz, 0.95, 99.0)
+			valley.add_obstacle(base.x - ox, base.z - oz, 0.95, 99.0)
 			oz += 1.1
 		ox += 1.1
 	# фонарь у входа даёт ощущение жилья: тёплые блики на земле рисуем отдельно (простое пятно света)
+
+	# тёплые источники света: крыльцо, окна, три фонаря вдоль тропы (на мобильном рендерере держим их немного)
+	var spots := [
+		[Vector3(1.15, 2.1, D + 1.85), 9.0, 2.2],
+		[Vector3(0.0, 1.8, D + 1.6), 8.0, 1.6],
+		[Vector3(-2.0, 1.6, D + 4.0), 8.0, 1.5],
+		[Vector3(2.0, 1.6, D + 8.5), 8.0, 1.5],
+		[Vector3(-2.0, 1.6, D + 13.0), 8.0, 1.4]]
+	for sp in spots:
+		var l := OmniLight3D.new()
+		l.position = sp[0]
+		l.omni_range = sp[1]
+		l.light_energy = sp[2]
+		l.light_color = Color(1.0, 0.66, 0.34)
+		l.omni_attenuation = 1.6
+		l.shadow_enabled = false
+		add_child(l)
+		lights.append(l)
+		light_base.append(sp[2])
+
+
+func _process(_delta: float) -> void:
+	var t := Time.get_ticks_msec() * 0.001
+	for i in range(lights.size()):
+		var f := 0.88 + 0.12 * sin(t * (6.0 + float(i)) + float(i) * 1.7) * sin(t * 2.3 + float(i))
+		lights[i].light_energy = light_base[i] * f

@@ -28,6 +28,8 @@ void fragment() {
 	rc = mix(rc, rc * vec3(1.25, 1.05, 0.95), band * 0.5);
 	c = mix(c, rc * (0.9 + 0.2 * n2), rock);
 	ALBEDO = c;
-	ROUGHNESS = 0.96;
-	SPECULAR = 0.15;
+	ROUGHNESS = 0.92;
+	SPECULAR = 0.2;
+	float rim = pow(1.0 - clamp(dot(normalize(NORMAL), normalize(VIEW)), 0.0, 1.0), 3.0);
+	EMISSION = vec3(0.12, 0.16, 0.40) * rim * 0.5;
 }

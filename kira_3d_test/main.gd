@@ -22,21 +22,20 @@ const WAVE_PAUSE := 3.0
 const KATANA_POS := Vector3(-0.03431, -0.08436, 0.10592)
 const KATANA_QUAT := Quaternion(0.58072, -0.40344, -0.58072, 0.40344)
 
-# комбо: удар 3 (круговой) -> удар ногой с разворота -> апперкот -> финал
-const COMBO_ROLES := ["slash", "slash2", "slash4", "kick", "slash5", "slash3"]
+# комбо: удары выбираются из набора AtkData по направлению стика, концовка - один из финишеров
 const COMBO_WINDOW := 0.08
-const CHAIN_AFTER_HIT := 0.07
+const CHAIN_AFTER_HIT := 0.05
 const ATTACK_RANGE := 2.4
-# [время попадания, рывок вперёд (м), множитель зоны, шлейф от, до (с), наклон плоскости волны (град), высота волны (м)]
-const HIT_INFO := {
-	"slash":  [0.17, 0.9, 1.0, 0.13, 0.24, 38.0, 1.0],
-	"slash2": [0.18, 0.9, 1.0, 0.12, 0.25, -8.0, 1.0],
-	"slash4": [0.24, 0.7, 1.35, 0.13, 0.32, 0.0, 0.55],
-	"kick":   [0.22, 0.6, 1.0, -1.0, -1.0, 0.0, 0.9],
-	"slash5": [0.21, 0.8, 1.1, 0.13, 0.27, -62.0, 1.1],
-	"slash3": [0.24, 1.4, 1.3, 0.21, 0.30, 90.0, 1.2]}
-const ALL_ROLES := ["idle", "walk", "run", "block", "jump", "dodge", "dash_in", "dash_out",
-	"slash", "slash2", "slash4", "kick", "slash5", "slash3"]
+const MAX_COMBO := 6
+const GAME_SPEED := 0.85
+const A_START := ["cut_rl", "cut_lr", "diag_dl", "diag_dr", "flick", "rise_l", "rise_r"]
+const A_FWD := ["thrust", "step_cut", "lunge_low", "slide_cut", "chop"]
+const A_BACK := ["back_cut", "spin_r", "spin_l", "whirl_low"]
+const A_LEFT := ["cut_rl", "diag_dl", "rise_l", "crescent", "spin_l"]
+const A_RIGHT := ["cut_lr", "diag_dr", "rise_r", "spin_r", "flick"]
+const A_MID := ["cut_rl", "cut_lr", "diag_dl", "diag_dr", "rise_l", "rise_r", "flick", "uppercut", "low_sweep", "x_cut", "kick", "spin_r", "spin_l"]
+const A_FIN := ["heavy_overhead", "crescent", "whirl_high", "dive_slam", "flurry3", "air_chop", "air_rise"]
+const BASE_ROLES := ["idle", "walk", "run", "block", "jump", "dodge", "dash_in", "dash_out"]
 const LOOPED := ["idle", "walk", "run", "block"]
 # перемещения спецдвижений: [начало, конец (с), дистанция (м); минус = назад]
 # прыжок: баллистика. взлёт на 0.24 с анимации, приземление на 1.22 с; высота и дальность задаются здесь
@@ -63,6 +62,12 @@ var dead_timer := 0.0
 var hp_fill: ColorRect
 var hp_label: Label
 var kills := 0
+var post_mat: ShaderMaterial
+var hurt_v := 0.0
+var flash_v := 0.0
+var katana_light: OmniLight3D
+var hit_light: OmniLight3D
+var hitstop_active := false
 var ui: TouchUI
 var hud: Label
 var state := "idle"
@@ -73,6 +78,11 @@ var combo_queued := false
 var anim_of := {}
 var problems: PackedStringArray = PackedStringArray()
 var hit_done := false
+var hit_idx := 0
+var cur_atk := "cut_rl"
+var last_atk := ""
+var lunge_sign := 1.0
+var atk_rel := Vector2.ZERO
 var lunge_left := 0.0
 var move_dir := Vector3.ZERO
 var block_held := false
@@ -100,6 +110,7 @@ const LOCO_RUN_REF := 6.2
 
 
 func _ready() -> void:
+	Engine.time_scale = GAME_SPEED
 	_build_world()
 	_build_player()
 	player.position = Vector3(Valley.START_POS.x, valley.height_at(Valley.START_POS.x, Valley.START_POS.z), Valley.START_POS.z)
@@ -182,6 +193,19 @@ func _build_player() -> void:
 	model = scene.instantiate() as Node3D
 	model.position = Vector3(0.0, 1.0, 0.0)  # ноги модели стоят на y = -1
 	player.add_child(model)
+	katana_light = OmniLight3D.new()
+	katana_light.position = Vector3(0.0, 1.5, 0.4)
+	katana_light.omni_range = 7.0
+	katana_light.light_color = Color(0.62, 0.40, 1.0)
+	katana_light.light_energy = 0.7
+	katana_light.shadow_enabled = false
+	player.add_child(katana_light)
+	hit_light = OmniLight3D.new()
+	hit_light.omni_range = 8.0
+	hit_light.light_color = Color(0.85, 0.55, 1.0)
+	hit_light.light_energy = 0.0
+	hit_light.shadow_enabled = false
+	add_child(hit_light)
 	skeleton = _find_first(model, "Skeleton3D") as Skeleton3D
 	anim = _find_first(model, "AnimationPlayer") as AnimationPlayer
 	if skeleton == null:
@@ -191,14 +215,20 @@ func _build_player() -> void:
 		return
 	for n in anim.get_animation_list():
 		var role := String(n).to_lower().replace("-loop", "")
-		if not (role in ALL_ROLES):
+		if not (role in all_roles()):
 			continue
 		anim_of[role] = n
 		anim.get_animation(n).loop_mode = Animation.LOOP_LINEAR if role in LOOPED else Animation.LOOP_NONE
-	for role in ALL_ROLES:
+	for role in all_roles():
 		if not anim_of.has(role):
 			problems.append("НЕТ анимации " + role)
 	_attach_katana()
+
+
+func all_roles() -> Array:
+	var r: Array = BASE_ROLES.duplicate()
+	r.append_array(AtkData.D.keys())
+	return r
 
 
 func _boost_emission(n: Node) -> void:
@@ -241,7 +271,18 @@ func _attach_katana() -> void:
 
 # ================================================================ ввод
 func _build_ui() -> void:
+	var post_layer := CanvasLayer.new()
+	post_layer.layer = 0
+	add_child(post_layer)
+	var pr := ColorRect.new()
+	pr.set_anchors_preset(Control.PRESET_FULL_RECT)
+	pr.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	post_mat = ShaderMaterial.new()
+	post_mat.shader = load("res://post.gdshader")
+	pr.material = post_mat
+	post_layer.add_child(pr)
 	var layer := CanvasLayer.new()
+	layer.layer = 2
 	add_child(layer)
 	ui = TouchUI.new()
 	layer.add_child(ui)
@@ -378,19 +419,22 @@ func _set_state(new_state: String, force := false) -> void:
 		"idle", "walk", "run", "block", "jump", "dodge", "dash_in", "dash_out":
 			_play(state, _blend_for(prev_state, state))
 		"attack":
-			var role: String = COMBO_ROLES[combo]
-			_play(role, _blend_for(prev_state, "attack"))
+			_play(cur_atk, _blend_for(prev_state, "attack"))
 			hit_done = false
-			lunge_left = float(HIT_INFO[role][1])
-			move_dir = _forward()
+			hit_idx = 0
+			var lg: float = AtkData.D[cur_atk]["lunge"]
+			lunge_left = absf(lg)
+			lunge_sign = -1.0 if lg < 0.0 else 1.0
+			move_dir = _forward() * lunge_sign
 		"dash_beam":
 			state_len = DASH_TIME
 
 
 func _on_attack() -> void:
 	if state == "attack":
-		if state_time >= state_len * COMBO_WINDOW and combo < COMBO_ROLES.size() - 1:
+		if state_time >= state_len * COMBO_WINDOW and combo < MAX_COMBO - 1:
 			combo_queued = true
+			atk_rel = _input_rel()
 		return
 	if state in ["dash_in", "dash_beam"]:
 		attack_buffered = true      # нажал во время рывка: удар вылетит сразу на выходе
@@ -400,16 +444,56 @@ func _on_attack() -> void:
 	attack_buffered = false
 	combo = 0
 	combo_queued = false
-	_face_input()
+	_begin_attack(_input_rel())
+
+
+func _begin_attack(rel: Vector2) -> void:
+	cur_atk = _pick_attack(rel)
+	last_atk = cur_atk
+	if String(AtkData.D[cur_atk]["tag"]) != "b":
+		_face_input()
 	_set_state("attack", true)
+
+
+## вход стика относительно текущего взгляда: x - влево, y - вперёд (до поворота корпуса)
+func _input_rel() -> Vector2:
+	var v := _input_vector()
+	if v.length() <= DEAD_ZONE:
+		return Vector2.ZERO
+	var d := _world_dir(v).normalized()
+	var f := _forward()
+	var left := Vector3(f.z, 0.0, -f.x)
+	return Vector2(d.dot(left), d.dot(f))
+
+
+func _pick_attack(rel: Vector2) -> String:
+	var pool: Array = A_MID
+	if combo >= 4:
+		pool = A_FIN
+	elif rel.length() > 0.5:
+		if rel.y > 0.55:
+			pool = A_FWD
+		elif rel.y < -0.55:
+			pool = A_BACK
+		elif rel.x > 0.0:
+			pool = A_LEFT
+		else:
+			pool = A_RIGHT
+	elif combo == 0:
+		pool = A_START
+	var pick: String = pool[randi() % pool.size()]
+	for i in range(5):
+		if pick != last_atk:
+			break
+		pick = pool[randi() % pool.size()]
+	return pick
 
 
 func _on_attack_from_dash() -> void:
 	attack_buffered = false
 	combo = 0
 	combo_queued = false
-	_face_input()
-	_set_state("attack", true)
+	_begin_attack(Vector2.ZERO)
 
 
 func _on_jump() -> void:
@@ -567,6 +651,7 @@ func _process(delta: float) -> void:
 		_move(vel * delta * 0.5)
 	_update_lean(delta)
 	_update_game(delta)
+	_update_fx(delta)
 	_update_camera(delta)
 	_update_hud()
 
@@ -587,34 +672,42 @@ func _update_lean(delta: float) -> void:
 
 
 func _process_attack(delta: float, v: Vector2, mag: float) -> void:
-	var role: String = COMBO_ROLES[combo]
-	var info: Array = HIT_INFO[role]
-	if mag > DEAD_ZONE and state_time < state_len * 0.2:
+	var data: Dictionary = AtkData.D[cur_atk]
+	var hits: Array = data["hits"]
+	var t_last: float = float((hits[hits.size() - 1] as Array)[0])
+	if mag > DEAD_ZONE and state_time < state_len * 0.2 and lunge_sign > 0.0:
 		var d := _world_dir(v)
 		player.rotation.y = lerp_angle(player.rotation.y, atan2(d.x, d.z), 1.0 - exp(-12.0 * delta))
 		move_dir = _forward()
-	var t_hit := float(info[0])
-	if state_time < t_hit + 0.06 and lunge_left > 0.0:
-		var u := clampf(state_time / (t_hit + 0.06), 0.0, 1.0)
+	var t_first: float = float((hits[0] as Array)[0])
+	if state_time < t_first + 0.06 and lunge_left > 0.0:
+		var u := clampf(state_time / (t_first + 0.06), 0.0, 1.0)
 		var w := 6.0 * u * (1.0 - u) + 0.15     # колоколообразный профиль скорости рывка
-		var step := minf(lunge_left, float(info[1]) * delta / (t_hit + 0.06) * w)
+		var step := minf(lunge_left, absf(float(data["lunge"])) * delta / (t_first + 0.06) * w)
 		lunge_left -= step
 		_move(move_dir * step)
 	if trail != null:
-		trail.active = state_time >= float(info[3]) and state_time <= float(info[4])
-	if not hit_done and state_time >= t_hit:
-		hit_done = true
-		hits_log.append(role)
-		_hit_hounds(role, float(info[2]))
-		if role == "kick":
+		var on := false
+		for h in hits:
+			var ha: Array = h
+			if float(ha[3]) >= 0.0 and state_time >= float(ha[3]) and state_time <= float(ha[4]):
+				on = true
+		trail.active = on
+	if hit_idx < hits.size() and state_time >= float((hits[hit_idx] as Array)[0]):
+		var hi: Array = hits[hit_idx]
+		hit_idx += 1
+		if hit_idx >= hits.size():
+			hit_done = true
+		hits_log.append(cur_atk)
+		_hit_hounds(cur_atk, float(data["zone"]))
+		if cur_atk == "kick":
 			_spawn_ripple(player.global_position + _forward() * 1.1 + Vector3(0.0, 0.9, 0.0), 2.0, false)
 		else:
-			_spawn_crescent(float(info[2]), float(info[5]), float(info[6]))
-	if hit_done and state_time >= t_hit + CHAIN_AFTER_HIT and combo_queued:
+			_spawn_crescent(float(data["zone"]), float(hi[1]), float(hi[2]))
+	if hit_done and state_time >= t_last + CHAIN_AFTER_HIT and combo_queued:
 		combo += 1
 		combo_queued = false
-		_face_input()
-		_set_state("attack", true)
+		_begin_attack(atk_rel)
 	elif state_time >= state_len:
 		combo = 0
 		_set_state("idle", true)
@@ -622,7 +715,11 @@ func _process_attack(delta: float, v: Vector2, mag: float) -> void:
 
 func _hit_hounds(role: String, zone: float) -> void:
 	var fwd := _forward()
-	var dmg := 40.0 if role == "slash3" else (30.0 if role == "slash4" else 24.0)
+	var dmg := 24.0
+	if role in ["heavy_overhead", "dive_slam", "crescent", "whirl_high"]:
+		dmg = 38.0
+	elif role in ["x_cut", "flurry3", "flick"]:
+		dmg = 16.0
 	for h in get_tree().get_nodes_in_group("hounds"):
 		var hh := h as Hound
 		var off := hh.position - player.position
@@ -632,7 +729,8 @@ func _hit_hounds(role: String, zone: float) -> void:
 			continue
 		if dist > 0.5 and fwd.dot(off / dist) < -0.1:
 			continue
-		hh.take_hit(dmg, player.position, 7.0 if role == "slash3" else 5.0)
+		hh.take_hit(dmg, player.position, 7.0 if dmg > 30.0 else 5.0)
+		_impact(hh.position, dmg > 30.0)
 		hits_log.append("hound_hit")
 
 
@@ -651,6 +749,7 @@ func damage_player(amount: float, from: Vector3) -> void:
 		k = 0.25
 	hp = maxf(0.0, hp - amount * k)
 	invuln = 0.35
+	hurt_v = 1.0
 	var away := player.position - from
 	away.y = 0.0
 	if away.length() > 0.01:
@@ -673,6 +772,62 @@ func _spawn_wave() -> void:
 		add_child(h)
 		h.setup(valley, player, self, pos)
 		alive_hounds += 1
+
+
+func _update_fx(delta: float) -> void:
+	hurt_v = maxf(0.0, hurt_v - delta * 2.4)
+	flash_v = maxf(0.0, flash_v - delta * 6.0)
+	if post_mat != null:
+		post_mat.set_shader_parameter("hurt", hurt_v)
+		post_mat.set_shader_parameter("flash", flash_v)
+		post_mat.set_shader_parameter("low_hp", 1.0 if hp < MAX_HP * 0.3 and hp > 0.0 else 0.0)
+	if katana_light != null:
+		var target := 0.7
+		if state == "attack":
+			target = 2.6
+		elif state in ["dash_beam", "dash_in"]:
+			target = 3.2
+		katana_light.light_energy = lerpf(katana_light.light_energy, target, 1.0 - exp(-14.0 * delta))
+	if hit_light != null and hit_light.light_energy > 0.01:
+		hit_light.light_energy = maxf(0.0, hit_light.light_energy - delta * 22.0)
+
+
+## удар по врагу: короткая остановка времени, вспышка света и искры
+func _impact(pos: Vector3, strong: bool) -> void:
+	flash_v = 1.0 if strong else 0.5
+	hit_light.global_position = pos + Vector3(0.0, 0.4, 0.0)
+	hit_light.light_energy = 7.0 if strong else 4.0
+	var p := CPUParticles3D.new()
+	p.one_shot = true
+	p.explosiveness = 1.0
+	p.amount = 22 if strong else 12
+	p.lifetime = 0.45
+	p.local_coords = false
+	var q := QuadMesh.new()
+	q.size = Vector2(0.18, 0.18)
+	p.mesh = q
+	var fm := ShaderMaterial.new()
+	fm.shader = load("res://fly.gdshader")
+	fm.set_shader_parameter("glow", Color(0.85, 0.5, 1.0))
+	p.material_override = fm
+	p.direction = Vector3(0.0, 1.0, 0.0)
+	p.spread = 180.0
+	p.initial_velocity_min = 3.0
+	p.initial_velocity_max = 8.0
+	p.gravity = Vector3(0.0, -9.0, 0.0)
+	p.scale_amount_min = 0.5
+	p.scale_amount_max = 1.5
+	p.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	add_child(p)
+	p.global_position = pos + Vector3(0.0, 0.9, 0.0)
+	p.emitting = true
+	get_tree().create_timer(1.0).timeout.connect(p.queue_free)
+	if not hitstop_active:
+		hitstop_active = true
+		Engine.time_scale = 0.12
+		await get_tree().create_timer(0.07 if strong else 0.045, true, false, true).timeout
+		Engine.time_scale = GAME_SPEED
+		hitstop_active = false
 
 
 func _update_game(delta: float) -> void:
@@ -813,7 +968,7 @@ func _update_hud() -> void:
 	var cur := anim.current_animation if anim != null else "-"
 	var tip := trail.get_tip_speed() if trail != null else 0.0
 	if state == "attack":
-		cur = "удар %d из %d" % [combo + 1, COMBO_ROLES.size()]
+		cur = "%s (%d)" % [cur_atk, combo + 1]
 	var txt := "состояние: %s   анимация: %s\nскорость: %.2f   кончик меча: %.1f   FPS: %d" % [state, cur, cur_speed, tip, Engine.get_frames_per_second()]
 	if problems.size() > 0:
 		txt += "\nПРОБЛЕМЫ: " + ", ".join(problems)
@@ -851,8 +1006,8 @@ func _run_selftest() -> void:
 	var seen := []
 	for i in range(60):
 		_on_attack()
-		if state == "attack" and not (COMBO_ROLES[combo] in seen):
-			seen.append(COMBO_ROLES[combo])
+		if state == "attack" and not (cur_atk in seen):
+			seen.append(cur_atk)
 		await _wait(0.08)
 	await _wait(1.0)
 	print("KIRA_TEST combo_seen=", seen, " hits=", hits_log)
@@ -880,7 +1035,7 @@ func _run_selftest() -> void:
 	# враг: появляется рядом, должен получить урон от ударов
 	var th := Hound.new()
 	add_child(th)
-	th.setup(valley, player, self, player.position + Vector3(0.0, 0.0, 4.0))
+	th.setup(valley, player, self, player.position + Vector3(0.0, 0.0, -4.0))
 	alive_hounds += 1
 	await _wait(1.8)
 	_log("hound_" + th.state)
@@ -895,7 +1050,7 @@ func _run_selftest() -> void:
 	print("KIRA_TEST hound_killed=", kills, " player_hp=", hp, " hits=", hits_log.count("hound_hit"))
 	if kills < 1:
 		problems.append("гончая не убита")
-	if seen.size() < COMBO_ROLES.size():
+	if seen.size() < 8:
 		problems.append("комбо прошло не полностью")
 	print("KIRA_TEST_DONE problems=", problems)
 	get_tree().quit(1 if problems.size() > 0 else 0)
