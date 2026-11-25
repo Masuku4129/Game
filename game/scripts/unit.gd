@@ -289,6 +289,7 @@ func tick(dt: float) -> void:
 		_animate(dt)
 		return
 	_free_self(dt)
+	_watchdog(dt)
 	if state == "walk":
 		_walk(dt)
 	else:
@@ -300,6 +301,48 @@ func tick(dt: float) -> void:
 
 ## Не застревать в постройках, стволах и камнях: если стоим на непроходимом месте
 ## дольше 0.4 с — выходим на ближайшую свободную точку.
+## Сторож: идём, а с места не сдвинулись 4 с — сперва перепроложим путь в обход,
+## потом выйдем на свободное место, а на третий раз бросим дело.
+var _wd_pos := Vector3.INF
+var _wd_t := 0.0
+var _wd_n := 0
+func _watchdog(dt: float) -> void:
+	if state != "walk" or path.is_empty():
+		_wd_t = 0.0
+		_wd_n = 0
+		_wd_pos = position
+		return
+	if _wd_pos == Vector3.INF or Vector2(position.x - _wd_pos.x, position.z - _wd_pos.z).length() > 0.6:
+		_wd_pos = position
+		_wd_t = 0.0
+		_wd_n = 0
+		return
+	_wd_t += dt
+	if _wd_t < 4.0:
+		return
+	_wd_t = 0.0
+	_wd_n += 1
+	var tgt: Vector3 = path[path.size() - 1]
+	if _wd_n == 1:
+		var d := Vector2(path[0].x - position.x, path[0].z - position.z).normalized()
+		nav.mark_blocked(position.x + d.x * 1.0, position.z + d.y * 1.0)
+		path = nav.find_path(position, tgt, area_lock)
+		if path.is_empty():
+			state = "idle"
+	elif _wd_n == 2:
+		var q: Vector3 = nav.nearest_free(position + Vector3(randf_range(-3, 3), 0, randf_range(-3, 3)), 10.0)
+		position.x = q.x
+		position.z = q.z
+		path = nav.find_path(position, tgt, area_lock)
+		if path.is_empty():
+			state = "idle"
+	else:
+		_wd_n = 0
+		path = []
+		state = "idle"
+		if not job.is_empty():
+			colony.jobs.cancel(self)
+
 var _inside_t := 0.0
 func _free_self(dt: float) -> void:
 	if not nav.passable(position.x, position.z) or main.blocked(position.x, position.z, 0.22):

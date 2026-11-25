@@ -22,14 +22,15 @@ const COLS := [
 	{"id": "fish", "name": "Рыба"},
 	{"id": "cook", "name": "Варить"},
 	{"id": "fire", "name": "Костёр"},
+	{"id": "craft", "name": "Мастерить"},
 ]
 ## Кто к чему сноровистее (1 — первым делом, 0 — не его дело).
 const DEFAULTS := {
-	"Ермолай": {"chop": 1, "build": 2, "haul": 3, "gather": 3, "hunt": 2, "fish": 0, "cook": 2, "fire": 1},
-	"Семён": {"chop": 3, "build": 3, "haul": 3, "gather": 2, "hunt": 1, "fish": 1, "cook": 2, "fire": 2},
-	"Фёдор": {"chop": 1, "build": 1, "haul": 2, "gather": 2, "hunt": 3, "fish": 2, "cook": 3, "fire": 2},
+	"Ермолай": {"chop": 1, "build": 2, "haul": 3, "gather": 3, "hunt": 2, "fish": 0, "cook": 2, "fire": 1, "craft": 3},
+	"Семён": {"chop": 3, "build": 3, "haul": 3, "gather": 2, "hunt": 1, "fish": 1, "cook": 2, "fire": 2, "craft": 2},
+	"Фёдор": {"chop": 1, "build": 1, "haul": 2, "gather": 2, "hunt": 3, "fish": 2, "cook": 3, "fire": 2, "craft": 1},
 }
-const BASE := {"chop": 2, "build": 2, "haul": 3, "gather": 2, "hunt": 3, "fish": 3, "cook": 3, "fire": 2}
+const BASE := {"chop": 2, "build": 2, "haul": 3, "gather": 2, "hunt": 3, "fish": 3, "cook": 3, "fire": 2, "craft": 2}
 
 var colony
 var main: Node3D
@@ -227,6 +228,11 @@ func _best(u, col: String, live: Array) -> Dictionary:
 		return best
 	# своим умом: что нужно острогу
 	match col:
+		"craft":
+			var rid: String = colony.next_order(u)
+			if rid != "":
+				var sp: Vector3 = colony.stock_point()
+				return {"kind": "craft", "data": {"recipe": rid, "pos": sp}, "pos": sp}
 		"chop":
 			var tr: Dictionary = w.find_trunk(p, 45.0)
 			if not tr.is_empty():

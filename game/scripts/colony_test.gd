@@ -14,6 +14,8 @@ var _fails: Array = []
 var _dbg := false
 var _shots := ""
 var _plank_seen := false
+var pl0 := 0
+var _crafted := false
 
 func _ready() -> void:
 	colony = main.colony
@@ -168,6 +170,20 @@ func _test_step() -> void:
 			colony.from_save(snap.get("colony", {}))
 			_ok(colony.units[0].unit_name == was_name, "имя после загрузки")
 			_ok(absf(float(colony.units[0].health) - was_h) < 0.01, "здоровье после загрузки (%.2f)" % float(colony.units[0].health))
+			_stage = 50
+			_t = 0.0
+		50:
+			colony.give("log", 3)
+			colony.orders["plank"] = 1
+			pl0 = colony.count("plank")
+			colony.jobs.cancel(colony.units[1])
+			colony.jobs.start(colony.units[1], "craft", {"recipe": "plank", "pos": colony.stock_point()})
+			_stage = 52
+			_t = 0.0
+		52:
+			if _t < 20.0:
+				return
+			_ok(colony.count("plank") > pl0, "заказ «доска» выполнен мастером")
 			_stage = 51
 			_t = 0.0
 		51:

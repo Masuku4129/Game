@@ -37,6 +37,46 @@ const PEOPLE := [
 const START_STOCK := {"axe": 2, "knife": 3, "bow": 1, "arrow": 16, "spear": 2, "rope": 2,
 	"twig": 12, "bark": 8, "firewood": 6, "meat_dried": 8, "berry": 6, "pebble": 10}
 
+## Заказы мастерской: что умеют делать. in — расход, out — сколько получится, tool — нужный инструмент.
+const RECIPES := {
+	"plank": {"in": {"log": 1}, "out": 2, "tool": "axe", "t": 4.0},
+	"bow": {"in": {"branch": 1, "bark": 2}, "out": 1, "tool": "knife", "t": 6.0},
+	"arrow": {"in": {"twig": 1, "pebble": 1}, "out": 3, "tool": "knife", "t": 3.0},
+	"handle": {"in": {"branch": 1}, "out": 1, "tool": "knife", "t": 3.0},
+	"shovel": {"in": {"plank": 1, "handle": 1}, "out": 1, "tool": "knife", "t": 5.0},
+	"table": {"in": {"plank": 4, "log": 1}, "out": 1, "tool": "axe", "t": 8.0},
+	"spoon": {"in": {"firewood": 1}, "out": 1, "tool": "knife", "t": 3.0},
+	"mug": {"in": {"firewood": 1}, "out": 1, "tool": "knife", "t": 3.0},
+	"bowl": {"in": {"firewood": 2}, "out": 1, "tool": "knife", "t": 3.5},
+}
+const RECIPE_ORDER := ["plank", "table", "bow", "arrow", "handle", "shovel", "spoon", "mug", "bowl"]
+var orders := {}                # рецепт → сколько ещё сделать
+
+func can_craft(id: String) -> bool:
+	var r: Dictionary = RECIPES.get(id, {})
+	if r.is_empty() or count(String(r["tool"])) < 1:
+		return false
+	for k: String in r["in"]:
+		if count(k) < int(r["in"][k]):
+			return false
+	return true
+
+func order_add(id: String, d: int) -> void:
+	orders[id] = clampi(int(orders.get(id, 0)) + d, 0, 20)
+
+## Первый заказ в очереди, который можно делать сейчас (не больше одного мастера на рецепт).
+func next_order(me) -> String:
+	for id: String in RECIPE_ORDER:
+		if int(orders.get(id, 0)) <= 0 or not can_craft(id):
+			continue
+		var busy := false
+		for o in units:
+			if o != me and o.state != "dead" and String(o.job.get("kind", "")) == "craft" and String(o.job.get("recipe", "")) == id:
+				busy = true
+		if not busy:
+			return id
+	return ""
+
 var main: Node3D
 var nav
 var jobs
@@ -1167,7 +1207,7 @@ func to_save() -> Dictionary:
 	return {"units": us, "stats": stats.duplicate(), "auto": auto_work,
 		"center": preload("res://scripts/save.gd").enc(camp_center),
 		"zones": zones.to_save() if zones != null else {},
-		"plan": planner.to_save() if planner != null else {},
+		"plan": planner.to_save() if planner != null else {}, "orders": orders.duplicate(),
 		"scenario": scenario.to_save() if scenario != null else {}}
 
 func from_save(d: Dictionary) -> void:
@@ -1180,6 +1220,9 @@ func from_save(d: Dictionary) -> void:
 	for k: String in st:
 		stats[k] = int(st[k])
 	auto_work = bool(d.get("auto", true))
+	orders = {}
+	for k: String in (d.get("orders", {}) as Dictionary):
+		orders[k] = int(d["orders"][k])
 	camp_center = SV.dec(d.get("center", SV.enc(camp_center)))
 	if zones != null:
 		zones.from_save(d.get("zones", {}))

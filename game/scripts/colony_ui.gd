@@ -21,6 +21,9 @@ var colony
 var main: Node3D
 var portraits: Array = []
 var build_btn: Button
+var craft_btn: Button
+var craft_sheet: Control
+var craft_rows: Array = []
 var auto_btn: Button
 var stop_btn: Button
 var order_btn: Button
@@ -107,9 +110,11 @@ func _ready() -> void:
 	zone_btn.pressed.connect(_open_zone)
 	desig_btn = _grid("Метить", 1, 1)
 	desig_btn.pressed.connect(_toggle_desig)
+	craft_btn = _grid("Заказы", 0, 2)
+	craft_btn.pressed.connect(_open_craft)
 	auto_btn = _grid("Сам: да", 1, 2)
 	auto_btn.pressed.connect(_toggle_auto)
-	main_btns = [build_btn, plan_btn, zone_btn, desig_btn, auto_btn]
+	main_btns = [build_btn, plan_btn, zone_btn, desig_btn, craft_btn, auto_btn]
 	rot_l = _btn("⟲", -620.0, -150.0, 130.0, 100.0)
 	rot_r = _btn("⟳", -470.0, -150.0, 130.0, 100.0)
 	place_btn = _btn("Ставить", -300.0, -150.0, 270.0, 100.0)
@@ -305,19 +310,19 @@ func _open_plan() -> void:
 	sh.anchor_right = 0.5
 	sh.anchor_top = 0.5
 	sh.anchor_bottom = 0.5
-	sh.offset_left = -590.0
-	sh.offset_right = 590.0
+	sh.offset_left = -620.0
+	sh.offset_right = 620.0
 	sh.offset_top = -250.0
 	sh.offset_bottom = 250.0
 	sh.mouse_filter = Control.MOUSE_FILTER_STOP
 	add_child(sh)
 	plan_sheet = sh
-	var x0 := 290.0
+	var x0 := 270.0
 	var i := 0
 	for c: Dictionary in PLAN.COLS:
 		var l := Label.new()
 		l.text = String(c["name"])
-		l.position = Vector2(x0 + float(i) * 104.0, 96.0)
+		l.position = Vector2(x0 + float(i) * 98.0, 96.0)
 		l.size = Vector2(100, 30)
 		l.add_theme_font_size_override("font_size", 21)
 		l.add_theme_color_override("font_color", INK)
@@ -336,8 +341,8 @@ func _open_plan() -> void:
 		for c2: Dictionary in PLAN.COLS:
 			var col := String(c2["id"])
 			var b := Button.new()
-			b.position = Vector2(x0 + float(k) * 104.0, y)
-			b.size = Vector2(94, 64)
+			b.position = Vector2(x0 + float(k) * 98.0, y)
+			b.size = Vector2(90, 64)
 			b.focus_mode = Control.FOCUS_NONE
 			INV.style_button(b, 30)
 			b.text = _pri_text(uu, col)
@@ -469,6 +474,7 @@ func _toggle_box() -> void:
 	colony.set_tool("box")
 
 func _close_tools() -> void:
+	_close_craft()
 	_close_plan()
 	_close_zone()
 	if colony != null and String(colony.tool_mode) != "":
@@ -589,6 +595,8 @@ func _process(delta: float) -> void:
 		_t = 0.2
 		if build_sheet != null:
 			_refresh_build_rows()
+		if craft_sheet != null:
+			_refresh_craft()
 		queue_redraw()
 	if order_t > 0.0 or String(colony.tool_mode) != "":
 		queue_redraw()
@@ -674,3 +682,98 @@ func _draw() -> void:
 		var sp: Vector2 = (colony.rig.cam as Camera3D).unproject_position(order_mark + Vector3(0, 0.3, 0))
 		var k := order_t / 1.1
 		draw_arc(sp, 26.0 * (1.4 - k), 0.0, TAU, 24, Color(1.0, 0.88, 0.5, k), 4.0, true)
+
+# ---------- заказы мастерской ----------
+
+func _close_craft() -> void:
+	if craft_sheet != null:
+		craft_sheet.queue_free()
+		craft_sheet = null
+	craft_rows = []
+
+func _open_craft() -> void:
+	if craft_sheet != null:
+		_close_craft()
+		return
+	_close_tools()
+	var sh: Control = SHEET.new()
+	sh.set("title", "Заказы")
+	sh.set("info", "")
+	sh.anchor_left = 0.0
+	sh.anchor_right = 0.0
+	sh.anchor_top = 0.0
+	sh.anchor_bottom = 1.0
+	sh.offset_left = 24.0
+	sh.offset_right = 824.0
+	sh.offset_top = 150.0
+	sh.offset_bottom = -170.0
+	sh.mouse_filter = Control.MOUSE_FILTER_STOP
+	add_child(sh)
+	craft_sheet = sh
+	var sc := ScrollContainer.new()
+	sc.anchor_right = 1.0
+	sc.anchor_bottom = 1.0
+	sc.offset_left = 24.0
+	sc.offset_top = 100.0
+	sc.offset_right = -24.0
+	sc.offset_bottom = -24.0
+	sc.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	sc.scroll_deadzone = 12
+	sh.add_child(sc)
+	var vb := VBoxContainer.new()
+	vb.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	vb.custom_minimum_size = Vector2(720, 0)
+	vb.add_theme_constant_override("separation", 10)
+	sc.add_child(vb)
+	craft_rows = []
+	for id: String in colony.RECIPE_ORDER:
+		var hb := HBoxContainer.new()
+		hb.add_theme_constant_override("separation", 8)
+		vb.add_child(hb)
+		var b := Button.new()
+		b.custom_minimum_size = Vector2(0, 120)
+		b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		b.focus_mode = Control.FOCUS_NONE
+		b.alignment = HORIZONTAL_ALIGNMENT_LEFT
+		b.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		b.mouse_filter = Control.MOUSE_FILTER_PASS
+		INV.style_button(b, 26)
+		b.pressed.connect(func() -> void: colony.order_add(id, 1))
+		hb.add_child(b)
+		var m := Button.new()
+		m.text = "−"
+		m.custom_minimum_size = Vector2(110, 120)
+		m.focus_mode = Control.FOCUS_NONE
+		m.mouse_filter = Control.MOUSE_FILTER_PASS
+		INV.style_button(m, 40)
+		m.pressed.connect(func() -> void: colony.order_add(id, -1))
+		hb.add_child(m)
+		craft_rows.append([id, b])
+	var x := _btn("Закрыть", 0.0, 0.0, 200.0, 70.0)
+	remove_child(x)
+	x.anchor_left = 1.0
+	x.anchor_right = 1.0
+	x.anchor_top = 0.0
+	x.anchor_bottom = 0.0
+	x.offset_left = -214.0
+	x.offset_right = -22.0
+	x.offset_top = 14.0
+	x.offset_bottom = 78.0
+	INV.style_button(x, 26)
+	x.pressed.connect(_close_craft)
+	sh.add_child(x)
+	_refresh_craft()
+
+func _refresh_craft() -> void:
+	for r: Array in craft_rows:
+		var id := String(r[0])
+		var rc: Dictionary = colony.RECIPES[id]
+		var parts: Array = []
+		for k: String in rc["in"]:
+			var have: int = colony.count(k)
+			parts.append("%s %d/%d" % [INV.IT.name_of(k).to_lower(), have, int(rc["in"][k])])
+		var q: int = int(colony.orders.get(id, 0))
+		var warn := ""
+		if colony.count(String(rc["tool"])) < 1:
+			warn = " · нужен " + INV.IT.name_of(String(rc["tool"])).to_lower()
+		(r[1] as Button).text = "%s ×%d    в очереди: %d\n%s%s\nтап — заказать ещё" % [INV.IT.name_of(id), int(rc["out"]), q, " · ".join(PackedStringArray(parts)), warn]

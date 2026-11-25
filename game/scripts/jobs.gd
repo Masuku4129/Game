@@ -22,7 +22,7 @@ const FOOD_VAL := {"meat_cooked": 0.5, "fish_cooked": 0.42, "stew": 0.6, "fish_s
 const LABELS := {"move": "Идёт", "chop": "Рубит дерево", "cut": "Кряжует ствол", "split": "Колет дрова",
 	"gather": "Собирает", "fish": "Ловит рыбу", "hunt": "Охотится", "butcher": "Разделывает",
 	"haul": "Несёт", "build": "Строит", "refuel": "Топит огонь", "cook": "Готовит",
-	"deposit": "Относит в амбар", "supply": "Несёт на стройку", "eat": "Ест", "sleep": "Спит", "defend": "Отбивается", "warm": "Греется"}
+	"deposit": "Относит в амбар", "supply": "Несёт на стройку", "eat": "Ест", "sleep": "Спит", "defend": "Отбивается", "warm": "Греется", "craft": "Мастерит"}
 
 var main: Node3D
 var colony
@@ -97,6 +97,10 @@ func start(u, kind: String, data: Dictionary) -> bool:
 		"deposit":
 			stand = colony.stock_point()
 			reach = 2.0
+		"craft":
+			stand = colony.stock_point()
+			reach = 2.4
+			u.show_tool("")
 		"supply":
 			# сперва к запасу (взять), потом на стройку (положить)
 			var ss: Dictionary = j["site"]
@@ -155,6 +159,15 @@ func tick(u, dt: float) -> void:
 						done(u, false)
 		"work":
 			_work(u, j, dt)
+		"fall":
+			# дерево падает: ждём, потом сами пилим ствол на брёвна
+			j["t"] = float(j["t"]) + dt
+			if float(j["t"]) < 3.5:
+				return
+			var tr2: Dictionary = _w().find_trunk(u.position, 14.0)
+			done(u, true)
+			if not tr2.is_empty():
+				start(u, "cut", {"trunk": tr2, "pos": _w().trunk_cut_point(tr2)})
 		"deliver":
 			_deliver(u, j)
 		"haul":
@@ -180,7 +193,7 @@ func _begin_work(u, j: Dictionary) -> void:
 			u.work_anim = "gather"
 		"butcher":
 			u.work_anim = "kneel"
-		"build":
+		"build", "craft":
 			u.work_anim = "build"
 		"refuel", "cook", "eat":
 			u.work_anim = "cook"
@@ -274,7 +287,24 @@ func _work(u, j: Dictionary, dt: float) -> void:
 				colony.note("%s свалил дерево" % u.unit_name)
 				colony.stat_add("trees", 1)
 				colony.nav.invalidate(u.position.x, u.position.z, 14.0)
-				done(u, true)
+				j["stage"] = "fall"
+				j["t"] = 0.0
+				u.work_anim = ""
+				u.state = "idle"
+		"craft":
+			var rc: Dictionary = colony.RECIPES.get(String(j["recipe"]), {})
+			if rc.is_empty() or float(j["t"]) < float(rc["t"]):
+				return
+			var rid2 := String(j["recipe"])
+			if not colony.can_craft(rid2):
+				done(u, false)
+				return
+			for k: String in rc["in"]:
+				colony.spend(k, int(rc["in"][k]))
+			colony.give(rid2, int(rc["out"]))
+			colony.order_add(rid2, -1)
+			colony.note("%s сделал: %s" % [u.unit_name, IT.name_of(rid2).to_lower()])
+			done(u, true)
 		"cut":
 			if not _every(j, 0.75):
 				return
