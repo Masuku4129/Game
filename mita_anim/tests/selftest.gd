@@ -92,6 +92,6 @@ func _initialize() -> void:
 			_check(max_fist > 0.8, "fists clench during strike (max %.2f)" % max_fist)
 		if sc[0] == "run":
 			var sl: Vector3 = ch.solver.P[ch.solver.idx["LeftArm"]] - ch.solver.P[ch.solver.idx["RightArm"]]
-			_check(sl.x < -0.15 and ch.anim.pos.z < -3.0, "runs facing -Z (left shoulder on -X)")
+			_check(sl.x < -0.15 and ch.anim.pos.z < -3.0, "runs facing -Z (left arm on -X): L-R=%s yaw=%.2f pos=%s" % [sl, ch.anim.yaw, ch.anim.pos])
 	print("SELFTEST ", "PASSED" if fails == 0 else "FAILED (%d)" % fails)
 	quit(0 if fails == 0 else 1)
