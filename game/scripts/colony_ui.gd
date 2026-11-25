@@ -199,7 +199,16 @@ func _open_build() -> void:
 	vb.add_theme_constant_override("separation", 12)
 	sc.add_child(vb)
 	build_rows = []
+	var entries: Array = []
 	for type: String in main.camp.ORDER_COLONY:
+		var vl: Array = main.camp.VARIANTS.get(type, [])
+		if vl.is_empty():
+			entries.append([type, 0])
+		else:
+			for vi in vl.size():
+				entries.append([type, vi])
+	for en: Array in entries:
+		var type: String = en[0]
 		var b := Button.new()
 		b.custom_minimum_size = Vector2(0, 150)
 		b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -208,9 +217,9 @@ func _open_build() -> void:
 		b.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		b.mouse_filter = Control.MOUSE_FILTER_PASS
 		INV.style_button(b, 26)
-		b.pressed.connect(_pick_type.bind(type))
+		b.pressed.connect(_pick_type.bind(type, int(en[1])))
 		vb.add_child(b)
-		build_rows.append([type, b])
+		build_rows.append([type, b, int(en[1])])
 	_refresh_build_rows()
 	var x := _btn("Закрыть", 0.0, 0.0, 200.0, 70.0)
 	remove_child(x)
@@ -229,7 +238,14 @@ func _open_build() -> void:
 func _refresh_build_rows() -> void:
 	for r: Array in build_rows:
 		var d: Dictionary = main.camp.DEFS[String(r[0])]
-		(r[1] as Button).text = "%s\n%s\n%s" % [String(d["name"]), String(d.get("desc", "")), _cost_text(d)]
+		var vl: Array = main.camp.VARIANTS.get(String(r[0]), [])
+		var ttl := String(d["name"])
+		var dd: Dictionary = d
+		if not vl.is_empty():
+			var v: Dictionary = vl[int(r[2])]
+			ttl += " — " + String(v["name"])
+			dd = {"need": v["need"]}
+		(r[1] as Button).text = "%s\n%s\n%s" % [ttl, String(d.get("desc", "")), _cost_text(dd)]
 
 func _free_build_sheet() -> void:
 	if build_sheet != null:
@@ -249,8 +265,8 @@ func _cost_text(d: Dictionary) -> String:
 		return "даром"
 	return " · ".join(PackedStringArray(parts))
 
-func _pick_type(type: String) -> void:
-	colony.build_begin(type)
+func _pick_type(type: String, vi: int = 0) -> void:
+	colony.build_begin(type, vi)
 	_free_build_sheet()
 	for b: Button in [rot_l, rot_r, place_btn, cancel_btn]:
 		b.visible = true

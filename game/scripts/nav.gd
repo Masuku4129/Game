@@ -79,6 +79,13 @@ func _cost_point(x: float, z: float, half: float) -> int:
 		return 0
 	if main.blocked(x, z, 0.45):
 		return 0
+	# тонкие преграды (лежачий ствол) между центрами клеток: щупаем ещё по краям клетки
+	var nb := 0
+	for o: Vector2 in [Vector2(0.8, 0), Vector2(-0.8, 0), Vector2(0, 0.8), Vector2(0, -0.8)]:
+		if main.blocked(x + o.x, z + o.y, 0.3):
+			nb += 1
+	if nb >= 2:
+		return 0
 	var c := 1 + int(dh * 3.0)
 	if depth > 0.05:
 		c += 6
@@ -86,6 +93,15 @@ func _cost_point(x: float, z: float, half: float) -> int:
 	if sn > 0.4:
 		c += 2
 	return mini(c, 60)
+
+## Запомнить клетку непроходимой (юнит упёрся в то, чего сетка не видит).
+func mark_blocked(x: float, z: float) -> void:
+	var c := cell_of(x, z)
+	cost_cell(c)
+	var ck := Vector2i(floori(float(c.x) / float(CH)), floori(float(c.y) / float(CH)))
+	var arr: PackedByteArray = chunks[ck]
+	arr[(c.y - ck.y * CH) * CH + (c.x - ck.x * CH)] = 0
+	chunks[ck] = arr
 
 ## Пересчитать куски вокруг точки (постройка, упавшее дерево).
 func invalidate(x: float, z: float, r: float) -> void:

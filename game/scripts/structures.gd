@@ -32,6 +32,28 @@ const DEFS := {
 	"tower": {"name": "Башня", "cost": {}, "need": {"log": 10, "plank": 3}, "work": 3.5, "desc": "Острожная башня с помостом: видно далеко."},
 	"rack": {"name": "Сушило", "cost": {"branch": 3, "fiber": 2}, "desc": "Вялить рыбу и мясо впрок."},
 }
+## Чертежи: у здания несколько наборов припасов (какой ресурс есть — из того и строим).
+const VARIANTS := {
+	"storehouse": [
+		{"name": "брёвна и доски", "need": {"log": 8, "plank": 3}},
+		{"name": "только брёвна", "need": {"log": 12, "moss": 3}},
+		{"name": "камень и брёвна", "need": {"log": 5, "pebble": 12, "plank": 2}},
+	],
+	"dugout": [
+		{"name": "мох и лапник", "need": {"log": 6, "moss": 4, "spruce_twigs": 4}},
+		{"name": "глиняная", "need": {"log": 4, "clay": 6, "branch": 4}},
+		{"name": "каменная", "need": {"log": 4, "pebble": 14, "moss": 3}},
+	],
+	"tower": [
+		{"name": "с досками", "need": {"log": 10, "plank": 3}},
+		{"name": "из одних брёвен", "need": {"log": 16, "branch": 4}},
+	],
+	"palisade": [
+		{"name": "брёвна", "need": {"log": 4}},
+		{"name": "жерди и камень", "need": {"branch": 10, "pebble": 6}},
+	],
+}
+
 const ORDER := ["campfire", "leanto", "tree_shelter", "snow_shelter", "cache", "chop_block", "cabin"]
 ## --- colony: порядок построек в листе острога ---
 const ORDER_COLONY := ["campfire", "leanto", "dugout", "storehouse", "rack", "cache", "chop_block", "palisade", "tower", "cabin", "snow_shelter"]
@@ -728,6 +750,10 @@ func cook_k(s: Dictionary) -> float:
 
 ## Что нужно стройке (любой тип: изба, амбар, башня …), а не только брёвна избы.
 func need_of(s: Dictionary) -> Dictionary:
+	var vs: Array = VARIANTS.get(String(s["type"]), [])
+	var vi := int(s.get("var", 0))
+	if not vs.is_empty() and vi >= 0 and vi < vs.size():
+		return (vs[vi] as Dictionary)["need"]
 	return DEFS.get(String(s["type"]), {}).get("need", {})
 
 ## Положить в стройку id в количестве n (не больше, чем нужно). Возвращает, сколько легло.

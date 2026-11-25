@@ -724,8 +724,10 @@ func ground_point(screen: Vector2) -> Vector3:
 
 # ---------- стройка ----------
 
-func build_begin(type: String) -> void:
+var place_var := 0
+func build_begin(type: String, vi: int = 0) -> void:
 	build_cancel()
+	place_var = vi
 	place_type = type
 	ghost = CG.ghost(main.camp.geo, type)
 	if ghost == null:
@@ -792,6 +794,9 @@ func _validate() -> Array:
 			return [false, "неровное место"]
 	var def: Dictionary = main.camp.DEFS[place_type]
 	var need: Dictionary = def.get("need", {})
+	var vl: Array = main.camp.VARIANTS.get(place_type, [])
+	if not vl.is_empty():
+		need = (vl[clampi(place_var, 0, vl.size() - 1)] as Dictionary)["need"]
 	var cost: Dictionary = def.get("cost", {})
 	if not main.camp.can_pay(cost):
 		return [false, "нет припасов"]
@@ -815,6 +820,7 @@ func build_confirm() -> bool:
 	var s: Dictionary = main.camp.place(type, pos, ghost_yaw)
 	if not (d.get("need", {}) as Dictionary).is_empty() and type != "cabin":
 		s["stage"] = "site"
+		s["var"] = place_var
 		s["have"] = {}
 		s["prog"] = 0.0
 		main.camp._rebuild(s)
@@ -854,7 +860,7 @@ func build_cancel() -> void:
 func build_progress(s: Dictionary, dt: float) -> void:
 	var type := String(s["type"])
 	var d: Dictionary = main.camp.DEFS[type]
-	var need: Dictionary = d.get("need", {})
+	var need: Dictionary = main.camp.need_of(s)
 	var stage := String(s.get("stage", "done"))
 	if stage == "done":
 		return

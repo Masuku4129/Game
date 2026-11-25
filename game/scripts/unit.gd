@@ -368,7 +368,24 @@ func _walk(dt: float) -> void:
 	elif _can_walk(position + Vector3(0, 0, step.z)):
 		position.z += step.z
 	else:
-		# упёрлись: ищем путь заново (не чаще раза в полсекунды)
+		# упёрлись: пробуем обойти боком, потом ищем путь заново (не чаще раза в полсекунды)
+		var slid := false
+		if not _can_walk(position + step * 4.0) or true:
+			nav.mark_blocked(position.x + dir.x * 0.8, position.y * 0.0 + position.z + dir.y * 0.8)
+		for ang: float in [0.8, -0.8, 1.5, -1.5, 2.3, -2.3]:
+			var st2 := step.rotated(Vector3.UP, ang) * 1.5
+			if _can_walk(position + st2):
+				position.x += st2.x
+				position.z += st2.z
+				slid = true
+				break
+		if slid:
+			_repath = 0.0
+			speed_now = SPEED
+			moving = true
+			_stuck = 0.0
+			_animate(0.0)
+			return
 		vel = Vector3.ZERO
 		_repath -= dt
 		if _repath <= 0.0:

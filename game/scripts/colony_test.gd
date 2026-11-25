@@ -35,6 +35,10 @@ func _process(delta: float) -> void:
 	_t += delta
 	if _dbg and _n % 120 == 0:
 		for u in colony.units:
+			if u.state == "walk" and not u.path.is_empty():
+				var dd: Vector3 = (u.path[0] - u.position).normalized() * 0.5
+				print("CL blk ", u.unit_name, " here ", colony.nav.cost_at(u.position.x, u.position.z), main.blocked(u.position.x, u.position.z, 0.22), " ahead ", colony.nav.cost_at(u.position.x + dd.x, u.position.z + dd.z), main.blocked(u.position.x + dd.x, u.position.z + dd.z, 0.22), " vel ", u.vel)
+		for u in colony.units:
 			print("CL dbg %s %s pos=%s path=%s goal=%s job=%s stage=%s path=%d carry=%s" % [u.unit_name, u.state, u.position, u.path, u._goal,
 				String(u.job.get("kind", "-")), String(u.job.get("stage", "-")), u.path.size(), u.carry])
 	if _shots != "":
