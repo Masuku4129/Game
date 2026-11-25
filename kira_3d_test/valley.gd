@@ -691,7 +691,58 @@ func _tint(lo: float, hi: float) -> Color:
 
 
 func _scatter() -> void:
-	pass
+	# Populate the playable valley perimeter with existing authored foliage/rock sprites.
+	# Leave the center, bridge approach, and spawn corridor open for combat and navigation.
+	var names := ["tree_big", "tree_g", "tree_purple", "tree_white", "pine_a", "pine_b", "bush_a", "bush_b", "bush_c", "bush_d", "rock_a", "rock_b", "rock_big", "rock_c", "rock_d", "rock_e", "rubble_a", "rubble_b", "rubble_c", "log", "stump", "mush_a", "mush_b", "grass_a", "reeds"]
+	var weights := [4, 6, 3, 2, 7, 5, 8, 8, 7, 6, 6, 6, 2, 5, 5, 4, 4, 4, 3, 3, 2, 2, 2, 9, 5]
+	var mat_cache := {}
+	for i in range(180):
+		var angle := rng.randf_range(0.0, TAU)
+		var radius := rng.randf_range(18.0, 53.0)
+		var x := cos(angle) * radius
+		var z := sin(angle) * radius
+		# Keep the spawn lane and bridge approaches readable.
+		if absf(x) < 6.5 and z > -36.0 and z < 32.0:
+			continue
+		if Vector2(x, z).distance_to(Vector2(0.0, -4.0)) < 12.0:
+			continue
+		var idx := rng.rand_weighted(weights)
+		var asset := names[idx]
+		var tex: Texture2D = load("res://sp/%s.png" % asset)
+		if tex == null:
+			continue
+		var height := rng.randf_range(1.6, 4.6)
+		if asset in ["tree_big", "tree_g", "tree_purple", "tree_white", "pine_a", "pine_b"]:
+			height = rng.randf_range(5.5, 10.0)
+		elif asset in ["bush_a", "bush_b", "bush_c", "bush_d"]:
+			height = rng.randf_range(1.2, 2.8)
+		elif asset in ["rock_big"]:
+			height = rng.randf_range(2.0, 3.6)
+		var quad := QuadMesh.new()
+		quad.size = Vector2(float(tex.get_width()) / float(tex.get_height()) * height, height)
+		quad.center_offset = Vector3(0.0, height * 0.42, 0.0)
+		var sprite := MeshInstance3D.new()
+		sprite.mesh = quad
+		sprite.position = Vector3(x, height_at(x, z), z)
+		sprite.rotation.y = rng.randf_range(-PI, PI)
+		sprite.scale = Vector3.ONE * rng.randf_range(0.8, 1.25)
+		var key := asset
+		if not mat_cache.has(key):
+			var mat := StandardMaterial3D.new()
+			mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+			mat.albedo_texture = tex
+			mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA_SCISSOR
+			mat.alpha_scissor_threshold = 0.45
+			mat.billboard_mode = BaseMaterial3D.BILLBOARD_ENABLED
+			mat.billboard_keep_scale = true
+			mat.cull_mode = BaseMaterial3D.CULL_DISABLED
+			mat.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
+			mat_cache[key] = mat
+		sprite.material_override = mat_cache[key]
+		sprite.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		add_child(sprite)
+		if asset in ["tree_big", "tree_g", "tree_purple", "tree_white", "pine_a", "pine_b", "rock_big", "rock_a", "rock_b", "rock_c", "rock_d", "rock_e", "log", "stump"]:
+			add_obstacle(x, z, 0.65 if asset in ["log", "stump"] else 1.25, height)
 
 
 # ================================================================ далёкие горы
