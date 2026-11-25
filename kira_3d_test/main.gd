@@ -345,8 +345,8 @@ func _unhandled_input(event: InputEvent) -> void:
 		_on_block(false)
 
 
-func _on_camera_drag(_d: Vector2) -> void:
-	pass                                    # камера закреплена
+func _on_camera_drag(d: Vector2) -> void:
+	cam_yaw = wrapf(cam_yaw + d.x * 0.25, -180.0, 180.0)
 
 
 func _input_vector() -> Vector2:
