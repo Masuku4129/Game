@@ -24,19 +24,6 @@ func _initialize() -> void:
 	if not ch.ready_ok:
 		quit(1)
 		return
-	# --- diagnostics: does the skeleton really follow the solver?
-	var sk: Skeleton3D = ch.skel
-	print("[diag] mesh skin=", ch.mesh_inst.skin != null, " skeleton path=", ch.mesh_inst.skeleton, " mesh class=", ch.mesh_inst.mesh.get_class(), " sk_global_scale=", sk.global_transform.basis.get_scale())
-	print("[diag] AnimationPlayers left: ", ch.model.find_children("*", "AnimationPlayer", true, false).size(), " modifier_cb=", sk.modifier_callback_mode_process)
-	ch.input_dir = Vector2(0, -1)
-	ch.input_speed = 4.8
-	for _i in 120:
-		ch._process(1.0 / 60.0)
-	for nm in ["LeftArm", "LeftHand", "RightHand", "LeftFoot", "RightFoot", "Hips"]:
-		var bi: int = ch.solver.idx[nm]
-		var gp: Vector3 = ch.solver.to_root * sk.get_bone_global_pose(bi).origin
-		var tp: Vector3 = ch.solver.P[bi]
-		print("[diag] ", nm, " skel_global=", gp, " solver=", tp, " pose_rot=", sk.get_bone_pose_rotation(bi), " rest_rot=", sk.get_bone_rest(bi).basis.get_rotation_quaternion())
 	var dt := 1.0 / 60.0
 	var scenario := [
 		["idle", Vector2.ZERO, 0.0, "", 120],
@@ -66,8 +53,27 @@ func _initialize() -> void:
 		var min_hips := 99.0
 		var max_hips := 0.0
 		var bad := false
+		var len_err := 0.0
+		var min_knee := 999.0
+		var min_elbow := 999.0
+		var max_fist := 0.0
 		for _i in int(sc[4]):
 			ch._process(dt)
+			max_fist = maxf(max_fist, ch.anim.fist)
+			var sv = ch.solver
+			for side in ["Left", "Right"]:
+				var pu: Vector3 = sv.P[sv.idx[side + "UpLeg"]]
+				var pk: Vector3 = sv.P[sv.idx[side + "Leg"]]
+				var pf: Vector3 = sv.P[sv.idx[side + "Foot"]]
+				var pa: Vector3 = sv.P[sv.idx[side + "Arm"]]
+				var pe: Vector3 = sv.P[sv.idx[side + "ForeArm"]]
+				var pw: Vector3 = sv.P[sv.idx[side + "Hand"]]
+				len_err = maxf(len_err, absf((pu - pk).length() - (sv.rest_pos[sv.idx[side + "UpLeg"]] - sv.rest_pos[sv.idx[side + "Leg"]]).length()))
+				len_err = maxf(len_err, absf((pk - pf).length() - (sv.rest_pos[sv.idx[side + "Leg"]] - sv.rest_pos[sv.idx[side + "Foot"]]).length()))
+				len_err = maxf(len_err, absf((pa - pe).length() - (sv.rest_pos[sv.idx[side + "Arm"]] - sv.rest_pos[sv.idx[side + "ForeArm"]]).length()))
+				len_err = maxf(len_err, absf((pe - pw).length() - (sv.rest_pos[sv.idx[side + "ForeArm"]] - sv.rest_pos[sv.idx[side + "Hand"]]).length()))
+				min_knee = minf(min_knee, rad_to_deg((pu - pk).angle_to(pf - pk)))
+				min_elbow = minf(min_elbow, rad_to_deg((pa - pe).angle_to(pw - pe)))
 			max_disp = maxf(max_disp, ch.cloak.stat_max_disp)
 			var hp: Vector3 = ch.solver.P[ch.solver.idx["Hips"]]
 			min_hips = minf(min_hips, hp.y)
@@ -79,5 +85,13 @@ func _initialize() -> void:
 		_check(not bad, "all poses finite")
 		_check(max_disp < 0.8, "cloak displacement bounded")
 		_check(min_hips > 0.2, "hips above ground")
+		_check(len_err < 0.002, "bone lengths constant (err %.4f m)" % len_err)
+		_check(min_knee > 15.0, "knee never over-folded (min %.0f deg)" % min_knee)
+		_check(min_elbow > 15.0, "elbow never over-folded (min %.0f deg)" % min_elbow)
+		if sc[3] == "punch" or sc[3] == "spinkick":
+			_check(max_fist > 0.8, "fists clench during strike (max %.2f)" % max_fist)
+		if sc[0] == "run":
+			var sl: Vector3 = ch.solver.P[ch.solver.idx["LeftShoulder"]] - ch.solver.P[ch.solver.idx["RightShoulder"]]
+			_check(sl.x < -0.15 and ch.anim.pos.z < -3.0, "runs facing -Z (left shoulder on -X)")
 	print("SELFTEST ", "PASSED" if fails == 0 else "FAILED (%d)" % fails)
 	quit(0 if fails == 0 else 1)

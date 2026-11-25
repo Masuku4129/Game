@@ -20,6 +20,8 @@ var cloak_enabled := true
 var last_pose
 var cloak_ms := 0.0
 var anim_ms := 0.0
+var fist_ok := false
+var hand_idx := [0, 0]
 
 func _ready() -> void:
 	var scene = load(MODEL_PATH)
@@ -40,21 +42,16 @@ func _ready() -> void:
 		push_error("no MeshInstance3D in model")
 		return
 	mesh_inst = mis[0]
-	print("[char] model ok: bones=", skel.get_bone_count(), " mesh=", mesh_inst.name)
 	solver = RS.new()
 	if not solver.setup(skel, self):
 		push_error("[char] solver.setup failed")
 		return
-	print("[char] solver ok")
 	anim = Anim.new()
 	anim.setup(solver)
 	cloak = Cloak.new()
 	if not cloak.setup(solver):
-		push_error("[char] cloak.setup failed")
 		return
-	print("[char] cloak ok: particles=", cloak.n, " verts=", cloak.vertex_count)
 	_build_cloth_mesh()
-	print("[char] cloth mesh built: ", cloth_mat != null)
 	# keep rest pose until the first update
 	ready_ok = true
 
@@ -71,6 +68,16 @@ func _build_cloth_mesh() -> void:
 	arrays[Mesh.ARRAY_CUSTOM0] = cloak.vtx_idx
 	arrays[Mesh.ARRAY_CUSTOM1] = cloak.vtx_w
 	var flags: int = (Mesh.ARRAY_CUSTOM_RGBA_FLOAT << Mesh.ARRAY_FORMAT_CUSTOM0_SHIFT) | (Mesh.ARRAY_CUSTOM_RGBA_FLOAT << Mesh.ARRAY_FORMAT_CUSTOM1_SHIFT)
+	# смещения вершин кисти для кулака (у модели нет костей пальцев)
+	var ff := FileAccess.open("res://assets/fist_vtx.bin", FileAccess.READ)
+	if ff != null:
+		var fraw := ff.get_buffer(ff.get_length()).to_float32_array()
+		if fraw.size() == verts.size() * 4:
+			arrays[Mesh.ARRAY_CUSTOM2] = fraw
+			flags |= Mesh.ARRAY_CUSTOM_RGBA_FLOAT << Mesh.ARRAY_FORMAT_CUSTOM2_SHIFT
+			fist_ok = true
+		else:
+			push_warning("fist_vtx.bin size mismatch")
 	var bones = arrays[Mesh.ARRAY_BONES]
 	if bones != null and bones.size() == verts.size() * 8:
 		flags |= Mesh.ARRAY_FLAG_USE_8_BONE_WEIGHTS
@@ -116,6 +123,10 @@ func _process(delta: float) -> void:
 		cloth_mat.set_shader_parameter("disp", d)
 		cloth_mat.set_shader_parameter("w2l", mesh_inst.global_transform.affine_inverse().basis)
 		cloth_mat.set_shader_parameter("cloth_on", 1.0 if cloak_enabled else 0.0)
+		if fist_ok:
+			cloth_mat.set_shader_parameter("hand_l", Basis(solver.D[solver.idx["LeftHand"]]))
+			cloth_mat.set_shader_parameter("hand_r", Basis(solver.D[solver.idx["RightHand"]]))
+			cloth_mat.set_shader_parameter("fist_amt", anim.fist)
 	var t2 := Time.get_ticks_usec()
 	anim_ms = lerpf(anim_ms, (t1 - t0) / 1000.0, 0.05)
 	cloak_ms = lerpf(cloak_ms, (t2 - t1) / 1000.0, 0.05)

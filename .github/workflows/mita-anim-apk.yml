@@ -43,7 +43,7 @@ jobs:
           godot --headless --export-debug "Android" build/MitaAnimLab.apk
           test -s build/MitaAnimLab.apk
           # данные анимаций и плаща должны лежать внутри APK (их нет в «ресурсах», поэтому include_filter)
-          unzip -l build/MitaAnimLab.apk | grep -E "cloak.json|cloak_vtx.bin|actions.json" || (echo "НЕТ данных в APK" && exit 1)
+          for f in cloak.json cloak_vtx.bin clips.json fist_vtx.bin; do unzip -l build/MitaAnimLab.apk | grep -q "$f" || (echo "НЕТ $f в APK" && exit 1); done
 
       - uses: actions/upload-artifact@v4
         with:
