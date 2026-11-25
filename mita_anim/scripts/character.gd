@@ -40,15 +40,21 @@ func _ready() -> void:
 		push_error("no MeshInstance3D in model")
 		return
 	mesh_inst = mis[0]
+	print("[char] model ok: bones=", skel.get_bone_count(), " mesh=", mesh_inst.name)
 	solver = RS.new()
 	if not solver.setup(skel, self):
+		push_error("[char] solver.setup failed")
 		return
+	print("[char] solver ok")
 	anim = Anim.new()
 	anim.setup(solver)
 	cloak = Cloak.new()
 	if not cloak.setup(solver):
+		push_error("[char] cloak.setup failed")
 		return
+	print("[char] cloak ok: particles=", cloak.n, " verts=", cloak.vertex_count)
 	_build_cloth_mesh()
+	print("[char] cloth mesh built: ", cloth_mat != null)
 	# keep rest pose until the first update
 	ready_ok = true
 

@@ -34,7 +34,7 @@ jobs:
         working-directory: mita_anim
         run: |
           timeout 300 godot --headless --path . --script tests/selftest.gd 2>&1 | tee ../selftest.log || true
-          grep -E "ok |FAIL|SELFTEST|\[|ERROR" ../selftest.log | head -80 || true
+          head -150 ../selftest.log || true
 
       - name: Сборка APK
         working-directory: mita_anim

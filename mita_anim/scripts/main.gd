@@ -193,7 +193,7 @@ func _process(delta: float) -> void:
 	else:
 		ch.set_wind(Vector3.ZERO)
 	# camera
-	var tgt := ch.world_pos() + Vector3(0, 1.15, 0)
+	var tgt: Vector3 = ch.world_pos() + Vector3(0, 1.15, 0)
 	cam_focus = cam_focus.lerp(tgt, 1.0 - exp(-8.0 * delta))
 	var off := Vector3(sin(cam_yaw) * cos(cam_pitch), sin(cam_pitch), cos(cam_yaw) * cos(cam_pitch)) * cam_dist
 	cam.global_position = cam_focus + off
