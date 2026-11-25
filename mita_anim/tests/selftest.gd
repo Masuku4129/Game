@@ -18,6 +18,8 @@ func _finite(v: Vector3) -> bool:
 func _initialize() -> void:
 	var ch: Node3D = Character.new()
 	root.add_child(ch)
+	await process_frame
+	await process_frame
 	_check(ch.ready_ok, "character loaded (skeleton, solver, cloak)")
 	if not ch.ready_ok:
 		quit(1)
