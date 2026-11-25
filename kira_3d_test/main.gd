@@ -14,9 +14,9 @@ const DEAD_ZONE := 0.18
 const TURN_SPEED := 14.0
 const BLEND := 0.12
 # камера: закреплена сверху под 40 градусов, без вращения
-const CAM_DIST := 60.0
+const CAM_DIST := 24.0
 const CAM_PITCH := 36.0
-const CAM_ORTHO := 15.0         # высота кадра в метрах: изометрия как в 2D-играх
+const CAM_ORTHO := 11.5       # ближе: читаемый персонаж и окружение на мобильном
 const MAX_HP := 100.0
 const WAVE_PAUSE := 3.0
 # Положение катаны в системе правой кисти (прямой хват, под анимации)
