@@ -1,0 +1,59 @@
+name: Mita Animation Lab APK
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'mita_anim/**'
+      - '.github/workflows/mita-anim-apk.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    container:
+      image: barichello/godot-ci:4.3
+    env:
+      GODOT_VERSION: "4.3"
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Установка шаблонов экспорта и настроек Godot
+        run: |
+          mkdir -p ~/.local/share/godot/export_templates/ ~/.config/
+          cp -r /root/.config/godot ~/.config/godot || true
+          cp -r /root/.local/share/godot/export_templates/${GODOT_VERSION}.stable ~/.local/share/godot/export_templates/ || true
+
+      - name: Импорт ресурсов
+        working-directory: mita_anim
+        run: godot --headless --import || true
+
+      - name: Самопроверка (анимации и плащ, числа)
+        working-directory: mita_anim
+        run: |
+          timeout 300 godot --headless --path . --script tests/selftest.gd 2>&1 | tee ../selftest.log || true
+          grep -E "ok |FAIL|SELFTEST|\[|ERROR" ../selftest.log | head -80 || true
+
+      - name: Сборка APK
+        working-directory: mita_anim
+        run: |
+          mkdir -p build
+          godot --headless --export-debug "Android" build/MitaAnimLab.apk
+          test -s build/MitaAnimLab.apk
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: mita-anim-apk
+          path: |
+            mita_anim/build/MitaAnimLab.apk
+            selftest.log
+
+      - name: Публикация в релиз mita-anim
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: mita-anim
+          name: Mita Animation Lab (анимации + плащ)
+          prerelease: true
+          files: mita_anim/build/MitaAnimLab.apk
