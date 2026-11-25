@@ -24,6 +24,19 @@ func _initialize() -> void:
 	if not ch.ready_ok:
 		quit(1)
 		return
+	# --- diagnostics: does the skeleton really follow the solver?
+	var sk: Skeleton3D = ch.skel
+	print("[diag] mesh skin=", ch.mesh_inst.skin != null, " skeleton path=", ch.mesh_inst.skeleton, " mesh class=", ch.mesh_inst.mesh.get_class(), " sk_global_scale=", sk.global_transform.basis.get_scale())
+	print("[diag] AnimationPlayers left: ", ch.model.find_children("*", "AnimationPlayer", true, false).size(), " modifier_cb=", sk.modifier_callback_mode_process)
+	ch.input_dir = Vector2(0, -1)
+	ch.input_speed = 4.8
+	for _i in 120:
+		ch._process(1.0 / 60.0)
+	for nm in ["LeftArm", "LeftHand", "RightHand", "LeftFoot", "RightFoot", "Hips"]:
+		var bi: int = ch.solver.idx[nm]
+		var gp: Vector3 = ch.solver.to_root * sk.get_bone_global_pose(bi).origin
+		var tp: Vector3 = ch.solver.P[bi]
+		print("[diag] ", nm, " skel_global=", gp, " solver=", tp, " pose_rot=", sk.get_bone_pose_rotation(bi), " rest_rot=", sk.get_bone_rest(bi).basis.get_rotation_quaternion())
 	var dt := 1.0 / 60.0
 	var scenario := [
 		["idle", Vector2.ZERO, 0.0, "", 120],
