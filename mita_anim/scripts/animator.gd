@@ -142,7 +142,7 @@ static func _to_world(p: RS.Pose, yaw_a: float, origin: Vector3) -> RS.Pose:
 	var qi := qy.inverse()
 	var q := RS.Pose.new()
 	q.hips_pos = origin + qy * p.hips_pos
-	q.hips_rot = qy * p.hips_rot * qi
+	q.hips_rot = qy * p.hips_rot            # абсолютная дельта от позы покоя: разворачиваем всё тело
 	for i in 3:
 		q.spine[i] = qy * p.spine[i] * qi
 	q.neck = qy * p.neck * qi
@@ -151,7 +151,7 @@ static func _to_world(p: RS.Pose, yaw_a: float, origin: Vector3) -> RS.Pose:
 		q.hand[s] = origin + qy * p.hand[s]
 		q.hand_pole[s] = qy * p.hand_pole[s]
 		q.foot[s] = origin + qy * p.foot[s]
-		q.foot_rot[s] = qy * p.foot_rot[s] * qi
+		q.foot_rot[s] = qy * p.foot_rot[s]
 		q.knee_pole[s] = qy * p.knee_pole[s]
 	return q
 
