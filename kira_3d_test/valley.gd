@@ -706,7 +706,16 @@ func _scatter() -> void:
 			continue
 		if Vector2(x, z).distance_to(Vector2(0.0, -4.0)) < 12.0:
 			continue
-		var idx := rng.rand_weighted(weights)
+		var roll := rng.randf_range(0.0, 0.0)
+		for weight in weights:
+			roll += float(weight)
+		roll = rng.randf_range(0.0, roll)
+		var idx := 0
+		for wi in range(weights.size()):
+			roll -= float(weights[wi])
+			if roll <= 0.0:
+				idx = wi
+				break
 		var asset := names[idx]
 		var tex: Texture2D = load("res://sp/%s.png" % asset)
 		if tex == null:
