@@ -1110,9 +1110,13 @@ static func _be(skel: Skeleton3D, b: int, e: Vector3) -> void:
 	skel.set_bone_pose_rotation(b, Basis.from_euler(e).get_rotation_quaternion())
 
 func _animate_rig(delta: float) -> void:
+	if not parts.has("def") or not parts.has("skel") or not parts.has("sk") or not (parts["def"] is Dictionary) or not (parts["skel"] is Skeleton3D):
+		return
 	_attack_t -= delta
 	_rig_t += delta
 	var d: Dictionary = parts["def"]
+	if not d.has("legs") or not (d["legs"] is Array) or not d.has("gpos") or not (d["gpos"] is Array) or not d.has("root") or not d.has("pelvis") or not d.has("chest") or not d.has("neck1") or not d.has("neck2") or not d.has("head") or not d.has("jaw") or not d.has("tails") or not (d["tails"] is Array):
+		return
 	if d.has("bird"):
 		_animate_bird(delta)
 		return
