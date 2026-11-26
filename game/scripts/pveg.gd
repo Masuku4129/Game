@@ -162,7 +162,7 @@ func _grass_tex() -> Texture2D:
 ## Облако из мазков: сплошное ядро + карточки-мазки по поверхности (рваный край).
 func leafblob(core: SurfaceTool, cards: SurfaceTool, c: Vector3, sc: Vector3, shade: float) -> void:
 	if cards == null:
-		blob(core, c, sc * 0.92, shade * 0.8)
+		blob(core, c, sc * 0.82, shade * 0.7)
 		return
 	blob(core, c, sc * 0.78, shade * 0.6)
 	var verts: Array = _ico[0]
@@ -237,7 +237,7 @@ func blob(st: SurfaceTool, c: Vector3, sc: Vector3, shade: float, autumn_k: floa
 	var pts: Array = []
 	for p in verts:
 		var q: Vector3 = p
-		var n := 1.0 + 0.25 * sin(q.x * 3.1 + off) * cos(q.z * 2.7 + off) + 0.15 * sin(q.y * 5.3 + off * 2.0) + 0.06 * sin(q.x * 17.3 + q.y * 11.1 + q.z * 7.7 + off)
+		var n := 1.0 + 0.31 * sin(q.x * 2.7 + off) * cos(q.z * 2.4 - off * 0.7) + 0.19 * sin(q.y * 4.8 + off * 1.6) + 0.11 * sin(q.x * 13.7 + q.y * 9.4 + q.z * 6.1 + off) + 0.045 * cos(q.x * 23.0 - q.z * 17.0 + q.y * 8.0 + off * 0.5)
 		# низ облака приплюснут — как у настоящих крон
 		if q.y < 0:
 			q.y *= 0.7
