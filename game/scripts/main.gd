@@ -65,6 +65,7 @@ var colony
 var colony_mode := true
 var _imported_model_keeper: Node3D
 var _imported_variants_cache := {}
+var imported_veg_mats: Array[ShaderMaterial] = []
 
 func _ready() -> void:
 	_imported_model_keeper = Node3D.new()
@@ -821,6 +822,12 @@ func _process(delta: float) -> void:
 		_update_stats(0.25)
 		_core_tick(0.25)  # core
 		weather.apply(veg.fade_list + pv.fade_list, terrain_mat, pv.mats["tuft"], water_mat)
+		for im in imported_veg_mats:
+			im.set_shader_parameter("snow", weather.snow)
+			im.set_shader_parameter("wet", weather.wet)
+			im.set_shader_parameter("autumn", weather.autumn)
+			im.set_shader_parameter("leaf_drop", weather.leaf_drop)
+			im.set_shader_parameter("wind", weather.wind)
 		if joy != null:
 			var lbl: String = hero.action_label()
 			act_btn.visible = lbl != ""
@@ -1057,6 +1064,18 @@ func _imported_glb_variant(file_name: String) -> Array:
 	# нативным RenderingServer RID. Сохраняем исходную сцену скрытым дочерним
 	# узлом, чтобы RID и MeshInstance оставались живыми весь срок работы мира.
 	var model_height: float = found.get_aabb().size.y
+	# GLB-модели остаются едиными объединёнными мешами, но получают общий
+	# vertex-color shader: листва желтеет/опадает, ветви качаются, снег ложится
+	# на верхние поверхности, дождь затемняет кору и листву.
+	var seasonal_mat := ShaderMaterial.new()
+	seasonal_mat.shader = load("res://shaders/paint/imported_vegetation.gdshader")
+	var deciduous := file_name in ["taiga_birch.glb", "taiga_larch.glb", "taiga_aspen.glb", "taiga_alder.glb", "taiga_willow.glb"]
+	seasonal_mat.set_shader_parameter("deciduous", 1.0 if deciduous else 0.0)
+	var flexible := file_name in ["taiga_grass.glb", "taiga_fern.glb", "taiga_reed.glb"]
+	seasonal_mat.set_shader_parameter("sway_strength", 0.11 if flexible else 0.045)
+	for surface in found.get_surface_count():
+		found.surface_set_material(surface, seasonal_mat)
+	imported_veg_mats.append(seasonal_mat)
 	_imported_model_keeper.add_child(root)
 	root.visible = false
 	var variant := [[found, model_height]]
