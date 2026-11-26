@@ -12,3 +12,7 @@ All models are exported as glTF Binary (GLB), with Y-up coordinates for Godot 4.
 | `taiga_fallen_log.glb` | Tapered fallen trunk with bark ridges and exposed end | 3.1 m |
 
 No rig, animation, weapon, enemy, or character integration is included in this asset batch.
+
+## Visual import check
+
+Open `res://scenes/asset_gallery.tscn` in Godot to inspect all five imported models together. The Android workflow renders this scene and uploads `taiga-visual-review` for review. The gallery is isolated and does not replace the live world generator.
