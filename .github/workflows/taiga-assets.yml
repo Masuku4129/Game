@@ -17,12 +17,20 @@ on:
 jobs:
   validate:
     runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Validate embedded glTF geometry, normals and vertex colors
+        run: python tools/validate_taiga_gltf.py
+  godot-import:
+    needs: validate
+    runs-on: ubuntu-latest
     container:
       image: barichello/godot-ci:4.3
     steps:
       - uses: actions/checkout@v4
-      - name: Validate embedded glTF geometry, normals and vertex colors
-        run: python3 tools/validate_taiga_gltf.py
       - name: Import Godot project and model resources
         run: |
           cd game
