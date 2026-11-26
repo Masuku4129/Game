@@ -74,7 +74,8 @@ func _ready() -> void:
 	_make_terrain()
 	_make_water()
 	_scatter_all()
-	grass_mesh_vars = [pv.tuft(1500), pv.tuft(1503, 1.3), pv.tuft(1504, 0.8)]
+	var imported_grass: Array = _imported_glb_variant("taiga_grass.glb")
+	grass_mesh_vars = [imported_grass[0] if not imported_grass.is_empty() else pv.tuft(1500), pv.tuft(1503, 1.3), pv.tuft(1504, 0.8)]
 	hero = preload("res://scripts/hero.gd").new()
 	hero.main = self
 	add_child(hero)
@@ -1188,7 +1189,7 @@ func _variants(kind: String) -> Array:
 			out[0] = imported[0]
 	return out
 
-const TREE_KINDS := ["spruce", "pine", "birch", "larch", "aspen", "fir", "cedar", "rowan", "alder"]
+const TREE_KINDS := ["spruce", "pine", "birch", "larch", "aspen", "fir", "cedar", "rowan", "alder", "willow"]
 const NEAR_R := 36.0
 var tree_grid := {}
 var near_mesh := {}
@@ -1433,7 +1434,7 @@ func move_factor() -> float:
 		f = 0.78
 	return f * (0.6 + 0.4 * clampf(health * 2.0, 0.0, 1.0))
 
-const BLOCK_R := {"fungus_snag": 0.22, "birch_dead": 0.2, "snag": 0.25, "snag_b": 0.25, "cherry": 0.15, "fir": 0.36, "cedar": 0.38, "rowan": 0.2, "spruce": 0.4, "pine": 0.32, "birch": 0.28, "bare": 0.3, "spruce_dead": 0.3, "stump": 0.45, "rock": 0.5, "boulder": 0.6, "larch": 0.32, "aspen": 0.26, "alder": 0.24}
+const BLOCK_R := {"fungus_snag": 0.22, "birch_dead": 0.2, "snag": 0.25, "snag_b": 0.25, "cherry": 0.15, "fir": 0.36, "cedar": 0.38, "rowan": 0.2, "spruce": 0.4, "pine": 0.32, "birch": 0.28, "bare": 0.3, "spruce_dead": 0.3, "stump": 0.45, "rock": 0.5, "boulder": 0.6, "larch": 0.32, "aspen": 0.26, "alder": 0.24, "willow": 0.28}
 
 func _scatter_all() -> void:
 	# вид, попыток на клетку 32 м, масштаб, дальность видимости, тень, правило
@@ -1497,6 +1498,8 @@ func _scatter_all() -> void:
 		["fungus_snag", 2, Vector2(0.9, 1.2), 100.0, true, "tree"],
 		["birch_dead", 2, Vector2(0.9, 1.2), 100.0, true, "edge"],
 		["mosslog", 5, Vector2(0.9, 1.2), 90.0, true, "under"],
+		["yagel", 60, Vector2(0.7, 1.1), 45.0, false, "under"],
+		["sphagnum", 52, Vector2(0.7, 1.1), 42.0, false, "bog_z"],
 		["ledum", 36, Vector2(0.8, 1.3), 45.0, false, "bog_z"],
 		["ledum", 6, Vector2(0.8, 1.2), 45.0, false, "under"],
 		["cloudberry", 30, Vector2(0.8, 1.3), 40.0, false, "bog_z"],
