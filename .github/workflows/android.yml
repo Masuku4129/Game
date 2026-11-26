@@ -63,7 +63,7 @@ jobs:
         with:
           distribution: temurin
           java-version: "17"
-      - uses: android-actions/setup-android@v3
+      - uses: android-actions/setup-android@v4
       - name: Install Android SDK packages
         run: |
           sdkmanager --install "platform-tools" "platforms;android-35" "build-tools;35.0.0"
@@ -104,7 +104,7 @@ jobs:
           cd game
           timeout 300 godot --headless --path . --quit-after 60 res://scenes/main.tscn 2>&1 | tee ../smoke.log
           ! grep -E "SCRIPT ERROR|Parse Error|Invalid|Cannot|Nonexistent|ERROR:" ../smoke.log
-          grep -E "ImportedModelResourceKeeper|taiga_" ../smoke.log || true
+          grep -E "^TAIGA_STARTUP_OK " ../smoke.log
       - name: Export APK
         run: |
           mkdir -p build
