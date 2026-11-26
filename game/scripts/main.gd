@@ -28,6 +28,8 @@ var hunger := 0.85
 var warmth := 0.8
 var stamina := 1.0
 var blockers := {}
+var tree_grid := {}
+var _tree_record_id := 0
 var seats := {}
 var act_btn: Button
 var fps_lbl: Label
@@ -1807,6 +1809,14 @@ func _place_cell_records(mm: MultiMesh, xs: Array, r: Array, vi: int, vars: Arra
 	if is_tree:
 		var key: String = r[0] + str(vi)
 		near_mesh[key] = vars[vi][0]
+		# Retain a per-instance reference for chopping, hiding and interaction.
+		for i in xs.size():
+			var xf: Transform3D = xs[i]
+			var gk := Vector2i(floori(xf.origin.x / 16.0), floori(xf.origin.z / 16.0))
+			if not tree_grid.has(gk):
+				tree_grid[gk] = []
+			_tree_record_id += 1
+			tree_grid[gk].append([mm, i, xf, key, _tree_record_id])
 		for i in xs.size():
 			var o: Vector3 = xs[i].origin
 			var gk := Vector2i(floori(o.x / 16.0), floori(o.z / 16.0))
