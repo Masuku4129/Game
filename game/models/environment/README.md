@@ -25,4 +25,4 @@ No rig, animation, weapon, enemy, or character integration is included in this a
 
 ## Visual import check
 
-Open `res://scenes/asset_gallery.tscn` in Godot to inspect all eleven imported models together. The Android workflow renders this scene and uploads `taiga-visual-review` for review. The gallery is isolated and does not replace the live world generator.
+Open `res://scenes/asset_gallery.tscn` in Godot to inspect all fifteen imported models together. The Android workflow renders this scene and uploads `taiga-visual-review` for review. The gallery is isolated and does not replace the live world generator.
