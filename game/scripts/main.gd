@@ -1102,6 +1102,13 @@ func _imported_glb_variant(file_name: String) -> Array:
 			seasonal_mat.set_shader_parameter("deciduous", 1.0 if deciduous else 0.0)
 			seasonal_mat.set_shader_parameter("sway_strength", 0.045)
 		else:
+			# GLB files without useful vertex colours previously rendered as white/
+			# monochrome clay. Provide species-aware palette fallback in shader.
+			var palette := _imported_species_palette(file_name)
+			seasonal_mat.set_shader_parameter("fallback_leaf_color", palette["leaf"])
+			seasonal_mat.set_shader_parameter("fallback_bark_color", palette["bark"])
+			seasonal_mat.set_shader_parameter("fallback_rock_color", palette["rock"])
+			seasonal_mat.set_shader_parameter("is_rock", 1.0 if file_name.contains("rock") else 0.0)
 			seasonal_mat.set_shader_parameter("deciduous", 1.0 if deciduous else 0.0)
 			seasonal_mat.set_shader_parameter("sway_strength", 0.045)
 		found.surface_set_material(surface, seasonal_mat)
@@ -1111,6 +1118,26 @@ func _imported_glb_variant(file_name: String) -> Array:
 	var variant := [[found, model_height]]
 	_imported_variants_cache[file_name] = variant
 	return variant
+
+## Natural fallback palette for imported meshes whose vertex colours are absent/white.
+func _imported_species_palette(file_name: String) -> Dictionary:
+	var palettes := {
+		"spruce": [Color("#21492b"), Color("#493a2a")],
+		"pine": [Color("#285232"), Color("#59422e")],
+		"larch": [Color("#49723a"), Color("#67452e")],
+		"cedar": [Color("#315d3b"), Color("#58412b")],
+		"birch": [Color("#77934c"), Color("#d0c4a4")],
+		"aspen": [Color("#668d48"), Color("#766048")],
+		"alder": [Color("#557c46"), Color("#554132")],
+		"willow": [Color("#55794c"), Color("#5b4938")],
+		"bush": [Color("#3d6938"), Color("#5a4831")],
+		"juniper": [Color("#345b42"), Color("#54402d")],
+		"rock": [Color("#5f625e"), Color("#555956")]
+	}
+	var key := file_name.get_basename().replace("taiga_", "").replace("taiga_style_", "")
+	var pair: Array = palettes.get(key, [Color("#476b3d"), Color("#5a4531")])
+	return {"leaf": pair[0], "bark": pair[1], "rock": Color("#62645f")}
+
 
 ## Варианты: [mesh, высота]. Несколько вариантов на породу, чтобы лес не повторялся.
 func _variants(kind: String) -> Array:
