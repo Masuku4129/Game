@@ -805,14 +805,14 @@ func _can_step(p: Vector3, flying: bool = false) -> bool:
 		# выявляет резкие уступы/пересечения поверхности, в которых зверь раньше
 		# визуально проваливался или застревал в рельефной текстуре.
 		var center_ground: float = main.grid_height(probe_center.x, probe_center.y)
-		for terrain_i in 4:
-			var terrain_a: float = TAU * float(terrain_i) / 4.0
+		for terrain_i in 8:
+			var terrain_a: float = TAU * float(terrain_i) / 8.0
 			var terrain_p: Vector2 = probe_center + Vector2(cos(terrain_a), sin(terrain_a)) * body_radius
 			var terrain_h: float = main.grid_height(terrain_p.x, terrain_p.y)
 			if absf(terrain_h - center_ground) > terrain_step_limit:
 				return false
-			# Footprint collision samples are deliberately offset slightly outward
-			# from the animal's body radius to avoid clipping through thin trunks.
+			# Eight circumference probes catch narrow trunks and diagonal edges,
+			# not only the four cardinal directions around the animal.
 			if main.blocked(terrain_p.x, terrain_p.y, 0.12 * scale_k):
 				return false
 	var gy: float = main.grid_height(p.x, p.z)
