@@ -1,8 +1,7 @@
 #!/usr/bin/env python3
 """Generate original, Y-up, import-ready Taiga environment GLBs.
 
-No third-party meshes or paid services are used. Geometry is procedural and
-kept as separate named mesh nodes so Godot can instance each asset efficiently.
+No third-party meshes or paid services are used. Geometry is procedural, vertex-colored, Y-up, and merged into one render mesh per asset to reduce mobile draw calls.
 """
 from pathlib import Path
 import math
