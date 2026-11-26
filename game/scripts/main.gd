@@ -1534,7 +1534,7 @@ func move_factor() -> float:
 		f = 0.78
 	return f * (0.6 + 0.4 * clampf(health * 2.0, 0.0, 1.0))
 
-const BLOCK_R := {"fungus_snag": 0.22, "birch_dead": 0.2, "snag": 0.25, "snag_b": 0.25, "cherry": 0.15, "fir": 0.36, "cedar": 0.38, "rowan": 0.2, "spruce": 0.4, "pine": 0.32, "birch": 0.28, "bare": 0.3, "spruce_dead": 0.3, "stump": 0.45, "rock": 0.5, "boulder": 0.6, "larch": 0.32, "aspen": 0.26, "alder": 0.24, "willow": 0.28, "bush": 0.2, "juniper": 0.18, "stlanik": 0.2}
+const BLOCK_R := {"fungus_snag": 0.28, "birch_dead": 0.28, "snag": 0.34, "snag_b": 0.34, "cherry": 0.24, "fir": 0.48, "cedar": 0.52, "rowan": 0.28, "spruce": 0.48, "pine": 0.42, "birch": 0.38, "bare": 0.36, "spruce_dead": 0.38, "stump": 0.52, "rock": 0.5, "boulder": 0.6, "larch": 0.42, "aspen": 0.36, "alder": 0.34, "willow": 0.36, "bush": 0.28, "juniper": 0.26, "stlanik": 0.24}
 
 func _scatter_all() -> void:
 	# вид, попыток на клетку 32 м, масштаб, дальность видимости, тень, правило
