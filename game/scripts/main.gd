@@ -32,6 +32,7 @@ var seats := {}
 var act_btn: Button
 var fps_lbl: Label
 var _fps_t := 0.0
+var _shader_sync_t := 0.0
 var weather
 var sfx
 var feet
@@ -780,18 +781,23 @@ func _process(delta: float) -> void:
 		hp = Vector3(0, -1000.0, 0)
 		cp = colony.veg_focus()
 	# --- /colony ---
-	for m in veg.fade_list:
-		m.set_shader_parameter("hero_pos", hp)
-		m.set_shader_parameter("cam_pos", cp)
-	for m in pv.fade_list:
-		m.set_shader_parameter("hero_pos", hp)
-		m.set_shader_parameter("cam_pos", cp)
-	pv.mats["tuft"].set_shader_parameter("hero_pos", hp)
-	pv.mats["tuft"].set_shader_parameter("cam_pos", cp)
+	# Dynamic shader state is synchronized at 20 Hz instead of touching every material each frame.
+	# Continuous grass animation remains frame-driven; spatial fade/water state changes more slowly.
+	_shader_sync_t -= delta
+	if _shader_sync_t <= 0.0:
+		_shader_sync_t = 0.05
+		for m in veg.fade_list:
+			m.set_shader_parameter("hero_pos", hp)
+			m.set_shader_parameter("cam_pos", cp)
+		for m in pv.fade_list:
+			m.set_shader_parameter("hero_pos", hp)
+			m.set_shader_parameter("cam_pos", cp)
+		pv.mats["tuft"].set_shader_parameter("hero_pos", hp)
+		pv.mats["tuft"].set_shader_parameter("cam_pos", cp)
+		water_mat.set_shader_parameter("hero_pos", hero.position)
+		water_mat.set_shader_parameter("swim", hero.swimb if colony == null else 0.0)
+		water_mat.set_shader_parameter("swim_move", clampf(hero.run_mag, 0.0, 1.0))
 	pv.mats["tuft"].set_shader_parameter("grass_now", Time.get_ticks_msec() * 0.001)
-	water_mat.set_shader_parameter("hero_pos", hero.position)
-	water_mat.set_shader_parameter("swim", hero.swimb if colony == null else 0.0)
-	water_mat.set_shader_parameter("swim_move", clampf(hero.run_mag, 0.0, 1.0))
 	_fps_t -= delta
 	if _fps_t <= 0.0:
 		_fps_t = 0.5
