@@ -258,11 +258,11 @@ func _grow(bark: Surf, lf: Surf, P: Dictionary, st: Vector3, d: Vector3, L: floa
 		tube(bark, st, mid, en, r, r * 0.62, 3 if lv == 0 else 2, 5 if lv == 0 else 3)
 	var maxlv: int = P["lv"]
 	if P["leaf"] != "" and (lv >= maxlv - 1 or (lv >= 1 and rng.randf() < 0.25)):
-		var k := 7 if kind == "birch" else 5
+		var k := 9 if kind == "birch" else (7 if kind in ["larch", "aspen"] else 6)
 		var cs: float = P["cs"]
 		if lod:
-			k = 2
-			cs *= 1.5
+			k = 3
+			cs *= 1.35
 		for i in k:
 			var p := _bez(st, mid, en, R(0.3, 1.0)) + Vector3(R(-0.5, 0.5), R(-0.4, 0.4), R(-0.5, 0.5)) * cs
 			var b := Basis.from_euler(Vector3(R(-1.2, 1.2), R(0, TAU), R(-1.2, 1.2)))
