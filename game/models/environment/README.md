@@ -20,9 +20,14 @@ All models are exported as glTF Binary (GLB), with Y-up coordinates for Godot 4.
 | `taiga_willow.glb` | Multi-stem willow with drooping branchlets and leaf clusters | 5.1 m |
 | `taiga_grass.glb` | Dense clump of individually tapered grass blades | 0.8 m |
 | `taiga_moss.glb` | Low irregular moss cushions with fine sporophytes | 0.4 m |
+| `taiga_juniper.glb` | Low wind-shaped evergreen shrub with woody stems and dense foliage | 1.6 m |
+| `taiga_reed.glb` | Wetland reed stems, seed heads and narrow leaves | 1.9 m |
+| `taiga_cranberry.glb` | Creeping bog runners, small leaves and red fruit | 0.3 m |
+| `taiga_dead_snag.glb` | Weathered dead standing trunk with broken branches | 5.7 m |
+| `taiga_lichen_rock.glb` | Irregular stone with separate lichen patches | 1.7 m |
 
 No rig, animation, weapon, enemy, or character integration is included in this asset batch.
 
 ## Visual import check
 
-Open `res://scenes/asset_gallery.tscn` in Godot to inspect all fifteen imported models together. The Android workflow renders this scene and uploads `taiga-visual-review` for review. The gallery is isolated and does not replace the live world generator.
+Open `res://scenes/asset_gallery.tscn` in Godot to inspect all twenty imported models together. The Android workflow renders this scene and uploads `taiga-visual-review` for review. The gallery is isolated. Spruce, pine, birch, larch, aspen, cedar, alder, willow, juniper, reeds, cranberry, snag, fern, grass, moss and stump variants are also integrated into live-world scatter where their placement metadata is compatible.
