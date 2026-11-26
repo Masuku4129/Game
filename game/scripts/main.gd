@@ -6,6 +6,7 @@ const SIZE := 512.0
 const SEG := 384
 const WATER_Y := -2.0
 const CELL := 64.0
+const IMPORTED_GLBS := {"spruce": "taiga_spruce.glb", "birch": "taiga_birch.glb", "bush": "taiga_bush.glb", "larch": "taiga_larch.glb", "aspen": "taiga_aspen.glb", "cedar": "taiga_cedar.glb", "alder": "taiga_alder.glb", "fern": "taiga_fern.glb", "stump": "taiga_stump.glb"}
 
 var n_hill := FastNoiseLite.new()
 var n_cliff := FastNoiseLite.new()
@@ -1017,6 +1018,33 @@ func _grass_step() -> void:
 	add_child(holder)
 	grass_cells[k] = holder
 
+## Загружает один объединённый GLB-меш как вариант MultiMesh.
+## Сцена освобождается сразу; ресурс Mesh остаётся удержан массивом варианта.
+func _imported_glb_variant(file_name: String) -> Array:
+	var packed := load("res://models/environment/" + file_name) as PackedScene
+	if packed == null:
+		push_warning("Missing imported taiga model: " + file_name)
+		return []
+	var root := packed.instantiate()
+	var pending: Array[Node] = [root]
+	var found: Mesh = null
+	while not pending.is_empty():
+		var node: Node = pending.pop_back()
+		if node is MeshInstance3D:
+			var candidate := (node as MeshInstance3D).mesh
+			if candidate != null:
+				found = candidate
+				break
+		for child: Node in node.get_children():
+			pending.append(child)
+	if found == null:
+		root.free()
+		push_warning("Imported taiga model has no MeshInstance3D: " + file_name)
+		return []
+	var model_height: float = found.get_aabb().size.y
+	root.free()
+	return [[found, model_height]]
+
 ## Варианты: [mesh, высота]. Несколько вариантов на породу, чтобы лес не повторялся.
 func _variants(kind: String) -> Array:
 	var out := []
@@ -1151,9 +1179,21 @@ func _variants(kind: String) -> Array:
 			for i in 2: out.append(pv.cones(7400 + i))
 		"bones":
 			out.append(pv.bones(7500))
+	# Ближний/обычный LOD использует импортированные модели; дальний LOD
+	# сохраняет лёгкие процедурные варианты. У деревьев заменяем индекс 0,
+	# чтобы массивы cache и cache_lod оставались строго одинаковой длины.
+	var imported_file: String = IMPORTED_GLBS.get(kind, "")
+	if not pv.lod and not imported_file.is_empty():
+		var imported := _imported_glb_variant(imported_file)
+		if not imported.is_empty():
+			if kind in TREE_KINDS:
+				if not out.is_empty():
+					out[0] = imported[0]
+			else:
+				out.append(imported[0])
 	return out
 
-const TREE_KINDS := ["spruce", "pine", "birch", "larch", "aspen", "fir", "cedar", "rowan"]
+const TREE_KINDS := ["spruce", "pine", "birch", "larch", "aspen", "fir", "cedar", "rowan", "alder"]
 const NEAR_R := 36.0
 var tree_grid := {}
 var near_mesh := {}
@@ -1398,7 +1438,7 @@ func move_factor() -> float:
 		f = 0.78
 	return f * (0.6 + 0.4 * clampf(health * 2.0, 0.0, 1.0))
 
-const BLOCK_R := {"fungus_snag": 0.22, "birch_dead": 0.2, "snag": 0.25, "snag_b": 0.25, "cherry": 0.15, "fir": 0.36, "cedar": 0.38, "rowan": 0.2, "spruce": 0.4, "pine": 0.32, "birch": 0.28, "bare": 0.3, "spruce_dead": 0.3, "stump": 0.45, "rock": 0.5, "boulder": 0.6, "larch": 0.32, "aspen": 0.26}
+const BLOCK_R := {"fungus_snag": 0.22, "birch_dead": 0.2, "snag": 0.25, "snag_b": 0.25, "cherry": 0.15, "fir": 0.36, "cedar": 0.38, "rowan": 0.2, "spruce": 0.4, "pine": 0.32, "birch": 0.28, "bare": 0.3, "spruce_dead": 0.3, "stump": 0.45, "rock": 0.5, "boulder": 0.6, "larch": 0.32, "aspen": 0.26, "alder": 0.24}
 
 func _scatter_all() -> void:
 	# вид, попыток на клетку 32 м, масштаб, дальность видимости, тень, правило
