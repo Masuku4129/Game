@@ -47,6 +47,9 @@ jobs:
             echo "No model changes."
           else
             git commit -m "Add original Taiga environment GLB models"
+            # Rebase the generated binary-only commit if source edits landed during generation.
+            git fetch origin "$GITHUB_REF_NAME"
+            git rebase "origin/$GITHUB_REF_NAME"
             git push
           fi
       - name: Upload importable GLB pack
