@@ -1134,7 +1134,7 @@ func _imported_species_palette(file_name: String) -> Dictionary:
 		"juniper": [Color("#345b42"), Color("#54402d")],
 		"rock": [Color("#5f625e"), Color("#555956")]
 	}
-	var key := file_name.get_basename().replace("taiga_", "").replace("taiga_style_", "")
+	var key := file_name.get_basename().replace("taiga_style_", "").replace("taiga_", "");
 	var pair: Array = palettes.get(key, [Color("#476b3d"), Color("#5a4531")])
 	return {"leaf": pair[0], "bark": pair[1], "rock": Color("#62645f")}
 
