@@ -219,6 +219,31 @@ def larch():
     parts.append(("Open_Larch_Needle_Clusters",organic_union(centers,scales,((-1.7,1.7),(-1.5,1.5),(.4,7.2)),56,.18,(94,125,65))))
     export("taiga_larch.glb",parts)
 
+
+def pine():
+    parts=[("Pine_Trunk",tube((0,0,0),(.08,0,8.0),.34,.045,(91,65,43,255),24,12,(.18,0,0)))]
+    centers=[]; scales=[]
+    # Distinct Scots-pine silhouette: open crown, long lateral limbs and
+    # irregular needle pads concentrated near branch tips.
+    for tier,z in enumerate([3.5,4.0,4.55,5.1,5.65,6.15,6.6,7.0]):
+        radius=[2.5,2.55,2.4,2.15,1.85,1.45,1.05,.65][tier]
+        for j in range(5):
+            a=2*math.pi*j/5+tier*.59
+            start=np.array([.04,0,z])
+            end=start+np.array([math.cos(a)*radius,math.sin(a)*radius*.78,.12+radius*.12])
+            parts.append((f"Pine_Limb_{tier}_{j}",tube(start,end,.075,.018,(98,72,48,255),8,7,(0,0,.12))))
+            for k in range(4):
+                t=.48+k*.14
+                p=start*(1-t)+end*t
+                side=np.array([-math.sin(a),math.cos(a),0])
+                center=p+side*((k-1.5)*.11)+np.array([0,0,.1])
+                centers.append(tuple(center))
+                scales.append((.34,.29,.26))
+    centers += [(0,0,7.15),(.1,-.05,6.65)]
+    scales += [(.62,.55,.72),(.72,.62,.48)]
+    parts.append(("Irregular_Pine_Needle_Pads",organic_union(centers,scales,((-3.0,3.0),(-2.5,2.5),(3.1,8.0)),64,.2,(54,91,49))))
+    export("taiga_pine.glb",parts)
+
 def cedar():
     parts=[("Cedar_Trunk",tube((0,0,0),(.03,0,7.4),.38,.08,(86,62,42,255),24,12,(.1,0,0)))]
     centers=[]; scales=[]
@@ -314,5 +339,5 @@ def stump():
     export("taiga_stump.glb",parts)
 
 if __name__ == "__main__":
-    spruce(); birch(); bush(); rock(); fallen_log(); larch(); cedar(); aspen(); alder(); fern(); stump()
-    print("Generated 11 original Taiga GLB models in", OUT)
+    spruce(); birch(); bush(); rock(); fallen_log(); pine(); larch(); cedar(); aspen(); alder(); fern(); stump()
+    print("Generated 12 original Taiga GLB models in", OUT)
