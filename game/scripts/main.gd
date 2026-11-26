@@ -84,6 +84,7 @@ func _ready() -> void:
 	_make_terrain()
 	_make_water()
 	_scatter_all()
+	print("TAIGA_STARTUP_OK imported_models=%d" % _imported_variants_cache.size())
 	# Cache material list once; avoid allocating a concatenated array during runtime ticks.
 	_fade_materials = veg.fade_list + pv.fade_list
 	# В основной сцене пока используем проверенную процедурную траву:
