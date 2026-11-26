@@ -6,7 +6,7 @@ const SIZE := 512.0
 const SEG := 384
 const WATER_Y := -2.0
 const CELL := 64.0
-const IMPORTED_GLBS := {"spruce": "taiga_spruce.glb", "pine": "taiga_pine.glb", "birch": "taiga_birch.glb", "bush": "taiga_bush.glb", "larch": "taiga_larch.glb", "aspen": "taiga_aspen.glb", "cedar": "taiga_cedar.glb", "alder": "taiga_alder.glb", "willow": "taiga_willow.glb", "fern": "taiga_fern.glb", "grass": "taiga_grass.glb", "yagel": "taiga_moss.glb", "sphagnum": "taiga_moss.glb", "stump": "taiga_stump.glb", "juniper": "taiga_juniper.glb", "reeds": "taiga_reed.glb", "cranberry": "taiga_cranberry.glb", "snag": "taiga_dead_snag.glb"}
+const IMPORTED_GLBS := {"spruce": "taiga_style_spruce.glb", "pine": "taiga_style_pine.glb", "birch": "taiga_style_birch.glb", "bush": "taiga_style_bush.glb", "rock": "taiga_style_rock.glb"}
 
 var n_hill := FastNoiseLite.new()
 var n_cliff := FastNoiseLite.new()
@@ -1072,18 +1072,28 @@ func _imported_glb_variant(file_name: String) -> Array:
 	# нативным RenderingServer RID. Сохраняем исходную сцену скрытым дочерним
 	# узлом, чтобы RID и MeshInstance оставались живыми весь срок работы мира.
 	var model_height: float = found.get_aabb().size.y
-	# GLB-модели остаются едиными объединёнными мешами, но получают общий
-	# vertex-color shader: листва желтеет/опадает, ветви качаются, снег ложится
-	# на верхние поверхности, дождь затемняет кору и листву.
-	var seasonal_mat := ShaderMaterial.new()
-	seasonal_mat.shader = load("res://shaders/paint/imported_vegetation.gdshader")
-	var deciduous := file_name in ["taiga_birch.glb", "taiga_larch.glb", "taiga_aspen.glb", "taiga_alder.glb", "taiga_willow.glb"]
-	seasonal_mat.set_shader_parameter("deciduous", 1.0 if deciduous else 0.0)
-	var flexible := file_name in ["taiga_grass.glb", "taiga_fern.glb", "taiga_reed.glb"]
-	seasonal_mat.set_shader_parameter("sway_strength", 0.11 if flexible else 0.045)
+	# Возвращаем именно игровые материалы: GLB экспортирован из veg.gd,
+	# а сезонный shader поверх них сохраняет исходные текстуры коры и листовых карточек.
+	var game_style := file_name.begins_with("taiga_style_")
+	var deciduous := file_name in ["taiga_style_birch.glb"]
 	for surface in found.get_surface_count():
+		var source_mat := found.surface_get_material(surface) as StandardMaterial3D
+		var seasonal_mat := ShaderMaterial.new()
+		seasonal_mat.shader = load("res://shaders/paint/imported_game_style.gdshader") if game_style else load("res://shaders/paint/imported_vegetation.gdshader")
+		if game_style:
+			var base_texture: Texture2D = source_mat.albedo_texture if source_mat != null else null
+			seasonal_mat.set_shader_parameter("has_texture", 1.0 if base_texture != null else 0.0)
+			if base_texture != null:
+				seasonal_mat.set_shader_parameter("base_texture", base_texture)
+			seasonal_mat.set_shader_parameter("base_tint", source_mat.albedo_color if source_mat != null else Color.WHITE)
+			seasonal_mat.set_shader_parameter("foliage", 1.0 if surface > 0 and not file_name.ends_with("rock.glb") else 0.0)
+			seasonal_mat.set_shader_parameter("deciduous", 1.0 if deciduous else 0.0)
+			seasonal_mat.set_shader_parameter("sway_strength", 0.045)
+		else:
+			seasonal_mat.set_shader_parameter("deciduous", 1.0 if deciduous else 0.0)
+			seasonal_mat.set_shader_parameter("sway_strength", 0.045)
 		found.surface_set_material(surface, seasonal_mat)
-	imported_veg_mats.append(seasonal_mat)
+		imported_veg_mats.append(seasonal_mat)
 	_imported_model_keeper.add_child(root)
 	root.visible = false
 	var variant := [[found, model_height]]
@@ -1227,10 +1237,16 @@ func _variants(kind: String) -> Array:
 	# Импортированный вариант занимает индекс 0, а остальные остаются процедурными.
 	# Это сохраняет индексы MultiMesh и парность cache/cache_lod у деревьев.
 	var imported_file: String = IMPORTED_GLBS.get(kind, "")
-	if OS.get_environment("USE_EXPERIMENTAL_GLB") != "" and not pv.lod and not imported_file.is_empty():
+	if not pv.lod and not imported_file.is_empty():
 		var imported := _imported_glb_variant(imported_file)
 		if not imported.is_empty() and not out.is_empty():
-			out[0] = imported[0]
+			# Сохраняем служебные габариты исходного варианта: они участвуют
+			# в коллизиях, опоре на грунт и расчёте занятости места.
+			var original: Array = out[0]
+			var replacement: Array = [imported[0][0], imported[0][1]]
+			for meta_index in range(2, original.size()):
+				replacement.append(original[meta_index])
+			out[0] = replacement
 	return out
 
 const TREE_KINDS := ["spruce", "pine", "birch", "larch", "aspen", "fir", "cedar", "rowan", "alder", "willow"]
