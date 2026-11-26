@@ -109,6 +109,8 @@ func _build_field() -> void:
 		var zh3 := mini(iz + 3, fn - 1) * fn
 		for ix in fn:
 			var i := iz * fn + ix
+			var x := ix * fstep - half
+			var z := iz * fstep - half
 			var y := hs[i]
 			var gx := (hs[iz * fn + mini(ix + 1, fn - 1)] - hs[iz * fn + maxi(ix - 1, 0)]) / (2.0 * fstep)
 			var gz := (hs[zh + ix] - hs[zl + ix]) / (2.0 * fstep)
