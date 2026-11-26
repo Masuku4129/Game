@@ -26,6 +26,13 @@ jobs:
           cd game
           timeout 600 godot --headless --import 2>&1 | tee /tmp/pv/import.log
           ! grep -E "Parse Error|Failed loading resource" /tmp/pv/import.log
+      - name: Export and re-import game-style GLB models
+        run: |
+          cd game
+          timeout 300 godot --headless --script res://scripts/export_game_style_models.gd 2>&1 | tee /tmp/pv/game_style_export.log
+          grep "GAME_STYLE_EXPORT completed=5 failed=0" /tmp/pv/game_style_export.log
+          timeout 300 godot --headless --import 2>&1 | tee /tmp/pv/game_style_import.log
+          ! grep -E "Parse Error|Failed loading resource" /tmp/pv/game_style_import.log
       - name: Render single-player style test shots
         run: |
           mkdir -p /tmp/pv
@@ -42,7 +49,7 @@ jobs:
           cd game
           ASSET_GALLERY_SHOTS=/tmp/pv/taiga_asset_gallery.png timeout 180 xvfb-run -a -s "-screen 0 1920x864x24" godot --rendering-driver vulkan --resolution 1920x864 res://scenes/asset_gallery.tscn 2>&1 | tee /tmp/pv/asset_gallery.log
           test -s /tmp/pv/taiga_asset_gallery.png
-          grep "TAIGA_ASSET_GALLERY loaded=15" /tmp/pv/asset_gallery.log
+          grep "TAIGA_ASSET_GALLERY loaded=25" /tmp/pv/asset_gallery.log
       - name: Upload visual verification frames
         uses: actions/upload-artifact@v4
         with:
@@ -50,6 +57,8 @@ jobs:
           path: |
             /tmp/pv/taiga_asset_gallery.png
             /tmp/pv/asset_gallery.log
+            /tmp/pv/game_style_export.log
+            /tmp/pv/game_style_import.log
             /tmp/pv/hero.txt
             /tmp/pv/perf.log
             /tmp/pv/*.png
@@ -82,7 +91,11 @@ jobs:
           cp -r /root/.config/godot ~/.config/godot || true
           cp -r /root/.local/share/godot/export_templates/${GODOT_VERSION}.stable ~/.local/share/godot/export_templates/ || true
       - name: Import project
-        run: cd game && (timeout 600 godot --headless --import || true)
+        run: |
+          cd game
+          timeout 600 godot --headless --import
+          timeout 300 godot --headless --script res://scripts/export_game_style_models.gd
+          timeout 600 godot --headless --import
       - name: Check scripts
         run: |
           cd game
