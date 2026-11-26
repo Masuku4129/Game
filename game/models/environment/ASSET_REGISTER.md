@@ -16,3 +16,6 @@ Generation source: tools/generate_taiga_models.py
 | Fern | Original procedural mesh authored for this project | No third-party mesh source; project-original procedural output | game/models/environment/taiga_fern.glb | Pending generator and Godot visual checks |
 | Stump | Original procedural mesh authored for this project | No third-party mesh source; project-original procedural output | game/models/environment/taiga_stump.glb | Pending generator and Godot visual checks |
 | Scots pine | Original procedural mesh authored for this project | No third-party mesh source; project-original procedural output | game/models/environment/taiga_pine.glb | Pending generator and Godot visual checks |
+| Willow | Original procedural mesh authored for this project | No third-party mesh source; project-original procedural output | game/models/environment/taiga_willow.glb | Pending generator and Godot visual checks |
+| Grass | Original procedural mesh authored for this project | No third-party mesh source; project-original procedural output | game/models/environment/taiga_grass.glb | Pending generator and Godot visual checks |
+| Moss | Original procedural mesh authored for this project | No third-party mesh source; project-original procedural output | game/models/environment/taiga_moss.glb | Pending generator and Godot visual checks |
