@@ -1625,8 +1625,15 @@ func _scatter_all() -> void:
 			cache[r[0]] = _variants(r[0])
 			if r[0] in TREE_KINDS:
 				pv.lod = true
-				cache_lod[r[0]] = _variants(r[0])
+				var lod_variants: Array = _variants(r[0])
 				pv.lod = false
+				# Keep LOD variant indices aligned with full-detail variants. Previously
+				# only two LOD meshes existed while scatter selected up to six detail
+				# variants, causing index 2+ access failures during scene startup.
+				var aligned_lod: Array = []
+				for vi in cache[r[0]].size():
+					aligned_lod.append(lod_variants[vi % lod_variants.size()])
+				cache_lod[r[0]] = aligned_lod
 	_cliff_rocks(cache["rock"])
 	var cells := int(SIZE / CELL)
 	for cz in cells:
