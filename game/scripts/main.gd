@@ -63,8 +63,12 @@ var combat  # --- combat: удары, прицел, стрелы (combat.gd) ---
 # (отладочный переключатель в настройках и переменная окружения HERO_MODE=1). ---
 var colony
 var colony_mode := true
+var _imported_model_keeper: Node3D
 
 func _ready() -> void:
+	_imported_model_keeper = Node3D.new()
+	_imported_model_keeper.name = "ImportedModelResourceKeeper"
+	add_child(_imported_model_keeper)
 	_colony_pick_mode()
 	_setup_noise()
 	weather = preload("res://scripts/weather.gd").new()
@@ -1046,15 +1050,17 @@ func _imported_glb_variant(file_name: String) -> Array:
 		root.free()
 		push_warning("Imported taiga model has no MeshInstance3D: " + file_name)
 		return []
-	# Копируем Mesh из инстанса сцены: MultiMesh должен владеть независимым
-	# ресурсом, не зависящим от освобождения временного GLB root.
-	var retained := found.duplicate(true) as Mesh
+	# Не дублируем импортированный ArrayMesh: GLB importer связывает Mesh с
+	# нативным RenderingServer RID. Сохраняем исходную сцену скрытым дочерним
+	# узлом, чтобы RID и MeshInstance оставались живыми весь срок работы мира.
 	var model_height: float = found.get_aabb().size.y
-	root.free()
-	if retained == null or retained.get_surface_count() == 0:
+	root.visible = false
+	_imported_model_keeper.add_child(root)
+	if found.get_surface_count() == 0:
 		push_warning("Imported taiga model has no valid mesh surfaces: " + file_name)
+		root.queue_free()
 		return []
-	return [[retained, model_height]]
+	return [[found, model_height]]
 
 ## Варианты: [mesh, высота]. Несколько вариантов на породу, чтобы лес не повторялся.
 func _variants(kind: String) -> Array:
