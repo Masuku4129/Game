@@ -62,7 +62,7 @@ var combat  # --- combat: удары, прицел, стрелы (combat.gd) ---
 # colony_mode = true — новая игра про острог; false — старый режим героя с джойстиком
 # (отладочный переключатель в настройках и переменная окружения HERO_MODE=1). ---
 var colony
-var colony_mode := true
+var colony_mode := false
 var _imported_model_keeper: Node3D
 var _imported_variants_cache := {}
 var imported_veg_mats: Array[ShaderMaterial] = []
@@ -80,8 +80,9 @@ func _ready() -> void:
 	_make_terrain()
 	_make_water()
 	_scatter_all()
-	var imported_grass: Array = _imported_glb_variant("taiga_grass.glb")
-	grass_mesh_vars = [imported_grass[0] if not imported_grass.is_empty() else pv.tuft(1500), pv.tuft(1503, 1.3), pv.tuft(1504, 0.8)]
+	# В основной сцене пока используем проверенную процедурную траву:
+	# экспериментальные GLB возвращены в галерею до проверки материалов, коллизий и FPS.
+	grass_mesh_vars = [pv.tuft(1500), pv.tuft(1503, 1.3), pv.tuft(1504, 0.8)]
 	hero = preload("res://scripts/hero.gd").new()
 	hero.main = self
 	add_child(hero)
@@ -256,16 +257,15 @@ func _ready() -> void:
 ## --- colony: какой режим запускать. Старые проверки (бой, инструменты, охота, стройка,
 ## сохранение, кадры, замер) идут по-прежнему от героя, поэтому для них — режим героя. ---
 func _colony_pick_mode() -> void:
-	colony_mode = true
-	var cf := ConfigFile.new()
-	if cf.load("user://settings.cfg") == OK:
-		colony_mode = not bool(cf.get_value("game", "hero_mode", false))
-	for e: String in ["COMBAT_TEST", "TOOLS_TEST", "HUNT_TEST", "BUILD_TEST", "SAVE_TEST", "UI_SHOTS", "SHOTS", "PERF", "HERO_MODE"]:
+	# Релизная игра — одиночное выживание за одного первопроходца.
+	# Режим острога/отряда оставлен только для явных внутренних тестов.
+	colony_mode = false
+	for e: String in ["COLONY_TEST", "COLONY_SHOTS"]:
 		if OS.get_environment(e) != "":
-			colony_mode = false
-	for e2: String in ["COLONY_TEST", "COLONY_SHOTS"]:
-		if OS.get_environment(e2) != "":
 			colony_mode = true
+	for e2: String in ["COMBAT_TEST", "TOOLS_TEST", "HUNT_TEST", "BUILD_TEST", "SAVE_TEST", "UI_SHOTS", "SHOTS", "PERF", "HERO_MODE"]:
+		if OS.get_environment(e2) != "":
+			colony_mode = false
 
 func _find_start() -> Vector3:
 	for r in range(0, 120, 3):
@@ -971,7 +971,9 @@ func _grass_step() -> void:
 	var per_var: Array = _gb["pv"]
 	var x0 := k.x * GCELL - SIZE * 0.5
 	var z0 := k.y * GCELL - SIZE * 0.5
-	var step := 0.92
+	# Меньше экземпляров: прежний шаг 0.92 м создавал почти сплошной ковёр
+	# и перегружал мобильный GPU. Новая сетка реже и плотность задаётся биомом.
+	var step := 1.65
 	var z: float = _gb["z"]
 	var z_end := minf(z + 8.0, GCELL)
 	while z < z_end:
@@ -986,19 +988,25 @@ func _grass_step() -> void:
 				continue
 			if camp != null and camp.cleared(px, pz):  # build: под постройкой травы нет
 				continue
+			# В болотных зонах оставляем место осоке, сфагнуму и кочкам,
+			# а не накрываем их одинаковой сухой травой.
+			if zone(px, pz) == 2:
+				continue
 			var fd := forest_density(px, pz)
 			var h1 := grid_height(px + 1.0, pz)
 			var h2 := grid_height(px - 1.0, pz)
 			var h3 := grid_height(px, pz + 1.0)
 			var h4 := grid_height(px, pz - 1.0)
 			var slope := 1.0 - Vector3(h2 - h1, 2.0, h4 - h3).normalized().y
-			# сплошной ковёр: на лугу густо, в лесу реже; пятна шума меняют только высоту
+			# Ковёр заменён отдельными куртинами: чаще на открытом лугу,
+			# заметно реже под кронами и среди кустарника.
 			var patch := n_detail.get_noise_2d(px * 3.0, pz * 3.0) + n_forest.get_noise_2d(px * 6.0, pz * 6.0) * 0.5
-			if slope > 0.22 or rng.randf() > (1.0 - fd) * 0.75 + 0.25:
+			var cover_chance := clampf(0.10 + (1.0 - fd) * 0.38 + clampf(patch + 0.3, 0.0, 1.0) * 0.1, 0.08, 0.52)
+			if slope > 0.22 or rng.randf() > cover_chance:
 				continue
 			if maxf(maxf(h1, h2), maxf(h3, h4)) - minf(minf(h1, h2), minf(h3, h4)) > 1.0:
 				continue
-			var s := rng.randf_range(1.1, 1.6)
+			var s := rng.randf_range(1.25, 1.75)
 			var tall := clampf(0.8 + patch * 0.6, 0.55, 1.4) * rng.randf_range(0.85, 1.15)
 			var b := Basis(Vector3.UP, rng.randf() * TAU).scaled(Vector3(s, s * tall, s))
 			per_var[rng.randi() % grass_mesh_vars.size()].append(Transform3D(b, Vector3(px, y - 0.03, pz)))
@@ -1219,7 +1227,7 @@ func _variants(kind: String) -> Array:
 	# Импортированный вариант занимает индекс 0, а остальные остаются процедурными.
 	# Это сохраняет индексы MultiMesh и парность cache/cache_lod у деревьев.
 	var imported_file: String = IMPORTED_GLBS.get(kind, "")
-	if not pv.lod and not imported_file.is_empty():
+	if OS.get_environment("USE_EXPERIMENTAL_GLB") != "" and not pv.lod and not imported_file.is_empty():
 		var imported := _imported_glb_variant(imported_file)
 		if not imported.is_empty() and not out.is_empty():
 			out[0] = imported[0]
@@ -1470,7 +1478,7 @@ func move_factor() -> float:
 		f = 0.78
 	return f * (0.6 + 0.4 * clampf(health * 2.0, 0.0, 1.0))
 
-const BLOCK_R := {"fungus_snag": 0.22, "birch_dead": 0.2, "snag": 0.25, "snag_b": 0.25, "cherry": 0.15, "fir": 0.36, "cedar": 0.38, "rowan": 0.2, "spruce": 0.4, "pine": 0.32, "birch": 0.28, "bare": 0.3, "spruce_dead": 0.3, "stump": 0.45, "rock": 0.5, "boulder": 0.6, "larch": 0.32, "aspen": 0.26, "alder": 0.24, "willow": 0.28}
+const BLOCK_R := {"fungus_snag": 0.22, "birch_dead": 0.2, "snag": 0.25, "snag_b": 0.25, "cherry": 0.15, "fir": 0.36, "cedar": 0.38, "rowan": 0.2, "spruce": 0.4, "pine": 0.32, "birch": 0.28, "bare": 0.3, "spruce_dead": 0.3, "stump": 0.45, "rock": 0.5, "boulder": 0.6, "larch": 0.32, "aspen": 0.26, "alder": 0.24, "willow": 0.28, "bush": 0.2, "juniper": 0.18, "stlanik": 0.2}
 
 func _scatter_all() -> void:
 	# вид, попыток на клетку 32 м, масштаб, дальность видимости, тень, правило
