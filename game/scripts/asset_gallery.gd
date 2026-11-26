@@ -3,11 +3,20 @@ extends Node3D
 ## Не меняет основную игровую сцену и не подменяет штатный генератор леса.
 
 const ASSETS := [
-	{"file": "taiga_spruce.glb", "label": "ЕЛЬ", "x": -12.0, "scale": 0.82},
-	{"file": "taiga_birch.glb", "label": "БЕРЁЗА", "x": -6.0, "scale": 0.92},
-	{"file": "taiga_bush.glb", "label": "КУСТ", "x": 0.0, "scale": 1.7},
-	{"file": "taiga_rock.glb", "label": "КАМЕНЬ", "x": 6.0, "scale": 1.25},
-	{"file": "taiga_fallen_log.glb", "label": "ВАЛЕЖНИК", "x": 12.0, "scale": 1.4},
+	{"file": "taiga_spruce.glb", "label": "ЕЛЬ", "x": -18.0, "z": -5.0, "scale": 0.8},
+	{"file": "taiga_pine.glb", "label": "СОСНА", "x": -12.0, "z": -5.0, "scale": 0.7},
+	{"file": "taiga_larch.glb", "label": "ЛИСТВЕННИЦА", "x": -6.0, "z": -5.0, "scale": 0.75},
+	{"file": "taiga_cedar.glb", "label": "КЕДР", "x": 0.0, "z": -5.0, "scale": 0.8},
+	{"file": "taiga_birch.glb", "label": "БЕРЁЗА", "x": 6.0, "z": -5.0, "scale": 0.9},
+	{"file": "taiga_aspen.glb", "label": "ОСИНА", "x": 12.0, "z": -5.0, "scale": 0.8},
+	{"file": "taiga_alder.glb", "label": "ОЛЬХА", "x": 18.0, "z": -5.0, "scale": 0.9},
+	{"file": "taiga_bush.glb", "label": "КУСТ", "x": -18.0, "z": 5.0, "scale": 1.5},
+	{"file": "taiga_fern.glb", "label": "ПАПОРОТНИК", "x": -12.0, "z": 5.0, "scale": 2.0},
+	{"file": "taiga_grass.glb", "label": "ТРАВА", "x": -6.0, "z": 5.0, "scale": 2.0},
+	{"file": "taiga_moss.glb", "label": "МОХ", "x": 0.0, "z": 5.0, "scale": 1.6},
+	{"file": "taiga_rock.glb", "label": "КАМЕНЬ", "x": 6.0, "z": 5.0, "scale": 1.25},
+	{"file": "taiga_stump.glb", "label": "ПЕНЬ", "x": 12.0, "z": 5.0, "scale": 1.4},
+	{"file": "taiga_fallen_log.glb", "label": "ВАЛЕЖНИК", "x": 18.0, "z": 5.0, "scale": 1.2},
 ]
 
 func _ready() -> void:
@@ -22,12 +31,12 @@ func _ready() -> void:
 		if model == null:
 			push_error("GLB root is not Node3D: " + path)
 			continue
-		model.position = Vector3(float(spec.x), 0.0, 0.0)
+		model.position = Vector3(float(spec.x), 0.0, float(spec.z))
 		model.scale = Vector3.ONE * float(spec.scale)
 		add_child(model)
 		var label := Label3D.new()
 		label.text = str(spec.label)
-		label.position = Vector3(float(spec.x), 0.12, 3.0)
+		label.position = Vector3(float(spec.x), 0.12, float(spec.z) + 3.0)
 		label.font_size = 48
 		label.pixel_size = 0.008
 		label.modulate = Color(0.94, 0.91, 0.78)
@@ -47,7 +56,7 @@ func _ready() -> void:
 func _make_stage() -> void:
 	var floor := MeshInstance3D.new()
 	var plane := PlaneMesh.new()
-	plane.size = Vector2(34.0, 14.0)
+	plane.size = Vector2(46.0, 24.0)
 	floor.mesh = plane
 	var ground := StandardMaterial3D.new()
 	ground.albedo_color = Color(0.19, 0.23, 0.18)
@@ -74,8 +83,8 @@ func _make_stage() -> void:
 
 	var camera := Camera3D.new()
 	camera.projection = Camera3D.PROJECTION_ORTHOGONAL
-	camera.size = 19.0
-	camera.position = Vector3(0.0, 15.0, 27.0)
-	camera.look_at(Vector3(0.0, 2.4, 0.0), Vector3.UP)
+	camera.size = 26.0
+	camera.position = Vector3(0.0, 20.0, 34.0)
+	camera.look_at(Vector3(0.0, 2.0, 0.0), Vector3.UP)
 	add_child(camera)
 	camera.current = true
