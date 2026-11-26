@@ -6,7 +6,7 @@ const SIZE := 512.0
 const SEG := 384
 const WATER_Y := -2.0
 const CELL := 64.0
-const IMPORTED_GLBS := {"spruce": "taiga_style_spruce.glb", "pine": "taiga_style_pine.glb", "birch": "taiga_style_birch.glb", "bush": "taiga_style_bush.glb", "rock": "taiga_style_rock.glb"}
+const IMPORTED_GLBS := {"spruce": "taiga_spruce.glb", "pine": "taiga_pine.glb", "birch": "taiga_birch.glb", "larch": "taiga_larch.glb", "aspen": "taiga_aspen.glb", "cedar": "taiga_cedar.glb", "alder": "taiga_alder.glb", "willow": "taiga_willow.glb", "bush": "taiga_bush.glb", "rock": "taiga_rock.glb"}
 
 var n_hill := FastNoiseLite.new()
 var n_cliff := FastNoiseLite.new()
@@ -1084,7 +1084,7 @@ func _imported_glb_variant(file_name: String) -> Array:
 	# Возвращаем именно игровые материалы: GLB экспортирован из veg.gd,
 	# а сезонный shader поверх них сохраняет исходные текстуры коры и листовых карточек.
 	var game_style := file_name.begins_with("taiga_style_")
-	var deciduous := file_name in ["taiga_style_birch.glb"]
+	var deciduous := file_name in ["taiga_style_birch.glb", "taiga_birch.glb", "taiga_aspen.glb", "taiga_alder.glb", "taiga_willow.glb"]
 	for surface in found.get_surface_count():
 		var source_mat := found.surface_get_material(surface) as StandardMaterial3D
 		var seasonal_mat := ShaderMaterial.new()
