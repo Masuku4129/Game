@@ -794,18 +794,26 @@ func _can_step(p: Vector3, flying: bool = false) -> bool:
 	# иначе корпус проскальзывает через тонкие стволы между кадрами.
 	var body_radius: float = clampf(float(parts.get("gw", 0.12)) * scale_k * 0.75, 0.12, 0.68)
 	var travel: Vector2 = Vector2(p.x - position.x, p.z - position.z)
-	var probe_count: int = clampi(int(ceil(travel.length() / maxf(body_radius * 0.55, 0.12))), 1, 6)
+	var probe_count: int = clampi(int(ceil(travel.length() / maxf(body_radius * 0.45, 0.16))), 1, 24)
+	var terrain_step_limit: float = maxf(0.55, body_radius * 1.35)
 	for probe_i in range(probe_count + 1):
 		var probe_t: float = float(probe_i) / float(probe_count)
 		var probe_center: Vector2 = Vector2(position.x, position.z) + travel * probe_t
 		if main.blocked(probe_center.x, probe_center.y, body_radius):
 			return false
-		# Дополнительная проверка окружности корпуса защищает от узких/диагональных
-		# препятствий, которые не попадают в центральный радиус блокировок.
-		for sample_i in 8:
-			var sample_a: float = TAU * float(sample_i) / 8.0
-			var sample_p: Vector2 = probe_center + Vector2(cos(sample_a), sin(sample_a)) * body_radius
-			if main.blocked(sample_p.x, sample_p.y, 0.10 * scale_k):
+		# Проверяем не только точку ног: четырёхточечная опора под корпусом
+		# выявляет резкие уступы/пересечения поверхности, в которых зверь раньше
+		# визуально проваливался или застревал в рельефной текстуре.
+		var center_ground: float = main.grid_height(probe_center.x, probe_center.y)
+		for terrain_i in 4:
+			var terrain_a: float = TAU * float(terrain_i) / 4.0
+			var terrain_p: Vector2 = probe_center + Vector2(cos(terrain_a), sin(terrain_a)) * body_radius
+			var terrain_h: float = main.grid_height(terrain_p.x, terrain_p.y)
+			if absf(terrain_h - center_ground) > terrain_step_limit:
+				return false
+			# Footprint collision samples are deliberately offset slightly outward
+			# from the animal's body radius to avoid clipping through thin trunks.
+			if main.blocked(terrain_p.x, terrain_p.y, 0.12 * scale_k):
 				return false
 	var gy: float = main.grid_height(p.x, p.z)
 	var g0: float = main.grid_height(position.x, position.z)
