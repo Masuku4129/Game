@@ -39,7 +39,7 @@ jobs:
         run: |
           cd game
           SHOTS=/tmp/pv timeout 600 xvfb-run -a -s "-screen 0 1920x864x24" godot --rendering-driver opengl3 --resolution 1920x864 2>&1 | tee /tmp/pv/hero.txt | grep -iE "SCRIPT ERROR|shot" | head -20 || true
-          ASSET_GALLERY_SHOTS=/tmp/pv/taiga_asset_gallery.png timeout 180 xvfb-run -a -s "-screen 0 1920x864x24" godot --rendering-driver gl_compatibility --resolution 1920x864 res://scenes/asset_gallery.tscn 2>&1 | tee /tmp/pv/asset_gallery.log
+          ASSET_GALLERY_SHOTS=/tmp/pv/taiga_asset_gallery.png timeout 180 xvfb-run -a -s "-screen 0 1920x864x24" godot --rendering-driver opengl3 --resolution 1920x864 res://scenes/asset_gallery.tscn 2>&1 | tee /tmp/pv/asset_gallery.log
           test -s /tmp/pv/taiga_asset_gallery.png
           grep "TAIGA_ASSET_GALLERY loaded=25" /tmp/pv/asset_gallery.log
       - name: Measure scene script cost
@@ -76,10 +76,11 @@ jobs:
           sudo mv /tmp/godot-bin/Godot_v4.3-stable_linux.x86_64 /usr/local/bin/godot
           sudo chmod +x /usr/local/bin/godot
           mkdir -p ~/.local/share/godot/export_templates/4.3.stable
-          mkdir -p ~/.local/share/godot/export_templates/4.3.stable
           unzip -q /tmp/templates.tpz -d /tmp/godot-templates
-          find /tmp/godot-templates -type f -name 'android_debug.apk' -exec cp {} ~/.local/share/godot/export_templates/4.3.stable/android_debug.apk \;
-          find /tmp/godot-templates -type f -name 'android_release.apk' -exec cp {} ~/.local/share/godot/export_templates/4.3.stable/android_release.apk \;
+          DEBUG_TEMPLATE="$(find /tmp/godot-templates -type f -name android_debug.apk -print -quit)"
+          RELEASE_TEMPLATE="$(find /tmp/godot-templates -type f -name android_release.apk -print -quit)"
+          test -n "$DEBUG_TEMPLATE" && cp "$DEBUG_TEMPLATE" ~/.local/share/godot/export_templates/4.3.stable/android_debug.apk
+          test -n "$RELEASE_TEMPLATE" && cp "$RELEASE_TEMPLATE" ~/.local/share/godot/export_templates/4.3.stable/android_release.apk
           test -s ~/.local/share/godot/export_templates/4.3.stable/android_debug.apk
           test -s ~/.local/share/godot/export_templates/4.3.stable/android_release.apk
       - name: Configure Godot Android export
