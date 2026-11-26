@@ -64,6 +64,7 @@ var combat  # --- combat: удары, прицел, стрелы (combat.gd) ---
 var colony
 var colony_mode := true
 var _imported_model_keeper: Node3D
+var _imported_variants_cache := {}
 
 func _ready() -> void:
 	_imported_model_keeper = Node3D.new()
@@ -1030,6 +1031,8 @@ func _grass_step() -> void:
 ## Загружает один объединённый GLB-меш как вариант MultiMesh.
 ## Сцена освобождается сразу; ресурс Mesh остаётся удержан массивом варианта.
 func _imported_glb_variant(file_name: String) -> Array:
+	if _imported_variants_cache.has(file_name):
+		return _imported_variants_cache[file_name]
 	var packed := load("res://models/environment/" + file_name) as PackedScene
 	if packed == null:
 		push_warning("Missing imported taiga model: " + file_name)
@@ -1054,13 +1057,11 @@ func _imported_glb_variant(file_name: String) -> Array:
 	# нативным RenderingServer RID. Сохраняем исходную сцену скрытым дочерним
 	# узлом, чтобы RID и MeshInstance оставались живыми весь срок работы мира.
 	var model_height: float = found.get_aabb().size.y
-	root.visible = false
 	_imported_model_keeper.add_child(root)
-	if found.get_surface_count() == 0:
-		push_warning("Imported taiga model has no valid mesh surfaces: " + file_name)
-		root.queue_free()
-		return []
-	return [[found, model_height]]
+	root.visible = false
+	var variant := [[found, model_height]]
+	_imported_variants_cache[file_name] = variant
+	return variant
 
 ## Варианты: [mesh, высота]. Несколько вариантов на породу, чтобы лес не повторялся.
 func _variants(kind: String) -> Array:
