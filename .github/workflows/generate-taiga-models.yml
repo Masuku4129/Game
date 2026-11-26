@@ -31,7 +31,9 @@ jobs:
           assert len(files) == 11, f"Expected 11 GLB models, got {len(files)}"
           for path in files:
               scene = trimesh.load(path, force="scene")
-              assert len(scene.geometry) > 0, path
+              assert len(scene.geometry) == 1, f"{path}: expected one merged render mesh, got {len(scene.geometry)}"
+              mesh = next(iter(scene.geometry.values()))
+              assert len(mesh.faces) > 0, path
               assert scene.bounds.shape == (2, 3), path
               assert scene.bounds[1, 1] > scene.bounds[0, 1], f"Y-up height missing: {path}"
               print(path, "meshes=", len(scene.geometry), "bytes=", path.stat().st_size)
