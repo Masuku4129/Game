@@ -14,7 +14,16 @@ func _export_models() -> void:
 		{"file": "taiga_style_pine.glb", "result": generator.branchy(9201, "pine")},
 		{"file": "taiga_style_birch.glb", "result": generator.branchy(9301, "birch")},
 		{"file": "taiga_style_bush.glb", "result": generator.bush(9401)},
-		{"file": "taiga_style_rock.glb", "result": generator.rock(9501, 2)}
+		{"file": "taiga_style_rock.glb", "result": generator.rock(9501, 2)},
+		{"file": "taiga_style_larch.glb", "result": generator.branchy(9601, "larch")},
+		{"file": "taiga_style_aspen.glb", "result": generator.branchy(9701, "aspen")},
+		{"file": "taiga_style_fern.glb", "result": generator.fern(9801)},
+		{"file": "taiga_style_grass_patch.glb", "result": generator.grass_patch(9901)},
+		{"file": "taiga_style_stump.glb", "result": generator.stump(10001)},
+		{"file": "taiga_style_fallen_log.glb", "result": generator.log_fallen(10101)},
+		{"file": "taiga_style_reeds.glb", "result": generator.reeds(10201)},
+		{"file": "taiga_style_berry_bush.glb", "result": generator.berry_bush(10301)},
+		{"file": "taiga_style_mushrooms.glb", "result": generator.mushroom(10401, true)}
 	]
 	var out_dir := ProjectSettings.globalize_path("res://models/environment")
 	var dir_error := DirAccess.make_dir_recursive_absolute(out_dir)
