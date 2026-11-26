@@ -1360,6 +1360,8 @@ func find_pick(p: Vector3) -> Array:
 			if not pickables.has(k):
 				continue
 			for it in pickables[k]:
+				if not (it is Array) or it.size() < 4 or not (it[0] is Vector3):
+					continue
 				var q: Vector3 = it[0]
 				var dd := Vector2(q.x - p.x, q.z - p.z).length_squared()
 				if dd < bd:
@@ -1368,6 +1370,10 @@ func find_pick(p: Vector3) -> Array:
 	return best
 
 func take_pick(it: Array) -> void:
+	# Ignore malformed/stale pickup entries instead of crashing the scene during startup.
+	if it.size() < 4 or not (it[0] is Vector3) or not (it[2] is MultiMesh) or not (it[3] is int):
+		push_warning("Ignored malformed pickup record: %s" % [it])
+		return
 	if inventory != null and not inventory.can_add(String(it[1])):
 		_say("Короб полон")
 		return
