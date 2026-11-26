@@ -282,19 +282,36 @@ func _grow(bark: Surf, lf: Surf, P: Dictionary, st: Vector3, d: Vector3, L: floa
 			nd = nd.normalized()
 		_grow(bark, lf, P, p, nd, L * R(0.5, 0.72), r * 0.55 * (1.0 - t * 0.3), lv + 1, kind)
 
-## Куст: шар из листовых карточек.
+## Куст: низкий асимметричный силуэт с несколькими древесными побегами и отдельными группами листвы.
 func bush(seed_v: int) -> Array:
 	rng.seed = seed_v
 	var lf := Surf.new()
 	var bark := Surf.new()
-	for i in 5:
-		tube(bark, Vector3.ZERO, Vector3(R(-0.2, 0.2), 0.4, R(-0.2, 0.2)), Vector3(R(-0.5, 0.5), R(0.7, 1.0), R(-0.5, 0.5)), 0.03, 0.01, 3, 4)
-	for i in 34:
-		var d := Vector3(R(-1, 1), R(-0.2, 1), R(-1, 1)).normalized()
-		var p := Vector3(0, 0.55, 0) + d * R(0.3, 0.75)
-		var b := Basis.from_euler(Vector3(R(0, 6), R(0, 6), R(0, 6)))
-		card(lf, p - b.y * 0.45, b, 0.9, 0.9, R(0.8, 1.05))
-	return [_commit([bark, lf], ["bark_dead", "broad_leaf"]), 1.2]
+	# Побеги расходятся из основания, формируя характерный куст, а не гладкий шар.
+	for i in 7:
+		var a := TAU * i / 7.0 + R(-0.25, 0.25)
+		var lean := Vector3(cos(a), 0, sin(a))
+		var L := R(0.65, 1.05)
+		var st := Vector3(0, R(0.05, 0.18), 0)
+		var mid := st + lean * L * 0.52 + Vector3(0, L * 0.32, 0)
+		var en := st + lean * L + Vector3(0, L * R(0.55, 0.9), 0)
+		tube(bark, st, mid, en, R(0.035, 0.055), 0.012, 4, 5)
+		# Листовые группы идут вдоль ветвей и в верхней части, оставляя просветы.
+		for j in 9:
+			var t := R(0.22, 1.0)
+			var p := _bez(st, mid, en, t) + Vector3(R(-0.22, 0.22), R(-0.14, 0.18), R(-0.22, 0.22))
+			var b := Basis.from_euler(Vector3(R(-0.75, 0.75), R(0, TAU), R(-0.75, 0.75)))
+			var sz := R(0.42, 0.68) * (1.0 - t * 0.12)
+			card(lf, p - b.y * sz * 0.5, b, sz * R(0.75, 1.15), sz, R(0.72, 1.08))
+	# Несколько крупных листовых групп на верхнем контуре, с вариативным оттенком.
+	for i in 18:
+		var a := R(0, TAU)
+		var radius := R(0.35, 0.9)
+		var p := Vector3(cos(a) * radius, R(0.55, 1.15), sin(a) * radius)
+		var b := Basis.from_euler(Vector3(R(-0.65, 0.65), R(0, TAU), R(-0.65, 0.65)))
+		var sz := R(0.38, 0.62)
+		card(lf, p - b.y * sz * 0.5, b, sz, sz * R(0.85, 1.25), R(0.75, 1.08))
+	return [_commit([bark, lf], ["bark_dead", "broad_leaf"]), 1.35]
 
 ## Папоротник: веер из листьев-вай.
 func fern(seed_v: int) -> Array:
