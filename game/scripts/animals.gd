@@ -365,7 +365,7 @@ func alarm(a: Node3D, threat: Node3D) -> void:
 	if a.group < 0 or not groups.has(a.group):
 		return
 	for o in groups[a.group]:
-		if o != a and not o.dead and o.state != "flee" and o.state != "inlodge" and not (o.kind in ["wolf", "boar"] and o.scale_k > 0.6):
+		if o != a and not o.dead and o.state != "flee" and o.state != "inlodge":
 			o._flee_from(threat, 5.0)
 
 func _process(delta: float) -> void:
@@ -592,7 +592,7 @@ class Bird extends Node3D:
 # Каждого вида — несколько групп по всей карте и хотя бы одна группа в 60–120 м от старта,
 # чтобы их можно было найти. Места — по образу жизни вида.
 
-const TAIGA_PREDS := {"hare": ["lynx", "wolverine"], "roe": ["lynx"], "beaver": ["wolverine"], "moose": ["wolf", "tiger", "bear"],
+const TAIGA_PREDS := {"hare": ["lynx", "wolverine"], "roe": ["lynx"], "beaver": ["wolverine"], "wolf": ["tiger", "bear"], "moose": ["wolf", "tiger", "bear"],
 	"muskdeer": ["wolf", "lynx", "wolverine", "tiger"], "capercaillie": ["fox", "lynx", "wolverine"],
 	"lynx": ["wolf", "tiger"], "wolverine": ["wolf", "tiger", "bear"]}
 
