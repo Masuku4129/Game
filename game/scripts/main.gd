@@ -1319,12 +1319,6 @@ func _update_near(force: bool = false) -> void:
 	for m in veg.fade_list + pv.fade_list:
 		m.set_shader_parameter("near_c", c)
 		m.set_shader_parameter("near_r", NEAR_R)
-r xs: Array = by_key[key]
-		mi.multimesh.instance_count = xs.size()
-		for i in xs.size():
-			mi.multimesh.set_instance_transform(i, xs[i])
-			mi.multimesh.set_instance_custom_data(i, Color(0.0, 1.0, 0.0, 0.0))
-		mi.visible = true
 
 const PICK := ["berry", "mushroom", "twig", "pebble"]
 const PICK_NAME := {"berry": "ягоды", "mushroom": "гриб", "amanita": "мухомор", "twig": "хворост", "pebble": "камень", "flint": "кремень"}
