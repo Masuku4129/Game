@@ -741,8 +741,8 @@ func tick(delta: float) -> void:
 				found = true
 		if found:
 			heading = lerp_angle(heading, chosen, minf(1.0, delta * 7.0))
-			var dir := Vector3(sin(heading), 0.0, cos(heading))
-			var np2 := position + dir * step_len
+			var move_dir := Vector3(sin(heading), 0.0, cos(heading))
+			var np2 := position + move_dir * step_len
 			if _can_step(np2, flying):
 				position.x = np2.x
 				position.z = np2.z
