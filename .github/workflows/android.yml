@@ -31,6 +31,21 @@ jobs:
           grep -v ALSA /tmp/pv/colony.txt | tail -60 > /tmp/pv/colony_tail.txt; grep -E "CL |SCRIPT" /tmp/pv/colony.txt | head -30 || true
           SHOTS=/tmp/pv timeout 600 xvfb-run -a -s "-screen 0 1920x864x24" godot --rendering-driver vulkan --resolution 1920x864 2>&1 | grep -iE "SCRIPT ERROR|shot" | head -20 || true
           ls /tmp/pv
+      - name: Render imported GLB asset gallery
+        run: |
+          cd game
+          ASSET_GALLERY_SHOTS=/tmp/pv/taiga_asset_gallery.png timeout 180 xvfb-run -a -s "-screen 0 1920x864x24" godot --rendering-driver vulkan --resolution 1920x864 res://scenes/asset_gallery.tscn 2>&1 | tee /tmp/pv/asset_gallery.log
+          test -s /tmp/pv/taiga_asset_gallery.png
+          grep "TAIGA_ASSET_GALLERY loaded=5" /tmp/pv/asset_gallery.log
+      - name: Upload visual verification frames
+        uses: actions/upload-artifact@v4
+        with:
+          name: taiga-visual-review
+          path: |
+            /tmp/pv/taiga_asset_gallery.png
+            /tmp/pv/asset_gallery.log
+          if-no-files-found: error
+          retention-days: 30
       - name: Publish preview frames to branch
         run: |
           git config --global --add safe.directory "$GITHUB_WORKSPACE"
