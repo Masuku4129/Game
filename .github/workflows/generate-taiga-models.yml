@@ -47,3 +47,10 @@ jobs:
             git commit -m "Add original Taiga environment GLB models"
             git push
           fi
+      - name: Upload importable GLB pack
+        uses: actions/upload-artifact@v4
+        with:
+          name: taiga-environment-glb
+          path: game/models/environment/*.glb
+          if-no-files-found: error
+          retention-days: 30
