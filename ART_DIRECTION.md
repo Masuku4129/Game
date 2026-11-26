@@ -1,44 +1,40 @@
-# Art direction — fantasy ruins and purple magic
+# Визуальное направление — «Тайга»
 
-## Source references
-The image sheets supplied in the conversation are the primary visual references for the current art direction. Use them as visual guidance, not as flat textures to stretch across the world.
+## Основа
+Самостоятельная 3D survival-игра о человеке, который осваивает дикую природу Дальнего Востока. Визуальная основа — разнообразие реальных природных ландшафтов, сезонность, погода, естественные материалы и читаемый силуэт персонажа. Не использовать фэнтезийные руины, магические эффекты или фиолетовую палитру как основу мира.
 
-## Visual pillars
-- **Dense, handcrafted environments:** modular stone arches, broken walls, stairs, bridges, platforms, columns, gate structures, and architectural fragments.
-- **Layered natural dressing:** trees with readable silhouettes, bushes, ground cover, vines, roots, rocks, fallen logs, water features, and mushrooms/crystals where appropriate.
-- **Purple magical identity:** violet banners, luminous crystal clusters, rune-like accents, restrained magical glow, and blue-violet environmental lighting.
-- **Materials:** varied stone blocks with chipped edges, moss, dark wood, weathered metal, fabric folds, emissive crystal surfaces, and textured ground. Avoid smooth untextured primitives as final assets.
-- **Atmosphere:** fog depth where it improves readability, dramatic but readable light pools, high contrast focal areas, and dark cool surroundings.
+## Визуальные опоры
+- **Разнообразная природа:** хвойные и лиственные леса, смешанные леса, редколесье, болота, берега рек, каменистые склоны, луга, буреломы и участки гари.
+- **Растительность с узнаваемыми силуэтами:** ель, сосна, лиственница, пихта, кедр, берёза, осина, ольха, ива, кустарники, папоротники, мхи, ягоды и травы.
+- **Физически правдоподобные поверхности:** кора с рисунком, древесина с волокнами и торцами, камень с неровным рельефом, влажная почва, мох, хвойная подстилка, снег и лёд.
+- **Сезонные состояния:** отдельные состояния листвы, хвои, травы, грунта и водоёмов; снег на ветвях и земле зимой; весенняя грязь и талые воды; осенние цвета без чрезмерной насыщенности.
+- **Погода влияет на мир:** дождь и снег меняют поверхность, видимость и состояние объектов; следы ног и тела сохраняются в достаточно глубоком снегу и грязи.
 
-## Modular environment construction
-Build environments from reusable authored modules that can be combined into distinct silhouettes:
-- arches, straight wall segments, corner walls, broken wall variants, gates
-- column families, capitals, bases, damaged variants
-- stair sections, landings, bridge decks, parapets
-- decorative banners, lamps, braziers, statues, carts, crates, containers
-- crystal clusters, trees, shrubs, stones, ground vegetation
-- waterfalls, streams, pools, wet shoreline transitions
+## Модели и материалы
+- Игровые объекты должны быть импортируемыми 3D-моделями с реальной геометрией и материалами, а не набором очевидных примитивов.
+- У деревьев должны читаться ствол, ветви и объём кроны; у кустов — отдельные ветви и естественная масса листвы; у валежника — кора и открытая древесина на торцах.
+- Использовать несколько вариантов формы, возраста, размера и состояния каждого распространённого вида.
+- Не растягивать одну плоскую текстуру на весь объект. Избегать видимых стыков, одинаковых повторяющихся силуэтов и размытых поверхностей.
+- Коллизии могут быть упрощены, но должны соответствовать видимой форме объекта.
 
-Use multiple variants and irregular placement. Repetition must be masked through orientation, scale variation within bounds, damage, vegetation, and lighting. Keep collision geometry simplified but aligned to visible geometry.
+## Камера и мобильная читаемость
+- Основной формат — горизонтальный экран.
+- Камера — фиксированная изометрическая перспектива около 45°, без свободного вращения, с дистанцией, на которой хорошо различимы персонаж и ближайшее окружение.
+- Не отдалять камеру ради показа всей карты ценой потери детализации.
+- Оптимизировать повторяющиеся объекты через MultiMesh, LOD и дистанционное прореживание; сохранять плотность леса без чрезмерной нагрузки на телефон.
 
-## Camera and mobile readability
-- Keep landscape orientation and a close enough camera to read character and props clearly.
-- Avoid zooming out to show the whole arena at the cost of detail.
-- Maintain clear player silhouette, navigation paths, and combat spaces.
-- Mobile performance: instance/merge repeated geometry where practical, limit dynamic lights, use LOD or distance-based detail, and preserve readability.
+## Критерии приёмки
+Отклонять модели и сборки, если:
+- деревья, кусты, камни или персонажи выглядят как очевидные примитивы;
+- материалы отсутствуют, однотонны без причины или размыты;
+- лес выглядит редким, однообразным или повторяющимся;
+- объекты висят над землёй, проваливаются в неё или имеют заметные стыки;
+- персонаж слишком мал для уверенного распознавания на экране телефона;
+- снег, грязь и следы не взаимодействуют с рельефом.
 
-## Asset acceptance criteria
-Reject assets or builds where:
-- major props appear as obvious colored cubes/cylinders/cones;
-- terrain looks blurred or uniformly primitive;
-- character silhouette is too small to read in landscape gameplay;
-- modular seams are visible or pieces float/misalign;
-- vegetation density is sparse or repetitive;
-- lighting blooms so strongly that detail is lost.
-
-## Implementation sequence
-1. Establish the visual target with a compact playable scene and close landscape camera.
-2. Upgrade the primary environment modules and materials before expanding the map.
-3. Add dense natural dressing and variation.
-4. Integrate player readability, camera, touch controls, and interaction.
-5. Verify on Android export and optimize only after visual inspection.
+## Последовательность
+1. Создать и проверить импортируемые модели природных объектов и персонажа.
+2. Проверить модели в отдельной сцене Godot, затем интегрировать их в основную генерацию мира.
+3. Расширить набор сезонных и природных вариантов, не ломая существующие системы погоды, рельефа и следов.
+4. Проверить плотность леса, камеру, управление и производительность на Android.
+5. Только после проверки визуального результата расширять игровую механику.
