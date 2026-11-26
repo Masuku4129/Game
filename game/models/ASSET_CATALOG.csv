@@ -1,11 +1,7 @@
 id,group,asset,format,status,notes
-tree_birch_a,tree,tree_birch_a,GLB,created,Берёза
-tree_spruce_a,tree,tree_spruce_a,GLB,created,Ель
-tree_spruce_b,tree,tree_spruce_b,GLB,created,Вариант ели
-fern_cluster_a,undergrowth,fern_cluster_a,GLB,created,Папоротник
-rock_moss_a,geology,rock_moss_a,GLB,created,Камень со мхом
-stump_old_a,forest_floor,stump_old_a,GLB,created,Старый пень
-bush_berry_a,undergrowth,bush_berry_a,GLB,created,Куст с ягодами
-grass_tussock_a,undergrowth,grass_tussock_a,GLB,created,Пучок травы
-root_cluster_a,forest_floor,root_cluster_a,GLB,created,Корневая система
-fallen_log_a,forest_floor,fallen_log_a,GLB,created,Упавшее бревно
+tree_spruce_a,tree,tree_spruce_a,glTF,created,Ель; процедурная геометрия; vertex colors
+tree_birch_a,tree,tree_birch_a,glTF,created,Берёза; процедурная геометрия; vertex colors
+fern_cluster_a,undergrowth,fern_cluster_a,glTF,created,Папоротник; процедурная геометрия; vertex colors
+rock_moss_a,geology,rock_moss_a,glTF,created,Мшистый камень; процедурная геометрия; vertex colors
+stump_old_a,forest_floor,stump_old_a,glTF,created,Старый пень; процедурная геометрия; vertex colors
+fallen_log_a,forest_floor,fallen_log_a,glTF,created,Упавшее бревно; процедурная геометрия; vertex colors
