@@ -1247,7 +1247,9 @@ func _animate_rig(delta: float) -> void:
 		if rear:
 			var gp: Array = d["gpos"]
 			dy += sin(atk * 0.55) * 0.8 * absf((gp[d["pelvis"]] as Vector3).z - (gp[d["root"]] as Vector3).z)
-	var root: int = d["root"]
+	var root: int = int(d["root"])
+	if root < 0 or root >= (d["gpos"] as Array).size() or not ((d["gpos"] as Array)[root] is Vector3):
+		return
 	var rp: Vector3 = (d["gpos"] as Array)[root]
 	skel.set_bone_pose_position(root, rp + Vector3(0, dy, 0))
 	_be(skel, root, Vector3(pitch, 0, sin(phase) * 0.025 * mv * (1.0 - r)))
@@ -1288,8 +1290,12 @@ func _animate_rig(delta: float) -> void:
 ## Глухарь: шаг с кивками головы, пробежка, взлёт и полёт с частыми взмахами и планированием,
 ## клюёт с земли, токует (хвост веером, шея вверх, крылья опущены), сидит.
 func _animate_bird(delta: float) -> void:
+	if not parts.has("def") or not parts.has("skel") or not (parts["def"] is Dictionary) or not (parts["skel"] is Skeleton3D):
+		return
 	var d: Dictionary = parts["def"]
 	var skel: Skeleton3D = parts["skel"]
+	if not d.has("legs") or not (d["legs"] is Array) or not d.has("gpos") or not (d["gpos"] is Array) or not d.has("root") or not d.has("tails") or not (d["tails"] is Array) or (d["tails"] as Array).is_empty() or not d.has("chains") or not (d["chains"] is Dictionary) or not (d["chains"] as Dictionary).has("w"):
+		return
 	var sk: float = parts["sk"]
 	var walk: float = sp["walk"]
 	var fly := clampf(climb_h / 1.5, 0.0, 1.0)
@@ -1306,6 +1312,8 @@ func _animate_bird(delta: float) -> void:
 	var lie := _lie_k
 	var legs: Array = d["legs"]
 	for i in legs.size():
+		if not (legs[i] is Dictionary) or not (legs[i] as Dictionary).has("b") or not ((legs[i] as Dictionary)["b"] is Array) or ((legs[i] as Dictionary)["b"] as Array).size() < 3:
+			continue
 		var bs: Array = (legs[i] as Dictionary)["b"]
 		var ph: float = phase + float(i) * PI
 		var s := sin(ph)
@@ -1347,10 +1355,15 @@ func _animate_bird(delta: float) -> void:
 	# крылья: сложены вдоль боков; в полёте раскрыты и машут; на току приспущены
 	var flap := sin(_rig_t * 22.0)
 	var glide := 1.0 if fmod(_rig_t, 2.4) < 1.5 else 0.15
-	for w: Dictionary in (d["chains"] as Dictionary)["w"]:
+	for wing in (d["chains"] as Dictionary)["w"]:
+		if not (wing is Dictionary) or not wing.has("sd") or not wing.has("b") or not (wing["b"] is Array) or (wing["b"] as Array).size() < 2:
+			continue
+		var w: Dictionary = wing
 		var sd: float = w["sd"]
 		var b0: int = w["b"][0]
 		var b1: int = w["b"][1]
+		if b0 < 0 or b1 < 0 or b0 >= skel.get_bone_count() or b1 >= skel.get_bone_count():
+			continue
 		# плечо: разворот наружу (по Y), взмах (по Z); кисть: доворот
 		var yw := -sd * lerpf(0.04 + 0.12 * dk, PI * 0.5, fly)
 		var fl := lerpf(sd * 0.25 * dk, -sd * (flap * 0.8 * glide + 0.1), fly)
