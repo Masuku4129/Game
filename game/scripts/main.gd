@@ -67,6 +67,7 @@ var colony_mode := false
 var _imported_model_keeper: Node3D
 var _imported_variants_cache := {}
 var imported_veg_mats: Array[ShaderMaterial] = []
+var _fade_materials: Array = []
 
 func _ready() -> void:
 	_imported_model_keeper = Node3D.new()
@@ -81,6 +82,8 @@ func _ready() -> void:
 	_make_terrain()
 	_make_water()
 	_scatter_all()
+	# Cache material list once; avoid allocating a concatenated array during runtime ticks.
+	_fade_materials = veg.fade_list + pv.fade_list
 	# В основной сцене пока используем проверенную процедурную траву:
 	# экспериментальные GLB возвращены в галерею до проверки материалов, коллизий и FPS.
 	grass_mesh_vars = [pv.tuft(1500), pv.tuft(1503, 1.3), pv.tuft(1504, 0.8)]
@@ -827,7 +830,7 @@ func _process(delta: float) -> void:
 		_update_sky()
 		_update_stats(0.25)
 		_core_tick(0.25)  # core
-		weather.apply(veg.fade_list + pv.fade_list, terrain_mat, pv.mats["tuft"], water_mat)
+		weather.apply(_fade_materials, terrain_mat, pv.mats["tuft"], water_mat)
 		for im in imported_veg_mats:
 			im.set_shader_parameter("snow", weather.snow)
 			im.set_shader_parameter("wet", weather.wet)
@@ -1331,7 +1334,7 @@ func _update_near(force: bool = false) -> void:
 					(near_chunks[chunk_id] as MultiMeshInstance3D).queue_free()
 					near_chunks.erase(chunk_id)
 	# Центр перехода обновляется чаще, чем геометрические чанки: fade остаётся плавным.
-	for m in veg.fade_list + pv.fade_list:
+	for m in _fade_materials:
 		m.set_shader_parameter("near_c", c)
 		m.set_shader_parameter("near_r", NEAR_R)
 
