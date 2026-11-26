@@ -790,8 +790,16 @@ func _sense() -> float:
 func _can_step(p: Vector3, flying: bool = false) -> bool:
 	if absf(p.x) > main.SIZE * 0.5 - 10.0 or absf(p.z) > main.SIZE * 0.5 - 10.0:
 		return false
-	if main.blocked(p.x, p.z, 0.2 * scale_k):
+	# Проверяем не только точку центра: крупные звери часто клипались в стволы
+	# и кусты из-за слишком маленького радиуса. Круговой footprint по 8 точкам.
+	var body_radius: float = clampf(float(parts.get("gw", 0.12)) * scale_k * 0.75, 0.12, 0.68)
+	if main.blocked(p.x, p.z, body_radius):
 		return false
+	for sample_i in 8:
+		var sample_a: float = TAU * float(sample_i) / 8.0
+		var sample_p: Vector2 = Vector2(p.x, p.z) + Vector2(cos(sample_a), sin(sample_a)) * body_radius
+		if main.blocked(sample_p.x, sample_p.y, 0.10 * scale_k):
+			return false
 	var gy: float = main.grid_height(p.x, p.z)
 	var g0: float = main.grid_height(position.x, position.z)
 	if gy < main.WATER_Y - 0.3 and not swimmer() and not flying:
