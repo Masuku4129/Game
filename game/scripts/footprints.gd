@@ -484,13 +484,22 @@ func animal_step(a: Node3D, _dist: float) -> float:
 				var off := clampf(L * 0.09, 0.04, 0.15) * side
 				var w := clampf(L * 0.045, 0.03, 0.11) + sink * 0.2
 				var depth := maxf(sink, 0.02)
-				# Distinct paired tracks instead of one body-shaped imprint:
-				# light animals leave narrow paired paw marks; heavier species
-				# make wider, deeper prints in soft snow/mud.
+				# Four separate paw imprints: front and rear pair are offset along the gait,
+				# with the rear pair slightly narrower. This avoids the single-body oval.
 				var paw_gap := clampf(L * 0.12, 0.06, 0.22)
 				var paw_len := w * 1.3
-				_paint_oval(x + dir.y * off + lateral.x * paw_gap, z - dir.x * off + lateral.y * paw_gap, yaw, w, paw_len, depth, 4.0)
-				_paint_oval(x + dir.y * off - lateral.x * paw_gap, z - dir.x * off - lateral.y * paw_gap, yaw, w, paw_len, depth * 0.92, 4.0)
+				var fore_offset := clampf(L * 0.13, 0.07, 0.24)
+				var hind_offset := clampf(L * 0.16, 0.08, 0.28)
+				var hind_w := w * 0.82
+				var hind_len := paw_len * 0.9
+				var fore_x := x + dir.y * off + dir.x * fore_offset
+				var fore_z := z - dir.x * off + dir.y * fore_offset
+				var hind_x := x + dir.y * off - dir.x * hind_offset
+				var hind_z := z - dir.x * off - dir.y * hind_offset
+				_paint_oval(fore_x + lateral.x * paw_gap, fore_z + lateral.y * paw_gap, yaw, w, paw_len, depth, 4.0)
+				_paint_oval(fore_x - lateral.x * paw_gap, fore_z - lateral.y * paw_gap, yaw, w, paw_len, depth * 0.94, 4.0)
+				_paint_oval(hind_x + lateral.x * paw_gap, hind_z + lateral.y * paw_gap, yaw, hind_w, hind_len, depth * 0.88, 4.0)
+				_paint_oval(hind_x - lateral.x * paw_gap, hind_z - lateral.y * paw_gap, yaw, hind_w, hind_len, depth * 0.82, 4.0
 	return sd - sink
 
 # ---------- обновление ----------
