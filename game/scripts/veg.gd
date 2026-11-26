@@ -132,21 +132,33 @@ func tube(s: Surf, p0: Vector3, p1: Vector3, p2: Vector3, r0: float, r1: float, 
 			s.tri(a, b, a + 1)
 			s.tri(b, b + 1, a + 1)
 
-## Карточка: прямоугольник с текстурой. Нормали приподняты вверх, чтобы крона светилась мягко.
+## Карточка листвы: суженный низ, плечи и острый кончик вместо прямоугольного силуэта.
+## Семь вершин формируют более естественную форму листа/хвои; альфа-текстура добавляет мелкую детализацию.
 func card(s: Surf, pos: Vector3, basis: Basis, w: float, h: float, shade: float = 1.0) -> void:
-	var x := basis.x * w * 0.5
+	var x := basis.x * w
 	var y := basis.y * h
 	var face := basis.z
-	var c := Color(shade, shade, shade)
 	var base := s.n
-	var pts := [pos - x, pos + x, pos + x + y, pos - x + y]
-	var uvs := [Vector2(0, 1), Vector2(1, 1), Vector2(1, 0), Vector2(0, 0)]
-	for i in 4:
+	var pts := [
+		pos - x * 0.22,
+		pos + x * 0.22,
+		pos + x * 0.50 + y * 0.48,
+		pos + x * 0.24 + y * 0.82,
+		pos + y,
+		pos - x * 0.24 + y * 0.82,
+		pos - x * 0.50 + y * 0.48
+	]
+	var uvs := [
+		Vector2(0.28, 1.0), Vector2(0.72, 1.0), Vector2(1.0, 0.52),
+		Vector2(0.76, 0.18), Vector2(0.5, 0.0), Vector2(0.24, 0.18), Vector2(0.0, 0.52)
+	]
+	for i in pts.size():
 		var off: Vector3 = (pts[i] - pos - y * 0.5).normalized()
 		var nor := (face * 0.3 + off * 0.5 + Vector3.UP).normalized()
-		s.v(pts[i], nor, uvs[i], c)
-	s.tri(base, base + 1, base + 2)
-	s.tri(base, base + 2, base + 3)
+		var edge_shade := shade * (0.92 + 0.08 * sin(float(i) * 1.7))
+		s.v(pts[i], nor, uvs[i], Color(edge_shade, edge_shade, edge_shade))
+	for i in 5:
+		s.tri(base, base + i + 1, base + i + 2)
 
 func _basis_along(dir: Vector3, roll: float) -> Basis:
 	var y := dir.normalized()
