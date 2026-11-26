@@ -343,6 +343,26 @@ func spruce(seed_v: int, kind: String = "spruce") -> Array:
 		var y := lerpf(H * 0.14, H * 0.86, t)
 		var r := R0 * (1.0 - t * 0.85) * R(0.9, 1.1)
 		skirt(fl, y, r, r * 0.7 + 0.4, rng.randi_range(9, 13), lerpf(0.5, 1.0, t))
+		# Неровные живые ветви выходят за ярус, опускаются под весом хвои,
+		# с вторичными веточками и отдельными объемными игольчатыми кистями.
+		var branch_count := rng.randi_range(6, 9)
+		for bi in branch_count:
+			var a := TAU * float(bi) / branch_count + t * 0.7 + R(-0.18, 0.18)
+			var reach := r * R(0.88, 1.22)
+			var start := Vector3(0, y + R(-0.06, 0.12), 0)
+			var mid := Vector3(cos(a) * reach * 0.42, -reach * 0.10, sin(a) * reach * 0.42)
+			var tip := Vector3(cos(a) * reach, -reach * R(0.18, 0.32), sin(a) * reach)
+			trunk(bk, start, start + mid, start + tip, R0 * 0.035, 0.025, 3, 5)
+			var branch_dir := Vector3(cos(a), -0.22, sin(a)
+			).normalized()
+			for twig_i in 2:
+				var tt := 0.42 + twig_i * 0.23
+				var base := start.lerp(tip, tt)
+				var side_a := a + (1.0 if twig_i % 2 == 0 else -1.0) * R(0.55, 1.1)
+				var twig_tip := base + Vector3(cos(side_a), R(0.04, 0.18), sin(side_a)) * reach * R(0.16, 0.28)
+				trunk(bk, base, base.lerp(twig_tip, 0.55), twig_tip, 0.035, 0.012, 2, 4)
+				leafblob(fl, cards, twig_tip, Vector3(reach * 0.16, reach * 0.10, reach * 0.16), R(0.58, 1.0))
+			leafblob(fl, cards, tip, Vector3(reach * 0.20, reach * 0.13, reach * 0.20), R(0.55, 0.9))
 	skirt(fl, H * 0.9, 0.35, H * 0.12, 4, 1.0)
 	var out := [_mesh([[bk, "bark"], [fl, kind], [cards, kind + "_card"]]), H]
 	cards = null
@@ -358,13 +378,24 @@ func pine(seed_v: int, kind: String = "pine") -> Array:
 	cards = null if lod else _st()
 	var top := Vector3(R(-0.6, 0.6), H, R(-0.6, 0.6))
 	trunk(bk, Vector3.ZERO, Vector3(R(-0.3, 0.3), H * 0.5, R(-0.3, 0.3)), top, 0.28, 0.08, 4, 6)
-	for i in (rng.randi_range(7, 10) if cedar else rng.randi_range(3, 5)):
+	var crown_clusters := rng.randi_range(7, 10) if cedar else rng.randi_range(4, 6)
+	for i in crown_clusters:
 		var a := R(0, TAU)
-		var y := H * (R(0.35, 0.95) if cedar else R(0.68, 0.96))
+		var y := H * (R(0.28, 0.92) if cedar else R(0.66, 0.97))
 		var d := R(0.6, 2.0) * ((1.25 - y / H) * 1.6 if cedar else 1.0)
 		var c := Vector3(cos(a) * d, y, sin(a) * d) + top * Vector3(1, 0, 1) * (y / H)
-		trunk(bk, Vector3(top.x * y / H * 0.8, y - 0.8, top.z * y / H * 0.8), (Vector3(top.x * y / H, y - 0.6, top.z * y / H) + c) * 0.5, c, 0.07, 0.03, 1, 4)
-		clump(fl, c + Vector3(0, 0.3, 0), Vector3(R(1.3, 2.0), R(0.6, 0.9), R(1.3, 2.0)), R(0.4, 1.0))
+		var stem_start := Vector3(top.x * y / H * 0.8, y - 0.8, top.z * y / H * 0.8)
+		trunk(bk, stem_start, (stem_start + c) * 0.5, c, 0.07, 0.03, 2, 5)
+		# Длинные наклонные ветви с несколькими мягкими игольчатыми подушками,
+		# а не одинаковые сферические облака на голом стволе.
+		var bcount := rng.randi_range(4, 7)
+		for bj in bcount:
+			var ba := a + TAU * float(bj) / bcount + R(-0.22, 0.22)
+			var br := R(0.55, 1.1) * (1.0 - y / H * 0.45)
+			var branch_tip := c + Vector3(cos(ba) * br, R(-0.12, 0.16), sin(ba) * br)
+			trunk(bk, c, c.lerp(branch_tip, 0.55), branch_tip, 0.045, 0.018, 2, 4)
+			leafblob(fl, cards, branch_tip, Vector3(R(0.42, 0.68), R(0.25, 0.48), R(0.42, 0.68)), R(0.4, 0.95))
+		clump(fl, c + Vector3(0, 0.3, 0), Vector3(R(1.15, 1.65), R(0.55, 0.82), R(1.15, 1.65)), R(0.4, 1.0))
 	return [_mesh([[bk, "bark" if cedar else "bark_pine"], [fl, kind], [cards, kind + "_card"]]), H]
 
 ## Берёза: белый ствол с наклоном, вертикальные лёгкие облака.
@@ -403,9 +434,17 @@ func bush(seed_v: int, kind: String = "bush") -> Array:
 		var a := R(0, TAU)
 		var d: float = R(0.1, 0.6) * k.x
 		var c := Vector3(cos(a) * d, R(0.35, 0.7) * k.y, sin(a) * d)
-		if kind == "willow":
-			trunk(bk, Vector3(cos(a) * 0.1, 0, sin(a) * 0.1), c * 0.5, c, 0.05, 0.025, 1, 4)
-		leafblob(fl, cards, c, Vector3(R(0.45, 0.7), R(0.4, 0.6) * (1.3 if kind == "willow" else 1.0), R(0.45, 0.7)) * k.z, R(0.3, 1.0))
+		var start := Vector3(cos(a) * 0.1, 0.08, sin(a) * 0.1)
+		if kind == "willow" or kind == "bush":
+			trunk(bk, start, start.lerp(c, 0.55), c, 0.05, 0.025, 2, 5)
+		# Кусты имеют тонкие стебли, наружные листья и небольшие промежуточные
+		# листовые узлы, чтобы не читаться как ряд одинаковых шаров.
+		var bush_size := Vector3(R(0.45, 0.7), R(0.4, 0.6) * (1.3 if kind == "willow" else 1.0), R(0.45, 0.7)) * k.z
+		for li in 3:
+			var lt := 0.28 + li * 0.24
+			var leaf_center := start.lerp(c, lt) + Vector3(cos(a + R(-0.6, 0.6)), R(-0.1, 0.2), sin(a + R(-0.6, 0.6))) * bush_size.x * 0.4
+			leafblob(fl, cards, leaf_center, bush_size * R(0.42, 0.62), R(0.4, 1.0))
+		leafblob(fl, cards, c, bush_size, R(0.3, 1.0))
 	var parts := [[fl, kind], [cards, kind + "_card"]]
 	if kind == "willow":
 		parts.append([bk, "bark_dead"])
