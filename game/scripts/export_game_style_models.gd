@@ -81,7 +81,7 @@ func _portable_material(source: Material) -> StandardMaterial3D:
 	var shader_path := shader_material.shader.resource_path if shader_material.shader != null else ""
 	var texture: Variant = null
 	var tint := Color.WHITE
-	if shader_path.ends_with("card.gdshader") or shader_path.ends_with("bark.gdshader"):
+	if shader_path.ends_with("card.gdshader") or shader_path.ends_with("bark.gdshader") or shader_path.ends_with("bark_solid.gdshader"):
 		texture = shader_material.get_shader_parameter("tex")
 		var tint_value: Variant = shader_material.get_shader_parameter("tint")
 		if tint_value is Color:
