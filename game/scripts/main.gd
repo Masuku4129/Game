@@ -1651,13 +1651,13 @@ func _scatter_all() -> void:
 					# Validate metadata tuples before species-specific [2]/[4] access.
 					if kind in ROCKISH and (variant_data.size() < 3 or not (variant_data[2] is Vector3)):
 						push_warning("Skipped malformed rock variant %s[%d]: %s" % [kind, vi, variant_data])
-					continue
+						continue
 					if kind in ["fallen0", "fallen1"] and variant_data.size() < 5:
 						push_warning("Skipped malformed fallen-tree variant %s[%d]" % [kind, vi])
-					continue
+						continue
 					if kind == "mosslog" and variant_data.size() < 3:
 						push_warning("Skipped malformed mosslog variant %s[%d]" % [kind, vi])
-					continue
+						continue
 					var sc: Vector2 = r[2]
 					var s := rng.randf_range(sc.x, sc.y)
 					var b := Basis(Vector3.UP, rng.randf() * TAU).scaled(Vector3(s, s * rng.randf_range(0.9, 1.1), s))
