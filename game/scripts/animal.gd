@@ -718,19 +718,38 @@ func tick(delta: float) -> void:
 		var np := position + dir * speed * delta
 		# обход стволов и воды; мелкие воду обходят всегда, крупные плывут только
 		# спасаясь, в погоне или на переправе; отвесный уступ не одолеть
-		var gy: float = main.grid_height(np.x, np.z)
-		var g0: float = main.grid_height(position.x, position.z)
-		var wet: bool = gy < main.WATER_Y - 0.3 and not swimmer() and not flying
-		if not wet and swimmer() and kind != "beaver" and not flying and swim_k < 0.2 and not cross and not (state in ["flee", "chase", "charge"]):
-			wet = main.water_level(np.x, np.z) - gy > 0.6
-		var steep: bool = (gy - g0) > maxf(0.35, speed * delta * 1.6) and gy > main.WATER_Y and not flying
-		if main.blocked(np.x, np.z, 0.2 * scale_k) or wet or steep or absf(np.x) > main.SIZE * 0.5 - 10.0 or absf(np.z) > main.SIZE * 0.5 - 10.0:
-			heading += _turn_dir * 0.9
-			speed *= 0.5
-			_bump += 1
+		var desired := atan2(to.x, to.z)
+		var chosen := heading
+		var best_score := -INF
+		var step_len := maxf(0.18, speed * delta)
+		# Try the direct path first, then progressively wider arcs. This avoids
+		# the old fixed-angle bounce that trapped animals against the same blocker.
+		var offsets := [0.0, 0.38, -0.38, 0.78, -0.78, 1.25, -1.25, 1.85, -1.85, PI]
+		var found := false
+		for off in offsets:
+			var candidate := lerp_angle(heading, desired, 0.35) + off
+			var cd := Vector3(sin(candidate), 0.0, cos(candidate))
+			var probe := position + cd * step_len
+			if not _can_step(probe, flying):
+				continue
+			var align := cd.dot(to.normalized())
+			var turn_cost := absf(wrapf(candidate - heading, -PI, PI)) * 0.08
+			var score := align - turn_cost
+			if score > best_score:
+				best_score = score
+				chosen = candidate
+				found = true
+		if found:
+			heading = lerp_angle(heading, chosen, minf(1.0, delta * 7.0))
+			var dir := Vector3(sin(heading), 0.0, cos(heading))
+			var np2 := position + dir * step_len
+			if _can_step(np2, flying):
+				position.x = np2.x
+				position.z = np2.z
+				_bump = maxi(0, _bump - 1)
 		else:
-			position.x = np.x
-			position.z = np.z
+			speed *= 0.35
+			_bump += 1
 	_unstick(delta)
 	# бобр у хатки ныряет под неё (купол хатки — опора только для человека)
 	var g: float = main.grid_height(position.x, position.z) if state == "dive_in" else main.ground_fast(position.x, position.z)
@@ -767,6 +786,24 @@ func _sense() -> float:
 
 ## Застрял (упирается в склон, ствол или воду и почти не движется) — новая цель в сторону,
 ## откуда пришёл, со сменой направления обхода; долго не выходит — переносится к дому.
+## Проверка короткого шага: коллизии, вода, границы карты и непроходимый подъём.
+func _can_step(p: Vector3, flying: bool = false) -> bool:
+	if absf(p.x) > main.SIZE * 0.5 - 10.0 or absf(p.z) > main.SIZE * 0.5 - 10.0:
+		return false
+	if main.blocked(p.x, p.z, 0.2 * scale_k):
+		return false
+	var gy: float = main.grid_height(p.x, p.z)
+	var g0: float = main.grid_height(position.x, position.z)
+	if gy < main.WATER_Y - 0.3 and not swimmer() and not flying:
+		return false
+	if swimmer() and kind != "beaver" and not flying and swim_k < 0.2 and not cross and not (state in ["flee", "chase", "charge"]):
+		if main.water_level(p.x, p.z) - gy > 0.6:
+			return false
+	if (gy - g0) > 0.35 and gy > main.WATER_Y and not flying:
+		return false
+	return true
+
+
 func _unstick(delta: float) -> void:
 	_chk_t += delta
 	if _chk_t < 2.0:
@@ -792,9 +829,24 @@ func _unstick(delta: float) -> void:
 	if state == "wander":
 		state_t = rng.randf_range(6.0, 12.0)
 	if _bump > 40:
+		# Never teleport wildlife: abandon the unreachable destination and
+		# choose a nearby point on valid ground, preserving the current position.
 		_bump = 0
-		var hp2 := door if door != Vector3.INF else home
-		position = hp2 + Vector3(rng.randf_range(-6, 6), 0, rng.randf_range(-6, 6)) * (0.2 if kind == "beaver" else 1.0)
+		var escape := heading + rng.randf_range(-PI * 0.75, PI * 0.75)
+		var recovered := false
+		for radius in [4.0, 7.0, 11.0, 16.0]:
+			for turn in range(8):
+				var ang := escape + TAU * float(turn) / 8.0
+				var probe := position + Vector3(sin(ang), 0.0, cos(ang)) * radius
+				if _can_step(probe):
+					target = probe
+					recovered = true
+					break
+			if recovered:
+				break
+		if not recovered:
+			state_t = 0.0
+			want = 0.0
 
 func _strike(tg: Node3D) -> void:
 	if attack_cd > 0.0:
