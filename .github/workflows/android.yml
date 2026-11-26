@@ -76,10 +76,14 @@ jobs:
           cp -r /root/.local/share/godot/export_templates/${GODOT_VERSION}.stable ~/.local/share/godot/export_templates/ || true
       - name: Import project
         run: cd game && (timeout 600 godot --headless --import || true)
-      - name: Check scripts
+      - name: Check scripts (strict)
         run: |
+          set -o pipefail
           cd game
-          for f in scripts/*.gd; do godot --headless --check-only --script "$f" 2>&1 | grep -E "SCRIPT ERROR|Parse Error|ERROR" && exit 1 || true; done
+          for f in scripts/*.gd; do
+            log=$(godot --headless --check-only --script "$f" 2>&1) || { echo "$log"; exit 1; }
+            if echo "$log" | grep -E "SCRIPT ERROR|Parse Error|ERROR"; then echo "Script validation failed: $f"; exit 1; fi
+          done
       - name: Smoke test (запуск сцены без экрана)
         run: |
           cd game
@@ -90,14 +94,22 @@ jobs:
           mkdir -p build
           cd game && godot --headless --export-debug "Android" ../build/taiga.apk
           test -s ../build/taiga.apk
+      - name: Package complete project source
+        run: |
+          zip -qr build/taiga-project.zip game README.md ART_DIRECTION.md CHANGELOG.md .github/workflows/android.yml
+          test -s build/taiga-project.zip
       - uses: actions/upload-artifact@v4
         with:
-          name: taiga-apk
-          path: build/taiga.apk
-      - name: Publish to "latest" release
+          name: taiga-apk-and-project
+          path: |
+            build/taiga.apk
+            build/taiga-project.zip
+      - name: Publish APK and source ZIP to "latest" release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: latest
           name: Последняя сборка
           prerelease: true
-          files: build/taiga.apk
+          files: |
+            build/taiga.apk
+            build/taiga-project.zip
