@@ -1117,6 +1117,9 @@ func _animate_rig(delta: float) -> void:
 	var d: Dictionary = parts["def"]
 	if not d.has("legs") or not (d["legs"] is Array) or not d.has("gpos") or not (d["gpos"] is Array) or not d.has("root") or not d.has("pelvis") or not d.has("chest") or not d.has("neck1") or not d.has("neck2") or not d.has("head") or not d.has("jaw") or not d.has("tails") or not (d["tails"] is Array):
 		return
+	var root_idx: int = int(d["root"])
+	if root_idx < 0 or root_idx >= (d["gpos"] as Array).size() or not ((d["gpos"] as Array)[root_idx] is Vector3):
+		return
 	if d.has("bird"):
 		_animate_bird(delta)
 		return
