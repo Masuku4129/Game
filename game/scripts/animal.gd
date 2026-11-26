@@ -727,9 +727,9 @@ func tick(delta: float) -> void:
 		var offsets := [0.0, 0.38, -0.38, 0.78, -0.78, 1.25, -1.25, 1.85, -1.85, PI]
 		var found := false
 		for off in offsets:
-			var candidate := lerp_angle(heading, desired, 0.35) + off
+			var candidate: float = lerp_angle(heading, desired, 0.35) + float(off)
 			var cd := Vector3(sin(candidate), 0.0, cos(candidate))
-			var probe := position + cd * step_len
+			var probe: Vector3 = position + cd * step_len
 			if not _can_step(probe, flying):
 				continue
 			var align := cd.dot(to.normalized())
@@ -837,7 +837,7 @@ func _unstick(delta: float) -> void:
 		for radius in [4.0, 7.0, 11.0, 16.0]:
 			for turn in range(8):
 				var ang := escape + TAU * float(turn) / 8.0
-				var probe := position + Vector3(sin(ang), 0.0, cos(ang)) * radius
+				var probe: Vector3 = position + Vector3(sin(ang), 0.0, cos(ang)) * float(radius)
 				if _can_step(probe):
 					target = probe
 					recovered = true
