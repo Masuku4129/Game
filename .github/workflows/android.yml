@@ -1,7 +1,7 @@
 name: Android APK
 on:
   push:
-    branches: [main]
+    branches: [main, "parallel/**"]
   workflow_dispatch:
 concurrency:
   group: android-${{ github.ref }}
