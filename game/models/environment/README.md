@@ -10,9 +10,15 @@ All models are exported as glTF Binary (GLB), with Y-up coordinates for Godot 4.
 | `taiga_bush.glb` | Woody stems and fused foliage volume | 1.5 m |
 | `taiga_rock.glb` | Irregular weathered rock | 2.7 m wide |
 | `taiga_fallen_log.glb` | Tapered fallen trunk with bark ridges and exposed end | 3.1 m |
+| `taiga_larch.glb` | Open crown, tiered branches and needle clusters | 8.2 m |
+| `taiga_cedar.glb` | Broad layered cedar crown and heavy boughs | 7.4 m |
+| `taiga_aspen.glb` | Pale marked trunk, spreading branches and rounded crown | 7.2 m |
+| `taiga_alder.glb` | Multi-stem alder with irregular leaf crown | 5.6 m |
+| `taiga_fern.glb` | Radial fronds with separate rachises and pinnae | 1.1 m |
+| `taiga_stump.glb` | Broken stump with exposed wood top and bark ridges | 1.1 m |
 
 No rig, animation, weapon, enemy, or character integration is included in this asset batch.
 
 ## Visual import check
 
-Open `res://scenes/asset_gallery.tscn` in Godot to inspect all five imported models together. The Android workflow renders this scene and uploads `taiga-visual-review` for review. The gallery is isolated and does not replace the live world generator.
+Open `res://scenes/asset_gallery.tscn` in Godot to inspect all eleven imported models together. The Android workflow renders this scene and uploads `taiga-visual-review` for review. The gallery is isolated and does not replace the live world generator.

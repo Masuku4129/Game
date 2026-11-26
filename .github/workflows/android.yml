@@ -1,7 +1,7 @@
 name: Android APK
 on:
   push:
-    branches: [main]
+    branches: [main, "parallel/**"]
   workflow_dispatch:
 concurrency:
   group: android-${{ github.ref }}
@@ -39,7 +39,7 @@ jobs:
           cd game
           ASSET_GALLERY_SHOTS=/tmp/pv/taiga_asset_gallery.png timeout 180 xvfb-run -a -s "-screen 0 1920x864x24" godot --rendering-driver vulkan --resolution 1920x864 res://scenes/asset_gallery.tscn 2>&1 | tee /tmp/pv/asset_gallery.log
           test -s /tmp/pv/taiga_asset_gallery.png
-          grep "TAIGA_ASSET_GALLERY loaded=5" /tmp/pv/asset_gallery.log
+          grep "TAIGA_ASSET_GALLERY loaded=11" /tmp/pv/asset_gallery.log
       - name: Upload visual verification frames
         uses: actions/upload-artifact@v4
         with:
@@ -50,6 +50,7 @@ jobs:
           if-no-files-found: error
           retention-days: 30
       - name: Publish preview frames to branch
+        if: github.ref == 'refs/heads/main'
         run: |
           git config --global --add safe.directory "$GITHUB_WORKSPACE"
           git config user.name "github-actions[bot]"
