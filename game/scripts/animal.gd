@@ -790,8 +790,31 @@ func _sense() -> float:
 func _can_step(p: Vector3, flying: bool = false) -> bool:
 	if absf(p.x) > main.SIZE * 0.5 - 10.0 or absf(p.z) > main.SIZE * 0.5 - 10.0:
 		return false
-	if main.blocked(p.x, p.z, 0.2 * scale_k):
-		return false
+	# Проверяем всю траекторию короткого шага, а не только конечную точку:
+	# иначе корпус проскальзывает через тонкие стволы между кадрами.
+	var body_radius: float = clampf(float(parts.get("gw", 0.12)) * scale_k * 0.75, 0.12, 0.68)
+	var travel: Vector2 = Vector2(p.x - position.x, p.z - position.z)
+	var probe_count: int = clampi(int(ceil(travel.length() / maxf(body_radius * 0.45, 0.16))), 1, 24)
+	var terrain_step_limit: float = maxf(0.55, body_radius * 1.35)
+	for probe_i in range(probe_count + 1):
+		var probe_t: float = float(probe_i) / float(probe_count)
+		var probe_center: Vector2 = Vector2(position.x, position.z) + travel * probe_t
+		if main.blocked(probe_center.x, probe_center.y, body_radius):
+			return false
+		# Проверяем не только точку ног: четырёхточечная опора под корпусом
+		# выявляет резкие уступы/пересечения поверхности, в которых зверь раньше
+		# визуально проваливался или застревал в рельефной текстуре.
+		var center_ground: float = main.grid_height(probe_center.x, probe_center.y)
+		for terrain_i in 8:
+			var terrain_a: float = TAU * float(terrain_i) / 8.0
+			var terrain_p: Vector2 = probe_center + Vector2(cos(terrain_a), sin(terrain_a)) * body_radius
+			var terrain_h: float = main.grid_height(terrain_p.x, terrain_p.y)
+			if absf(terrain_h - center_ground) > terrain_step_limit:
+				return false
+			# Eight circumference probes catch narrow trunks and diagonal edges,
+			# not only the four cardinal directions around the animal.
+			if main.blocked(terrain_p.x, terrain_p.y, 0.12 * scale_k):
+				return false
 	var gy: float = main.grid_height(p.x, p.z)
 	var g0: float = main.grid_height(position.x, position.z)
 	if gy < main.WATER_Y - 0.3 and not swimmer() and not flying:
@@ -829,14 +852,14 @@ func _unstick(delta: float) -> void:
 	if state == "wander":
 		state_t = rng.randf_range(6.0, 12.0)
 	if _bump > 40:
-		# Never teleport wildlife: abandon the unreachable destination and
-		# choose a nearby point on valid ground, preserving the current position.
+		# Never teleport wildlife: exhaustively search for a reachable nearby target,
+		# then abandon path-dependent activities if the target cannot be reached.
 		_bump = 0
 		var escape := heading + rng.randf_range(-PI * 0.75, PI * 0.75)
 		var recovered := false
-		for radius in [4.0, 7.0, 11.0, 16.0]:
-			for turn in range(8):
-				var ang := escape + TAU * float(turn) / 8.0
+		for radius in [3.0, 5.0, 8.0, 12.0, 17.0, 23.0, 30.0]:
+			for turn in range(16):
+				var ang := escape + TAU * float(turn) / 16.0
 				var probe: Vector3 = position + Vector3(sin(ang), 0.0, cos(ang)) * float(radius)
 				if _can_step(probe):
 					target = probe
@@ -845,8 +868,16 @@ func _unstick(delta: float) -> void:
 			if recovered:
 				break
 		if not recovered:
-			state_t = 0.0
+			# Retain current location, release the unreachable task and rotate
+			# toward a fresh direction; subsequent decisions retry local movement.
+			_drop_fish()
+			food = null
+			prey = null
+			state = "wander"
+			state_t = rng.randf_range(3.0, 6.0)
 			want = 0.0
+			heading = wrapf(heading + PI * _turn_dir, -PI, PI)
+			target = position + Vector3(sin(heading), 0.0, cos(heading)) * 2.0
 
 func _strike(tg: Node3D) -> void:
 	if attack_cd > 0.0:
@@ -1110,9 +1141,16 @@ static func _be(skel: Skeleton3D, b: int, e: Vector3) -> void:
 	skel.set_bone_pose_rotation(b, Basis.from_euler(e).get_rotation_quaternion())
 
 func _animate_rig(delta: float) -> void:
+	if not parts.has("def") or not parts.has("skel") or not parts.has("sk") or not (parts["def"] is Dictionary) or not (parts["skel"] is Skeleton3D):
+		return
 	_attack_t -= delta
 	_rig_t += delta
 	var d: Dictionary = parts["def"]
+	if not d.has("legs") or not (d["legs"] is Array) or not d.has("gpos") or not (d["gpos"] is Array) or not d.has("root") or not d.has("pelvis") or not d.has("chest") or not d.has("neck1") or not d.has("neck2") or not d.has("head") or not d.has("jaw") or not d.has("tails") or not (d["tails"] is Array):
+		return
+	var root_idx: int = int(d["root"])
+	if root_idx < 0 or root_idx >= (d["gpos"] as Array).size() or not ((d["gpos"] as Array)[root_idx] is Vector3):
+		return
 	if d.has("bird"):
 		_animate_bird(delta)
 		return
@@ -1163,9 +1201,12 @@ func _animate_rig(delta: float) -> void:
 	var hsum := 0.0
 	for i in legs.size():
 		var lg: Dictionary = legs[i]
-		var bs: Array = lg["b"]
-		var rel: Array = lg["rel"]
-		var front: bool = lg["front"]
+		var bs: Array = lg.get("b", [])
+		var rel: Array = lg.get("rel", [])
+		# Guard species/animation data before bone array access; malformed rigs must not crash the scene.
+		if bs.size() < 4 or rel.size() < 3 or lie_f.size() < 3 or lie_h.size() < 3:
+			continue
+		var front: bool = bool(lg.get("front", false))
 		var ph: float = phase + float(_gait_offs[i]) * TAU
 		var s := sin(ph)
 		var lift := maxf(0.0, -cos(ph))
@@ -1244,7 +1285,9 @@ func _animate_rig(delta: float) -> void:
 		if rear:
 			var gp: Array = d["gpos"]
 			dy += sin(atk * 0.55) * 0.8 * absf((gp[d["pelvis"]] as Vector3).z - (gp[d["root"]] as Vector3).z)
-	var root: int = d["root"]
+	var root: int = int(d["root"])
+	if root < 0 or root >= (d["gpos"] as Array).size() or not ((d["gpos"] as Array)[root] is Vector3):
+		return
 	var rp: Vector3 = (d["gpos"] as Array)[root]
 	skel.set_bone_pose_position(root, rp + Vector3(0, dy, 0))
 	_be(skel, root, Vector3(pitch, 0, sin(phase) * 0.025 * mv * (1.0 - r)))
@@ -1285,8 +1328,12 @@ func _animate_rig(delta: float) -> void:
 ## Глухарь: шаг с кивками головы, пробежка, взлёт и полёт с частыми взмахами и планированием,
 ## клюёт с земли, токует (хвост веером, шея вверх, крылья опущены), сидит.
 func _animate_bird(delta: float) -> void:
+	if not parts.has("def") or not parts.has("skel") or not (parts["def"] is Dictionary) or not (parts["skel"] is Skeleton3D):
+		return
 	var d: Dictionary = parts["def"]
 	var skel: Skeleton3D = parts["skel"]
+	if not d.has("legs") or not (d["legs"] is Array) or not d.has("gpos") or not (d["gpos"] is Array) or not d.has("root") or not d.has("tails") or not (d["tails"] is Array) or (d["tails"] as Array).is_empty() or not d.has("chains") or not (d["chains"] is Dictionary) or not (d["chains"] as Dictionary).has("w"):
+		return
 	var sk: float = parts["sk"]
 	var walk: float = sp["walk"]
 	var fly := clampf(climb_h / 1.5, 0.0, 1.0)
@@ -1303,6 +1350,8 @@ func _animate_bird(delta: float) -> void:
 	var lie := _lie_k
 	var legs: Array = d["legs"]
 	for i in legs.size():
+		if not (legs[i] is Dictionary) or not (legs[i] as Dictionary).has("b") or not ((legs[i] as Dictionary)["b"] is Array) or ((legs[i] as Dictionary)["b"] as Array).size() < 3:
+			continue
 		var bs: Array = (legs[i] as Dictionary)["b"]
 		var ph: float = phase + float(i) * PI
 		var s := sin(ph)
@@ -1344,10 +1393,15 @@ func _animate_bird(delta: float) -> void:
 	# крылья: сложены вдоль боков; в полёте раскрыты и машут; на току приспущены
 	var flap := sin(_rig_t * 22.0)
 	var glide := 1.0 if fmod(_rig_t, 2.4) < 1.5 else 0.15
-	for w: Dictionary in (d["chains"] as Dictionary)["w"]:
+	for wing in (d["chains"] as Dictionary)["w"]:
+		if not (wing is Dictionary) or not wing.has("sd") or not wing.has("b") or not (wing["b"] is Array) or (wing["b"] as Array).size() < 2:
+			continue
+		var w: Dictionary = wing
 		var sd: float = w["sd"]
 		var b0: int = w["b"][0]
 		var b1: int = w["b"][1]
+		if b0 < 0 or b1 < 0 or b0 >= skel.get_bone_count() or b1 >= skel.get_bone_count():
+			continue
 		# плечо: разворот наружу (по Y), взмах (по Z); кисть: доворот
 		var yw := -sd * lerpf(0.04 + 0.12 * dk, PI * 0.5, fly)
 		var fl := lerpf(sd * 0.25 * dk, -sd * (flap * 0.8 * glide + 0.1), fly)

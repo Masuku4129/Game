@@ -24,7 +24,8 @@ uniform sampler2D zone_tex : filter_nearest;
 uniform float tsize = 512.0;
 uniform float tseg = 384.0;
 uniform float snow_m = 0.0;   // глубина снега (м) при множителе 1
-uniform float mud_m = 0.0;    // глубина грязи (м) при грязевитости 1
+uniform float mud_m = 0.0;    // глубина обычной грязи (м)
+uniform float bog_m = 0.0;    // постоянная вязкость болотной почвы, сезонно промерзает
 // следы: r — глубина (×1.25 м), g — отметка «часов засыпания» (0..255)
 uniform sampler2D track_tex : filter_linear, repeat_enable;
 uniform sampler2D track_near : filter_nearest, repeat_enable;
@@ -91,9 +92,9 @@ void vertex() {
 		float k = snow_m * 1.4;
 		v_wear = 1.0 - f.a;
 		v_sd = k * f.g * (1.0 - 0.85 * v_wear);
-		v_md = mud_m * f.b;
+		v_md = mud_m * f.b + bog_m * zw.y;
 		v_fd = f.r;
-		v_mf = f.b;
+		v_mf = max(f.b, zw.y);
 		wn = normalize(vec3(h - hx, e, h - hz));
 		sn = normalize(vec3(h + v_sd - hx - k * sx, e, h + v_sd - hz - k * sz));
 		vec2 uv = wp.xz / track_span;
@@ -119,9 +120,9 @@ void vertex() {
 		float k = snow_m * 1.4;
 		v_wear = 1.0 - f.a;
 		v_sd = k * f.g * (1.0 - 0.85 * v_wear);
-		v_md = mud_m * f.b;
+		v_md = mud_m * f.b + bog_m * zw.y;
 		v_fd = f.r;
-		v_mf = f.b;
+		v_mf = max(f.b, zw.y);
 		vec3 g = wn / max(wn.y, 0.05);
 		sn = normalize(vec3(g.x - k * sx / (2.0 * step_m), 1.0, g.z - k * sz / (2.0 * step_m)));
 		// под заплаткой у героя — опустить, по краю — чуть-чуть, чтобы не мерцало

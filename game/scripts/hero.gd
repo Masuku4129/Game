@@ -330,11 +330,11 @@ func _can_walk(p: Vector3) -> bool:
 		return false
 	# обрыв вниз: шагнуть можно — дальше герой падает
 	if y < position.y - 0.6 or airborne:
-		return not main.blocked(p.x, p.z, 0.32)
+		return not main.blocked(p.x, p.z, 0.42)
 	var n: Vector3 = main.ground_normal(p.x, p.z)
 	if n.y < 0.42:
 		return false
-	return not main.blocked(p.x, p.z, 0.32)
+	return not main.blocked(p.x, p.z, 0.42)
 
 ## Приземление: от скорости удара зависит, присядет ли герой, потеряет ли силы.
 func _land(impact: float) -> void:
@@ -535,7 +535,7 @@ func _process_main(delta: float) -> void:
 			# упёрлись в крутую стену: если это скала, а не дерево — начинаем лезть
 			var q := position + d * 0.5
 			var nq: Vector3 = main.ground_normal(q.x, q.z)
-			if mag > 0.5 and nq.y < 0.42 and depth < 0.5 and not main.blocked(q.x, q.z, 0.2) and float(main.stamina) > 0.1:
+			if mag > 0.5 and nq.y < 0.42 and depth < 0.5 and not main.blocked(q.x, q.z, 0.30) and float(main.stamina) > 0.1:
 				state = "climb"
 			vel = Vector3.ZERO
 	position.x = p.x
@@ -815,7 +815,7 @@ func _process_climb(delta: float) -> void:
 	var dy := climb_in * 0.85 * delta
 	var p := position + up_dir * (dy / maxf(slope, 0.6)) + right * side * 0.6 * delta
 	var nn: Vector3 = main.ground_normal(p.x, p.z)
-	if nn.y > 0.08 and not main.blocked(p.x, p.z, 0.25):
+	if nn.y > 0.08 and not main.blocked(p.x, p.z, 0.35):
 		position.x = p.x
 		position.z = p.z
 	position.y = main.ground_at(position.x, position.z)

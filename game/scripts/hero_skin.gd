@@ -74,7 +74,13 @@ static func build(parent: Node3D, pal: Dictionary = {}) -> Dictionary:
 			for t in range(a.get_track_count() - 1, -1, -1):
 				if a.track_get_type(t) == Animation.TYPE_POSITION_3D and not String(a.track_get_path(t)).ends_with(":pelvis") and not String(a.track_get_path(t)).ends_with(":root"):
 					a.remove_track(t)
-			if String(n).ends_with("_Loop"):
+			var anim_name := String(n)
+			var loop_clips := ["Walk", "Sprint", "Jog_Fwd", "Walk_Carry", "Farm_Harvest", "TreeChopping", "Fixing_Kneeling"]
+			var should_loop := anim_name.ends_with("_Loop")
+			for clip in loop_clips:
+				if anim_name == clip or anim_name.ends_with("|" + clip) or anim_name.ends_with("_" + clip):
+					should_loop = true
+			if should_loop:
 				a.loop_mode = Animation.LOOP_LINEAR
 			lib.add_animation(n, a)
 		src.free()

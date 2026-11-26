@@ -2,7 +2,7 @@ name: Generate Taiga 3D models
 on:
   workflow_dispatch:
   push:
-    branches: [main]
+    branches: [main, "parallel/**"]
     paths:
       - "tools/generate_taiga_models.py"
       - "tools/requirements-models.txt"
@@ -15,6 +15,8 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
@@ -28,10 +30,12 @@ jobs:
           from pathlib import Path
           import trimesh
           files = sorted(Path("game/models/environment").glob("*.glb"))
-          assert len(files) == 5, f"Expected 5 GLB models, got {len(files)}"
+          assert len(files) == 20, f"Expected 20 GLB models, got {len(files)}"
           for path in files:
               scene = trimesh.load(path, force="scene")
-              assert len(scene.geometry) > 0, path
+              assert len(scene.geometry) == 1, f"{path}: expected one merged render mesh, got {len(scene.geometry)}"
+              mesh = next(iter(scene.geometry.values()))
+              assert len(mesh.faces) > 0, path
               assert scene.bounds.shape == (2, 3), path
               assert scene.bounds[1, 1] > scene.bounds[0, 1], f"Y-up height missing: {path}"
               print(path, "meshes=", len(scene.geometry), "bytes=", path.stat().st_size)
@@ -45,6 +49,9 @@ jobs:
             echo "No model changes."
           else
             git commit -m "Add original Taiga environment GLB models"
+            # Rebase the generated binary-only commit if source edits landed during generation.
+            git fetch origin "$GITHUB_REF_NAME:refs/remotes/origin/$GITHUB_REF_NAME"
+            git rebase "origin/$GITHUB_REF_NAME"
             git push
           fi
       - name: Upload importable GLB pack

@@ -1,100 +1,127 @@
 name: Android APK
 on:
   push:
-    branches: [main]
+    branches: [main, "parallel/**"]
   workflow_dispatch:
 concurrency:
   group: android-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: false
 permissions:
   contents: write
 jobs:
   preview:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     timeout-minutes: 45
-    container:
-      image: barichello/godot-ci:4.3
     steps:
       - uses: actions/checkout@v4
-      - name: Install software GPU
+      - name: Install system graphics dependencies
+        run: sudo apt-get update -qq && sudo apt-get install -y xvfb mesa-vulkan-drivers libvulkan1 libgl1-mesa-dri unzip wget
+      - name: Install Godot 4.3
         run: |
-          apt-get update -qq
-          DEBIAN_FRONTEND=noninteractive apt-get install -y -qq xvfb mesa-vulkan-drivers libvulkan1 libgl1-mesa-dri >/dev/null
+          wget -q https://github.com/godotengine/godot/releases/download/4.3-stable/Godot_v4.3-stable_linux.x86_64.zip -O /tmp/godot.zip
+          unzip -q /tmp/godot.zip -d /tmp/godot-bin
+          sudo mv /tmp/godot-bin/Godot_v4.3-stable_linux.x86_64 /usr/local/bin/godot
+          sudo chmod +x /usr/local/bin/godot
       - name: Import project
         run: |
           mkdir -p /tmp/pv
           cd game
           timeout 600 godot --headless --import 2>&1 | tee /tmp/pv/import.log
           ! grep -E "Parse Error|Failed loading resource" /tmp/pv/import.log
-      - name: Render style test shots
-        run: |
-          mkdir -p /tmp/pv
-          cd game
-          COLONY_SHOTS=/tmp/pv timeout 900 xvfb-run -a -s "-screen 0 1920x864x24" godot --rendering-driver vulkan --resolution 1920x864 > /tmp/pv/colony.txt 2>&1 || true
-          grep -v ALSA /tmp/pv/colony.txt | tail -60 > /tmp/pv/colony_tail.txt; grep -E "CL |SCRIPT" /tmp/pv/colony.txt | head -30 || true
-          SHOTS=/tmp/pv timeout 600 xvfb-run -a -s "-screen 0 1920x864x24" godot --rendering-driver vulkan --resolution 1920x864 2>&1 | grep -iE "SCRIPT ERROR|shot" | head -20 || true
-          ls /tmp/pv
-      - name: Render imported GLB asset gallery
+      - name: Export and re-import game-style GLB models
         run: |
           cd game
-          ASSET_GALLERY_SHOTS=/tmp/pv/taiga_asset_gallery.png timeout 180 xvfb-run -a -s "-screen 0 1920x864x24" godot --rendering-driver vulkan --resolution 1920x864 res://scenes/asset_gallery.tscn 2>&1 | tee /tmp/pv/asset_gallery.log
+          timeout 300 godot --headless --script res://scripts/export_game_style_models.gd 2>&1 | tee /tmp/pv/game_style_export.log
+          grep "GAME_STYLE_EXPORT completed=5 failed=0" /tmp/pv/game_style_export.log
+          timeout 300 godot --headless --import 2>&1 | tee /tmp/pv/game_style_import.log
+          ! grep -E "Parse Error|Failed loading resource" /tmp/pv/game_style_import.log
+      - name: Render style and gallery shots
+        run: |
+          cd game
+          SHOTS=/tmp/pv timeout 600 xvfb-run -a -s "-screen 0 1920x864x24" godot --rendering-driver opengl3 --resolution 1920x864 2>&1 | tee /tmp/pv/hero.txt | grep -iE "SCRIPT ERROR|shot" | head -20 || true
+          ASSET_GALLERY_SHOTS=/tmp/pv/taiga_asset_gallery.png timeout 180 xvfb-run -a -s "-screen 0 1920x864x24" godot --rendering-driver opengl3 --resolution 1920x864 res://scenes/asset_gallery.tscn 2>&1 | tee /tmp/pv/asset_gallery.log
           test -s /tmp/pv/taiga_asset_gallery.png
-          grep "TAIGA_ASSET_GALLERY loaded=5" /tmp/pv/asset_gallery.log
-      - name: Upload visual verification frames
+          grep "TAIGA_ASSET_GALLERY loaded=25" /tmp/pv/asset_gallery.log
+      - name: Measure scene script cost
+        run: |
+          cd game
+          PERF=1 timeout 300 godot --headless res://scenes/main.tscn 2>&1 | tee /tmp/pv/perf.log
+          grep "PERF всё" /tmp/pv/perf.log
+      - name: Upload verification frames
         uses: actions/upload-artifact@v4
         with:
           name: taiga-visual-review
-          path: |
-            /tmp/pv/taiga_asset_gallery.png
-            /tmp/pv/asset_gallery.log
+          path: /tmp/pv/*
           if-no-files-found: error
           retention-days: 30
-      - name: Publish preview frames to branch
-        run: |
-          git config --global --add safe.directory "$GITHUB_WORKSPACE"
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git checkout --orphan preview
-          git rm -rf -q . || true
-          rm -rf game preview
-          cp /tmp/pv/*.png . && cp /tmp/pv/colony_tail.txt . && git add *.png colony_tail.txt
-          git commit -q -m "Кадры предпросмотра"
-          git push -f origin preview
   export:
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-    container:
-      image: barichello/godot-ci:4.3
-    env:
-      GODOT_VERSION: "4.3"
+    runs-on: ubuntu-22.04
+    timeout-minutes: 35
     steps:
       - uses: actions/checkout@v4
-      - name: Setup Godot templates and editor settings
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - uses: android-actions/setup-android@v4
+      - name: Install Android SDK packages
         run: |
-          mkdir -p ~/.local/share/godot/export_templates/ ~/.config/
-          cp -r /root/.config/godot ~/.config/godot || true
-          cp -r /root/.local/share/godot/export_templates/${GODOT_VERSION}.stable ~/.local/share/godot/export_templates/ || true
-      - name: Import project
-        run: cd game && (timeout 600 godot --headless --import || true)
+          sdkmanager --install "platform-tools" "platforms;android-35" "build-tools;35.0.0"
+          yes | sdkmanager --licenses >/dev/null || true
+      - name: Install Godot 4.3 and export templates
+        run: |
+          wget -q https://github.com/godotengine/godot/releases/download/4.3-stable/Godot_v4.3-stable_linux.x86_64.zip -O /tmp/godot.zip
+          wget -q https://github.com/godotengine/godot/releases/download/4.3-stable/Godot_v4.3-stable_export_templates.tpz -O /tmp/templates.tpz
+          unzip -q /tmp/godot.zip -d /tmp/godot-bin
+          sudo mv /tmp/godot-bin/Godot_v4.3-stable_linux.x86_64 /usr/local/bin/godot
+          sudo chmod +x /usr/local/bin/godot
+          mkdir -p ~/.local/share/godot/export_templates/4.3.stable
+          unzip -q /tmp/templates.tpz -d /tmp/godot-templates
+          DEBUG_TEMPLATE="$(find /tmp/godot-templates -type f -name android_debug.apk -print -quit)"
+          RELEASE_TEMPLATE="$(find /tmp/godot-templates -type f -name android_release.apk -print -quit)"
+          test -n "$DEBUG_TEMPLATE" && cp "$DEBUG_TEMPLATE" ~/.local/share/godot/export_templates/4.3.stable/android_debug.apk
+          test -n "$RELEASE_TEMPLATE" && cp "$RELEASE_TEMPLATE" ~/.local/share/godot/export_templates/4.3.stable/android_release.apk
+          test -s ~/.local/share/godot/export_templates/4.3.stable/android_debug.apk
+          test -s ~/.local/share/godot/export_templates/4.3.stable/android_release.apk
+      - name: Configure Godot Android export
+        run: |
+          mkdir -p ~/.config/godot
+          cat > ~/.config/godot/editor_settings-4.3.tres <<EOF
+          [gd_resource type="EditorSettings" format=3]
+          [resource]
+          export/android/android_sdk_path = "${ANDROID_HOME}"
+          export/android/java_sdk_path = "${JAVA_HOME}"
+          EOF
+      - name: Import project and model pipeline
+        run: |
+          cd game
+          timeout 600 godot --headless --editor --path . --quit
+          timeout 300 godot --headless --path . --script res://scripts/export_game_style_models.gd
+          timeout 600 godot --headless --editor --path . --quit
       - name: Check scripts
         run: |
           cd game
-          for f in scripts/*.gd; do godot --headless --check-only --script "$f" 2>&1 | grep -E "SCRIPT ERROR|Parse Error|ERROR" && exit 1 || true; done
-      - name: Smoke test (запуск сцены без экрана)
+          for f in scripts/*.gd; do
+            log=$(godot --headless --path . --check-only --script "$f" 2>&1) || { echo "$log"; exit 1; }
+            echo "$log" | grep -E "SCRIPT ERROR|Parse Error|ERROR" && exit 1 || true
+          done
+      - name: Smoke test (strict; errors fail the build)
         run: |
           cd game
-          timeout 300 godot --headless --quit-after 60 res://scenes/main.tscn 2>&1 | tee ../smoke.log | tail -40
-          ! grep -E "SCRIPT ERROR|Invalid|Cannot|Nonexistent" ../smoke.log
+          timeout 300 godot --headless --path . --quit-after 60 res://scenes/main.tscn 2>&1 | tee ../smoke.log
+          ! grep -E "SCRIPT ERROR|Parse Error|Invalid|Cannot|Nonexistent" ../smoke.log
+          grep -E "^TAIGA_STARTUP_OK imported_models=[1-9][0-9]*" ../smoke.log
       - name: Export APK
         run: |
           mkdir -p build
-          cd game && godot --headless --export-debug "Android" ../build/taiga.apk
+          cd game
+          godot --headless --path . --export-debug "Android" ../build/taiga.apk
           test -s ../build/taiga.apk
       - uses: actions/upload-artifact@v4
         with:
           name: taiga-apk
           path: build/taiga.apk
-      - name: Publish to "latest" release
+      - name: Publish latest APK
         uses: softprops/action-gh-release@v2
         with:
           tag_name: latest

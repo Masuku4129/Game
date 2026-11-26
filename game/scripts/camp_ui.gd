@@ -216,20 +216,29 @@ func _ready() -> void:
 	add_child(panel)
 	scroll.position = Vector2(30, 110)
 	scroll.size = Vector2(1060, 520)
+	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_AUTO
+	scroll.mouse_filter = Control.MOUSE_FILTER_STOP
 	panel.add_child(scroll)
 	rows_box.custom_minimum_size = Vector2(1040, 0)
+	rows_box.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	rows_box.add_theme_constant_override("separation", 10)
 	scroll.add_child(rows_box)
 	cols.position = Vector2(30, 110)
 	cols.size = Vector2(1060, 520)
+	cols.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	cols.add_theme_constant_override("separation", 20)
 	panel.add_child(cols)
 	for bx: VBoxContainer in [left_box, right_box]:
 		var sc := ScrollContainer.new()
 		sc.custom_minimum_size = Vector2(520, 520)
+		sc.size_flags_vertical = Control.SIZE_EXPAND_FILL
 		sc.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+		sc.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_AUTO
+		sc.mouse_filter = Control.MOUSE_FILTER_STOP
 		bx.custom_minimum_size = Vector2(500, 0)
+		bx.size_flags_vertical = Control.SIZE_EXPAND_FILL
 		bx.add_theme_constant_override("separation", 8)
 		sc.add_child(bx)
 		cols.add_child(sc)

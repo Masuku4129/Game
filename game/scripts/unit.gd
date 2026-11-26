@@ -74,6 +74,7 @@ var _goal := Vector3.INF
 var _hspeed := 0.0
 var _last_pos := Vector3.ZERO
 var _step_acc := 0.0
+var _step_side := 1.0
 var _stuck := 0.0
 var _lean := 0.0
 var _turn := 0.0
@@ -396,8 +397,21 @@ func _walk(dt: float) -> void:
 	sp *= clampf(0.45 + health * 0.55, 0.4, 1.0) * (1.0 - clampf(fatigue, 0.0, 1.0) * 0.3)
 	if carry_kind == "log":
 		sp *= 0.72
-	var snow: float = main.weather.snow if main.weather != null else 0.0
-	sp *= 1.0 - clampf(snow, 0.0, 1.0) * 0.28
+	# Реальная глубина снега/грязи под ногами, а не только общий процент снега по карте.
+	# После дождя мокрые низины вязнут сильнее; по натоптанному снегу идти легче.
+	if main.feet != null:
+		var sink: Vector2 = main.feet.sink_at(position)
+		var depth: float = sink.x + sink.y * 1.5
+		sp *= 1.0 / (1.0 + 1.3 * depth + 0.55 * depth * depth)
+	# Ветер и сильные осадки мешают движению; основной штраф дождя идёт через грязь.
+	if main.weather != null:
+		var wind_drag := clampf((float(main.weather.wind) - 0.9) * 0.07, 0.0, 0.12)
+		var rain_drag := clampf(float(main.weather.precip) * 0.035, 0.0, 0.04)
+		sp *= 1.0 - wind_drag - rain_drag
+	# На подъём идти тяжелее, спуск немного ускоряет шаг, но не отменяет коллизии.
+	var slope_n: Vector3 = main.ground_normal(position.x, position.z)
+	var downhill := slope_n.x * dir.x + slope_n.z * dir.y
+	sp *= clampf(1.0 + downhill * 0.16, 0.78, 1.08)
 	var want := Vector3(dir.x, 0, dir.y) * sp
 	vel = vel.move_toward(want, 9.0 * dt)
 	vel.y = 0.0
@@ -467,8 +481,19 @@ func _walk(dt: float) -> void:
 	if main.feet != null and moving:
 		_step_acc += speed_now * dt
 		if _step_acc > 0.7:
-			_step_acc = 0.0
+			_step_acc = fmod(_step_acc, 0.7)
 			main.feet.add_wear(position.x, position.z, 0.7, 0.014, 0.75)
+			# Не только вожак: остальные люди отряда тоже оставляют следы ботинок.
+			# Следы повторяют фактический шаг и учитывают глубину снега/грязи.
+			if not leader:
+				var print_depth: float = main.feet._print_depth(position.x, position.z, position.y)
+				if print_depth > 0.0:
+					_step_side = -_step_side
+					if print_depth < 0.14:
+						main.feet._paint_foot(position.x, position.z, yaw, print_depth, _step_side)
+				else:
+					var k := smoothstep(0.14, 0.5, print_depth)
+					main.feet._paint_oval(position.x, position.z, yaw, lerpf(0.09, 0.14, k), lerpf(0.2, 0.32, k), print_depth, 5.0)
 			# шаги слышно у вожака (он же герой для звука и следов)
 			if leader and main.sfx != null:
 				main.sfx.step(false, speed_now / 1.6)

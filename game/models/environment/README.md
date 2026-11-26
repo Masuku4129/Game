@@ -5,14 +5,29 @@ All models are exported as glTF Binary (GLB), with Y-up coordinates for Godot 4.
 
 | Asset | Purpose | Approx. scale |
 |---|---|---|
+| `taiga_pine.glb` | Scots pine with open crown, lateral limbs and irregular needle pads | 8.0 m |
 | `taiga_spruce.glb` | Spruce with tapered trunk, tiered boughs and organic needle canopy | 7.8 m |
 | `taiga_birch.glb` | Pale birch trunk, bark scars, branches and fused crown | 6.6 m |
 | `taiga_bush.glb` | Woody stems and fused foliage volume | 1.5 m |
 | `taiga_rock.glb` | Irregular weathered rock | 2.7 m wide |
 | `taiga_fallen_log.glb` | Tapered fallen trunk with bark ridges and exposed end | 3.1 m |
+| `taiga_larch.glb` | Open crown, tiered branches and needle clusters | 8.2 m |
+| `taiga_cedar.glb` | Broad layered cedar crown and heavy boughs | 7.4 m |
+| `taiga_aspen.glb` | Pale marked trunk, spreading branches and rounded crown | 7.2 m |
+| `taiga_alder.glb` | Multi-stem alder with irregular leaf crown | 5.6 m |
+| `taiga_fern.glb` | Radial fronds with separate rachises and pinnae | 1.1 m |
+| `taiga_stump.glb` | Broken stump with exposed wood top and bark ridges | 1.1 m |
+| `taiga_willow.glb` | Multi-stem willow with drooping branchlets and leaf clusters | 5.1 m |
+| `taiga_grass.glb` | Dense clump of individually tapered grass blades | 0.8 m |
+| `taiga_moss.glb` | Low irregular moss cushions with fine sporophytes | 0.4 m |
+| `taiga_juniper.glb` | Low wind-shaped evergreen shrub with woody stems and dense foliage | 1.6 m |
+| `taiga_reed.glb` | Wetland reed stems, seed heads and narrow leaves | 1.9 m |
+| `taiga_cranberry.glb` | Creeping bog runners, small leaves and red fruit | 0.3 m |
+| `taiga_dead_snag.glb` | Weathered dead standing trunk with broken branches | 5.7 m |
+| `taiga_lichen_rock.glb` | Irregular stone with separate lichen patches | 1.7 m |
 
 No rig, animation, weapon, enemy, or character integration is included in this asset batch.
 
 ## Visual import check
 
-Open `res://scenes/asset_gallery.tscn` in Godot to inspect all five imported models together. The Android workflow renders this scene and uploads `taiga-visual-review` for review. The gallery is isolated and does not replace the live world generator.
+Open `res://scenes/asset_gallery.tscn` in Godot to inspect all twenty imported models together. The Android workflow renders this scene and uploads `taiga-visual-review` for review. The gallery is isolated. Spruce, pine, birch, larch, aspen, cedar, alder, willow, juniper, reeds, cranberry, snag, fern, grass, moss and stump variants are also integrated into live-world scatter where their placement metadata is compatible.

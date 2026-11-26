@@ -6,6 +6,7 @@ const SIZE := 512.0
 const SEG := 384
 const WATER_Y := -2.0
 const CELL := 64.0
+const IMPORTED_GLBS := {"spruce": "taiga_spruce.glb", "pine": "taiga_pine.glb", "birch": "taiga_birch.glb", "larch": "taiga_larch.glb", "aspen": "taiga_aspen.glb", "cedar": "taiga_cedar.glb", "alder": "taiga_alder.glb", "willow": "taiga_willow.glb", "bush": "taiga_bush.glb", "rock": "taiga_rock.glb"}
 
 var n_hill := FastNoiseLite.new()
 var n_cliff := FastNoiseLite.new()
@@ -27,10 +28,13 @@ var hunger := 0.85
 var warmth := 0.8
 var stamina := 1.0
 var blockers := {}
+var tree_grid := {}
+var _tree_record_id := 0
 var seats := {}
 var act_btn: Button
 var fps_lbl: Label
 var _fps_t := 0.0
+var _shader_sync_t := 0.0
 var weather
 var sfx
 var feet
@@ -61,9 +65,16 @@ var combat  # --- combat: удары, прицел, стрелы (combat.gd) ---
 # colony_mode = true — новая игра про острог; false — старый режим героя с джойстиком
 # (отладочный переключатель в настройках и переменная окружения HERO_MODE=1). ---
 var colony
-var colony_mode := true
+var colony_mode := false
+var _imported_model_keeper: Node3D
+var _imported_variants_cache := {}
+var imported_veg_mats: Array[ShaderMaterial] = []
+var _fade_materials: Array = []
 
 func _ready() -> void:
+	_imported_model_keeper = Node3D.new()
+	_imported_model_keeper.name = "ImportedModelResourceKeeper"
+	add_child(_imported_model_keeper)
 	_colony_pick_mode()
 	_setup_noise()
 	weather = preload("res://scripts/weather.gd").new()
@@ -73,6 +84,11 @@ func _ready() -> void:
 	_make_terrain()
 	_make_water()
 	_scatter_all()
+	print("TAIGA_STARTUP_OK imported_models=%d" % _imported_variants_cache.size())
+	# Cache material list once; avoid allocating a concatenated array during runtime ticks.
+	_fade_materials = veg.fade_list + pv.fade_list
+	# В основной сцене пока используем проверенную процедурную траву:
+	# экспериментальные GLB возвращены в галерею до проверки материалов, коллизий и FPS.
 	grass_mesh_vars = [pv.tuft(1500), pv.tuft(1503, 1.3), pv.tuft(1504, 0.8)]
 	hero = preload("res://scripts/hero.gd").new()
 	hero.main = self
@@ -248,16 +264,15 @@ func _ready() -> void:
 ## --- colony: какой режим запускать. Старые проверки (бой, инструменты, охота, стройка,
 ## сохранение, кадры, замер) идут по-прежнему от героя, поэтому для них — режим героя. ---
 func _colony_pick_mode() -> void:
-	colony_mode = true
-	var cf := ConfigFile.new()
-	if cf.load("user://settings.cfg") == OK:
-		colony_mode = not bool(cf.get_value("game", "hero_mode", false))
-	for e: String in ["COMBAT_TEST", "TOOLS_TEST", "HUNT_TEST", "BUILD_TEST", "SAVE_TEST", "UI_SHOTS", "SHOTS", "PERF", "HERO_MODE"]:
+	# Релизная игра — одиночное выживание за одного первопроходца.
+	# Режим острога/отряда оставлен только для явных внутренних тестов.
+	colony_mode = false
+	for e: String in ["COLONY_TEST", "COLONY_SHOTS"]:
 		if OS.get_environment(e) != "":
-			colony_mode = false
-	for e2: String in ["COLONY_TEST", "COLONY_SHOTS"]:
-		if OS.get_environment(e2) != "":
 			colony_mode = true
+	for e2: String in ["COMBAT_TEST", "TOOLS_TEST", "HUNT_TEST", "BUILD_TEST", "SAVE_TEST", "UI_SHOTS", "SHOTS", "PERF", "HERO_MODE"]:
+		if OS.get_environment(e2) != "":
+			colony_mode = false
 
 func _find_start() -> Vector3:
 	for r in range(0, 120, 3):
@@ -266,7 +281,7 @@ func _find_start() -> Vector3:
 			var x := cos(a) * r
 			var z := sin(a) * r
 			var y := height(x, z)
-			if y > WATER_Y + 0.8 and normal_at(x, z).y > 0.93 and not blocked(x, z, 1.5):
+			if y > WATER_Y + 0.8 and normal_at(x, z).y > 0.93 and not blocked(x, z, 7.5):
 				return Vector3(x, y, z)
 	return Vector3(0, height(0, 0), 0)
 
@@ -772,18 +787,23 @@ func _process(delta: float) -> void:
 		hp = Vector3(0, -1000.0, 0)
 		cp = colony.veg_focus()
 	# --- /colony ---
-	for m in veg.fade_list:
-		m.set_shader_parameter("hero_pos", hp)
-		m.set_shader_parameter("cam_pos", cp)
-	for m in pv.fade_list:
-		m.set_shader_parameter("hero_pos", hp)
-		m.set_shader_parameter("cam_pos", cp)
-	pv.mats["tuft"].set_shader_parameter("hero_pos", hp)
-	pv.mats["tuft"].set_shader_parameter("cam_pos", cp)
+	# Dynamic shader state is synchronized at 20 Hz instead of touching every material each frame.
+	# Continuous grass animation remains frame-driven; spatial fade/water state changes more slowly.
+	_shader_sync_t -= delta
+	if _shader_sync_t <= 0.0:
+		_shader_sync_t = 0.05
+		for m in veg.fade_list:
+			m.set_shader_parameter("hero_pos", hp)
+			m.set_shader_parameter("cam_pos", cp)
+		for m in pv.fade_list:
+			m.set_shader_parameter("hero_pos", hp)
+			m.set_shader_parameter("cam_pos", cp)
+		pv.mats["tuft"].set_shader_parameter("hero_pos", hp)
+		pv.mats["tuft"].set_shader_parameter("cam_pos", cp)
+		water_mat.set_shader_parameter("hero_pos", hero.position)
+		water_mat.set_shader_parameter("swim", hero.swimb if colony == null else 0.0)
+		water_mat.set_shader_parameter("swim_move", clampf(hero.run_mag, 0.0, 1.0))
 	pv.mats["tuft"].set_shader_parameter("grass_now", Time.get_ticks_msec() * 0.001)
-	water_mat.set_shader_parameter("hero_pos", hero.position)
-	water_mat.set_shader_parameter("swim", hero.swimb if colony == null else 0.0)
-	water_mat.set_shader_parameter("swim_move", clampf(hero.run_mag, 0.0, 1.0))
 	_fps_t -= delta
 	if _fps_t <= 0.0:
 		_fps_t = 0.5
@@ -813,7 +833,13 @@ func _process(delta: float) -> void:
 		_update_sky()
 		_update_stats(0.25)
 		_core_tick(0.25)  # core
-		weather.apply(veg.fade_list + pv.fade_list, terrain_mat, pv.mats["tuft"], water_mat)
+		weather.apply(_fade_materials, terrain_mat, pv.mats["tuft"], water_mat)
+		for im in imported_veg_mats:
+			im.set_shader_parameter("snow", weather.snow)
+			im.set_shader_parameter("wet", weather.wet)
+			im.set_shader_parameter("autumn", weather.autumn)
+			im.set_shader_parameter("leaf_drop", weather.leaf_drop)
+			im.set_shader_parameter("wind", weather.wind)
 		if joy != null:
 			var lbl: String = hero.action_label()
 			act_btn.visible = lbl != ""
@@ -957,7 +983,9 @@ func _grass_step() -> void:
 	var per_var: Array = _gb["pv"]
 	var x0 := k.x * GCELL - SIZE * 0.5
 	var z0 := k.y * GCELL - SIZE * 0.5
-	var step := 0.92
+	# Меньше экземпляров: прежний шаг 0.92 м создавал почти сплошной ковёр
+	# и перегружал мобильный GPU. Новая сетка реже и плотность задаётся биомом.
+	var step := 1.65
 	var z: float = _gb["z"]
 	var z_end := minf(z + 8.0, GCELL)
 	while z < z_end:
@@ -972,19 +1000,25 @@ func _grass_step() -> void:
 				continue
 			if camp != null and camp.cleared(px, pz):  # build: под постройкой травы нет
 				continue
+			# В болотных зонах оставляем место осоке, сфагнуму и кочкам,
+			# а не накрываем их одинаковой сухой травой.
+			if zone(px, pz) == 2:
+				continue
 			var fd := forest_density(px, pz)
 			var h1 := grid_height(px + 1.0, pz)
 			var h2 := grid_height(px - 1.0, pz)
 			var h3 := grid_height(px, pz + 1.0)
 			var h4 := grid_height(px, pz - 1.0)
 			var slope := 1.0 - Vector3(h2 - h1, 2.0, h4 - h3).normalized().y
-			# сплошной ковёр: на лугу густо, в лесу реже; пятна шума меняют только высоту
+			# Ковёр заменён отдельными куртинами: чаще на открытом лугу,
+			# заметно реже под кронами и среди кустарника.
 			var patch := n_detail.get_noise_2d(px * 3.0, pz * 3.0) + n_forest.get_noise_2d(px * 6.0, pz * 6.0) * 0.5
-			if slope > 0.22 or rng.randf() > (1.0 - fd) * 0.75 + 0.25:
+			var cover_chance := clampf(0.10 + (1.0 - fd) * 0.38 + clampf(patch + 0.3, 0.0, 1.0) * 0.1, 0.08, 0.52)
+			if slope > 0.22 or rng.randf() > cover_chance:
 				continue
 			if maxf(maxf(h1, h2), maxf(h3, h4)) - minf(minf(h1, h2), minf(h3, h4)) > 1.0:
 				continue
-			var s := rng.randf_range(1.1, 1.6)
+			var s := rng.randf_range(1.25, 1.75)
 			var tall := clampf(0.8 + patch * 0.6, 0.55, 1.4) * rng.randf_range(0.85, 1.15)
 			var b := Basis(Vector3.UP, rng.randf() * TAU).scaled(Vector3(s, s * tall, s))
 			per_var[rng.randi() % grass_mesh_vars.size()].append(Transform3D(b, Vector3(px, y - 0.03, pz)))
@@ -998,9 +1032,13 @@ func _grass_step() -> void:
 		var xs: Array = per_var[vi]
 		if xs.is_empty():
 			continue
+		var grass_mesh: Mesh = grass_mesh_vars[vi][0]
+		if grass_mesh == null:
+			push_error("Null grass mesh variant=%d" % vi)
+			continue
 		var mm := MultiMesh.new()
 		mm.transform_format = MultiMesh.TRANSFORM_3D
-		mm.mesh = grass_mesh_vars[vi][0]
+		mm.mesh = grass_mesh
 		mm.use_custom_data = true
 		mm.instance_count = xs.size()
 		# время постройки клетки: шейдер по нему плавно выращивает траву
@@ -1017,27 +1055,111 @@ func _grass_step() -> void:
 	add_child(holder)
 	grass_cells[k] = holder
 
+## Загружает один объединённый GLB-меш как вариант MultiMesh.
+## Сцена освобождается сразу; ресурс Mesh остаётся удержан массивом варианта.
+func _imported_glb_variant(file_name: String) -> Array:
+	if _imported_variants_cache.has(file_name):
+		return _imported_variants_cache[file_name]
+	var packed := load("res://models/environment/" + file_name) as PackedScene
+	if packed == null:
+		push_warning("Missing imported taiga model: " + file_name)
+		return []
+	var root := packed.instantiate()
+	var pending: Array[Node] = [root]
+	var found: Mesh = null
+	while not pending.is_empty():
+		var node: Node = pending.pop_back()
+		if node is MeshInstance3D:
+			var candidate := (node as MeshInstance3D).mesh
+			if candidate != null:
+				found = candidate
+				break
+		for child: Node in node.get_children():
+			pending.append(child)
+	if found == null:
+		root.free()
+		push_warning("Imported taiga model has no MeshInstance3D: " + file_name)
+		return []
+	# Не дублируем импортированный ArrayMesh: GLB importer связывает Mesh с
+	# нативным RenderingServer RID. Сохраняем исходную сцену скрытым дочерним
+	# узлом, чтобы RID и MeshInstance оставались живыми весь срок работы мира.
+	var model_height: float = found.get_aabb().size.y
+	# Возвращаем именно игровые материалы: GLB экспортирован из veg.gd,
+	# а сезонный shader поверх них сохраняет исходные текстуры коры и листовых карточек.
+	var game_style := file_name.begins_with("taiga_style_")
+	var deciduous := file_name in ["taiga_style_birch.glb", "taiga_birch.glb", "taiga_aspen.glb", "taiga_alder.glb", "taiga_willow.glb"]
+	for surface in found.get_surface_count():
+		var source_mat := found.surface_get_material(surface) as StandardMaterial3D
+		var seasonal_mat := ShaderMaterial.new()
+		seasonal_mat.shader = load("res://shaders/paint/imported_game_style.gdshader") if game_style else load("res://shaders/paint/imported_vegetation.gdshader")
+		if game_style:
+			var base_texture: Texture2D = source_mat.albedo_texture if source_mat != null else null
+			seasonal_mat.set_shader_parameter("has_texture", 1.0 if base_texture != null else 0.0)
+			if base_texture != null:
+				seasonal_mat.set_shader_parameter("base_texture", base_texture)
+			seasonal_mat.set_shader_parameter("base_tint", source_mat.albedo_color if source_mat != null else Color.WHITE)
+			seasonal_mat.set_shader_parameter("foliage", 1.0 if surface > 0 and not file_name.ends_with("rock.glb") else 0.0)
+			seasonal_mat.set_shader_parameter("deciduous", 1.0 if deciduous else 0.0)
+			seasonal_mat.set_shader_parameter("sway_strength", 0.045)
+		else:
+			# GLB files without useful vertex colours previously rendered as white/
+			# monochrome clay. Provide species-aware palette fallback in shader.
+			var palette := _imported_species_palette(file_name)
+			seasonal_mat.set_shader_parameter("fallback_leaf_color", palette["leaf"])
+			seasonal_mat.set_shader_parameter("fallback_bark_color", palette["bark"])
+			seasonal_mat.set_shader_parameter("fallback_rock_color", palette["rock"])
+			seasonal_mat.set_shader_parameter("is_rock", 1.0 if file_name.contains("rock") else 0.0)
+			seasonal_mat.set_shader_parameter("deciduous", 1.0 if deciduous else 0.0)
+			seasonal_mat.set_shader_parameter("sway_strength", 0.045)
+		found.surface_set_material(surface, seasonal_mat)
+		imported_veg_mats.append(seasonal_mat)
+	_imported_model_keeper.add_child(root)
+	root.visible = false
+	var variant := [[found, model_height]]
+	_imported_variants_cache[file_name] = variant
+	return variant
+
+## Natural fallback palette for imported meshes whose vertex colours are absent/white.
+func _imported_species_palette(file_name: String) -> Dictionary:
+	var palettes := {
+		"spruce": [Color("#21492b"), Color("#493a2a")],
+		"pine": [Color("#285232"), Color("#59422e")],
+		"larch": [Color("#49723a"), Color("#67452e")],
+		"cedar": [Color("#315d3b"), Color("#58412b")],
+		"birch": [Color("#77934c"), Color("#d0c4a4")],
+		"aspen": [Color("#668d48"), Color("#766048")],
+		"alder": [Color("#557c46"), Color("#554132")],
+		"willow": [Color("#55794c"), Color("#5b4938")],
+		"bush": [Color("#3d6938"), Color("#5a4831")],
+		"juniper": [Color("#345b42"), Color("#54402d")],
+		"rock": [Color("#5f625e"), Color("#555956")]
+	}
+	var key := file_name.get_basename().replace("taiga_style_", "").replace("taiga_", "");
+	var pair: Array = palettes.get(key, [Color("#476b3d"), Color("#5a4531")])
+	return {"leaf": pair[0], "bark": pair[1], "rock": Color("#62645f")}
+
+
 ## Варианты: [mesh, высота]. Несколько вариантов на породу, чтобы лес не повторялся.
 func _variants(kind: String) -> Array:
 	var out := []
 	match kind:
 		"spruce":
-			for i in 6: out.append(pv.spruce(100 + i))
+			for i in (2 if pv.lod else 6): out.append(pv.spruce(100 + i))
 		"spruce_dead":
 			for i in 2: out.append(pv.dead_tree(200 + i))
 		"pine":
-			for i in 5: out.append(pv.pine(300 + i))
+			for i in (2 if pv.lod else 5): out.append(pv.pine(300 + i))
 		"birch":
-			for i in 5: out.append(pv.birch(400 + i))
+			for i in (2 if pv.lod else 5): out.append(pv.birch(400 + i))
 		"bare":
 			for i in 2: out.append(pv.dead_tree(500 + i))
 			out.append(pv.dead_tree(510))
 		"bush":
 			for i in 5: out.append(pv.bush(600 + i))
 		"larch":
-			for i in 5: out.append(pv.birch(1400 + i, "larch"))
+			for i in (2 if pv.lod else 5): out.append(pv.birch(1400 + i, "larch"))
 		"aspen":
-			for i in 5: out.append(pv.birch(1500 + i, "leaf"))
+			for i in (2 if pv.lod else 5): out.append(pv.birch(1500 + i, "leaf"))
 		"berry":
 			for i in 3: out.append(pv.berry_bush(1600 + i))
 		"mushroom":
@@ -1046,9 +1168,9 @@ func _variants(kind: String) -> Array:
 		"anthill":
 			out.append(pv.anthill(1800))
 		"fir":
-			for i in 5: out.append(pv.spruce(1900 + i, "fir"))
+			for i in (2 if pv.lod else 5): out.append(pv.spruce(1900 + i, "fir"))
 		"cedar":
-			for i in 5: out.append(pv.pine(2000 + i, "cedar"))
+			for i in (2 if pv.lod else 5): out.append(pv.pine(2000 + i, "cedar"))
 		"willow":
 			for i in 4: out.append(pv.bush(2100 + i, "willow"))
 		"juniper":
@@ -1151,65 +1273,100 @@ func _variants(kind: String) -> Array:
 			for i in 2: out.append(pv.cones(7400 + i))
 		"bones":
 			out.append(pv.bones(7500))
+	# Импортированный вариант занимает индекс 0, а остальные остаются процедурными.
+	# Это сохраняет индексы MultiMesh и парность cache/cache_lod у деревьев.
+	var imported_file: String = IMPORTED_GLBS.get(kind, "")
+	if not pv.lod and not imported_file.is_empty():
+		var imported := _imported_glb_variant(imported_file)
+		if not imported.is_empty() and not out.is_empty():
+			# Сохраняем служебные габариты исходного варианта: они участвуют
+			# в коллизиях, опоре на грунт и расчёте занятости места.
+			var original: Array = out[0]
+			var replacement: Array = [imported[0][0], imported[0][1]]
+			for meta_index in range(2, original.size()):
+				replacement.append(original[meta_index])
+			out[0] = replacement
 	return out
 
-const TREE_KINDS := ["spruce", "pine", "birch", "larch", "aspen", "fir", "cedar", "rowan"]
+const TREE_KINDS := ["spruce", "pine", "birch", "larch", "aspen", "fir", "cedar", "rowan", "alder", "willow"]
 const NEAR_R := 36.0
-var tree_grid := {}
+var near_chunk_data := {}
 var near_mesh := {}
-var near_mmi := {}
-var _near_at := Vector3(1e9, 0, 0)
+# Ближние деревья собраны в локальные 16-метровые чанки один раз.
+# При перемещении героя переключается видимость готовых MultiMesh, а не
+# пересоздаются словари и массивы всех деревьев вокруг камеры.
+var near_chunks := {}
+var _near_active := {}
+var _near_cell := Vector2i(1_000_000_000, 1_000_000_000)
 var _near_t := 0.0
-var _tree_id := 0
 
 ## Детальные деревья только вблизи: в радиусе NEAR_R дерево берётся из полной модели.
 ## Дальняя лёгкая модель на краю круга не прячется щелчком, а перетекает в детальную
 ## дизерингом (шейдер сравнивает расстояние до near_c), поэтому смены моделей не видно.
 func _update_near(force: bool = false) -> void:
 	var c: Vector3 = rig.position
-	if not force and Vector2(c.x - _near_at.x, c.z - _near_at.z).length() < 2.5:
-		return
-	_near_at = c
-	var by_key := {}
-	var r2 := NEAR_R * NEAR_R
-	var g0 := Vector2i(floori((c.x - NEAR_R) / 16.0), floori((c.z - NEAR_R) / 16.0))
-	var g1 := Vector2i(floori((c.x + NEAR_R) / 16.0), floori((c.z + NEAR_R) / 16.0))
-	for gz in range(g0.y, g1.y + 1):
-		for gx in range(g0.x, g1.x + 1):
-			var gk := Vector2i(gx, gz)
-			if not tree_grid.has(gk):
-				continue
-			for rec in tree_grid[gk]:
-				var t: Transform3D = rec[2]
-				if (t.origin.x - c.x) * (t.origin.x - c.x) + (t.origin.z - c.z) * (t.origin.z - c.z) > r2:
+	# Обновление дерева LOD привязано к переходу между пространственными
+	# ячейками, а не к каждому смещению героя на несколько метров.
+	var camera_cell := Vector2i(floori(c.x / 16.0), floori(c.z / 16.0))
+	var cell_changed := camera_cell != _near_cell
+	if cell_changed or force:
+		_near_cell = camera_cell
+		var cell_center := Vector2((camera_cell.x + 0.5) * 16.0, (camera_cell.y + 0.5) * 16.0)
+		# Запас покрывает перемещение камеры внутри текущей ячейки.
+		# Сам переход между ближней и дальней геометрией по-прежнему делает shader fade.
+		var active_radius := NEAR_R + 24.0
+		var active_r2 := active_radius * active_radius
+		var reach := int(ceil(active_radius / 16.0))
+		var next_active := {}
+		for gz in range(camera_cell.y - reach, camera_cell.y + reach + 1):
+			for gx in range(camera_cell.x - reach, camera_cell.x + reach + 1):
+				var center := Vector2((gx + 0.5) * 16.0, (gz + 0.5) * 16.0)
+				if center.distance_squared_to(cell_center) > active_r2:
 					continue
-				var key: String = rec[3]
-				if not by_key.has(key):
-					by_key[key] = []
-				by_key[key].append(t)
-	for m in veg.fade_list + pv.fade_list:
+				var grid_key := Vector2i(gx, gz)
+				if not near_chunk_data.has(grid_key):
+					continue
+				# Размещение уже сгруппировано по ячейке и породе при генерации мира.
+				for key in near_chunk_data[grid_key]:
+					var chunk_id := "%d:%d:%s" % [gx, gz, key]
+					next_active[chunk_id] = true
+					if not near_chunks.has(chunk_id):
+						var xs: Array = near_chunk_data[grid_key][key]
+						var chunk_origin := Vector3(center.x, 0.0, center.y)
+						var mm := MultiMesh.new()
+						mm.transform_format = MultiMesh.TRANSFORM_3D
+						mm.use_custom_data = true
+						mm.mesh = near_mesh[key]
+						mm.instance_count = xs.size()
+						for i in xs.size():
+							var local_xf: Transform3D = xs[i]
+							local_xf.origin -= chunk_origin
+							mm.set_instance_transform(i, local_xf)
+							mm.set_instance_custom_data(i, Color(0.0, 1.0, 0.0, 0.0))
+						var mmi := MultiMeshInstance3D.new()
+						mmi.multimesh = mm
+						mmi.position = chunk_origin
+						mmi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
+						add_child(mmi)
+						near_chunks[chunk_id] = mmi
+					(near_chunks[chunk_id] as MultiMeshInstance3D).visible = true
+		for chunk_id in _near_active:
+			if not next_active.has(chunk_id) and near_chunks.has(chunk_id):
+				(near_chunks[chunk_id] as MultiMeshInstance3D).visible = false
+		_near_active = next_active
+		# Ограничиваем кэш посещёнными окрестностями: старые скрытые чанки
+		# удаляются, активные никогда не вытесняются.
+		if near_chunks.size() > 128:
+			for chunk_id in near_chunks.keys():
+				if near_chunks.size() <= 128:
+					break
+				if not _near_active.has(chunk_id):
+					(near_chunks[chunk_id] as MultiMeshInstance3D).queue_free()
+					near_chunks.erase(chunk_id)
+	# Центр перехода обновляется чаще, чем геометрические чанки: fade остаётся плавным.
+	for m in _fade_materials:
 		m.set_shader_parameter("near_c", c)
 		m.set_shader_parameter("near_r", NEAR_R)
-	for key in near_mmi.keys():
-		if not by_key.has(key):
-			near_mmi[key].visible = false
-	for key in by_key.keys():
-		if not near_mmi.has(key):
-			var mmi := MultiMeshInstance3D.new()
-			var mm := MultiMesh.new()
-			mm.transform_format = MultiMesh.TRANSFORM_3D
-			mm.use_custom_data = true
-			mm.mesh = near_mesh[key]
-			mmi.multimesh = mm
-			add_child(mmi)
-			near_mmi[key] = mmi
-		var mi: MultiMeshInstance3D = near_mmi[key]
-		var xs: Array = by_key[key]
-		mi.multimesh.instance_count = xs.size()
-		for i in xs.size():
-			mi.multimesh.set_instance_transform(i, xs[i])
-			mi.multimesh.set_instance_custom_data(i, Color(0.0, 1.0, 0.0, 0.0))
-		mi.visible = true
 
 const PICK := ["berry", "mushroom", "twig", "pebble"]
 const PICK_NAME := {"berry": "ягоды", "mushroom": "гриб", "amanita": "мухомор", "twig": "хворост", "pebble": "камень", "flint": "кремень"}
@@ -1231,6 +1388,8 @@ func find_pick(p: Vector3) -> Array:
 			if not pickables.has(k):
 				continue
 			for it in pickables[k]:
+				if not (it is Array) or it.size() < 4 or not (it[0] is Vector3):
+					continue
 				var q: Vector3 = it[0]
 				var dd := Vector2(q.x - p.x, q.z - p.z).length_squared()
 				if dd < bd:
@@ -1239,6 +1398,10 @@ func find_pick(p: Vector3) -> Array:
 	return best
 
 func take_pick(it: Array) -> void:
+	# Ignore malformed/stale pickup entries instead of crashing the scene during startup.
+	if it.size() < 4 or not (it[0] is Vector3) or not (it[2] is MultiMesh) or not (it[3] is int):
+		push_warning("Ignored malformed pickup record: %s" % [it])
+		return
 	if inventory != null and not inventory.can_add(String(it[1])):
 		_say("Короб полон")
 		return
@@ -1398,7 +1561,7 @@ func move_factor() -> float:
 		f = 0.78
 	return f * (0.6 + 0.4 * clampf(health * 2.0, 0.0, 1.0))
 
-const BLOCK_R := {"fungus_snag": 0.22, "birch_dead": 0.2, "snag": 0.25, "snag_b": 0.25, "cherry": 0.15, "fir": 0.36, "cedar": 0.38, "rowan": 0.2, "spruce": 0.4, "pine": 0.32, "birch": 0.28, "bare": 0.3, "spruce_dead": 0.3, "stump": 0.45, "rock": 0.5, "boulder": 0.6, "larch": 0.32, "aspen": 0.26}
+const BLOCK_R := {"fungus_snag": 0.28, "birch_dead": 0.28, "snag": 0.34, "snag_b": 0.34, "cherry": 0.24, "fir": 0.48, "cedar": 0.52, "rowan": 0.28, "spruce": 0.48, "pine": 0.42, "birch": 0.38, "bare": 0.36, "spruce_dead": 0.38, "stump": 0.52, "rock": 0.5, "boulder": 0.6, "larch": 0.42, "aspen": 0.36, "alder": 0.34, "willow": 0.36, "bush": 0.28, "juniper": 0.26, "stlanik": 0.24}
 
 func _scatter_all() -> void:
 	# вид, попыток на клетку 32 м, масштаб, дальность видимости, тень, правило
@@ -1462,6 +1625,8 @@ func _scatter_all() -> void:
 		["fungus_snag", 2, Vector2(0.9, 1.2), 100.0, true, "tree"],
 		["birch_dead", 2, Vector2(0.9, 1.2), 100.0, true, "edge"],
 		["mosslog", 5, Vector2(0.9, 1.2), 90.0, true, "under"],
+		["yagel", 60, Vector2(0.7, 1.1), 45.0, false, "under"],
+		["sphagnum", 52, Vector2(0.7, 1.1), 42.0, false, "bog_z"],
 		["ledum", 36, Vector2(0.8, 1.3), 45.0, false, "bog_z"],
 		["ledum", 6, Vector2(0.8, 1.2), 45.0, false, "under"],
 		["cloudberry", 30, Vector2(0.8, 1.3), 40.0, false, "bog_z"],
@@ -1487,8 +1652,15 @@ func _scatter_all() -> void:
 			cache[r[0]] = _variants(r[0])
 			if r[0] in TREE_KINDS:
 				pv.lod = true
-				cache_lod[r[0]] = _variants(r[0])
+				var lod_variants: Array = _variants(r[0])
 				pv.lod = false
+				# Keep LOD variant indices aligned with full-detail variants. Previously
+				# only two LOD meshes existed while scatter selected up to six detail
+				# variants, causing index 2+ access failures during scene startup.
+				var aligned_lod: Array = []
+				for vi in cache[r[0]].size():
+					aligned_lod.append(lod_variants[vi % lod_variants.size()])
+				cache_lod[r[0]] = aligned_lod
 	_cliff_rocks(cache["rock"])
 	var cells := int(SIZE / CELL)
 	for cz in cells:
@@ -1509,9 +1681,20 @@ func _scatter_all() -> void:
 					if not _accept(r[5], x, z, rng):
 						continue
 					var vi := rng.randi() % vars.size()
+					var kind: String = r[0]
+					var variant_data: Array = vars[vi]
+					# Validate metadata tuples before species-specific [2]/[4] access.
+					if kind in ROCKISH and (variant_data.size() < 3 or not (variant_data[2] is Vector3)):
+						push_warning("Skipped malformed rock variant %s[%d]: %s" % [kind, vi, variant_data])
+						continue
+					if kind in ["fallen0", "fallen1"] and variant_data.size() < 5:
+						push_warning("Skipped malformed fallen-tree variant %s[%d]" % [kind, vi])
+						continue
+					if kind == "mosslog" and variant_data.size() < 3:
+						push_warning("Skipped malformed mosslog variant %s[%d]" % [kind, vi])
+						continue
 					var sc: Vector2 = r[2]
 					var s := rng.randf_range(sc.x, sc.y)
-					var kind: String = r[0]
 					var b := Basis(Vector3.UP, rng.randf() * TAU).scaled(Vector3(s, s * rng.randf_range(0.9, 1.1), s))
 					if kind == "slab":
 						b = b.scaled(Vector3(1.0, 0.35, 1.0))
@@ -1631,7 +1814,11 @@ func _scatter_all() -> void:
 					# кусты и стланик (до 85 м) — к 62 м
 					var far: float = minf(float(r[3]), 95.0) if float(r[3]) > 85.0 else (minf(float(r[3]), 62.0) if float(r[3]) > 66.0 else minf(float(r[3]), 44.0))
 					for xs: Array in _split_cell(per_var[vi], x0, z0, fine):
-						var mm := _vis_multimesh(cache_lod[r[0]][vi][0] if is_tree else vars[vi][0], xs, far, is_tree)
+						var source_mesh: Mesh = cache_lod[r[0]][vi][0] if is_tree else vars[vi][0]
+						if source_mesh == null:
+							push_error("Null scatter mesh kind=%s variant=%d lod=%s" % [String(r[0]), vi, str(is_tree)])
+							continue
+						var mm := _vis_multimesh(source_mesh, xs, far, is_tree)
 						var mmi := MultiMeshInstance3D.new()
 						mmi.multimesh = mm
 						# клетка видна, пока хоть один её экземпляр может быть виден; каждый экземпляр
@@ -1674,13 +1861,22 @@ func _place_cell_records(mm: MultiMesh, xs: Array, r: Array, vi: int, vars: Arra
 	if is_tree:
 		var key: String = r[0] + str(vi)
 		near_mesh[key] = vars[vi][0]
+		# Retain a per-instance reference for chopping, hiding and interaction.
+		for i in xs.size():
+			var xf: Transform3D = xs[i]
+			var gk := Vector2i(floori(xf.origin.x / 16.0), floori(xf.origin.z / 16.0))
+			if not tree_grid.has(gk):
+				tree_grid[gk] = []
+			_tree_record_id += 1
+			tree_grid[gk].append([mm, i, xf, key, _tree_record_id])
 		for i in xs.size():
 			var o: Vector3 = xs[i].origin
 			var gk := Vector2i(floori(o.x / 16.0), floori(o.z / 16.0))
-			if not tree_grid.has(gk):
-				tree_grid[gk] = []
-			_tree_id += 1
-			tree_grid[gk].append([mm, i, xs[i], key, _tree_id])
+			if not near_chunk_data.has(gk):
+				near_chunk_data[gk] = {}
+			if not near_chunk_data[gk].has(key):
+				near_chunk_data[gk][key] = []
+			near_chunk_data[gk][key].append(xs[i])
 	if pick_kind != "":
 		var pk := pick_kind
 		if pk == "mushroom" and vi < 2:
@@ -1979,6 +2175,11 @@ func _core_setup(_ui: CanvasLayer) -> void:
 
 ## Еда и питьё из короба: из миски (и ложкой) сытнее, горячее греет. Возвращает [сытость, жажда, здоровье].
 func core_eat(id: String, e: Array) -> Array:
+	# Consume requests can come from saved or test states; normalize missing effect fields.
+	var effects: Array = [0.0, 0.0, 0.0]
+	for i in min(e.size(), effects.size()):
+		effects[i] = float(e[i])
+	e = effects
 	var d: Dictionary = preload("res://scripts/items.gd").DEF.get(id, {})
 	var k := 1.0
 	var cooked: bool = bool(d.get("bowl", false)) or id in ["meat_cooked", "fish_cooked"]

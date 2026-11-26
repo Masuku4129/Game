@@ -39,6 +39,8 @@ var center := Vector2(1e9, 1e9)
 var org := Vector2i(0, 0)       # мировой индекс текселя в углу окна
 var snow_m := 0.0
 var mud_m := 0.0
+var bog_m := 0.0
+var bog_data := PackedByteArray()
 var queue: Array = []           # отложенные следы героя: [время, x, z, dx, dz, сторона, y, x0, z0]
 var _hp_last := Vector3(1e9, 0, 0)
 var _dir := Vector2(0, 1)
@@ -99,6 +101,7 @@ func _build_field() -> void:
 	var wdir := Vector2(1.0, 0.3).normalized()
 	var wy: float = main.WATER_Y
 	fdata.resize(fn * fn * 4)
+	bog_data.resize(fn * fn)
 	for iz in fn:
 		var zl := maxi(iz - 1, 0) * fn
 		var zh := mini(iz + 1, fn - 1) * fn
@@ -106,11 +109,15 @@ func _build_field() -> void:
 		var zh3 := mini(iz + 3, fn - 1) * fn
 		for ix in fn:
 			var i := iz * fn + ix
+			var x := ix * fstep - half
+			var z := iz * fstep - half
 			var y := hs[i]
 			var gx := (hs[iz * fn + mini(ix + 1, fn - 1)] - hs[iz * fn + maxi(ix - 1, 0)]) / (2.0 * fstep)
 			var gz := (hs[zh + ix] - hs[zl + ix]) / (2.0 * fstep)
 			var ny := 1.0 / sqrt(1.0 + gx * gx + gz * gz)
 			var fd: float = cols[i].r
+			# Отдельная маска настоящих болотных зон (zone 2), а не просто тёмной текстуры.
+			bog_data[i] = 255 if main.zone(x, z) == 2 else 0
 			# лощины засыпает: средняя высота вокруг выше точки
 			var avg := (hs[iz * fn + mini(ix + 3, fn - 1)] + hs[iz * fn + maxi(ix - 3, 0)] + hs[zh3 + ix] + hs[zl3 + ix]) * 0.25
 			var hollow := clampf((avg - y) * 0.35, -0.3, 0.4)
@@ -190,8 +197,23 @@ func snow_depth(x: float, z: float) -> float:
 	# --- build: тропы и расчищенный лопатой снег (канал A карты поля — 255 минус износ) ---
 	return snow_m * 1.4 * _field(x, z, 1) * (1.0 - 0.85 * wear_at(x, z))
 
+func bog_factor(x: float, z: float) -> float:
+	var gx := clampf((x + half) / fstep, 0.0, fn - 1.0001)
+	var gz := clampf((z + half) / fstep, 0.0, fn - 1.0001)
+	var ix := int(gx)
+	var iz := int(gz)
+	var fx := gx - ix
+	var fz := gz - iz
+	var a := float(bog_data[iz * fn + ix]) / 255.0
+	var b := float(bog_data[iz * fn + ix + 1]) / 255.0
+	var c := float(bog_data[(iz + 1) * fn + ix]) / 255.0
+	var d := float(bog_data[(iz + 1) * fn + ix + 1]) / 255.0
+	return lerpf(lerpf(a, b, fx), lerpf(c, d, fx), fz)
+
 func mud_depth(x: float, z: float) -> float:
-	return mud_m * _field(x, z, 2)
+	# Обычная грязь появляется от дождя; болото остаётся насыщенным водой
+	# даже в сухую погоду и промерзает только при устойчивом морозе.
+	return mud_m * _field(x, z, 2) + bog_m * bog_factor(x, z)
 
 ## Видимая глубина уже продавленного следа в точке.
 func track_depth(x: float, z: float) -> float:
@@ -542,6 +564,10 @@ func _process(delta: float) -> void:
 	var cover := clampf(snow_m / 0.1, 0.0, 1.0)
 	var mt := 0.5 * clampf(0.15 + wet * 0.85 + (pr if temp > 0.5 else 0.0) * 0.2, 0.0, 1.0) * unfrozen * (1.0 - cover)
 	mud_m = lerpf(mud_m, mt, minf(1.0, delta * 0.5))
+	var bog_thaw := clampf((temp + 3.0) / 6.0, 0.0, 1.0)
+	var bog_saturation := clampf(0.55 + wet * 0.25 + pr * 0.2, 0.35, 1.0)
+	var bog_target := bog_thaw * lerpf(0.28, 0.72, bog_saturation)
+	bog_m = lerpf(bog_m, bog_target, minf(1.0, delta * 0.4))
 	# часы засыпания: снегопад, дождь и оттепель заметают следы быстрее
 	var rate := 0.33 * (1.0 + pr * 10.0 + maxf(temp - 1.0, 0.0) * 0.15 * cover)
 	clock += rate * delta
@@ -563,6 +589,7 @@ func _process(delta: float) -> void:
 	var m: ShaderMaterial = main.terrain_mat
 	m.set_shader_parameter("snow_m", snow_m)
 	m.set_shader_parameter("mud_m", mud_m)
+	m.set_shader_parameter("bog_m", bog_m)
 	if tuft_mat != null:
 		tuft_mat.set_shader_parameter("mud_m", mud_m)
 	m.set_shader_parameter("track_clock", fposmod(clock, 256.0))
