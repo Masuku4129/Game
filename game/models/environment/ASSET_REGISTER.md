@@ -15,3 +15,4 @@ Generation source: tools/generate_taiga_models.py
 | Alder | Original procedural mesh authored for this project | No third-party mesh source; project-original procedural output | game/models/environment/taiga_alder.glb | Pending generator and Godot visual checks |
 | Fern | Original procedural mesh authored for this project | No third-party mesh source; project-original procedural output | game/models/environment/taiga_fern.glb | Pending generator and Godot visual checks |
 | Stump | Original procedural mesh authored for this project | No third-party mesh source; project-original procedural output | game/models/environment/taiga_stump.glb | Pending generator and Godot visual checks |
+| Scots pine | Original procedural mesh authored for this project | No third-party mesh source; project-original procedural output | game/models/environment/taiga_pine.glb | Pending generator and Godot visual checks |
