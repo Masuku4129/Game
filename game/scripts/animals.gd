@@ -180,7 +180,7 @@ func _den(p: Vector3, r: float, h: float) -> void:
 
 ## Ближний хищник, опасный для зверя a.
 func nearest_predator(a: Node3D, r: float) -> Node3D:
-	var preds: Array = {"hare": ["fox", "wolf", "tiger"], "squirrel": ["fox"], "roe": ["wolf", "tiger", "bear"], "deer": ["wolf", "tiger", "bear"], "beaver": ["wolf", "fox"], "fox": ["wolf", "tiger"], "boar": ["tiger"]}.get(a.kind, []) + TAIGA_PREDS.get(a.kind, [])
+	var preds: Array = {"hare": ["fox", "wolf", "tiger"], "squirrel": ["fox"], "roe": ["wolf", "tiger", "bear"], "deer": ["wolf", "tiger", "bear"], "beaver": ["wolf", "fox"], "fox": ["wolf", "tiger"], "boar": ["wolf", "tiger"]}.get(a.kind, []) + TAIGA_PREDS.get(a.kind, [])
 	if preds.is_empty():
 		return null
 	var best: Node3D = null
