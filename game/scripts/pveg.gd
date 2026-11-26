@@ -217,10 +217,15 @@ func _icosphere() -> Array:
 var cards: SurfaceTool = null
 
 func clump(st: SurfaceTool, c: Vector3, sc: Vector3, shade: float) -> void:
+	# Крона строится из главного объёма и асимметричных боковых кластеров,
+	# а не из одного гладкого шара; количество добавлено умеренно для мобильной нагрузки.
 	leafblob(st, cards, c, sc, shade)
-	for i in rng.randi_range(0, 1):
-		var o := Vector3(R(-0.6, 0.6), R(-0.2, 0.4), R(-0.6, 0.6)) * sc
-		leafblob(st, cards, c + o, sc * R(0.55, 0.75), clampf(shade + R(-0.2, 0.3), 0.0, 1.0))
+	for i in rng.randi_range(1, 2):
+		var a := R(0.0, TAU)
+		var side := Vector3(cos(a), R(-0.18, 0.22), sin(a))
+		var o := side * sc * Vector3(R(0.38, 0.62), R(0.18, 0.48), R(0.38, 0.62))
+		var satellite_scale := sc * Vector3(R(0.48, 0.68), R(0.5, 0.72), R(0.48, 0.68))
+		leafblob(st, cards, c + o, satellite_scale, clampf(shade + R(-0.2, 0.3), 0.0, 1.0))
 
 ## Мелкая деталь (ягода, мутовка, соцветие): икосаэдр в 20 граней вместо 80.
 func dot(st: SurfaceTool, c: Vector3, sc: Vector3, shade: float) -> void:
