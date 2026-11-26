@@ -3,11 +3,17 @@ extends Node3D
 ## Не меняет основную игровую сцену и не подменяет штатный генератор леса.
 
 const ASSETS := [
-	{"file": "taiga_spruce.glb", "label": "ЕЛЬ", "x": -12.0, "scale": 0.82},
-	{"file": "taiga_birch.glb", "label": "БЕРЁЗА", "x": -6.0, "scale": 0.92},
-	{"file": "taiga_bush.glb", "label": "КУСТ", "x": 0.0, "scale": 1.7},
-	{"file": "taiga_rock.glb", "label": "КАМЕНЬ", "x": 6.0, "scale": 1.25},
-	{"file": "taiga_fallen_log.glb", "label": "ВАЛЕЖНИК", "x": 12.0, "scale": 1.4},
+	{"file": "taiga_spruce.glb", "label": "ЕЛЬ", "x": -30.0, "scale": 0.82},
+	{"file": "taiga_birch.glb", "label": "БЕРЁЗА", "x": -24.0, "scale": 0.92},
+	{"file": "taiga_bush.glb", "label": "КУСТ", "x": -18.0, "scale": 1.7},
+	{"file": "taiga_rock.glb", "label": "КАМЕНЬ", "x": -12.0, "scale": 1.25},
+	{"file": "taiga_fallen_log.glb", "label": "ВАЛЕЖНИК", "x": -6.0, "scale": 1.4},
+	{"file": "taiga_larch.glb", "label": "ЛИСТВЕННИЦА", "x": 0.0, "scale": 0.82},
+	{"file": "taiga_cedar.glb", "label": "КЕДР", "x": 6.0, "scale": 0.86},
+	{"file": "taiga_aspen.glb", "label": "ОСИНА", "x": 12.0, "scale": 0.9},
+	{"file": "taiga_alder.glb", "label": "ОЛЬХА", "x": 18.0, "scale": 1.0},
+	{"file": "taiga_fern.glb", "label": "ПАПОРОТНИК", "x": 24.0, "scale": 1.25},
+	{"file": "taiga_stump.glb", "label": "ПЕНЬ", "x": 30.0, "scale": 1.0},
 ]
 
 func _ready() -> void:
