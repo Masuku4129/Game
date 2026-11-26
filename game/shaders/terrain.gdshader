@@ -5,9 +5,9 @@ render_mode diffuse_burley;
 uniform sampler2D forest : source_color, filter_linear_mipmap_anisotropic, repeat_enable;
 uniform sampler2D grass : source_color, filter_linear_mipmap_anisotropic, repeat_enable;
 uniform sampler2D rock : source_color, filter_linear_mipmap_anisotropic, repeat_enable;
-uniform float tile_forest = 0.28;
-uniform float tile_grass = 0.45;
-uniform float tile_rock = 0.5;
+uniform float tile_forest = 0.36;
+uniform float tile_grass = 0.58;
+uniform float tile_rock = 0.64;
 uniform float bump = 1.1;
 uniform float snow = 0.0;
 uniform float wet = 0.0;
@@ -34,7 +34,11 @@ void vertex() {
 }
 
 vec4 two_scale(sampler2D t, vec2 uv) {
-	return mix(texture(t, uv), texture(t, uv * 0.21 + vec2(0.37, 0.11)), 0.42);
+	// Three distinct spatial scales preserve close-up detail and reduce broad blurred patches.
+	vec4 base = texture(t, uv);
+	vec4 detail = texture(t, uv * 1.65 + vec2(0.17, 0.31));
+	vec4 macro = texture(t, uv * 0.23 + vec2(0.37, 0.11));
+	return base * 0.56 + detail * 0.29 + macro * 0.15;
 }
 
 void fragment() {
