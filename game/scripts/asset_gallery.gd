@@ -23,6 +23,11 @@ const ASSETS := [
 	{"file": "taiga_cranberry.glb", "label": "КЛЮКВА", "x": 37.5, "scale": 1.1},
 	{"file": "taiga_dead_snag.glb", "label": "СУХОСТОЙ", "x": 42.5, "scale": 0.9},
 	{"file": "taiga_lichen_rock.glb", "label": "ЛИШАЙНИК НА КАМНЕ", "x": 47.5, "scale": 0.9},
+	{"file": "taiga_style_spruce.glb", "label": "ИГРОВОЙ СТИЛЬ · ЕЛЬ", "x": 50.0, "scale": 0.9},
+	{"file": "taiga_style_pine.glb", "label": "ИГРОВОЙ СТИЛЬ · СОСНА", "x": 55.0, "scale": 0.9},
+	{"file": "taiga_style_birch.glb", "label": "ИГРОВОЙ СТИЛЬ · БЕРЁЗА", "x": 60.0, "scale": 0.9},
+	{"file": "taiga_style_bush.glb", "label": "ИГРОВОЙ СТИЛЬ · КУСТ", "x": 65.0, "scale": 1.0},
+	{"file": "taiga_style_rock.glb", "label": "ИГРОВОЙ СТИЛЬ · КАМЕНЬ", "x": 70.0, "scale": 0.9},
 ]
 
 func _ready() -> void:
@@ -64,7 +69,7 @@ func _ready() -> void:
 func _make_stage() -> void:
 	var floor := MeshInstance3D.new()
 	var plane := PlaneMesh.new()
-	plane.size = Vector2(110.0, 18.0)
+	plane.size = Vector2(150.0, 18.0)
 	floor.mesh = plane
 	var ground := StandardMaterial3D.new()
 	ground.albedo_color = Color(0.19, 0.23, 0.18)
@@ -91,8 +96,8 @@ func _make_stage() -> void:
 
 	var camera := Camera3D.new()
 	camera.projection = Camera3D.PROJECTION_ORTHOGONAL
-	camera.size = 54.0
-	camera.position = Vector3(0.0, 28.0, 52.0)
+	camera.size = 75.0
+	camera.position = Vector3(0.0, 38.0, 72.0)
 	camera.look_at(Vector3(0.0, 3.2, 0.0), Vector3.UP)
 	add_child(camera)
 	camera.current = true
