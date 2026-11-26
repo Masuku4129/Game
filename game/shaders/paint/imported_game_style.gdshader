@@ -8,12 +8,15 @@ uniform float deciduous = 0.0;
 uniform float snow = 0.0;
 uniform float wet = 0.0;
 uniform float autumn = 0.0;
+uniform float leaf_drop = 0.0;
 uniform float wind = 0.5;
 uniform float sway_strength = 0.045;
 varying vec3 world_normal;
+varying vec3 world_position;
 varying float local_height;
 void vertex() {
 	world_normal = normalize((MODEL_MATRIX * vec4(NORMAL, 0.0)).xyz);
+	world_position = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;
 	local_height = clamp(VERTEX.y / 12.0, 0.0, 1.0);
 	float phase = TIME * (0.65 + wind) + VERTEX.x * 0.7 + VERTEX.z * 0.43;
 	float sway = sin(phase) * sway_strength * wind * local_height * foliage;
@@ -22,6 +25,8 @@ void vertex() {
 }
 void fragment() {
 	vec4 texel = has_texture > 0.5 ? texture(base_texture, UV) : vec4(1.0);
+	float leaf_hash = fract(sin(dot(floor(world_position.xz * 1.3), vec2(12.9898, 78.233))) * 43758.5453);
+	if (leaf_drop * deciduous * foliage > leaf_hash) discard;
 	if (foliage > 0.5 && texel.a < 0.45) discard;
 	vec3 color = texel.rgb * base_tint.rgb * COLOR.rgb;
 	float autumn_mix = clamp(autumn * deciduous * foliage, 0.0, 1.0);
