@@ -790,16 +790,23 @@ func _sense() -> float:
 func _can_step(p: Vector3, flying: bool = false) -> bool:
 	if absf(p.x) > main.SIZE * 0.5 - 10.0 or absf(p.z) > main.SIZE * 0.5 - 10.0:
 		return false
-	# Проверяем не только точку центра: крупные звери часто клипались в стволы
-	# и кусты из-за слишком маленького радиуса. Круговой footprint по 8 точкам.
+	# Проверяем всю траекторию короткого шага, а не только конечную точку:
+	# иначе корпус проскальзывает через тонкие стволы между кадрами.
 	var body_radius: float = clampf(float(parts.get("gw", 0.12)) * scale_k * 0.75, 0.12, 0.68)
-	if main.blocked(p.x, p.z, body_radius):
-		return false
-	for sample_i in 8:
-		var sample_a: float = TAU * float(sample_i) / 8.0
-		var sample_p: Vector2 = Vector2(p.x, p.z) + Vector2(cos(sample_a), sin(sample_a)) * body_radius
-		if main.blocked(sample_p.x, sample_p.y, 0.10 * scale_k):
+	var travel: Vector2 = Vector2(p.x - position.x, p.z - position.z)
+	var probe_count: int = clampi(int(ceil(travel.length() / maxf(body_radius * 0.55, 0.12))), 1, 6)
+	for probe_i in range(probe_count + 1):
+		var probe_t: float = float(probe_i) / float(probe_count)
+		var probe_center: Vector2 = Vector2(position.x, position.z) + travel * probe_t
+		if main.blocked(probe_center.x, probe_center.y, body_radius):
 			return false
+		# Дополнительная проверка окружности корпуса защищает от узких/диагональных
+		# препятствий, которые не попадают в центральный радиус блокировок.
+		for sample_i in 8:
+			var sample_a: float = TAU * float(sample_i) / 8.0
+			var sample_p: Vector2 = probe_center + Vector2(cos(sample_a), sin(sample_a)) * body_radius
+			if main.blocked(sample_p.x, sample_p.y, 0.10 * scale_k):
+				return false
 	var gy: float = main.grid_height(p.x, p.z)
 	var g0: float = main.grid_height(position.x, position.z)
 	if gy < main.WATER_Y - 0.3 and not swimmer() and not flying:
