@@ -313,17 +313,34 @@ func bush(seed_v: int) -> Array:
 		card(lf, p - b.y * sz * 0.5, b, sz, sz * R(0.85, 1.25), R(0.75, 1.08))
 	return [_commit([bark, lf], ["bark_dead", "broad_leaf"]), 1.35]
 
-## Папоротник: веер из листьев-вай.
+## Папоротник: дугообразные вайи с парными листочками вдоль центрального стебля.
 func fern(seed_v: int) -> Array:
 	rng.seed = seed_v
 	var lf := Surf.new()
-	var n := rng.randi_range(7, 11)
+	var rachis := Surf.new()
+	var n := rng.randi_range(6, 9)
 	for i in n:
 		var a := TAU * i / n + R(-0.2, 0.2)
 		var d := Vector3(cos(a) * R(0.6, 1.0), R(0.5, 0.9), sin(a) * R(0.6, 1.0)).normalized()
-		var L := R(0.8, 1.2)
-		card(lf, Vector3.ZERO, _basis_along(d, R(-0.4, 0.4)), L * 0.32, L, R(0.85, 1.05))
-	return [_commit([lf], ["fern"]), 1.0]
+		var L := R(0.85, 1.35)
+		var start := Vector3(0, 0.06, 0)
+		var middle := d * L * 0.52 + Vector3(0, L * 0.25, 0)
+		var tip := d * L + Vector3(0, L * 0.42, 0)
+		tube(rachis, start, middle, tip, 0.018, 0.004, 6, 4)
+		# Вайя постепенно сужается к верхушке; листочки расположены парами и немного наклонены вниз.
+		for j in 8:
+			var t := 0.16 + j * 0.095
+			var axis := _bez(start, middle, tip, t)
+			var tangent := _bez_d(start, middle, tip, t)
+			var side := Vector3(-d.z, 0, d.x).normalized()
+			var leaf_len := L * (0.25 * (1.0 - t) + 0.06) * R(0.85, 1.15)
+			for sign_side in [-1.0, 1.0]:
+				var leaf_dir := (side * sign_side * 0.72 - tangent * 0.3 + Vector3(0, -0.08, 0)).normalized()
+				var b := _basis_along(leaf_dir, R(-0.12, 0.12))
+				var p := axis + side * sign_side * 0.025
+				card(lf, p, b, leaf_len * 0.3, leaf_len, R(0.78, 1.06))
+		card(lf, tip - d * 0.04, _basis_along(d, R(-0.1, 0.1)), L * 0.08, L * 0.22, R(0.82, 1.0))
+	return [_commit([rachis, lf], ["bark_dead", "fern"]), 1.15]
 
 ## Пучок травы: две скрещённые карточки.
 func grass(seed_v: int) -> Array:
