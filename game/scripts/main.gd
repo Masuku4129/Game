@@ -1042,9 +1042,15 @@ func _imported_glb_variant(file_name: String) -> Array:
 		root.free()
 		push_warning("Imported taiga model has no MeshInstance3D: " + file_name)
 		return []
+	# Копируем Mesh из инстанса сцены: MultiMesh должен владеть независимым
+	# ресурсом, не зависящим от освобождения временного GLB root.
+	var retained := found.duplicate(true) as Mesh
 	var model_height: float = found.get_aabb().size.y
 	root.free()
-	return [[found, model_height]]
+	if retained == null or retained.get_surface_count() == 0:
+		push_warning("Imported taiga model has no valid mesh surfaces: " + file_name)
+		return []
+	return [[retained, model_height]]
 
 ## Варианты: [mesh, высота]. Несколько вариантов на породу, чтобы лес не повторялся.
 func _variants(kind: String) -> Array:
