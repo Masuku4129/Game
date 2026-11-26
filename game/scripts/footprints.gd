@@ -479,9 +479,18 @@ func animal_step(a: Node3D, _dist: float) -> float:
 				var side: float = -float(st[1])
 				st[0] = here
 				st[1] = side
+				var yaw := atan2(dir.x, dir.y)
+				var lateral := Vector2(dir.y, -dir.x)
 				var off := clampf(L * 0.09, 0.04, 0.15) * side
 				var w := clampf(L * 0.045, 0.03, 0.11) + sink * 0.2
-				_paint_oval(x + dir.y * off, z - dir.x * off, atan2(dir.x, dir.y), w, w * 1.3, maxf(sink, 0.02), 4.0)
+				var depth := maxf(sink, 0.02)
+				# Distinct paired tracks instead of one body-shaped imprint:
+				# light animals leave narrow paired paw marks; heavier species
+				# make wider, deeper prints in soft snow/mud.
+				var paw_gap := clampf(L * 0.12, 0.06, 0.22)
+				var paw_len := w * 1.3
+				_paint_oval(x + dir.y * off + lateral.x * paw_gap, z - dir.x * off + lateral.y * paw_gap, yaw, w, paw_len, depth, 4.0)
+				_paint_oval(x + dir.y * off - lateral.x * paw_gap, z - dir.x * off - lateral.y * paw_gap, yaw, w, paw_len, depth * 0.92, 4.0)
 	return sd - sink
 
 # ---------- обновление ----------
