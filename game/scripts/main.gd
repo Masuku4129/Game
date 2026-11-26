@@ -6,6 +6,8 @@ const SIZE := 512.0
 const SEG := 384
 const WATER_Y := -2.0
 const CELL := 64.0
+const FOREST_DENSITY_MULTIPLIER := 2.5
+const FOREST_DENSITY_SPECIES := ["spruce", "pine", "birch", "larch", "aspen", "bare", "spruce_dead", "bush", "fern", "reeds", "twig", "berry", "bilberry", "mushroom", "fir", "cedar", "willow", "alder", "cherry", "rose", "horsetail", "hummock", "sedge", "juniper", "stlanik", "rowan", "anthill", "mossrock", "stump_rot", "stump_mush", "fungus_snag", "birch_dead", "mosslog", "ledum", "cloudberry", "cranberry", "cotton", "lingon", "ernik", "raspberry", "currant", "bells", "daisy", "angelica", "brushpile", "chanterelle", "cones"]
 
 var n_hill := FastNoiseLite.new()
 var n_cliff := FastNoiseLite.new()
@@ -1503,7 +1505,10 @@ func _scatter_all() -> void:
 				for v in vars:
 					per_var.append([])
 				var pick_kind: String = r[0] if r[0] in PICK else ""
-				for k in int(r[1]) * 4:
+				var attempt_multiplier := 4
+				if r[0] in FOREST_DENSITY_SPECIES:
+					attempt_multiplier = int(round(4.0 * FOREST_DENSITY_MULTIPLIER))
+				for k in int(r[1]) * attempt_multiplier:
 					var x := x0 + rng.randf() * CELL
 					var z := z0 + rng.randf() * CELL
 					if not _accept(r[5], x, z, rng):
