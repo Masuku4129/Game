@@ -84,7 +84,7 @@ func _init() -> void:
 	# мазки листвы: те же цвета, что у сплошных крон
 	var bt := _brush_tex()
 	var lc := load("res://shaders/paint/leafcard.gdshader")
-	for k in ["spruce", "pine", "birch", "leaf", "bush", "larch", "fern", "fir", "cedar", "willow", "rowan", "juniper", "alder", "rose", "cherry", "raspberry", "currant", "ernik", "bilberry", "ledum", "moss"]:
+	for k in ["spruce", "pine", "birch", "leaf", "bush", "larch", "fern", "fir", "cedar", "willow", "rowan", "juniper", "alder", "rose", "cherry", "raspberry", "currant", "ernik", "bilberry", "ledum", "sphag", "yagel", "moss"]:
 		var m := ShaderMaterial.new()
 		m.shader = lc
 		m.set_shader_parameter("brush", bt)
