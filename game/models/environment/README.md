@@ -14,7 +14,7 @@ All models are exported as glTF Binary (GLB), with Y-up coordinates for Godot 4.
 | `taiga_cedar.glb` | Broad layered cedar crown and heavy boughs | 7.4 m |
 | `taiga_aspen.glb` | Pale marked trunk, spreading branches and rounded crown | 7.2 m |
 | `taiga_alder.glb` | Multi-stem alder with irregular leaf crown | 5.6 m |
-| `taiga_fern.glb` | Radial fronds with separate rachises and pinnae | 1.7 m |
+| `taiga_fern.glb` | Radial fronds with separate rachises and pinnae | 1.1 m |
 | `taiga_stump.glb` | Broken stump with exposed wood top and bark ridges | 1.1 m |
 
 No rig, animation, weapon, enemy, or character integration is included in this asset batch.
