@@ -1111,22 +1111,22 @@ func _variants(kind: String) -> Array:
 	var out := []
 	match kind:
 		"spruce":
-			for i in 6: out.append(pv.spruce(100 + i))
+			for i in (2 if pv.lod else 6): out.append(pv.spruce(100 + i))
 		"spruce_dead":
 			for i in 2: out.append(pv.dead_tree(200 + i))
 		"pine":
-			for i in 5: out.append(pv.pine(300 + i))
+			for i in (2 if pv.lod else 5): out.append(pv.pine(300 + i))
 		"birch":
-			for i in 5: out.append(pv.birch(400 + i))
+			for i in (2 if pv.lod else 5): out.append(pv.birch(400 + i))
 		"bare":
 			for i in 2: out.append(pv.dead_tree(500 + i))
 			out.append(pv.dead_tree(510))
 		"bush":
 			for i in 5: out.append(pv.bush(600 + i))
 		"larch":
-			for i in 5: out.append(pv.birch(1400 + i, "larch"))
+			for i in (2 if pv.lod else 5): out.append(pv.birch(1400 + i, "larch"))
 		"aspen":
-			for i in 5: out.append(pv.birch(1500 + i, "leaf"))
+			for i in (2 if pv.lod else 5): out.append(pv.birch(1500 + i, "leaf"))
 		"berry":
 			for i in 3: out.append(pv.berry_bush(1600 + i))
 		"mushroom":
@@ -1135,9 +1135,9 @@ func _variants(kind: String) -> Array:
 		"anthill":
 			out.append(pv.anthill(1800))
 		"fir":
-			for i in 5: out.append(pv.spruce(1900 + i, "fir"))
+			for i in (2 if pv.lod else 5): out.append(pv.spruce(1900 + i, "fir"))
 		"cedar":
-			for i in 5: out.append(pv.pine(2000 + i, "cedar"))
+			for i in (2 if pv.lod else 5): out.append(pv.pine(2000 + i, "cedar"))
 		"willow":
 			for i in 4: out.append(pv.bush(2100 + i, "willow"))
 		"juniper":
