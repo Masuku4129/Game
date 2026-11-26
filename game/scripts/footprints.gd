@@ -499,7 +499,7 @@ func animal_step(a: Node3D, _dist: float) -> float:
 				_paint_oval(fore_x + lateral.x * paw_gap, fore_z + lateral.y * paw_gap, yaw, w, paw_len, depth, 4.0)
 				_paint_oval(fore_x - lateral.x * paw_gap, fore_z - lateral.y * paw_gap, yaw, w, paw_len, depth * 0.94, 4.0)
 				_paint_oval(hind_x + lateral.x * paw_gap, hind_z + lateral.y * paw_gap, yaw, hind_w, hind_len, depth * 0.88, 4.0)
-				_paint_oval(hind_x - lateral.x * paw_gap, hind_z - lateral.y * paw_gap, yaw, hind_w, hind_len, depth * 0.82, 4.0
+				_paint_oval(hind_x - lateral.x * paw_gap, hind_z - lateral.y * paw_gap, yaw, hind_w, hind_len, depth * 0.82, 4.0)
 	return sd - sink
 
 # ---------- обновление ----------
