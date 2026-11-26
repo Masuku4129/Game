@@ -177,7 +177,7 @@ void fragment() {
 	c = mix(c, kur, kr * 0.85);
 	c = mix(c, lin(litter) * (0.8 + fine * 0.3), kw * 0.6);
 	// дно и берег: песок с округлыми камешками
-	float sh = smoothstep(water_y + 0.5, water_y - 0.1, wp.y);
+	float sh = 1.0 - smoothstep(water_y - 0.1, water_y + 0.5, wp.y);
 	vec2 pq = wp.xz * 1.6 + vec2(vnoise(wp.xz * 1.3), vnoise(wp.zx * 1.3 + 5.0)) * 0.9;
 	vec2 cell = floor(pq);
 	vec2 f = fract(pq) - 0.5;
