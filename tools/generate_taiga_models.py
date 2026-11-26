@@ -73,13 +73,20 @@ def organic_union(centers, scales, bounds, resolution=52, smooth=.25, base=(55, 
 
 def export(name, parts):
     scene = trimesh.Scene()
-    # glTF uses Y-up; authoring helpers use Z-up.
+    # glTF uses Y-up; authoring helpers use Z-up. Merge all colored parts
+    # into one renderable mesh to avoid hundreds of draw calls per tree.
     rotate = trimesh.transformations.rotation_matrix(-math.pi/2, [1, 0, 0])
-    for node_name, mesh in parts:
+    meshes = []
+    for _, mesh in parts:
         if mesh is None:
             continue
+        mesh = mesh.copy()
         mesh.apply_transform(rotate)
-        scene.add_geometry(mesh, geom_name=node_name, node_name=node_name)
+        meshes.append(mesh)
+    if not meshes:
+        raise ValueError(f"{name}: no geometry to export")
+    merged = trimesh.util.concatenate(meshes)
+    scene.add_geometry(merged, geom_name=Path(name).stem, node_name=Path(name).stem)
     (OUT / name).write_bytes(scene.export(file_type="glb"))
 
 def spruce():
@@ -269,19 +276,19 @@ def fern():
     parts=[]
     for frond in range(11):
         a=2*math.pi*frond/11+RNG.uniform(-.15,.15)
-        length=RNG.uniform(1.0,1.55)
+        length=RNG.uniform(.68,.92)
         points=[]
         for i in range(13):
             t=i/12
             r=length*t
-            z=.08+math.sin(t*math.pi)*.35+t*.18
+            z=.08+math.sin(t*math.pi)*.58+t*.52
             points.append(np.array([math.cos(a)*r,math.sin(a)*r,z]))
         for i in range(12):
             parts.append((f"Fern_Rachis_{frond}_{i}",tube(points[i],points[i+1],.025*(1-i/15),.018*(1-i/15),(83,107,48,255),2,5)))
         for i in range(2,12):
             t=i/12
             center=points[i]
-            side_len=(.36*(1-t)+.06)*RNG.uniform(.8,1.15)
+            side_len=(.2*(1-t)+.035)*RNG.uniform(.8,1.15)
             for side in (-1,1):
                 aa=a+side*1.15
                 tip=center+np.array([math.cos(aa)*side_len,math.sin(aa)*side_len,.06])
