@@ -6,7 +6,7 @@ const SIZE := 512.0
 const SEG := 384
 const WATER_Y := -2.0
 const CELL := 64.0
-const IMPORTED_GLBS := {"spruce": "taiga_spruce.glb", "birch": "taiga_birch.glb", "bush": "taiga_bush.glb", "larch": "taiga_larch.glb", "aspen": "taiga_aspen.glb", "cedar": "taiga_cedar.glb", "alder": "taiga_alder.glb", "fern": "taiga_fern.glb", "stump": "taiga_stump.glb"}
+const IMPORTED_GLBS := {"spruce": "taiga_spruce.glb", "pine": "taiga_pine.glb", "birch": "taiga_birch.glb", "bush": "taiga_bush.glb", "larch": "taiga_larch.glb", "aspen": "taiga_aspen.glb", "cedar": "taiga_cedar.glb", "alder": "taiga_alder.glb", "fern": "taiga_fern.glb", "stump": "taiga_stump.glb"}
 
 var n_hill := FastNoiseLite.new()
 var n_cliff := FastNoiseLite.new()
