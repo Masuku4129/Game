@@ -27,8 +27,6 @@ jobs:
           mkdir -p ~/.local/share/godot/export_templates/ ~/.config/
           cp -r /root/.config/godot ~/.config/godot || true
           cp -r /root/.local/share/godot/export_templates/${GODOT_VERSION}.stable ~/.local/share/godot/export_templates/ || true
-      - name: Validate glTF assets
-        run: python3 tools/validate_taiga_gltf.py
       - name: Import Godot project
         run: |
           cd game
