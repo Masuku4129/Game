@@ -1000,9 +1000,13 @@ func _grass_step() -> void:
 		var xs: Array = per_var[vi]
 		if xs.is_empty():
 			continue
+		var grass_mesh: Mesh = grass_mesh_vars[vi][0]
+		if grass_mesh == null:
+			push_error("Null grass mesh variant=%d" % vi)
+			continue
 		var mm := MultiMesh.new()
 		mm.transform_format = MultiMesh.TRANSFORM_3D
-		mm.mesh = grass_mesh_vars[vi][0]
+		mm.mesh = grass_mesh
 		mm.use_custom_data = true
 		mm.instance_count = xs.size()
 		# время постройки клетки: шейдер по нему плавно выращивает траву
@@ -1675,7 +1679,11 @@ func _scatter_all() -> void:
 					# кусты и стланик (до 85 м) — к 62 м
 					var far: float = minf(float(r[3]), 95.0) if float(r[3]) > 85.0 else (minf(float(r[3]), 62.0) if float(r[3]) > 66.0 else minf(float(r[3]), 44.0))
 					for xs: Array in _split_cell(per_var[vi], x0, z0, fine):
-						var mm := _vis_multimesh(cache_lod[r[0]][vi][0] if is_tree else vars[vi][0], xs, far, is_tree)
+						var source_mesh: Mesh = cache_lod[r[0]][vi][0] if is_tree else vars[vi][0]
+						if source_mesh == null:
+							push_error("Null scatter mesh kind=%s variant=%d lod=%s" % [String(r[0]), vi, str(is_tree)])
+							continue
+						var mm := _vis_multimesh(source_mesh, xs, far, is_tree)
 						var mmi := MultiMeshInstance3D.new()
 						mmi.multimesh = mm
 						# клетка видна, пока хоть один её экземпляр может быть виден; каждый экземпляр
