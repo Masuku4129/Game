@@ -85,7 +85,7 @@ jobs:
         run: |
           cd game
           timeout 300 godot --headless --quit-after 60 res://scenes/main.tscn 2>&1 | tee ../smoke.log | tail -40
-          ! grep -E "SCRIPT ERROR|Invalid|Cannot|Nonexistent" ../smoke.log
+          ! grep -E "ERROR:|SCRIPT ERROR|Invalid|Cannot|Nonexistent" ../smoke.log
       - name: Export APK
         run: |
           mkdir -p build
