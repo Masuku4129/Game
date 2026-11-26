@@ -1235,7 +1235,7 @@ func _variants(kind: String) -> Array:
 
 const TREE_KINDS := ["spruce", "pine", "birch", "larch", "aspen", "fir", "cedar", "rowan", "alder", "willow"]
 const NEAR_R := 36.0
-var tree_grid := {}
+var near_chunk_data := {}
 var near_mesh := {}
 # Ближние деревья собраны в локальные 16-метровые чанки один раз.
 # При перемещении героя переключается видимость готовых MultiMesh, а не
@@ -1269,21 +1269,14 @@ func _update_near(force: bool = false) -> void:
 				if center.distance_squared_to(cell_center) > active_r2:
 					continue
 				var grid_key := Vector2i(gx, gz)
-				if not tree_grid.has(grid_key):
+				if not near_chunk_data.has(grid_key):
 					continue
-				# Группируем только при первом создании чанка. После этого
-				# MultiMesh хранит локальные трансформы и повторно используется.
-				var by_key := {}
-				for rec in tree_grid[grid_key]:
-					var key: String = rec[3]
-					if not by_key.has(key):
-						by_key[key] = []
-					by_key[key].append(rec[2])
-				for key in by_key:
+				# Размещение уже сгруппировано по ячейке и породе при генерации мира.
+				for key in near_chunk_data[grid_key]:
 					var chunk_id := "%d:%d:%s" % [gx, gz, key]
 					next_active[chunk_id] = true
 					if not near_chunks.has(chunk_id):
-						var xs: Array = by_key[key]
+						var xs: Array = near_chunk_data[grid_key][key]
 						var chunk_origin := Vector3(center.x, 0.0, center.y)
 						var mm := MultiMesh.new()
 						mm.transform_format = MultiMesh.TRANSFORM_3D
@@ -1792,10 +1785,11 @@ func _place_cell_records(mm: MultiMesh, xs: Array, r: Array, vi: int, vars: Arra
 		for i in xs.size():
 			var o: Vector3 = xs[i].origin
 			var gk := Vector2i(floori(o.x / 16.0), floori(o.z / 16.0))
-			if not tree_grid.has(gk):
-				tree_grid[gk] = []
-			_tree_id += 1
-			tree_grid[gk].append([mm, i, xs[i], key, _tree_id])
+			if not near_chunk_data.has(gk):
+				near_chunk_data[gk] = {}
+			if not near_chunk_data[gk].has(key):
+				near_chunk_data[gk][key] = []
+			near_chunk_data[gk][key].append(xs[i])
 	if pick_kind != "":
 		var pk := pick_kind
 		if pk == "mushroom" and vi < 2:
