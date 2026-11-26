@@ -1,44 +1,43 @@
-# Art direction — fantasy ruins and purple magic
+# Художественное направление — «Тайга»
 
-## Source references
-The image sheets supplied in the conversation are the primary visual references for the current art direction. Use them as visual guidance, not as flat textures to stretch across the world.
+## Коротко о проекте
+Мобильная 3D-игра о выживании и освоении суровой природной среды Дальнего Востока и Сибири. Визуальная основа — узнаваемая природа: леса, реки, болота, сопки, каменистые берега, снег, грязь и сезонные изменения. Фэнтезийные руины, магия, кристаллы и фиолетовая палитра не относятся к проекту.
 
-## Visual pillars
-- **Dense, handcrafted environments:** modular stone arches, broken walls, stairs, bridges, platforms, columns, gate structures, and architectural fragments.
-- **Layered natural dressing:** trees with readable silhouettes, bushes, ground cover, vines, roots, rocks, fallen logs, water features, and mushrooms/crystals where appropriate.
-- **Purple magical identity:** violet banners, luminous crystal clusters, rune-like accents, restrained magical glow, and blue-violet environmental lighting.
-- **Materials:** varied stone blocks with chipped edges, moss, dark wood, weathered metal, fabric folds, emissive crystal surfaces, and textured ground. Avoid smooth untextured primitives as final assets.
-- **Atmosphere:** fog depth where it improves readability, dramatic but readable light pools, high contrast focal areas, and dark cool surroundings.
+## Визуальные принципы
+- Натуралистичные формы и материалы с художественной стилизацией, но без мультяшной примитивности.
+- Разнообразные силуэты и породы: ель, сосна, лиственница, берёза, осина, ольха и кустарники.
+- Геометрия должна читаться с игровой камеры: узнаваемый ствол, ветви, крона, корни, отдельные группы листвы/хвои.
+- Земля не должна выглядеть размытой плоскостью: использовать слои почвы, травяной подстилки, камней, корней, мха, влажных пятен и локального рельефа.
+- Материалы должны иметь правдоподобные цвет, шероховатость и микровариации. Не использовать однотонные примитивы как финальные объекты.
+- Время года меняет внешний вид объектов: листва, хвоя, снеговая нагрузка, влажность, цвет травы и состояние грунта.
+- Погода влияет на поверхность: мокрая земля темнеет, глубокая грязь деформируется следами, снег накапливается на поверхностях и сохраняет отпечатки.
 
-## Modular environment construction
-Build environments from reusable authored modules that can be combined into distinct silhouettes:
-- arches, straight wall segments, corner walls, broken wall variants, gates
-- column families, capitals, bases, damaged variants
-- stair sections, landings, bridge decks, parapets
-- decorative banners, lamps, braziers, statues, carts, crates, containers
-- crystal clusters, trees, shrubs, stones, ground vegetation
-- waterfalls, streams, pools, wet shoreline transitions
+## Камера и композиция
+- Основной формат — горизонтальный экран телефона.
+- Камера сверху под устойчивым изометрическим углом; без свободного вращения, если это ухудшает ориентацию игрока.
+- Персонаж и ближайшее окружение занимают достаточно места для чтения деталей.
+- Дальний план создаёт ощущение большого леса, но не уменьшает персонажа до точки.
+- Плотность растительности должна создавать лесной массив, а не редкую расстановку одиночных деревьев.
 
-Use multiple variants and irregular placement. Repetition must be masked through orientation, scale variation within bounds, damage, vegetation, and lighting. Keep collision geometry simplified but aligned to visible geometry.
+## Модели и технические требования
+- Игровые модели — реальные меши с корректными нормалями, материалами и цветом; GLB/glTF как переносимый формат.
+- Для повторяющихся объектов предусматривать варианты формы, масштаба и поворота, а также LOD/упрощённые коллизии.
+- Модели ориентировать по Y-up, с понятным масштабом в метрах и точкой опоры на земле.
+- Не допускать пересечений, заметных швов, плавающих корней и чрезмерно гладких шарообразных крон.
+- Приоритет Android: ограничивать число материалов и draw calls, применять инстансинг и разумную детализацию.
 
-## Camera and mobile readability
-- Keep landscape orientation and a close enough camera to read character and props clearly.
-- Avoid zooming out to show the whole arena at the cost of detail.
-- Maintain clear player silhouette, navigation paths, and combat spaces.
-- Mobile performance: instance/merge repeated geometry where practical, limit dynamic lights, use LOD or distance-based detail, and preserve readability.
+## Приёмка
+Отклонять ассеты и сборки, если:
+- деревья выглядят как конус на палке или набор очевидных шаров;
+- земля размыта, однотонна или состоит из видимых повторяющихся плиток;
+- кусты и трава повторяются одинаковыми клонами;
+- у модели нет материалов/цвета или нормали дают чёрные/ломаные грани;
+- персонаж теряется на экране в горизонтальной ориентации;
+- следы не соответствуют глубине и состоянию грязи/снега.
 
-## Asset acceptance criteria
-Reject assets or builds where:
-- major props appear as obvious colored cubes/cylinders/cones;
-- terrain looks blurred or uniformly primitive;
-- character silhouette is too small to read in landscape gameplay;
-- modular seams are visible or pieces float/misalign;
-- vegetation density is sparse or repetitive;
-- lighting blooms so strongly that detail is lost.
-
-## Implementation sequence
-1. Establish the visual target with a compact playable scene and close landscape camera.
-2. Upgrade the primary environment modules and materials before expanding the map.
-3. Add dense natural dressing and variation.
-4. Integrate player readability, camera, touch controls, and interaction.
-5. Verify on Android export and optimize only after visual inspection.
+## Порядок работ
+1. Зафиксировать единый масштаб, палитру и требования к мобильной геометрии.
+2. Создать библиотеку природных ассетов и проверить импорт в Godot.
+3. Подключить варианты моделей к генерации мира и обеспечить плотность леса.
+4. Улучшить грунт, сезонные материалы, снег/грязь и следы.
+5. Проверить сцену в Android APK на реальном устройстве.
