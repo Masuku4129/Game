@@ -1022,22 +1022,22 @@ func _variants(kind: String) -> Array:
 	var out := []
 	match kind:
 		"spruce":
-			for i in 4: out.append(pv.spruce(100 + i))
+			for i in 6: out.append(pv.spruce(100 + i))
 		"spruce_dead":
 			for i in 2: out.append(pv.dead_tree(200 + i))
 		"pine":
-			for i in 3: out.append(pv.pine(300 + i))
+			for i in 5: out.append(pv.pine(300 + i))
 		"birch":
-			for i in 3: out.append(pv.birch(400 + i))
+			for i in 5: out.append(pv.birch(400 + i))
 		"bare":
 			for i in 2: out.append(pv.dead_tree(500 + i))
 			out.append(pv.dead_tree(510))
 		"bush":
-			for i in 3: out.append(pv.bush(600 + i))
+			for i in 5: out.append(pv.bush(600 + i))
 		"larch":
-			for i in 3: out.append(pv.birch(1400 + i, "larch"))
+			for i in 5: out.append(pv.birch(1400 + i, "larch"))
 		"aspen":
-			for i in 3: out.append(pv.birch(1500 + i, "leaf"))
+			for i in 5: out.append(pv.birch(1500 + i, "leaf"))
 		"berry":
 			for i in 3: out.append(pv.berry_bush(1600 + i))
 		"mushroom":
@@ -1046,17 +1046,17 @@ func _variants(kind: String) -> Array:
 		"anthill":
 			out.append(pv.anthill(1800))
 		"fir":
-			for i in 3: out.append(pv.spruce(1900 + i, "fir"))
+			for i in 5: out.append(pv.spruce(1900 + i, "fir"))
 		"cedar":
-			for i in 3: out.append(pv.pine(2000 + i, "cedar"))
+			for i in 5: out.append(pv.pine(2000 + i, "cedar"))
 		"willow":
-			for i in 3: out.append(pv.bush(2100 + i, "willow"))
+			for i in 4: out.append(pv.bush(2100 + i, "willow"))
 		"juniper":
-			for i in 3: out.append(pv.bush(2200 + i, "juniper"))
+			for i in 4: out.append(pv.bush(2200 + i, "juniper"))
 		"rowan":
 			for i in 2: out.append(pv.birch(2300 + i, "rowan"))
 		"fern":
-			for i in 3: out.append(pv.fern(700 + i))
+			for i in 5: out.append(pv.fern(700 + i))
 		"grass":
 			for i in 4: out.append(veg.grass(800 + i))
 		"rock":
@@ -1082,7 +1082,7 @@ func _variants(kind: String) -> Array:
 		"rose":
 			for i in 3: out.append(pv.shrub(3500 + i, "rose"))
 		"alder":
-			for i in 3: out.append(pv.shrub(3600 + i, "alder"))
+			for i in 5: out.append(pv.shrub(3600 + i, "alder"))
 		"cherry":
 			for i in 2: out.append(pv.cherry(3700 + i))
 		"bilberry":
@@ -1100,7 +1100,7 @@ func _variants(kind: String) -> Array:
 		"slab":
 			for i in 4: out.append(pv.rock(4400 + i))
 		"mossrock":
-			for i in 4: out.append(pv.mossrock(5000 + i))
+			for i in 6: out.append(pv.mossrock(5000 + i))
 		"split_rock":
 			for i in 2: out.append(pv.split_rock(5100 + i))
 		"outcrop":
@@ -1108,23 +1108,23 @@ func _variants(kind: String) -> Array:
 		"scree":
 			for i in 3: out.append(pv.scree(5300 + i))
 		"stump_rot":
-			for i in 2: out.append(pv.stump2(5400 + i, false))
+			for i in 4: out.append(pv.stump2(5400 + i, false))
 		"stump_mush":
-			for i in 2: out.append(pv.stump2(5500 + i, true))
+			for i in 4: out.append(pv.stump2(5500 + i, true))
 		"fungus_snag":
 			for i in 3: out.append(pv.fungus_snag(5600 + i, false))
 		"birch_dead":
 			for i in 2: out.append(pv.fungus_snag(5700 + i, true))
 		"mosslog":
-			for i in 3: out.append(pv.mosslog(5800 + i))
+			for i in 5: out.append(pv.mosslog(5800 + i))
 		"ledum":
 			for i in 2: out.append(pv.low_patch(5900 + i, "ledum", "white", 14, 0.45))
 		"cloudberry":
 			for i in 2: out.append(pv.low_patch(6000 + i, "bilberry", "orange", 10, 0.15))
 		"yagel":
-			for i in 3: out.append(pv.low_patch(6100 + i, "yagel", "", 0, 0.12))
+			for i in 5: out.append(pv.low_patch(6100 + i, "yagel", "", 0, 0.12))
 		"sphagnum":
-			for i in 3: out.append(pv.low_patch(6200 + i, "sphag", "", 0, 0.1))
+			for i in 5: out.append(pv.low_patch(6200 + i, "sphag", "", 0, 0.1))
 		"lingon":
 			for i in 2: out.append(pv.low_patch(6300 + i, "moss", "berry", 16, 0.12))
 		"cranberry":
@@ -1403,18 +1403,18 @@ const BLOCK_R := {"fungus_snag": 0.22, "birch_dead": 0.2, "snag": 0.25, "snag_b"
 func _scatter_all() -> void:
 	# вид, попыток на клетку 32 м, масштаб, дальность видимости, тень, правило
 	var rules := [
-		["spruce", 36, Vector2(0.95, 1.45), 110.0, true, "spruce_t"],
-		["pine", 18, Vector2(1.05, 1.45), 115.0, true, "pine_t"],
-		["birch", 20, Vector2(1.0, 1.4), 115.0, true, "birch_t"],
+		["spruce", 43, Vector2(0.95, 1.45), 110.0, true, "spruce_t"],
+		["pine", 23, Vector2(1.05, 1.45), 115.0, true, "pine_t"],
+		["birch", 25, Vector2(1.0, 1.4), 115.0, true, "birch_t"],
 		["birch", 5, Vector2(1.0, 1.4), 115.0, true, "edge"],
 		["birch", 22, Vector2(0.22, 0.4), 70.0, false, "burnt_z"],
 		["bare", 3, Vector2(0.9, 1.3), 110.0, true, "edge"],
 		["spruce_dead", 2, Vector2(0.9, 1.3), 110.0, true, "tree"],
 		["spruce", 8, Vector2(0.18, 0.35), 75.0, true, "under"],
-		["bush", 38, Vector2(0.8, 1.5), 75.0, false, "under"],
-		["fern", 72, Vector2(0.7, 1.2), 62.0, false, "fern"],
+		["bush", 48, Vector2(0.8, 1.5), 75.0, false, "under"],
+		["fern", 90, Vector2(0.7, 1.2), 62.0, false, "fern"],
 		["reeds", 14, Vector2(0.8, 1.4), 110.0, false, "reed"],
-		["twig", 72, Vector2(0.8, 1.3), 45.0, false, "under"],
+		["twig", 90, Vector2(0.8, 1.3), 45.0, false, "under"],
 		["pebble", 40, Vector2(0.15, 0.45), 55.0, false, "pebble"],
 		["rock", 12, Vector2(0.5, 2.2), 115.0, true, "rock"],
 		["rock", 14, Vector2(1.8, 4.6), 125.0, true, "boulder"],
@@ -1433,15 +1433,15 @@ func _scatter_all() -> void:
 		["fallen1", 4, Vector2(0.9, 1.2), 100.0, true, "burnt_z"],
 		["fireweed", 60, Vector2(0.8, 1.3), 70.0, false, "burnt_z"],
 		["fireweed", 8, Vector2(0.8, 1.2), 70.0, false, "meadow"],
-		["larch", 8, Vector2(1.05, 1.45), 115.0, true, "larch_t"],
-		["aspen", 8, Vector2(1.0, 1.4), 115.0, true, "edge"],
+		["larch", 11, Vector2(1.05, 1.45), 115.0, true, "larch_t"],
+		["aspen", 11, Vector2(1.0, 1.4), 115.0, true, "edge"],
 		["berry", 25, Vector2(0.7, 1.3), 55.0, false, "under"],
-		["bilberry", 35, Vector2(0.9, 1.5), 55.0, false, "under"],
+		["bilberry", 42, Vector2(0.9, 1.5), 55.0, false, "under"],
 		["mushroom", 14, Vector2(0.8, 1.4), 40.0, false, "under"],
-		["fir", 12, Vector2(1.05, 1.45), 110.0, true, "fir_t"],
-		["cedar", 6, Vector2(1.05, 1.5), 110.0, true, "cedar_t"],
-		["willow", 18, Vector2(0.8, 1.3), 75.0, true, "river"],
-		["alder", 14, Vector2(0.9, 1.4), 80.0, true, "river"],
+		["fir", 15, Vector2(1.05, 1.45), 110.0, true, "fir_t"],
+		["cedar", 8, Vector2(1.05, 1.5), 110.0, true, "cedar_t"],
+		["willow", 22, Vector2(0.8, 1.3), 75.0, true, "river"],
+		["alder", 18, Vector2(0.9, 1.4), 80.0, true, "river"],
 		["cherry", 4, Vector2(0.9, 1.3), 90.0, true, "river"],
 		["cherry", 2, Vector2(0.9, 1.3), 90.0, true, "edge"],
 		["rose", 12, Vector2(0.8, 1.2), 65.0, false, "edge"],
@@ -1453,22 +1453,22 @@ func _scatter_all() -> void:
 		["stlanik", 16, Vector2(0.8, 1.3), 80.0, true, "rocky_z"],
 		["rowan", 4, Vector2(0.9, 1.3), 90.0, true, "edge"],
 		["anthill", 1, Vector2(0.8, 1.2), 65.0, true, "under"],
-		["mossrock", 6, Vector2(0.6, 1.6), 100.0, true, "under"],
+		["mossrock", 9, Vector2(0.6, 1.6), 100.0, true, "under"],
 		["split_rock", 1, Vector2(1.2, 2.2), 110.0, true, "rock"],
 		["outcrop", 3, Vector2(1.5, 2.8), 110.0, true, "rocky"],
 		["scree", 10, Vector2(0.8, 1.4), 60.0, false, "rocky_z"],
-		["stump_rot", 3, Vector2(0.8, 1.2), 70.0, true, "under"],
-		["stump_mush", 2, Vector2(0.8, 1.1), 60.0, true, "under"],
+		["stump_rot", 4, Vector2(0.8, 1.2), 70.0, true, "under"],
+		["stump_mush", 3, Vector2(0.8, 1.1), 60.0, true, "under"],
 		["fungus_snag", 2, Vector2(0.9, 1.2), 100.0, true, "tree"],
 		["birch_dead", 2, Vector2(0.9, 1.2), 100.0, true, "edge"],
-		["mosslog", 3, Vector2(0.9, 1.2), 90.0, true, "under"],
-		["ledum", 30, Vector2(0.8, 1.3), 45.0, false, "bog_z"],
+		["mosslog", 5, Vector2(0.9, 1.2), 90.0, true, "under"],
+		["ledum", 36, Vector2(0.8, 1.3), 45.0, false, "bog_z"],
 		["ledum", 6, Vector2(0.8, 1.2), 45.0, false, "under"],
 		["cloudberry", 30, Vector2(0.8, 1.3), 40.0, false, "bog_z"],
-		["cranberry", 25, Vector2(0.8, 1.3), 40.0, false, "bog_z"],
+		["cranberry", 32, Vector2(0.8, 1.3), 40.0, false, "bog_z"],
 		["cotton", 25, Vector2(0.8, 1.3), 45.0, false, "bog_z"],
-		["lingon", 25, Vector2(0.8, 1.4), 40.0, false, "under"],
-		["ernik", 25, Vector2(0.7, 1.2), 55.0, false, "bog_z"],
+		["lingon", 32, Vector2(0.8, 1.4), 40.0, false, "under"],
+		["ernik", 32, Vector2(0.7, 1.2), 55.0, false, "bog_z"],
 		["raspberry", 30, Vector2(0.8, 1.2), 60.0, false, "burnt_z"],
 		["raspberry", 5, Vector2(0.8, 1.2), 60.0, false, "edge"],
 		["currant", 8, Vector2(0.8, 1.2), 60.0, false, "river"],
