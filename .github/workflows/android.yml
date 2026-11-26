@@ -12,7 +12,6 @@ jobs:
   preview:
     runs-on: ubuntu-latest
     timeout-minutes: 45
-    continue-on-error: true
     container:
       image: barichello/godot-ci:4.3
     steps:
@@ -22,7 +21,11 @@ jobs:
           apt-get update -qq
           DEBIAN_FRONTEND=noninteractive apt-get install -y -qq xvfb mesa-vulkan-drivers libvulkan1 libgl1-mesa-dri >/dev/null
       - name: Import project
-        run: cd game && (timeout 600 godot --headless --import || true)
+        run: |
+          mkdir -p /tmp/pv
+          cd game
+          timeout 600 godot --headless --import 2>&1 | tee /tmp/pv/import.log
+          ! grep -E "Parse Error|Failed loading resource" /tmp/pv/import.log
       - name: Render style test shots
         run: |
           mkdir -p /tmp/pv
