@@ -1559,7 +1559,11 @@ func move_factor() -> float:
 		f = 0.5
 	elif injuries.has("рана: нога"):
 		f = 0.78
-	return f * (0.6 + 0.4 * clampf(health * 2.0, 0.0, 1.0))
+	# Strong exposed wind slightly reduces pace; camp windbreak suppresses the penalty.
+	var wind_penalty := clampf((weather.wind - 0.8) / 1.4, 0.0, 1.0) * 0.10
+	if camp != null:
+		wind_penalty *= 1.0 - clampf(camp.wind_k(), 0.0, 1.0)
+	return f * (1.0 - wind_penalty) * (0.6 + 0.4 * clampf(health * 2.0, 0.0, 1.0))
 
 const BLOCK_R := {"fungus_snag": 0.28, "birch_dead": 0.28, "snag": 0.34, "snag_b": 0.34, "cherry": 0.24, "fir": 0.48, "cedar": 0.52, "rowan": 0.28, "spruce": 0.48, "pine": 0.42, "birch": 0.38, "bare": 0.36, "spruce_dead": 0.38, "stump": 0.52, "rock": 0.5, "boulder": 0.6, "larch": 0.42, "aspen": 0.36, "alder": 0.34, "willow": 0.36, "bush": 0.28, "juniper": 0.26, "stlanik": 0.24}
 
