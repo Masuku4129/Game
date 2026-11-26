@@ -1163,9 +1163,12 @@ func _animate_rig(delta: float) -> void:
 	var hsum := 0.0
 	for i in legs.size():
 		var lg: Dictionary = legs[i]
-		var bs: Array = lg["b"]
-		var rel: Array = lg["rel"]
-		var front: bool = lg["front"]
+		var bs: Array = lg.get("b", [])
+		var rel: Array = lg.get("rel", [])
+		# Guard species/animation data before bone array access; malformed rigs must not crash the scene.
+		if bs.size() < 4 or rel.size() < 3 or lie_f.size() < 3 or lie_h.size() < 3:
+			continue
+		var front: bool = bool(lg.get("front", false))
 		var ph: float = phase + float(_gait_offs[i]) * TAU
 		var s := sin(ph)
 		var lift := maxf(0.0, -cos(ph))
