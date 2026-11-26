@@ -5,6 +5,7 @@ All models are exported as glTF Binary (GLB), with Y-up coordinates for Godot 4.
 
 | Asset | Purpose | Approx. scale |
 |---|---|---|
+| `taiga_pine.glb` | Scots pine with open crown, lateral limbs and irregular needle pads | 8.0 m |
 | `taiga_spruce.glb` | Spruce with tapered trunk, tiered boughs and organic needle canopy | 7.8 m |
 | `taiga_birch.glb` | Pale birch trunk, bark scars, branches and fused crown | 6.6 m |
 | `taiga_bush.glb` | Woody stems and fused foliage volume | 1.5 m |
