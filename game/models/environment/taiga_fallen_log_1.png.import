@@ -1,0 +1,37 @@
+[remap]
+
+importer="texture"
+type="CompressedTexture2D"
+uid="uid://7xvqk87a8vda"
+path="res://.godot/imported/taiga_fallen_log_1.png-2aed678e4fc699035f7a03b1c6321fd4.ctex"
+metadata={
+"vram_texture": false
+}
+generator_parameters={
+"md5": "eccc683aa07795f68766e4ac4107a157"
+}
+
+[deps]
+
+source_file="res://models/environment/taiga_fallen_log_1.png"
+dest_files=["res://.godot/imported/taiga_fallen_log_1.png-2aed678e4fc699035f7a03b1c6321fd4.ctex"]
+
+[params]
+
+compress/mode=0
+compress/high_quality=false
+compress/lossy_quality=0.7
+compress/hdr_compression=1
+compress/normal_map=0
+compress/channel_pack=0
+mipmaps/generate=true
+mipmaps/limit=-1
+roughness/mode=0
+roughness/src_normal=""
+process/fix_alpha_border=true
+process/premult_alpha=false
+process/normal_map_invert_y=false
+process/hdr_as_srgb=false
+process/hdr_clamp_exposure=false
+process/size_limit=0
+detect_3d/compress_to=1

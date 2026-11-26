@@ -149,7 +149,7 @@ def strip(b, key, p0, p1, wdir, width, segs=3, droop=0.0, ncenter=None, nup=0.3,
     b.add(key, verts, faces, uvs, nrm)
 
 
-def spray(b, key, p0, p1, width, droop=0.0, phis=(0.0, math.pi / 2), ncenter=None, segs=3, taper=0.1, nup=.3):
+def spray(b, key, p0, p1, width, droop=0.0, phis=(0.0, math.pi / 2), ncenter=None, segs=2, taper=0.1, nup=.3):
     d = np.asarray(p1, float) - np.asarray(p0, float)
     for phi in phis:
         strip(b, key, p0, p1, perp(d, phi), width, segs, droop, ncenter, nup, taper)
@@ -227,11 +227,11 @@ def conifer(name, seed, key_bark, key_needle, height, r0, r1, tiers, z0, z1, bou
             L = (length * (taper_len + (1 - taper_len) * frac) + .35) * rng.uniform(.82, 1.15)
             start = np.array([.03, 0, z + rng.uniform(-.12, .12)])
             end = start + np.array([math.cos(a) * L, math.sin(a) * L, -droop * L + tilt * L])
-            tube(b, key_bark, start, end, bough_r * frac + .018, .012, 4, 6, (0, 0, -.05))
+            tube(b, key_bark, start, end, bough_r * frac + .018, .012, 2, 4, (0, 0, -.05))
             inner = start + (end - start) * .12
             tip = end + unit(end - start) * .25
             if tuft:   # pine/cedar: clumps at the shoot ends
-                for k in range(3):
+                for k in range(4):
                     off = np.array([rng.uniform(-.35, .35), rng.uniform(-.35, .35), rng.uniform(0, .3)])
                     spray(b, key_needle, end - unit(end - start) * .3, tip + off + UP * .25, width * 1.2, droop=.25, phis=phis, ncenter=cc)
                 spray(b, key_needle, inner, end, width * .9, droop=.2, phis=(0, math.pi / 3), ncenter=cc)
@@ -251,7 +251,7 @@ def spruce():
 
 
 def pine():
-    conifer("taiga_pine.glb", 2, "bark_pine", "needle_pine", 11.0, .30, .05, 8, 6.4, 10.4, 5, 2.4, 1.8, .06, .22, .35,
+    conifer("taiga_pine.glb", 2, "bark_pine", "needle_pine", 11.0, .30, .05, 10, 5.8, 10.6, 7, 2.5, 2.0, .06, .22, .4,
             tuft=True, stubs=9, bough_r=.07)
 
 
@@ -261,7 +261,7 @@ def larch():
 
 
 def cedar():
-    conifer("taiga_cedar.glb", 4, "bark_cedar", "needle_cedar", 9.0, .44, .05, 9, 1.6, 8.2, 6, 2.7, 2.1, .16, .12, .45,
+    conifer("taiga_cedar.glb", 4, "bark_cedar", "needle_cedar", 9.0, .44, .05, 12, 1.6, 8.2, 8, 2.7, 1.5, .16, .12, .45,
             tuft=True, stubs=4, bough_r=.10)
 
 

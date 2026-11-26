@@ -1021,6 +1021,11 @@ func _grass_step() -> void:
 
 ## Варианты: [mesh, высота]. Несколько вариантов на породу, чтобы лес не повторялся.
 func _variants(kind: String) -> Array:
+	# ближние модели леса — текстурированные GLB; дальняя версия деревьев (pv.lod) остаётся лёгкой процедурной
+	if not pv.lod:
+		var glb: Array = pv.model_variants(kind)
+		if glb.size() > 0:
+			return glb
 	var out := []
 	match kind:
 		"spruce":

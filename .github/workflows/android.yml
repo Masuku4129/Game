@@ -78,12 +78,17 @@ jobs:
         run: cd game && (timeout 600 godot --headless --import || true)
       - name: Check scripts (strict)
         run: |
-          set -o pipefail
           cd game
+          fail=0
           for f in scripts/*.gd; do
-            log=$(godot --headless --check-only --script "$f" 2>&1) || { echo "$log"; exit 1; }
-            if echo "$log" | grep -E "SCRIPT ERROR|Parse Error|ERROR"; then echo "Script validation failed: $f"; exit 1; fi
+            log=$(godot --headless --check-only --script "$f" 2>&1); rc=$?
+            if [ $rc -ne 0 ] || echo "$log" | grep -qE "SCRIPT ERROR|Parse Error|ERROR"; then
+              msg=$(echo "$log" | grep -vE '^\s*$' | tail -8 | sed ':a;N;$!ba;s/\n/%0A/g')
+              echo "::error file=game/$f::check-only rc=$rc: $msg"
+              fail=1
+            fi
           done
+          exit $fail
       - name: Smoke test (запуск сцены без экрана)
         run: |
           cd game

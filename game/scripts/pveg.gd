@@ -1107,3 +1107,109 @@ func bones(seed_v: int) -> Array:
 		var x := -1.2 + i * 0.18
 		trunk(st, Vector3(x, 0.03, -0.1), Vector3(x + 0.05, 0.28, 0.15), Vector3(x + 0.08, 0.05, 0.4), 0.02, 0.012, 2, 3)
 	return [_mesh([[st, "stem"]]), 0.4]
+
+# ---------- текстурированные GLB-модели (models/environment) ----------
+const MODEL_DIR := "res://models/environment/"
+const MODEL_SHADER := preload("res://shaders/paint/model_tex.gdshader")
+
+## Таблица: порода леса → [файл, число вариантов, базовый масштаб, лиственная, тон].
+## Радиус/высота подгоняются под правила размещения в main.gd.
+const MODEL_KINDS := {
+	"spruce": ["taiga_spruce.glb", 6, 1.0, false, Color(1, 1, 1)],
+	"fir": ["taiga_spruce.glb", 5, 1.3, false, Color(0.82, 0.95, 0.95)],
+	"pine": ["taiga_pine.glb", 5, 1.0, false, Color(1, 1, 1)],
+	"cedar": ["taiga_cedar.glb", 5, 1.0, false, Color(1, 1, 1)],
+	"larch": ["taiga_larch.glb", 5, 1.0, true, Color(1, 1, 1)],
+	"birch": ["taiga_birch.glb", 5, 1.1, true, Color(1, 1, 1)],
+	"aspen": ["taiga_aspen.glb", 5, 1.0, true, Color(1, 1, 1)],
+	"alder": ["taiga_alder.glb", 5, 0.55, true, Color(1, 1, 1)],
+	"bush": ["taiga_bush.glb", 5, 0.75, true, Color(1, 1, 1)],
+	"fern": ["taiga_fern.glb", 5, 1.1, false, Color(1, 1, 1)],
+	"stump": ["taiga_stump.glb", 2, 1.0, false, Color(1, 1, 1)],
+}
+
+## Варианты породы из GLB: [[ArrayMesh, высота], ...] или [] если породы нет в таблице.
+## Модель одна, поэтому каждый вариант получает свой масштаб, наклон, скрутку и оттенок.
+func model_variants(kind: String) -> Array:
+	if not MODEL_KINDS.has(kind):
+		return []
+	var spec: Array = MODEL_KINDS[kind]
+	var out := []
+	for i in int(spec[1]):
+		var v := model(spec[0], kind, 7000 + i * 31 + kind.hash() % 97, float(spec[2]), bool(spec[3]), spec[4])
+		if v.is_empty():
+			return []
+		out.append(v)
+	return out
+
+func _model_mat(key: String, tex: Texture2D, foliage: bool, deciduous: bool, kind: String) -> ShaderMaterial:
+	var mk := "glb:%s:%s" % [kind, key]
+	if mats.has(mk):
+		return mats[mk]
+	var m := ShaderMaterial.new()
+	m.shader = MODEL_SHADER
+	m.set_shader_parameter("base_texture", tex)
+	m.set_shader_parameter("foliage", 1.0 if foliage else 0.0)
+	m.set_shader_parameter("autumn_k", 1.0 if (foliage and deciduous) else 0.0)
+	if kind == "larch":
+		m.set_shader_parameter("col_autumn", Color(0.86, 0.68, 0.2))
+	m.set_shader_parameter("no_fade", kind == "stump")
+	m.set_shader_parameter("sway", 0.02 if kind in ["fern", "bush"] else 0.03)
+	mats[mk] = m
+	fade_list.append(m)
+	return m
+
+func _collect_meshes(n: Node, out: Array) -> void:
+	if n is MeshInstance3D and (n as MeshInstance3D).mesh != null:
+		out.append(n)
+	for c in n.get_children():
+		_collect_meshes(c, out)
+
+func model(file: String, kind: String, seed_v: int, base_scale: float, deciduous: bool, tint: Color) -> Array:
+	var packed := load(MODEL_DIR + file) as PackedScene
+	if packed == null:
+		push_warning("GLB model missing: " + file)
+		return []
+	var root := packed.instantiate()
+	var src: Array = []
+	_collect_meshes(root, src)
+	rng.seed = seed_v
+	var sx := base_scale * R(0.92, 1.1)
+	var sy := base_scale * R(0.9, 1.14)
+	var lean := Vector2(R(-0.05, 0.05), R(-0.05, 0.05))
+	var twist := R(-0.35, 0.35)
+	var tone := Color(R(0.9, 1.06), R(0.92, 1.06), R(0.88, 1.04)) * tint
+	var out := ArrayMesh.new()
+	var top := 0.0
+	for mi in src:
+		var xf: Transform3D = (mi as MeshInstance3D).transform
+		var msh: Mesh = (mi as MeshInstance3D).mesh
+		for s in msh.get_surface_count():
+			var arr := msh.surface_get_arrays(s)
+			var verts: PackedVector3Array = arr[Mesh.ARRAY_VERTEX]
+			var nrm: PackedVector3Array = arr[Mesh.ARRAY_NORMAL]
+			var col := PackedColorArray()
+			col.resize(verts.size())
+			for i in verts.size():
+				var p: Vector3 = xf * verts[i]
+				var ang := twist * clampf(p.y * 0.12, 0.0, 1.0)
+				var q := Vector3(p.x * cos(ang) - p.z * sin(ang), p.y, p.x * sin(ang) + p.z * cos(ang))
+				q.x += lean.x * q.y
+				q.z += lean.y * q.y
+				q = Vector3(q.x * sx, q.y * sy, q.z * sx)
+				verts[i] = q
+				top = maxf(top, q.y)
+				nrm[i] = (xf.basis * nrm[i]).normalized()
+				col[i] = tone
+			arr[Mesh.ARRAY_VERTEX] = verts
+			arr[Mesh.ARRAY_NORMAL] = nrm
+			arr[Mesh.ARRAY_COLOR] = col
+			arr[Mesh.ARRAY_TANGENT] = null
+			out.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arr)
+			var src_mat := msh.surface_get_material(s) as BaseMaterial3D
+			var tex: Texture2D = src_mat.albedo_texture if src_mat != null else null
+			var tname := src_mat.resource_name if src_mat != null else "m%d" % s
+			var foliage := src_mat != null and src_mat.transparency == BaseMaterial3D.TRANSPARENCY_ALPHA_SCISSOR
+			out.surface_set_material(out.get_surface_count() - 1, _model_mat(tname, tex, foliage, deciduous, kind))
+	root.free()
+	return [out, top]

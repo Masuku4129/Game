@@ -85,6 +85,6 @@ func _make_stage() -> void:
 	camera.projection = Camera3D.PROJECTION_ORTHOGONAL
 	camera.size = 26.0
 	camera.position = Vector3(0.0, 20.0, 34.0)
-	camera.look_at(Vector3(0.0, 2.0, 0.0), Vector3.UP)
 	add_child(camera)
+	camera.look_at(Vector3(0.0, 2.0, 0.0), Vector3.UP)
 	camera.current = true
