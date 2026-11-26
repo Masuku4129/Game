@@ -353,8 +353,6 @@ func spruce(seed_v: int, kind: String = "spruce") -> Array:
 			var mid := Vector3(cos(a) * reach * 0.42, -reach * 0.10, sin(a) * reach * 0.42)
 			var tip := Vector3(cos(a) * reach, -reach * R(0.18, 0.32), sin(a) * reach)
 			trunk(bk, start, start + mid, start + tip, R0 * 0.035, 0.025, 3, 5)
-			var branch_dir := Vector3(cos(a), -0.22, sin(a)
-			).normalized()
 			for twig_i in 2:
 				var tt := 0.42 + twig_i * 0.23
 				var base := start.lerp(tip, tt)
