@@ -323,6 +323,61 @@ def fern():
                 parts.append((f"Fern_Pinna_{frond}_{i}_{side}",mesh))
     export("taiga_fern.glb",parts)
 
+
+def willow():
+    parts=[]; centers=[]; scales=[]
+    # Several curved stems and pendulous branchlets create a riverbank willow.
+    for stem in range(5):
+        a=2*math.pi*stem/5
+        base=np.array([math.cos(a)*.18,math.sin(a)*.18,0.])
+        top=base+np.array([math.cos(a)*.28,math.sin(a)*.28,RNG.uniform(4.0,5.1)])
+        parts.append((f"Willow_Stem_{stem}",tube(base,top,.13,.025,(86,65,43,255),18,9,(.08*math.sin(a),.08*math.cos(a),0))))
+        for j in range(7):
+            ang=a+j*2.399
+            reach=RNG.uniform(.8,1.55)
+            end=top+np.array([math.cos(ang)*reach,math.sin(ang)*reach*.8,-RNG.uniform(.55,1.25)])
+            parts.append((f"Willow_Drooping_Branch_{stem}_{j}",tube(top,end,.045,.009,(94,72,48,255),8,6)))
+            for k in range(3):
+                t=.45+k*.22
+                p=top*(1-t)+end*t
+                centers.append(tuple(p))
+                scales.append((RNG.uniform(.22,.32),RNG.uniform(.18,.27),RNG.uniform(.32,.48)))
+    parts.append(("Willow_Leaf_Clusters",organic_union(centers,scales,((-2.5,2.5),(-2.2,2.2),(2.0,5.6)),64,.18,(78,119,57))))
+    export("taiga_willow.glb",parts)
+
+def grass():
+    parts=[]
+    for tuft in range(13):
+        cx=RNG.uniform(-.28,.28); cy=RNG.uniform(-.28,.28)
+        for blade in range(7):
+            a=2*math.pi*blade/7+RNG.uniform(-.18,.18)
+            h=RNG.uniform(.42,.82)
+            reach=RNG.uniform(.16,.38)
+            start=np.array([cx,cy,.02])
+            mid=start+np.array([math.cos(a)*reach*.45,math.sin(a)*reach*.45,h*.55])
+            tip=start+np.array([math.cos(a)*reach,math.sin(a)*reach,h])
+            col=(48+int(RNG.integers(0,20)),92+int(RNG.integers(0,28)),38,255)
+            parts.append((f"Grass_Blade_{tuft}_{blade}",tube(start,mid,.025,.014,col,5,5)))
+            parts.append((f"Grass_Tip_{tuft}_{blade}",tube(mid,tip,.014,.001,col,5,4)))
+    export("taiga_grass.glb",parts)
+
+def moss():
+    parts=[]; centers=[]; scales=[]
+    # Low, connected cushion-like mats with subtle lobe variation.
+    for i in range(26):
+        a=RNG.uniform(0,2*math.pi)
+        r=RNG.uniform(0,1.15)
+        centers.append((math.cos(a)*r,math.sin(a)*r*.72,RNG.uniform(.07,.15)))
+        scales.append((RNG.uniform(.22,.48),RNG.uniform(.18,.38),RNG.uniform(.09,.17)))
+    parts.append(("Irregular_Moss_Cushions",organic_union(centers,scales,((-1.8,1.8),(-1.4,1.4),(-.02,.42)),64,.12,(67,104,53))))
+    # Fine stalks break the silhouette without creating a heavy high-poly mat.
+    for i in range(70):
+        a=RNG.uniform(0,2*math.pi); r=RNG.uniform(0,1.25)
+        p=np.array([math.cos(a)*r,math.sin(a)*r*.72,.12])
+        tip=p+np.array([RNG.uniform(-.035,.035),RNG.uniform(-.035,.035),RNG.uniform(.08,.2)])
+        parts.append((f"Moss_Sporophyte_{i}",tube(p,tip,.008,.003,(103,119,63,255),3,4)))
+    export("taiga_moss.glb",parts)
+
 def stump():
     parts=[("Broken_Stump_Bark",tube((0,0,0),(.05,0,1.05),.42,.34,(83,58,39,255),14,12,(.06,0,0)))]
     for i in range(12):
@@ -338,5 +393,5 @@ def stump():
     export("taiga_stump.glb",parts)
 
 if __name__ == "__main__":
-    spruce(); birch(); bush(); rock(); fallen_log(); pine(); larch(); cedar(); aspen(); alder(); fern(); stump()
-    print("Generated 12 original Taiga GLB models in", OUT)
+    spruce(); birch(); bush(); rock(); fallen_log(); pine(); larch(); cedar(); aspen(); alder(); willow(); fern(); grass(); moss(); stump()
+    print("Generated 15 original Taiga GLB models in", OUT)
