@@ -10,17 +10,29 @@ uniform float leaf_drop = 0.0;
 uniform float wind = 0.5;
 uniform float deciduous = 0.0;
 uniform float sway_strength = 0.045;
+uniform vec3 fallback_leaf_color = vec3(0.16, 0.30, 0.10);
+uniform vec3 fallback_bark_color = vec3(0.24, 0.15, 0.09);
+uniform vec3 fallback_rock_color = vec3(0.34, 0.35, 0.34);
+uniform float is_rock = 0.0;
 
 varying vec3 base_color;
 varying vec3 world_normal;
 varying float foliage_mask;
 varying float local_height;
+varying float vertex_color_valid;
 
 void vertex() {
-    base_color = COLOR.rgb;
+    float color_distance = length(COLOR.rgb - vec3(1.0));
+    vertex_color_valid = step(0.10, color_distance);
     float green_dominance = COLOR.g - max(COLOR.r, COLOR.b) * 1.12;
-    foliage_mask = smoothstep(0.015, 0.12, green_dominance);
     local_height = clamp(VERTEX.y / 8.0, 0.0, 1.0);
+    // Fallback foliage mask for models without meaningful vertex colors:
+    // height separates crown from trunk, while authored green colors take precedence.
+    float authored_mask = smoothstep(0.015, 0.12, green_dominance);
+    float fallback_mask = smoothstep(0.22, 0.55, local_height);
+    foliage_mask = mix(fallback_mask, authored_mask, vertex_color_valid);
+    vec3 fallback_color = is_rock > 0.5 ? fallback_rock_color : mix(fallback_bark_color, fallback_leaf_color, foliage_mask);
+    base_color = mix(fallback_color, COLOR.rgb, vertex_color_valid);
 
     float phase = TIME * (0.65 + wind) + VERTEX.x * 0.7 + VERTEX.z * 0.43;
     float sway = sin(phase) * sway_strength * wind * local_height * foliage_mask;
