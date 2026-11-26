@@ -8,7 +8,7 @@
 - **Визуальные требования и критерии приёмки:** [ART_DIRECTION.md](ART_DIRECTION.md)
 - **Игровые системы и план выживания:** [GAMEPLAY_SYSTEMS.md](GAMEPLAY_SYSTEMS.md)
 - **Импортируемые модели окружения:** [game/models/environment](game/models/environment/)
-- **Генератор моделей:** [tools/generate_taiga_models.py](tools/generate_taiga_models.py)
+- **Генератор игровых GLB-моделей:** [game/scripts/export_game_style_models.gd](game/scripts/export_game_style_models.gd) — использует штатные меши и текстуры `veg.gd`.
 - **Изолированная галерея GLB:** [game/scenes/asset_gallery.tscn](game/scenes/asset_gallery.tscn)
 - **GitHub Actions / APK:** [последние сборки](https://github.com/Masuku4129/Game/actions)
 
