@@ -63,11 +63,17 @@ func _portable_mesh(source: ArrayMesh) -> ArrayMesh:
 func _portable_material(source: Material) -> StandardMaterial3D:
 	var output := StandardMaterial3D.new()
 	output.vertex_color_use_as_albedo = true
+	output.vertex_color_is_srgb = true
 	output.roughness = 0.92
 	output.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
+	output.metallic = 0.0
+	output.specular = 0.18
+	output.shading_mode = BaseMaterial3D.SHADING_MODE_PER_PIXEL
 	if source is StandardMaterial3D:
 		output = (source as StandardMaterial3D).duplicate() as StandardMaterial3D
 		output.vertex_color_use_as_albedo = true
+		output.vertex_color_is_srgb = true
+		output.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
 		return output
 	if not (source is ShaderMaterial):
 		return output
@@ -86,9 +92,14 @@ func _portable_material(source: Material) -> StandardMaterial3D:
 		var grass_tint: Variant = shader_material.get_shader_parameter("tint")
 		if grass_tint is Color:
 			tint = grass_tint
+	# Unknown source shaders are exported with vertex-color shading, never blank white defaults.
+	# The procedural generators already store species-specific color in vertex COLOR.
 	if texture is Texture2D:
 		output.albedo_texture = texture
 	output.albedo_color = tint
+	output.vertex_color_use_as_albedo = true
+	output.vertex_color_is_srgb = true
+	output.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
 	if shader_path.ends_with("card.gdshader"):
 		output.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA_SCISSOR
 		output.alpha_scissor_threshold = 0.45
