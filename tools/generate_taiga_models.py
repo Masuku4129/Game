@@ -44,18 +44,32 @@ def tube(a, b, r0, r1, color, sections=8, sides=8, bend=(0, 0, 0)):
     return color_mesh(trimesh.Trimesh(vertices=verts, faces=faces, process=True), color)
 
 def organic_union(centers, scales, bounds, resolution=52, smooth=.25, base=(55, 105, 57)):
+    """Create fused, irregular foliage/moss surface efficiently using bounded SDF updates."""
     (xmin, xmax), (ymin, ymax), (zmin, zmax) = bounds
-    xs = np.linspace(xmin, xmax, resolution)
-    ys = np.linspace(ymin, ymax, resolution)
-    zs = np.linspace(zmin, zmax, resolution)
-    X, Y, Z = np.meshgrid(xs, ys, zs, indexing="ij")
-    field = np.full(X.shape, 1e3, dtype=np.float32)
+    xs = np.linspace(xmin, xmax, resolution, dtype=np.float32)
+    ys = np.linspace(ymin, ymax, resolution, dtype=np.float32)
+    zs = np.linspace(zmin, zmax, resolution, dtype=np.float32)
+    field = np.full((resolution, resolution, resolution), 1e3, dtype=np.float32)
+    # Update only the voxel neighborhood touched by each lobe, rather than evaluating
+    # every ellipsoid across the full volume. This cuts generator CPU work sharply.
     for c, s in zip(centers, scales):
+        lo = [max(0, int(np.searchsorted(axis, c[k] - s[k] - smooth, side="left"))) for k, axis in enumerate((xs, ys, zs))]
+        hi = [min(resolution, int(np.searchsorted(axis, c[k] + s[k] + smooth, side="right"))) for k, axis in enumerate((xs, ys, zs))]
+        if any(hi[k] <= lo[k] for k in range(3)):
+            continue
+        sx, sy, sz = xs[lo[0]:hi[0]], ys[lo[1]:hi[1]], zs[lo[2]:hi[2]]
+        X, Y, Z = np.meshgrid(sx, sy, sz, indexing="ij")
         q = np.sqrt(((X-c[0])/s[0])**2 + ((Y-c[1])/s[1])**2 + ((Z-c[2])/s[2])**2)
         d = (q - 1) * min(s)
-        h = np.maximum(smooth - np.abs(field-d), 0) / smooth
-        field = np.minimum(field, d) - h*h*smooth*.25
-    field += np.sin(X*7+Z*4) * np.cos(Y*8-Z*2) * .015
+        region = field[lo[0]:hi[0], lo[1]:hi[1], lo[2]:hi[2]]
+        h = np.maximum(smooth - np.abs(region-d), 0) / smooth
+        region[:] = np.minimum(region, d) - h*h*smooth*.25
+    # Multi-frequency surface perturbation prevents rounded plastic-looking
+    # silhouettes while retaining a mobile-friendly mesh budget.
+    X, Y, Z = np.meshgrid(xs, ys, zs, indexing="ij")
+    field += (np.sin(X*7+Z*4) * np.cos(Y*8-Z*2) * .026
+               + np.sin(X*15-Y*11+Z*6) * .012
+               + np.cos(X*23+Y*9-Z*13) * .006)
     spacing = ((xmax-xmin)/(resolution-1), (ymax-ymin)/(resolution-1), (zmax-zmin)/(resolution-1))
     verts, faces, _, _ = marching_cubes(field, level=0, spacing=spacing)
     verts += np.array([xmin, ymin, zmin])
