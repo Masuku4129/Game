@@ -17,6 +17,9 @@ All models are exported as glTF Binary (GLB), with Y-up coordinates for Godot 4.
 | `taiga_alder.glb` | Multi-stem alder with irregular leaf crown | 5.6 m |
 | `taiga_fern.glb` | Radial fronds with separate rachises and pinnae | 1.1 m |
 | `taiga_stump.glb` | Broken stump with exposed wood top and bark ridges | 1.1 m |
+| `taiga_willow.glb` | Multi-stem willow with drooping branchlets and leaf clusters | 5.1 m |
+| `taiga_grass.glb` | Dense clump of individually tapered grass blades | 0.8 m |
+| `taiga_moss.glb` | Low irregular moss cushions with fine sporophytes | 0.4 m |
 
 No rig, animation, weapon, enemy, or character integration is included in this asset batch.
 
