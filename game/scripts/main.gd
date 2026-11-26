@@ -1179,18 +1179,13 @@ func _variants(kind: String) -> Array:
 			for i in 2: out.append(pv.cones(7400 + i))
 		"bones":
 			out.append(pv.bones(7500))
-	# Ближний/обычный LOD использует импортированные модели; дальний LOD
-	# сохраняет лёгкие процедурные варианты. У деревьев заменяем индекс 0,
-	# чтобы массивы cache и cache_lod оставались строго одинаковой длины.
+	# Импортированный вариант занимает индекс 0, а остальные остаются процедурными.
+	# Это сохраняет индексы MultiMesh и парность cache/cache_lod у деревьев.
 	var imported_file: String = IMPORTED_GLBS.get(kind, "")
 	if not pv.lod and not imported_file.is_empty():
 		var imported := _imported_glb_variant(imported_file)
-		if not imported.is_empty():
-			if kind in TREE_KINDS:
-				if not out.is_empty():
-					out[0] = imported[0]
-			else:
-				out.append(imported[0])
+		if not imported.is_empty() and not out.is_empty():
+			out[0] = imported[0]
 	return out
 
 const TREE_KINDS := ["spruce", "pine", "birch", "larch", "aspen", "fir", "cedar", "rowan", "alder"]
