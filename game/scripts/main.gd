@@ -1237,9 +1237,12 @@ const TREE_KINDS := ["spruce", "pine", "birch", "larch", "aspen", "fir", "cedar"
 const NEAR_R := 36.0
 var tree_grid := {}
 var near_mesh := {}
-var near_mmi := {}
-var _near_at := Vector3(1e9, 0, 0)
-var _near_t := 0.0
+# Ближние деревья собраны в локальные 16-метровые чанки один раз.
+# При перемещении героя переключается видимость готовых MultiMesh, а не
+# пересоздаются словари и массивы всех деревьев вокруг камеры.
+var near_chunks := {}
+var _near_active := {}
+var _near_cell := Vector2i(1_000_000_000, 1_000_000_000)
 var _tree_id := 0
 
 ## Детальные деревья только вблизи: в радиусе NEAR_R дерево берётся из полной модели.
@@ -1247,44 +1250,76 @@ var _tree_id := 0
 ## дизерингом (шейдер сравнивает расстояние до near_c), поэтому смены моделей не видно.
 func _update_near(force: bool = false) -> void:
 	var c: Vector3 = rig.position
-	if not force and Vector2(c.x - _near_at.x, c.z - _near_at.z).length() < 2.5:
-		return
-	_near_at = c
-	var by_key := {}
-	var r2 := NEAR_R * NEAR_R
-	var g0 := Vector2i(floori((c.x - NEAR_R) / 16.0), floori((c.z - NEAR_R) / 16.0))
-	var g1 := Vector2i(floori((c.x + NEAR_R) / 16.0), floori((c.z + NEAR_R) / 16.0))
-	for gz in range(g0.y, g1.y + 1):
-		for gx in range(g0.x, g1.x + 1):
-			var gk := Vector2i(gx, gz)
-			if not tree_grid.has(gk):
-				continue
-			for rec in tree_grid[gk]:
-				var t: Transform3D = rec[2]
-				if (t.origin.x - c.x) * (t.origin.x - c.x) + (t.origin.z - c.z) * (t.origin.z - c.z) > r2:
+	# Обновление дерева LOD привязано к переходу между пространственными
+	# ячейками, а не к каждому смещению героя на несколько метров.
+	var camera_cell := Vector2i(floori(c.x / 16.0), floori(c.z / 16.0))
+	var cell_changed := camera_cell != _near_cell
+	if cell_changed or force:
+		_near_cell = camera_cell
+		var cell_center := Vector2((camera_cell.x + 0.5) * 16.0, (camera_cell.y + 0.5) * 16.0)
+		# Запас покрывает перемещение камеры внутри текущей ячейки.
+		# Сам переход между ближней и дальней геометрией по-прежнему делает shader fade.
+		var active_radius := NEAR_R + 24.0
+		var active_r2 := active_radius * active_radius
+		var reach := int(ceil(active_radius / 16.0))
+		var next_active := {}
+		for gz in range(camera_cell.y - reach, camera_cell.y + reach + 1):
+			for gx in range(camera_cell.x - reach, camera_cell.x + reach + 1):
+				var center := Vector2((gx + 0.5) * 16.0, (gz + 0.5) * 16.0)
+				if center.distance_squared_to(cell_center) > active_r2:
 					continue
-				var key: String = rec[3]
-				if not by_key.has(key):
-					by_key[key] = []
-				by_key[key].append(t)
+				var grid_key := Vector2i(gx, gz)
+				if not tree_grid.has(grid_key):
+					continue
+				# Группируем только при первом создании чанка. После этого
+				# MultiMesh хранит локальные трансформы и повторно используется.
+				var by_key := {}
+				for rec in tree_grid[grid_key]:
+					var key: String = rec[3]
+					if not by_key.has(key):
+						by_key[key] = []
+					by_key[key].append(rec[2])
+				for key in by_key:
+					var chunk_id := "%d:%d:%s" % [gx, gz, key]
+					next_active[chunk_id] = true
+					if not near_chunks.has(chunk_id):
+						var xs: Array = by_key[key]
+						var chunk_origin := Vector3(center.x, 0.0, center.y)
+						var mm := MultiMesh.new()
+						mm.transform_format = MultiMesh.TRANSFORM_3D
+						mm.use_custom_data = true
+						mm.mesh = near_mesh[key]
+						mm.instance_count = xs.size()
+						for i in xs.size():
+							var local_xf: Transform3D = xs[i]
+							local_xf.origin -= chunk_origin
+							mm.set_instance_transform(i, local_xf)
+							mm.set_instance_custom_data(i, Color(0.0, 1.0, 0.0, 0.0))
+						var mmi := MultiMeshInstance3D.new()
+						mmi.multimesh = mm
+						mmi.position = chunk_origin
+						mmi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
+						add_child(mmi)
+						near_chunks[chunk_id] = mmi
+					(near_chunks[chunk_id] as MultiMeshInstance3D).visible = true
+		for chunk_id in _near_active:
+			if not next_active.has(chunk_id) and near_chunks.has(chunk_id):
+				(near_chunks[chunk_id] as MultiMeshInstance3D).visible = false
+		_near_active = next_active
+		# Ограничиваем кэш посещёнными окрестностями: старые скрытые чанки
+		# удаляются, активные никогда не вытесняются.
+		if near_chunks.size() > 128:
+			for chunk_id in near_chunks.keys():
+				if near_chunks.size() <= 128:
+					break
+				if not _near_active.has(chunk_id):
+					(near_chunks[chunk_id] as MultiMeshInstance3D).queue_free()
+					near_chunks.erase(chunk_id)
+	# Центр перехода обновляется чаще, чем геометрические чанки: fade остаётся плавным.
 	for m in veg.fade_list + pv.fade_list:
 		m.set_shader_parameter("near_c", c)
 		m.set_shader_parameter("near_r", NEAR_R)
-	for key in near_mmi.keys():
-		if not by_key.has(key):
-			near_mmi[key].visible = false
-	for key in by_key.keys():
-		if not near_mmi.has(key):
-			var mmi := MultiMeshInstance3D.new()
-			var mm := MultiMesh.new()
-			mm.transform_format = MultiMesh.TRANSFORM_3D
-			mm.use_custom_data = true
-			mm.mesh = near_mesh[key]
-			mmi.multimesh = mm
-			add_child(mmi)
-			near_mmi[key] = mmi
-		var mi: MultiMeshInstance3D = near_mmi[key]
-		var xs: Array = by_key[key]
+r xs: Array = by_key[key]
 		mi.multimesh.instance_count = xs.size()
 		for i in xs.size():
 			mi.multimesh.set_instance_transform(i, xs[i])
