@@ -351,10 +351,10 @@ func fern(seed_v: int) -> Array:
 			var tangent := _bez_d(start, middle, tip, t)
 			var side := Vector3(-d.z, 0, d.x).normalized()
 			var leaf_len := L * (0.25 * (1.0 - t) + 0.06) * R(0.85, 1.15)
-			for sign_side in [-1.0, 1.0]:
-				var leaf_dir := (side * sign_side * 0.72 - tangent * 0.3 + Vector3(0, -0.08, 0)).normalized()
+			for sign_side: float in [-1.0, 1.0]:
+				var leaf_dir: Vector3 = (side * sign_side * 0.72 - tangent * 0.3 + Vector3(0, -0.08, 0)).normalized()
 				var b := _basis_along(leaf_dir, R(-0.12, 0.12))
-				var p := axis + side * sign_side * 0.025
+				var p: Vector3 = axis + side * sign_side * 0.025
 				card(lf, p, b, leaf_len * 0.3, leaf_len, R(0.78, 1.06))
 		card(lf, tip - d * 0.04, _basis_along(d, R(-0.1, 0.1)), L * 0.08, L * 0.22, R(0.82, 1.0))
 	return [_commit([rachis, lf], ["bark_dead", "fern"]), 1.15]
