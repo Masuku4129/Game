@@ -392,6 +392,93 @@ def stump():
     parts.append(("Exposed_Wood_Rings",cap))
     export("taiga_stump.glb",parts)
 
+
+def juniper():
+    parts=[]
+    # Low, wind-shaped evergreen shrub with several woody stems and dense scale-like foliage.
+    centers=[]; scales=[]
+    for stem in range(7):
+        a=2*math.pi*stem/7
+        base=np.array([math.cos(a)*.12,math.sin(a)*.12,0.])
+        top=base+np.array([math.cos(a)*RNG.uniform(.35,.75),math.sin(a)*RNG.uniform(.35,.75),RNG.uniform(.65,1.15)])
+        parts.append((f"Juniper_Woody_Stem_{stem}",tube(base,top,.055,.012,(91,70,48,255),8,6)))
+        for k in range(5):
+            t=.2+k*.15; p=base*(1-t)+top*t
+            centers.append(tuple(p))
+            scales.append((RNG.uniform(.22,.38),RNG.uniform(.18,.3),RNG.uniform(.16,.27)))
+    parts.append(("Juniper_Foliage",organic_union(centers,scales,((-1.35,1.35),(-1.35,1.35),(0,1.55)),60,.2,(42,82,49))))
+    export("taiga_juniper.glb",parts)
+
+def reed():
+    parts=[]
+    for stem in range(19):
+        a=RNG.uniform(0,2*math.pi); r=RNG.uniform(0,.42)
+        base=np.array([math.cos(a)*r,math.sin(a)*r,0.])
+        h=RNG.uniform(1.0,1.9)
+        lean=np.array([math.cos(a)*RNG.uniform(.08,.3),math.sin(a)*RNG.uniform(.08,.3),h])
+        parts.append((f"Reed_Culm_{stem}",tube(base,base+lean,.022,.009,(92,112,62,255),12,5)))
+        if stem%3==0:
+            head=base+lean
+            parts.append((f"Reed_Seedhead_{stem}",tube(head,head+np.array([0,0,.24]),.035,.012,(132,111,72,255),5,6)))
+        for side in (-1,1):
+            t=RNG.uniform(.35,.7); p=base+lean*t
+            tip=p+np.array([math.cos(a+side*1.1)*.34,math.sin(a+side*1.1)*.34,.12])
+            parts.append((f"Reed_Leaf_{stem}_{side}",tube(p,tip,.018,.002,(83,112,55,255),6,4)))
+    export("taiga_reed.glb",parts)
+
+def cranberry():
+    parts=[]; centers=[]; scales=[]
+    # Creeping bog shrub, horizontal runners, small leaves and berry clusters.
+    for runner in range(13):
+        a=RNG.uniform(0,2*math.pi); length=RNG.uniform(.45,1.15)
+        start=np.array([RNG.uniform(-.25,.25),RNG.uniform(-.25,.25),.08])
+        end=start+np.array([math.cos(a)*length,math.sin(a)*length*.75,RNG.uniform(.02,.12)])
+        parts.append((f"Cranberry_Runner_{runner}",tube(start,end,.014,.009,(102,76,51,255),8,5)))
+        for k in range(4):
+            t=(k+1)/5; p=start*(1-t)+end*t
+            centers.append(tuple(p+np.array([0,0,.035])))
+            scales.append((.13,.09,.045))
+            if k%2==0:
+                berry=trimesh.creation.icosphere(subdivisions=2,radius=.065)
+                berry.apply_translation(p+np.array([.02,0,.11]))
+                color_mesh(berry,(151,42,47,255))
+                parts.append((f"Cranberry_Fruit_{runner}_{k}",berry))
+    parts.append(("Cranberry_Leaves",organic_union(centers,scales,((-1.5,1.5),(-1.2,1.2),(.0,.25)),56,.06,(61,103,54))))
+    export("taiga_cranberry.glb",parts)
+
+def dead_snag():
+    parts=[("Weathered_Snag_Trunk",tube((0,0,0),(.08,0,5.7),.28,.055,(91,76,59,255),24,11,(.22,0,0)))]
+    for i,z in enumerate([1.2,2.1,3.0,3.8,4.7,5.25]):
+        a=i*2.399
+        length=RNG.uniform(.45,1.15)
+        start=np.array([.05,0,z])
+        end=start+np.array([math.cos(a)*length,math.sin(a)*length*.7,RNG.uniform(-.25,.3)])
+        parts.append((f"Broken_Branch_{i}",tube(start,end,.075,.012,(79,65,52,255),7,6)))
+        tip=end+np.array([math.cos(a+.5)*.12,math.sin(a+.5)*.1,.12])
+        parts.append((f"Splintered_Tip_{i}",tube(end,tip,.026,.002,(124,103,77,255),3,5)))
+    export("taiga_dead_snag.glb",parts)
+
+def lichen_rock():
+    rockmesh=trimesh.creation.icosphere(subdivisions=3,radius=1)
+    v=rockmesh.vertices.copy()
+    for i,p in enumerate(v):
+        f=1+.13*math.sin(p[0]*8+p[2]*5)+.08*math.cos(p[1]*9-p[0]*4)
+        v[i]=p*f*np.array([1.25,.78,.9])+np.array([0,0,.72])
+    rockmesh.vertices=v
+    cols=[]
+    for p in rockmesh.triangles_center:
+        base=np.array([86,91,78]) if p[2]>.75 else np.array([65,70,65])
+        cols.append([*np.clip(base+int(RNG.integers(-9,10)),0,255),255])
+    rockmesh.visual.face_colors=np.asarray(cols,dtype=np.uint8)
+    parts=[("Mossy_Stone",rockmesh)]
+    centers=[]; scales=[]
+    for i in range(24):
+        a=RNG.uniform(0,2*math.pi); r=RNG.uniform(.25,1.0)
+        centers.append((math.cos(a)*r,math.sin(a)*r*.75,RNG.uniform(.95,1.45)))
+        scales.append((RNG.uniform(.18,.34),RNG.uniform(.12,.24),RNG.uniform(.035,.075)))
+    parts.append(("Lichen_Patches",organic_union(centers,scales,((-1.6,1.6),(-1.2,1.2),(.85,1.65)),48,.05,(137,151,104))))
+    export("taiga_lichen_rock.glb",parts)
+
 if __name__ == "__main__":
-    spruce(); birch(); bush(); rock(); fallen_log(); pine(); larch(); cedar(); aspen(); alder(); willow(); fern(); grass(); moss(); stump()
-    print("Generated 15 original Taiga GLB models in", OUT)
+    spruce(); birch(); bush(); rock(); fallen_log(); pine(); larch(); cedar(); aspen(); alder(); willow(); fern(); grass(); moss(); stump(); juniper(); reed(); cranberry(); dead_snag(); lichen_rock()
+    print("Generated 20 original Taiga GLB models in", OUT)
