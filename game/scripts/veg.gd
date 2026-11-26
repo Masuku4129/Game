@@ -280,6 +280,13 @@ func _grow(bark: Surf, lf: Surf, P: Dictionary, st: Vector3, d: Vector3, L: floa
 			var sz := cs * R(0.8, 1.2)
 			var leaf_h := sz * (1.6 if kind == "birch" else (1.35 if kind == "aspen" else 0.9))
 			card(lf, p - b.y * leaf_h * 0.5, b, sz, leaf_h, R(0.78, 1.08))
+			# Хвойные и осина получают второй пересекающийся слой кластера:
+			# он закрывает просветы при взгляде под разными углами, не превращая крону в шар.
+			if kind == "pine" or kind == "larch" or kind == "aspen":
+				var cross := b * Basis(Vector3.UP, PI * 0.5)
+				var cross_sz := sz * (0.72 if kind == "larch" else 0.82)
+				var cross_h := leaf_h * (0.8 if kind == "larch" else 0.88)
+				card(lf, p - cross.y * cross_h * 0.5, cross, cross_sz, cross_h, R(0.72, 0.98))
 	if lv >= maxlv:
 		return
 	var n: int = P["n"] + (1 if lv == 0 else 0)
