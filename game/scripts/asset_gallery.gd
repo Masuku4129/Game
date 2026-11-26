@@ -18,6 +18,7 @@ const ASSETS := [
 
 func _ready() -> void:
 	_make_stage()
+	var loaded := 0
 	for spec in ASSETS:
 		var path := "res://models/environment/%s" % spec.file
 		var packed := load(path) as PackedScene
@@ -31,6 +32,7 @@ func _ready() -> void:
 		model.position = Vector3(float(spec.x), 0.0, 0.0)
 		model.scale = Vector3.ONE * float(spec.scale)
 		add_child(model)
+		loaded += 1
 		var label := Label3D.new()
 		label.text = str(spec.label)
 		label.position = Vector3(float(spec.x), 0.12, 3.0)
@@ -40,7 +42,7 @@ func _ready() -> void:
 		label.outline_size = 8
 		label.no_depth_test = true
 		add_child(label)
-	print("TAIGA_ASSET_GALLERY loaded=", ASSETS.size())
+	print("TAIGA_ASSET_GALLERY loaded=", loaded, " expected=", ASSETS.size())
 	if OS.get_environment("ASSET_GALLERY_SHOTS") != "":
 		await get_tree().process_frame
 		await get_tree().process_frame
@@ -53,7 +55,7 @@ func _ready() -> void:
 func _make_stage() -> void:
 	var floor := MeshInstance3D.new()
 	var plane := PlaneMesh.new()
-	plane.size = Vector2(34.0, 14.0)
+	plane.size = Vector2(74.0, 18.0)
 	floor.mesh = plane
 	var ground := StandardMaterial3D.new()
 	ground.albedo_color = Color(0.19, 0.23, 0.18)
@@ -80,8 +82,8 @@ func _make_stage() -> void:
 
 	var camera := Camera3D.new()
 	camera.projection = Camera3D.PROJECTION_ORTHOGONAL
-	camera.size = 19.0
-	camera.position = Vector3(0.0, 15.0, 27.0)
-	camera.look_at(Vector3(0.0, 2.4, 0.0), Vector3.UP)
+	camera.size = 38.0
+	camera.position = Vector3(0.0, 28.0, 52.0)
+	camera.look_at(Vector3(0.0, 3.2, 0.0), Vector3.UP)
 	add_child(camera)
 	camera.current = true
