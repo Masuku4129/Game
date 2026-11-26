@@ -852,14 +852,14 @@ func _unstick(delta: float) -> void:
 	if state == "wander":
 		state_t = rng.randf_range(6.0, 12.0)
 	if _bump > 40:
-		# Never teleport wildlife: abandon the unreachable destination and
-		# choose a nearby point on valid ground, preserving the current position.
+		# Never teleport wildlife: exhaustively search for a reachable nearby target,
+		# then abandon path-dependent activities if the target cannot be reached.
 		_bump = 0
 		var escape := heading + rng.randf_range(-PI * 0.75, PI * 0.75)
 		var recovered := false
-		for radius in [4.0, 7.0, 11.0, 16.0]:
-			for turn in range(8):
-				var ang := escape + TAU * float(turn) / 8.0
+		for radius in [3.0, 5.0, 8.0, 12.0, 17.0, 23.0, 30.0]:
+			for turn in range(16):
+				var ang := escape + TAU * float(turn) / 16.0
 				var probe: Vector3 = position + Vector3(sin(ang), 0.0, cos(ang)) * float(radius)
 				if _can_step(probe):
 					target = probe
@@ -868,8 +868,16 @@ func _unstick(delta: float) -> void:
 			if recovered:
 				break
 		if not recovered:
-			state_t = 0.0
+			# Retain current location, release the unreachable task and rotate
+			# toward a fresh direction; subsequent decisions retry local movement.
+			_drop_fish()
+			food = null
+			prey = null
+			state = "wander"
+			state_t = rng.randf_range(3.0, 6.0)
 			want = 0.0
+			heading = wrapf(heading + PI * _turn_dir, -PI, PI)
+			target = position + Vector3(sin(heading), 0.0, cos(heading)) * 2.0
 
 func _strike(tg: Node3D) -> void:
 	if attack_cd > 0.0:
