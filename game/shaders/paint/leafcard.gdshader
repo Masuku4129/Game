@@ -55,6 +55,10 @@ void fragment() {
 	float up = wn.y * 0.5 + 0.5;
 	float g = clamp(up * 1.0 + (b.g - 0.5) * 0.6 + shade * 0.25 - 0.2, 0.0, 1.0);
 	vec3 c = g < 0.5 ? mix(lin(col_dark), lin(col_mid), g * 2.0) : mix(lin(col_mid), lin(col_light), g * 2.0 - 1.0);
+	float color_noise = vnoise(wpc.xz * 4.7 + wpc.y * 1.9) * 0.65 + vnoise(wpc.xz * 11.0 - wpc.y * 2.3) * 0.35;
+	float leaf_speckle = vnoise(wpc.xz * 21.0 + vec2(wpc.y * 7.0, -wpc.y * 3.0));
+	c *= mix(0.82, 1.12, color_noise);
+	c = mix(c, c * vec3(1.08, 1.02, 0.84), smoothstep(0.62, 0.9, leaf_speckle) * 0.12);
 	c = mix(c, autumn_col(col_autumn, g, tree_r), clamp(autumn * autumn_k * (0.8 + tree_r * 0.45), 0.0, 1.0));
 	c = mix(c, lin(col_bloom) * (0.8 + g * 0.25), bloom_k * blossom * step(0.45, fract(drop_h * 3.7)));
 	c *= 1.0 - wet * 0.15;
