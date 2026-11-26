@@ -16,7 +16,7 @@ func _export_models() -> void:
 		{"file": "taiga_style_bush.glb", "result": generator.bush(9401)},
 		{"file": "taiga_style_rock.glb", "result": generator.rock(9501, 2)}
 	]
-	var out_dir := ProjectSettings.globalize_path("res://models/game_style")
+	var out_dir := ProjectSettings.globalize_path("res://models/environment")
 	var dir_error := DirAccess.make_dir_recursive_absolute(out_dir)
 	if dir_error != OK and dir_error != ERR_ALREADY_EXISTS:
 		push_error("GAME_STYLE_EXPORT cannot create output directory: %s" % dir_error)
