@@ -264,12 +264,22 @@ func _grow(bark: Surf, lf: Surf, P: Dictionary, st: Vector3, d: Vector3, L: floa
 			k = 3
 			cs *= 1.35
 		for i in k:
-			var p := _bez(st, mid, en, R(0.3, 1.0)) + Vector3(R(-0.5, 0.5), R(-0.4, 0.4), R(-0.5, 0.5)) * cs
+			var t_leaf := R(0.3, 1.0)
+			var p := _bez(st, mid, en, t_leaf) + Vector3(R(-0.5, 0.5), R(-0.4, 0.4), R(-0.5, 0.5)) * cs
 			var b := Basis.from_euler(Vector3(R(-1.2, 1.2), R(0, TAU), R(-1.2, 1.2)))
 			if kind == "birch":
+				# Берёзовые листья раскрыты, более плоская ориентация помогает читать силуэт.
 				b = Basis.from_euler(Vector3(R(-0.3, 0.3), R(0, TAU), R(-0.3, 0.3)))
+			elif kind == "larch":
+				# Мягкие свисающие пучки иголок вдоль тонких ветвей.
+				var branch_tangent := _bez_d(st, mid, en, t_leaf)
+				b = _basis_along(branch_tangent + Vector3(0, -0.32, 0), R(-0.18, 0.18))
+			elif kind == "aspen":
+				# Осина: округлая листва на периферии кроны, а не игольчатая масса.
+				b = Basis.from_euler(Vector3(R(-0.65, 0.65), R(0, TAU), R(-0.65, 0.65)))
 			var sz := cs * R(0.8, 1.2)
-			card(lf, p - b.y * sz * 0.5, b, sz, sz * (1.6 if kind == "birch" else 1.0), R(0.8, 1.05))
+			var leaf_h := sz * (1.6 if kind == "birch" else (1.35 if kind == "aspen" else 0.9))
+			card(lf, p - b.y * leaf_h * 0.5, b, sz, leaf_h, R(0.78, 1.08))
 	if lv >= maxlv:
 		return
 	var n: int = P["n"] + (1 if lv == 0 else 0)
