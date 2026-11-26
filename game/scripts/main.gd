@@ -281,7 +281,7 @@ func _find_start() -> Vector3:
 			var x := cos(a) * r
 			var z := sin(a) * r
 			var y := height(x, z)
-			if y > WATER_Y + 0.8 and normal_at(x, z).y > 0.93 and not blocked(x, z, 1.5):
+			if y > WATER_Y + 0.8 and normal_at(x, z).y > 0.93 and not blocked(x, z, 7.5):
 				return Vector3(x, y, z)
 	return Vector3(0, height(0, 0), 0)
 
