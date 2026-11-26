@@ -99,12 +99,12 @@ jobs:
             log=$(godot --headless --path . --check-only --script "$f" 2>&1) || { echo "$log"; exit 1; }
             echo "$log" | grep -E "SCRIPT ERROR|Parse Error|ERROR" && exit 1 || true
           done
-      - name: Smoke test
-        continue-on-error: true
+      - name: Smoke test (strict; errors fail the build)
         run: |
           cd game
           timeout 300 godot --headless --path . --quit-after 60 res://scenes/main.tscn 2>&1 | tee ../smoke.log
-          ! grep -E "SCRIPT ERROR|Invalid|Cannot|Nonexistent" ../smoke.log
+          ! grep -E "SCRIPT ERROR|Parse Error|Invalid|Cannot|Nonexistent|ERROR:" ../smoke.log
+          grep -E "ImportedModelResourceKeeper|taiga_" ../smoke.log || true
       - name: Export APK
         run: |
           mkdir -p build
