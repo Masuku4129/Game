@@ -2123,6 +2123,11 @@ func _core_setup(_ui: CanvasLayer) -> void:
 
 ## Еда и питьё из короба: из миски (и ложкой) сытнее, горячее греет. Возвращает [сытость, жажда, здоровье].
 func core_eat(id: String, e: Array) -> Array:
+	# Consume requests can come from saved or test states; normalize missing effect fields.
+	var effects: Array = [0.0, 0.0, 0.0]
+	for i in min(e.size(), effects.size()):
+		effects[i] = float(e[i])
+	e = effects
 	var d: Dictionary = preload("res://scripts/items.gd").DEF.get(id, {})
 	var k := 1.0
 	var cooked: bool = bool(d.get("bowl", false)) or id in ["meat_cooked", "fish_cooked"]
