@@ -869,11 +869,9 @@ func _can_step(p: Vector3, flying: bool = false, from_pos: Vector3 = Vector3.INF
 		if bog_here > bog_limit and bog_here > bog_current + 0.02:
 			return false
 	var solid_y: float = main.solid_top(p.x, p.z)
-	var obstacle_h: float = solid_y - base_y
-	# Животные могут забираться на низкие камни, но обходят отвесные валуны.
+	# Высота поверхности валуна над землёй не является высотой ступени:
+	# при движении по склону камня сравниваем соседние точки опоры ниже.
 	var step_limit := 0.58 if kind in ["hare", "squirrel", "fox"] else (0.78 if kind in ["roe", "deer", "muskdeer", "lynx"] else 0.68)
-	if not flying and obstacle_h > step_limit:
-		return false
 	var gy: float = maxf(base_y, solid_y)
 	# Сравниваем высоту с предыдущей точкой маршрута, а не с исходной
 	# позицией зверя: длинный probe должен проходить по плавному склону.
@@ -890,7 +888,10 @@ func _can_step(p: Vector3, flying: bool = false, from_pos: Vector3 = Vector3.INF
 
 ## Зверь оказался внутри ствола или камня (родился, построили рядом) — вытолкнуть к ближайшему свободному месту.
 func _push_out() -> void:
-	if not main.blocked(position.x, position.z, _obstacle_radius()) and main.solid_top(position.x, position.z) - main.grid_height(position.x, position.z) <= 0.45:
+	# Высота камня под лапами сама по себе не означает застревание:
+	# зверь может стоять на валуне. Выталкиваем только при перекрытии тела сверху.
+	var overhead: float = main.solid_top(position.x, position.z) - position.y
+	if not main.blocked(position.x, position.z, _obstacle_radius()) and overhead <= 0.55:
 		return
 	# Search wider and more densely so animals can escape tree/rock gaps.
 	for r in [0.5, 0.9, 1.3, 1.8, 2.4, 3.2, 4.2, 5.4]:
