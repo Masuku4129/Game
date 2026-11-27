@@ -16,6 +16,9 @@ var cloud := 0.1
 var precip := 0.0
 var fogv := 0.0
 var wind := 0.5
+var gust := 0.0
+var gust_target := 0.0
+var gust_timer := 0.0
 var temp := 8.0
 var snow := 0.0
 var wet := 0.0
@@ -31,6 +34,7 @@ var t_precip := 0.0
 var t_fog := 0.0
 var t_wind := 0.5
 var _hours_acc := 0.0
+var _gust_clock := 0.0
 
 var rain: GPUParticles3D
 var flakes: GPUParticles3D
@@ -176,6 +180,13 @@ func step(dh: float) -> void:
 	precip = lerpf(precip, t_precip, k)
 	fogv = lerpf(fogv, t_fog, k)
 	wind = lerpf(wind, t_wind, k)
+	# Ветер меняется порывами, а не только постоянной величиной.
+	gust_timer -= dh
+	if gust_timer <= 0.0:
+		gust_timer = rng.randf_range(0.18, 0.9) if t_wind > 1.4 else rng.randf_range(0.6, 2.4)
+		gust_target = rng.randf_range(0.0, 0.45) if t_wind < 1.4 else rng.randf_range(0.25, 1.0)
+	gust = lerpf(gust, gust_target, clampf(dh * (1.2 if gust_target > gust else 0.45), 0.0, 1.0))
+	wind = clampf(wind + gust * (0.25 if t_wind < 1.4 else 0.5), 0.0, 2.8)
 	var y := year_pos()
 	var daily: float = (main.day_factor - 0.5) * 9.0 * (1.0 - cloud * 0.5)
 	temp = base_temp(y) + daily - precip * 2.0
@@ -239,9 +250,9 @@ func update_visual(cam_target: Vector3) -> void:
 	rain.amount_ratio = amt
 	flakes.amount_ratio = amt
 	var pm: ParticleProcessMaterial = flakes.process_material
-	pm.gravity = Vector3(wind * 1.2, -1.3, wind * 0.5)
+	pm.gravity = Vector3(wind * (1.2 + gust * 0.8), -1.3, wind * (0.5 + gust * 0.35))
 	var pr: ParticleProcessMaterial = rain.process_material
-	pr.gravity = Vector3(wind * 2.5, -12.0, wind * 1.0)
+	pr.gravity = Vector3(wind * (2.5 + gust * 1.5), -12.0, wind * (1.0 + gust * 0.6))
 	atmo.update(cam_target)
 
 ## Раздать параметры шейдерам.
@@ -253,7 +264,7 @@ func apply(mats_a: Array, mats_b: Array, terrain: ShaderMaterial, blade: ShaderM
 	var freeze_now := clampf(-temp * 0.5, 0.0, 1.0)
 	var rain_now := precip if temp >= 0.5 else 0.0
 	var dry_now := clampf(autumn * 0.8 + (1.0 - smoothstep(0.0, 0.4, temp)) * 0.3, 0.0, 1.0)
-	var values := PackedFloat32Array([snow, wet, autumn, leaf_drop, wind, blossom, freeze_now, rain_now, dry_now, ice])
+	var values := PackedFloat32Array([snow, wet, autumn, leaf_drop, wind, blossom, freeze_now, rain_now, dry_now, ice, gust])
 	var changed := _last_shader_weather.size() != values.size()
 	if not changed:
 		for i in values.size():
@@ -290,7 +301,7 @@ func apply(mats_a: Array, mats_b: Array, terrain: ShaderMaterial, blade: ShaderM
 	water.set_shader_parameter("rain", rain_now)
 
 # --- core: сохранение (save.gd, раздел «weather») ---
-const _SAVE_KEYS := ["next_change", "cloud", "precip", "fogv", "wind", "temp", "snow", "wet", "autumn", "leaf_drop", "ice", "mist", "blossom", "t_cloud", "t_precip", "t_fog", "t_wind", "_hours_acc"]
+const _SAVE_KEYS := ["next_change", "cloud", "precip", "fogv", "wind", "gust", "gust_target", "gust_timer", "temp", "snow", "wet", "autumn", "leaf_drop", "ice", "mist", "blossom", "t_cloud", "t_precip", "t_fog", "t_wind", "_hours_acc"]
 
 func to_save() -> Dictionary:
 	var d := {"kind": kind, "rng_state": rng.state}
