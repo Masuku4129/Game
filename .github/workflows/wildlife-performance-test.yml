@@ -28,6 +28,17 @@ jobs:
           for f in scripts/*.gd tests/*.gd; do
             godot --headless --check-only --script "$f"
           done
+      - name: Wildlife performance baseline
+        run: |
+          cd game
+          PERF=1 timeout 300 godot --headless res://scenes/main.tscn 2>&1 | tee /tmp/perf.log
+          grep "PERF всё" /tmp/perf.log
+      - name: Upload performance log
+        uses: actions/upload-artifact@v4
+        with:
+          name: wildlife-performance-log
+          path: /tmp/perf.log
+          retention-days: 30
       - name: Smoke scene
         run: |
           cd game
