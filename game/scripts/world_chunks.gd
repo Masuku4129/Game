@@ -21,6 +21,8 @@ var terrain_nodes: Dictionary = {}
 var tree_mmis: Dictionary = {}
 var prop_mmis: Dictionary = {}
 var blocker_records: Dictionary = {}
+var prop_blocker_records: Dictionary = {}
+var prop_solid_records: Dictionary = {}
 var _model_variant_cache: Dictionary = {}
 var stream_water_material: ShaderMaterial
 var _water_state_clock := 0.0
@@ -543,6 +545,8 @@ func _build_understory(c: Vector2i) -> void:
 		var xf := Transform3D(Basis(Vector3.UP, yaw).scaled(Vector3.ONE * scale), Vector3(wx, h, wz))
 		groups[bucket].transforms.append(xf)
 	var created: Array = []
+	var chunk_blockers: Array = []
+	var chunk_solids: Array = []
 	for bucket: String in groups:
 		var group: Dictionary = groups[bucket]
 		var kind := String(group.kind)
@@ -567,7 +571,20 @@ func _build_understory(c: Vector2i) -> void:
 		created.append(mm)
 		# Подключаем ягоды/грибы/валежник к штатным системам сбора и инструментов.
 		main._place_cell_records(mm, transforms, [kind], vi, variants, false, "mushroom" if kind == "mushroom" else "")
+		if kind == "rock":
+			var bounds: AABB = (variants[vi][0] as Mesh).get_aabb()
+			for xf: Transform3D in transforms:
+				var p := xf.origin
+				var radius := maxf(0.35, (bounds.size.x + bounds.size.z) * 0.25 * xf.basis.x.length())
+				var obstacle := Vector3(p.x, p.z, radius)
+				main._add_blocker(p.x, p.z, radius)
+				chunk_blockers.append([Vector2i(floori(p.x / 8.0), floori(p.z / 8.0)), obstacle])
+				var solid := [0, p, Vector3.ZERO, radius, maxf(0.25, bounds.size.y * xf.basis.y.length() * 0.72)]
+				main._add_solid(solid)
+				chunk_solids.append(solid)
 	prop_mmis[k] = created
+	prop_blocker_records[k] = chunk_blockers
+	prop_solid_records[k] = chunk_solids
 
 func _remove_prop_cover(k: String) -> void:
 	var meshes: Array = prop_mmis.get(k, [])
@@ -599,7 +616,28 @@ func _remove_prop_cover(k: String) -> void:
 					fallen.remove_at(i)
 			if fallen.is_empty():
 				main.fallen_spots.erase(cell_key)
+	# Убираем препятствия и опорные поверхности, созданные моделями этого чанка.
+	for item: Array in prop_blocker_records.get(k, []):
+		var grid_key: Vector2i = item[0]
+		var obstacle: Vector3 = item[1]
+		if main.blockers.has(grid_key):
+			var entries: Array = main.blockers[grid_key]
+			for i in range(entries.size() - 1, -1, -1):
+				if entries[i] == obstacle:
+					entries.remove_at(i)
+			if entries.is_empty():
+				main.blockers.erase(grid_key)
+	for solid: Array in prop_solid_records.get(k, []):
+		for grid_key in main.solids.keys():
+			var entries: Array = main.solids[grid_key]
+			for i in range(entries.size() - 1, -1, -1):
+				if entries[i] == solid:
+					entries.remove_at(i)
+			if entries.is_empty():
+				main.solids.erase(grid_key)
 	prop_mmis.erase(k)
+	prop_blocker_records.erase(k)
+	prop_solid_records.erase(k)
 
 func _remove_tree_cover(k: String) -> void:
 	var meshes: Array = tree_mmis.get(k, [])
