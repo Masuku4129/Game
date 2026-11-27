@@ -552,7 +552,7 @@ func _build_tree_cover(c: Vector2i) -> void:
 				continue
 		for xf: Transform3D in transforms:
 			var p := xf.origin
-			var radius := 0.38 * xf.basis.x.length()
+			var radius := float(main.BLOCK_R.get(kind, 0.38)) * xf.basis.x.length()
 			main._add_blocker(p.x, p.z, radius)
 			blockers_for_chunk.append([Vector2i(floori(p.x / 8.0), floori(p.z / 8.0)), Vector3(p.x, p.z, radius)])
 	tree_mmis[k] = created
