@@ -133,6 +133,24 @@ func mark_explored(world_position: Vector3) -> void:
 	rec["explored"] = true
 	persistent[k] = rec
 
+func save_map_cell(world_x: float, world_z: float, cell_key: String, data: Dictionary) -> void:
+	var chunk_coord := Vector2i(floori(world_x / CHUNK_SIZE), floori(world_z / CHUNK_SIZE))
+	var k := _key(chunk_coord)
+	if not persistent.has(k):
+		persistent[k] = _create_record(chunk_coord)
+	var rec: Dictionary = persistent[k]
+	var cells: Dictionary = rec.get("map_cells", {})
+	cells[cell_key] = data.duplicate(true)
+	rec["map_cells"] = cells
+	rec["explored"] = true
+	rec["revision"] = int(rec.get("revision", 0)) + 1
+	persistent[k] = rec
+
+func read_map_cells(chunk_coord: Vector2i) -> Dictionary:
+	var rec: Dictionary = persistent.get(_key(chunk_coord), {})
+	var cells: Variant = rec.get("map_cells", {})
+	return cells.duplicate(true) if cells is Dictionary else {}
+
 func write_state(world_position: Vector3, section: String, state: Dictionary) -> void:
 	if section not in ["resource_state", "tree_state", "fallen_state", "terrain_delta", "structures", "animals"]:
 		return
