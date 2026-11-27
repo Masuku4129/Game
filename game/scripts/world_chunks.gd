@@ -234,6 +234,106 @@ func _update_stream_water(delta: float) -> void:
 		terrain.set_shader_parameter("freeze", clampf(-temperature * 0.5, 0.0, 1.0))
 		terrain.set_shader_parameter("rain", rain_now)
 
+func _build_bog_cover(c: Vector2i, parent: Node3D) -> void:
+	if main == null:
+		return
+	var rng := RandomNumberGenerator.new()
+	rng.seed = _seed(c) ^ 0x3D6E8A21
+	var groups: Dictionary = {}
+	var attempts := 190
+	for n in attempts:
+		var wx := float(c.x) * CHUNK_SIZE + rng.randf_range(0.5, CHUNK_SIZE - 0.5)
+		var wz := float(c.y) * CHUNK_SIZE + rng.randf_range(0.5, CHUNK_SIZE - 0.5)
+		var wet := main.swamp_depth_at(wx, wz)
+		var zone_id := main.zone(wx, wz)
+		if zone_id != 2 and wet < 0.56:
+			continue
+		var kind := "sedge"
+		var roll := rng.randf()
+		if roll < 0.20:
+			kind = "moss"
+		elif roll < 0.40:
+			kind = "fern"
+		elif roll < 0.59:
+			kind = "reeds"
+		elif roll < 0.77:
+			kind = "sedge"
+		elif roll < 0.89:
+			kind = "bush"
+		else:
+			kind = "rock"
+		var variants: Array = _model_variants(kind)
+		if variants.is_empty():
+			continue
+		var vi := rng.randi_range(0, variants.size() - 1)
+		var key := "%s:%d" % [kind, vi]
+		if not groups.has(key):
+			groups[key] = {"kind": kind, "variant": vi, "xf": []}
+		var h := main.height(wx, wz)
+		var scale := rng.randf_range(0.62, 1.36)
+		var xf := Transform3D(Basis(Vector3.UP, rng.randf_range(-PI, PI)).scaled(Vector3.ONE * scale), Vector3(wx, h, wz))
+		groups[key].xf.append(xf)
+	for key: String in groups:
+		var g: Dictionary = groups[key]
+		var variants: Array = _model_variants(String(g.kind))
+		var transforms: Array = g.xf
+		if transforms.is_empty():
+			continue
+		var mm := MultiMesh.new()
+		mm.transform_format = MultiMesh.TRANSFORM_3D
+		mm.use_custom_data = true
+		mm.mesh = variants[int(g.variant)][0]
+		mm.instance_count = transforms.size()
+		for i in transforms.size():
+			mm.set_instance_transform(i, transforms[i])
+			mm.set_instance_custom_data(i, Color(70.0, wet, 0.0, 0.0))
+		var mmi := MultiMeshInstance3D.new()
+		mmi.multimesh = mm
+		mmi.name = "BogPlant_%s_%d" % [g.kind, g.variant]
+		mmi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		parent.add_child(mmi)
+
+func _build_bog_water(c: Vector2i, parent: Node3D) -> void:
+	if main == null:
+		return
+	var cells := 18
+	var step := CHUNK_SIZE / float(cells)
+	var verts := PackedVector3Array()
+	var normals := PackedVector3Array()
+	var uvs := PackedVector2Array()
+	var indices := PackedInt32Array()
+	for z in range(cells):
+		for x in range(cells):
+			var wx := float(c.x) * CHUNK_SIZE + (float(x) + 0.5) * step
+			var wz := float(c.y) * CHUNK_SIZE + (float(z) + 0.5) * step
+			var wet := main.swamp_depth_at(wx, wz)
+			if wet < 0.66:
+				continue
+			var base := verts.size()
+			var x0 := float(x) * step
+			var z0 := float(z) * step
+			var y := main.water_level(wx, wz) - 0.035
+			verts.append_array([Vector3(x0, y, z0), Vector3(x0 + step, y, z0), Vector3(x0, y, z0 + step), Vector3(x0 + step, y, z0 + step)])
+			uvs.append_array([Vector2(wx, wz), Vector2(wx + step, wz), Vector2(wx, wz + step), Vector2(wx + step, wz + step)])
+			normals.append_array([Vector3.UP, Vector3.UP, Vector3.UP, Vector3.UP])
+			indices.append_array(PackedInt32Array([base, base + 2, base + 1, base + 1, base + 2, base + 3]))
+	if verts.is_empty():
+		return
+	var arrays: Array = []
+	arrays.resize(Mesh.ARRAY_MAX)
+	arrays[Mesh.ARRAY_VERTEX] = verts
+	arrays[Mesh.ARRAY_NORMAL] = normals
+	arrays[Mesh.ARRAY_TEX_UV] = uvs
+	arrays[Mesh.ARRAY_INDEX] = indices
+	var mesh := ArrayMesh.new()
+	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
+	mesh.surface_set_material(0, stream_water_material)
+	var water := MeshInstance3D.new()
+	water.name = "BogPools"
+	water.mesh = mesh
+	water.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	parent.add_child(water)
+
 func _build_water_surface(c: Vector2i, parent: Node3D) -> void:
 	if stream_water_material == null:
 		_update_stream_water(0.0)
@@ -410,6 +510,8 @@ func _build_terrain_chunk(c: Vector2i) -> void:
 	body.add_child(collision)
 	root.add_child(body)
 	_build_water_surface(c, root)
+	_build_bog_cover(c, root)
+	_build_bog_water(c, root)
 	add_child(root)
 	terrain_nodes[k] = root
 
