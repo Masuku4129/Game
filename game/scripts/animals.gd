@@ -198,6 +198,16 @@ func populate_stream_chunk(coord: Vector2i, chunk_seed: int) -> void:
 		for secondary_i in range(secondary_count):
 			var secondary_pos := secondary_center if secondary_i == 0 else _near(secondary_center, 5.5)
 			_spawn(secondary_kind, secondary_pos, rng.randf_range(0.84, 1.06), group_id + 4, "chunk:%s:secondary:%d" % [key, secondary_i])
+	# Riparian encounters are independent of the forest/open-ground pairing:
+	# small water-edge populations can occur even in otherwise inland chunks
+	# that include a narrow stream corridor.
+	if not waterside_candidates.is_empty() and rng.randf() < 0.16:
+		var bank_center: Vector3 = waterside_candidates[rng.randi_range(0, waterside_candidates.size() - 1)]
+		var bank_species := "beaver" if rng.randf() < 0.22 else ("boar" if rng.randf() < 0.35 else "roe")
+		var bank_count := 1 if bank_species == "beaver" else rng.randi_range(1, 2)
+		for bank_i in range(bank_count):
+			var bank_pos := bank_center if bank_i == 0 else _near(bank_center, 4.5)
+			_spawn(bank_species, bank_pos, rng.randf_range(0.86, 1.05), group_id + 5, "chunk:%s:bank:%d" % [key, bank_i])
 	# Мелкая живность населяет каждый подходящий лесной чанк; белки появляются
 	# только там, где уже создана древесная опора для карабканья.
 	if rng.randf() < 0.96:
