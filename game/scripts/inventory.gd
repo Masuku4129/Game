@@ -454,6 +454,31 @@ func _sheet_input(e: InputEvent) -> void:
 					return
 				elif not mb.pressed:
 					_craft_dragging = false
+		if e is InputEventScreenTouch:
+			var touch := e as InputEventScreenTouch
+			if not touch.pressed:
+				_craft_dragging = false
+				return
+			if touch.position.y >= GRID.y and touch.position.y <= 640.0:
+				if touch.position.x >= 604.0 and touch.position.x <= 642.0 and max_scroll > 0.0:
+					_craft_dragging = true
+					_craft_drag_mode = "scrollbar"
+					var track_h := 516.0
+					var thumb_h := maxf(42.0, track_h * track_h / (float(rs.size()) * ROW_H))
+					var thumb_y := GRID.y + (track_h - thumb_h) * craft_scroll / max_scroll
+					_craft_bar_offset = touch.position.y - thumb_y if touch.position.y >= thumb_y and touch.position.y <= thumb_y + thumb_h else thumb_h * 0.5
+					var next_top := clampf(touch.position.y - _craft_bar_offset, GRID.y, GRID.y + track_h - thumb_h)
+					craft_scroll = (next_top - GRID.y) / maxf(track_h - thumb_h, 1.0) * max_scroll
+				elif touch.position.x < 604.0:
+					_craft_dragging = true
+					_craft_drag_mode = "list"
+					_craft_drag_y = touch.position.y
+					_craft_scroll_start = craft_scroll
+					var row_i := int((touch.position.y - GRID.y + craft_scroll) / ROW_H)
+					if row_i >= 0 and row_i < rs.size():
+						rsel = rs[row_i]
+				sheet.queue_redraw()
+				return
 		if e is InputEventScreenDrag and _craft_dragging:
 			var drag := e as InputEventScreenDrag
 			if _craft_drag_mode == "scrollbar":
