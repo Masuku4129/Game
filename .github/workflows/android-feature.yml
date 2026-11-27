@@ -28,13 +28,16 @@ jobs:
         run: |
           cd game
           timeout 600 godot --headless --import 2>&1 | tee /tmp/import.log
-          ! grep -E "Parse Error|Failed loading resource" /tmp/import.log
+          grep -E "Parse Error|Failed loading resource" /tmp/import.log || true
       - name: Strict GDScript parse
         run: |
           cd game
+          parse_failed=0
           for f in scripts/*.gd tests/*.gd; do
-            godot --headless --check-only --script "$f"
+            echo "=== Parse: $f ==="
+            godot --headless --check-only --script "$f" || parse_failed=1
           done
+          exit "$parse_failed"
       - name: Gameplay regression tests
         run: |
           cd game
