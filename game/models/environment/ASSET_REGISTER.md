@@ -14,4 +14,10 @@
 | Валежник | Original procedural low-poly mesh; materials from game paint shaders | Project-original; no third-party meshes or images | game/models/environment/taiga_fallen_log.glb | GLB parse and mesh-name check in CI |
 | Камень | Original procedural low-poly mesh; materials from game paint shaders | Project-original; no third-party meshes or images | game/models/environment/taiga_rock.glb | GLB parse and mesh-name check in CI |
 
+| Папоротник | Original procedural GLB; foliage/bark game shaders | Project-original | game/models/environment/taiga_fern.glb | Present in branch; Godot runtime visual check pending |
+| Камыш | Original procedural GLB; dedicated volume foliage material and bark shader | Project-original | game/models/environment/taiga_reed.glb | Present in branch; shading fix committed, runtime visual check pending |
+| Мох | Original procedural GLB; foliage/bark game shaders | Project-original | game/models/environment/taiga_moss.glb | Present in branch; Godot runtime visual check pending |
+| Грибы | Original procedural GLB; cap/bark game shaders | Project-original | game/models/environment/taiga_mushroom.glb | Present in branch; Godot runtime visual check pending |
+| Цветы / кипрей | Original procedural GLB; seasonal foliage shader | Project-original | game/models/environment/taiga_flower.glb | Present in branch; Godot runtime visual check pending |
+
 Source: tools/generate_taiga_models.py
