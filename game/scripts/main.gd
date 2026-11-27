@@ -6,8 +6,7 @@ const SIZE := 512.0
 const SEG := 384
 const WATER_Y := -2.0
 const CELL := 64.0
-const START_CHUNK_COORD := Vector2i(4, 4) # чанк начальной позиции около мирового нуля
-const START_CHUNK_SEED := 20261129
+const MAP_SEED := 20261127 # единый seed всей карты: рельеф, биомы, река, озёра, лес и трава
 const FOREST_DENSITY_MULTIPLIER := 1.7
 const FOREST_DENSITY_SPECIES := ["spruce", "pine", "birch", "larch", "aspen", "bare", "spruce_dead", "bush", "fern", "reeds", "twig", "berry", "bilberry", "mushroom", "fir", "cedar", "willow", "alder", "cherry", "rose", "horsetail", "hummock", "sedge", "juniper", "stlanik", "rowan", "anthill", "mossrock", "stump_rot", "stump_mush", "fungus_snag", "birch_dead", "mosslog", "ledum", "cloudberry", "cranberry", "cotton", "lingon", "ernik", "raspberry", "currant", "bells", "daisy", "angelica", "brushpile", "chanterelle", "cones"]
 
@@ -24,7 +23,7 @@ var n_wet := FastNoiseLite.new()
 var n_glade := FastNoiseLite.new()
 const RP := preload("res://scripts/river_path.gd")
 ## Озёра: [x, z, радиус, м]. Вдали от русла и от старта.
-const LAKES := [[-150.0, -140.0, 34.0], [125.0, 160.0, 46.0], [-60.0, 205.0, 28.0], [185.0, -150.0, 30.0]]
+const LAKES := [[-174.0, -112.0, 38.0], [148.0, 132.0, 41.0], [-92.0, 184.0, 32.0], [172.0, -176.0, 35.0]]
 
 var t_hours := 9.0
 var day_count := 1
@@ -387,18 +386,18 @@ func blocked(x: float, z: float, rad: float) -> bool:
 	return false
 
 func _setup_noise() -> void:
-	n_hill.seed = 1640; n_hill.frequency = 0.004; n_hill.fractal_octaves = 4
-	n_cliff.seed = 77; n_cliff.frequency = 0.0045; n_cliff.fractal_octaves = 2
-	n_detail.seed = 5; n_detail.frequency = 0.05; n_detail.fractal_octaves = 3
-	n_crag.seed = 31; n_crag.frequency = 0.16; n_crag.fractal_octaves = 4
-	n_crag2.seed = 32; n_crag2.frequency = 0.55; n_crag2.fractal_octaves = 2
-	n_biome.seed = 4242; n_biome.frequency = 0.0042; n_biome.fractal_octaves = 2
-	n_forest.seed = 909; n_forest.frequency = 0.02; n_forest.fractal_octaves = 3
-	n_zone.seed = 2024; n_zone.noise_type = FastNoiseLite.TYPE_CELLULAR; n_zone.frequency = 0.018
+	n_hill.seed = MAP_SEED + 1640; n_hill.frequency = 0.004; n_hill.fractal_octaves = 4
+	n_cliff.seed = MAP_SEED + 77; n_cliff.frequency = 0.0045; n_cliff.fractal_octaves = 2
+	n_detail.seed = MAP_SEED + 5; n_detail.frequency = 0.05; n_detail.fractal_octaves = 3
+	n_crag.seed = MAP_SEED + 31; n_crag.frequency = 0.16; n_crag.fractal_octaves = 4
+	n_crag2.seed = MAP_SEED + 32; n_crag2.frequency = 0.55; n_crag2.fractal_octaves = 2
+	n_biome.seed = MAP_SEED + 4242; n_biome.frequency = 0.0042; n_biome.fractal_octaves = 2
+	n_forest.seed = MAP_SEED + 909; n_forest.frequency = 0.02; n_forest.fractal_octaves = 3
+	n_zone.seed = MAP_SEED + 2024; n_zone.noise_type = FastNoiseLite.TYPE_CELLULAR; n_zone.frequency = 0.018
 	n_zone.cellular_return_type = FastNoiseLite.RETURN_CELL_VALUE; n_zone.fractal_type = FastNoiseLite.FRACTAL_NONE
-	n_open.seed = 313; n_open.frequency = 0.0055; n_open.fractal_octaves = 2
-	n_wet.seed = 777; n_wet.frequency = 0.007; n_wet.fractal_octaves = 3
-	n_glade.seed = 555; n_glade.frequency = 0.011; n_glade.fractal_octaves = 2
+	n_open.seed = MAP_SEED + 313; n_open.frequency = 0.0055; n_open.fractal_octaves = 2
+	n_wet.seed = MAP_SEED + 777; n_wet.frequency = 0.007; n_wet.fractal_octaves = 3
+	n_glade.seed = MAP_SEED + 555; n_glade.frequency = 0.011; n_glade.fractal_octaves = 2
 
 ## Уровень воды в точке: у бобровых плотин выше (пруд) или ниже (после плотины).
 func water_level(x: float, z: float) -> float:
@@ -1002,10 +1001,7 @@ func _grass_begin(k: Vector2i) -> void:
 	var rng := RandomNumberGenerator.new()
 	var world_cx := floori(float(k.x * GCELL) / CELL)
 	var world_cz := floori(float(k.y * GCELL) / CELL)
-	if Vector2i(world_cx, world_cz) == START_CHUNK_COORD:
-		rng.seed = START_CHUNK_SEED + k.y * 7919 + k.x * 104729 + 13
-	else:
-		rng.seed = k.y * 7919 + k.x * 104729 + 13
+	rng.seed = _chunk_seed(world_cx, world_cz) + k.y * 7919 + k.x * 104729 + 13
 	var per_var := []
 	for v in grass_mesh_vars:
 		per_var.append([])
@@ -1503,10 +1499,8 @@ func move_factor() -> float:
 const BLOCK_R := {"fungus_snag": 0.22, "birch_dead": 0.2, "snag": 0.25, "snag_b": 0.25, "cherry": 0.15, "fir": 0.36, "cedar": 0.38, "rowan": 0.2, "spruce": 0.4, "pine": 0.32, "birch": 0.28, "bare": 0.3, "spruce_dead": 0.3, "stump": 0.45, "rock": 0.5, "boulder": 0.6, "larch": 0.32, "aspen": 0.26}
 
 func _chunk_seed(cx: int, cz: int) -> int:
-	# Stable coordinate hash; the starting chunk has its own deliberately refreshed seed.
-	if Vector2i(cx, cz) == START_CHUNK_COORD:
-		return START_CHUNK_SEED
-	return cz * 1000 + cx
+	# Один детерминированный seed для каждого чанка, производный от общего seed карты.
+	return MAP_SEED + cx * 73856093 + cz * 19349663
 
 func _scatter_all() -> void:
 	# вид, попыток на клетку 32 м, масштаб, дальность видимости, тень, правило
@@ -1919,7 +1913,7 @@ func _cliff_rocks(vars: Array) -> void:
 		push_warning("Cliff rock variants are empty; skipping cliff scatter")
 		return
 	var rng := RandomNumberGenerator.new()
-	rng.seed = 4711
+	rng.seed = MAP_SEED + 4711
 	var per_var := []
 	for v in vars:
 		per_var.append([])
