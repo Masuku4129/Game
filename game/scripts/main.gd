@@ -344,14 +344,42 @@ func _reveal_map_area() -> void:
 			var zkind := zone(wx, wz)
 			var rd := river_dist(wx, wz)
 			var lk := lake_k(wx, wz)
+			var forest_k := forest_density(wx, wz)
+			var wet_k_value := wet_k(wx, wz, h)
+			var slope_dx := absf(height(wx + 4.0, wz) - height(wx - 4.0, wz)) / 8.0
+			var slope_dz := absf(height(wx, wz + 4.0) - height(wx, wz - 4.0)) / 8.0
+			var slope_k := sqrt(slope_dx * slope_dx + slope_dz * slope_dz)
+			var zone_name := "forest"
+			match zkind:
+				1:
+					zone_name = "burned_forest"
+				2:
+					zone_name = "bog"
+				4:
+					zone_name = "windfall"
+			var forest_class := "dense_taiga" if forest_k > 0.72 else "woodland" if forest_k > 0.38 else "sparse_trees" if forest_k > 0.12 else "clearing"
+			var terrain_class := "steep_slope" if slope_k > 0.42 else "rolling" if slope_k > 0.16 else "flat"
+			var landmarks: Array[String] = []
+			if rd < 12.0:
+				landmarks.append("river_corridor")
+			if h < wl + 1.0:
+				landmarks.append("water_edge")
+			if wet_k_value > 0.68:
+				landmarks.append("wet_ground")
+			if slope_k > 0.5:
+				landmarks.append("steep_terrain")
+			if forest_k < 0.15:
+				landmarks.append("open_area")
+			if h > WATER_Y + 12.0:
+				landmarks.append("elevated_ground")
 			explored_map[key] = {
-				"zone": zkind,
-				"river": rd < 9.0,
-				"lake": lk > 0.28,
+				"zone": zkind, "zone_name": zone_name, "forest_class": forest_class,
+				"terrain_class": terrain_class, "landmarks": landmarks,
+				"river": rd < 9.0, "lake": lk > 0.28,
 				"water": h < wl + 0.25,
 				"bog": zkind == 2 and swamp_depth_at(wx, wz) > 0.3,
-				"forest": clampf((n_forest.get_noise_2d(wx, wz) + 1.0) * 0.5, 0.0, 1.0),
-				"elevation": int(round(h / 4.0))
+				"forest": forest_k, "wetness": wet_k_value,
+				"slope": slope_k, "elevation": int(round(h / 4.0))
 			}
 			if chunk_stream != null:
 				chunk_stream.save_map_cell(wx, wz, key, explored_map[key])
