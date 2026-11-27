@@ -58,7 +58,11 @@ func _process_queue() -> void:
 		var k := _key(c)
 		if active.has(k):
 			continue
-		var record: Dictionary = persistent.get(k, _create_record(c))
+		var record: Dictionary
+		if persistent.has(k):
+			record = persistent[k]
+		else:
+			record = _create_record(c)
 		record["last_seen"] = Time.get_unix_time_from_system()
 		record["loaded"] = true
 		active[k] = record
@@ -115,6 +119,11 @@ func read_state(world_position: Vector3, section: String) -> Dictionary:
 
 func _resource_key(world_position: Vector3, kind: String) -> String:
 	return "%d:%d:%s" % [roundi(world_position.x * 10.0), roundi(world_position.z * 10.0), kind]
+
+func is_resource_collected(world_position: Vector3, kind: String) -> bool:
+	var state := read_state(world_position, "resource_state")
+	var saved: Variant = state.get(_resource_key(world_position, kind), {})
+	return saved is Dictionary and bool(saved.get("collected", false))
 
 func mark_resource_collected(world_position: Vector3, kind: String) -> void:
 	if kind.is_empty():
