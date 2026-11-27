@@ -80,6 +80,24 @@ var colony
 var colony_mode := true
 
 func _ready() -> void:
+	# Видимый экран загрузки: генерация мира больше не должна выглядеть как зависание.
+	var boot_ui := CanvasLayer.new()
+	boot_ui.layer = 100
+	boot_ui.process_mode = Node.PROCESS_MODE_ALWAYS
+	add_child(boot_ui)
+	var boot_bg := ColorRect.new()
+	boot_bg.color = Color(0.055, 0.075, 0.055, 0.94)
+	boot_bg.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	boot_bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	boot_ui.add_child(boot_bg)
+	var boot_label := Label.new()
+	boot_label.text = "TAIGA\nПодготовка мира…"
+	boot_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	boot_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	boot_label.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	boot_label.add_theme_font_size_override("font_size", 34)
+	boot_label.add_theme_color_override("font_color", Color(0.88, 0.91, 0.78))
+	boot_ui.add_child(boot_label)
 	_resolve_world_seed()
 	_colony_pick_mode()
 	_setup_noise()
@@ -87,9 +105,11 @@ func _ready() -> void:
 	weather.main = self
 	add_child(weather)
 	_make_environment()
-	_make_terrain()
+	boot_label.text = "TAIGA\nФормирование рельефа…"
+	await _make_terrain()
 	_make_water()
-	_scatter_all()
+	boot_label.text = "TAIGA\nСоздание леса и растительности…"
+	await _scatter_all()
 	grass_mesh_vars = [pv.tuft(1500), pv.tuft(1503, 1.3), pv.tuft(1504, 0.8)]
 	hero = preload("res://scripts/hero.gd").new()
 	hero.main = self
@@ -264,6 +284,7 @@ func _ready() -> void:
 		var pf: Node = preload("res://scripts/perf.gd").new()
 		pf.set("main", self)
 		add_child(pf)
+	boot_ui.queue_free()
 
 ## --- colony: какой режим запускать. Старые проверки (бой, инструменты, охота, стройка,
 ## сохранение, кадры, замер) идут по-прежнему от героя, поэтому для них — режим героя. ---
@@ -710,6 +731,8 @@ func _make_terrain() -> void:
 	for iz in n:
 		for ix in n:
 			hs[iz * n + ix] = height(ix * step - half, iz * step - half)
+		if iz % 12 == 0:
+			await get_tree().process_frame
 	for iz in n:
 		for ix in n:
 			var x := ix * step - half
@@ -731,6 +754,8 @@ func _make_terrain() -> void:
 			var zn := zone(x, z)
 			zuv[i] = Vector2(1.0 if zn == 1 else 0.0, 1.0 if zn == 2 else 0.0)
 			zuv2[i] = Vector2(1.0 if zn == 3 else 0.0, 1.0 if zn == 4 else 0.0)
+		if iz % 12 == 0:
+			await get_tree().process_frame
 	var himg := Image.create_from_data(n, n, false, Image.FORMAT_RF, hs.to_byte_array())
 	hmap_tex = ImageTexture.create_from_image(himg)
 	var zb := PackedByteArray(); zb.resize(n * n * 4)
@@ -782,6 +807,8 @@ func _make_terrain() -> void:
 			mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 			mi.extra_cull_margin = 2.0  # снег поднимает поверхность в шейдере
 			add_child(mi)
+		if cz % 2 == 0:
+			await get_tree().process_frame
 
 func _make_water() -> void:
 	var plane := PlaneMesh.new()
@@ -1885,6 +1912,7 @@ func _scatter_all() -> void:
 						mmi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON if shadow else GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 						add_child(mmi)
 						_place_cell_records(mm, xs, r, vi, vars, is_tree, pick_kind)
+			await get_tree().process_frame
 
 ## Разбить экземпляры клетки 64 м на четыре клетки 32 м (fine) или оставить одной группой.
 func _split_cell(xs: Array, x0: float, z0: float, fine: bool) -> Array:
