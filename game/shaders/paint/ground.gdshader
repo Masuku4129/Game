@@ -140,24 +140,23 @@ void vertex() {
 }
 
 void fragment() {
-	float big = vnoise(wp.xz * 0.05) * 0.6 + vnoise(wp.xz * 0.13) * 0.4;
-	float s = vnoise(wp.xz * 0.35) * 0.5 + vnoise(wp.xz * 0.9 + 3.0) * 0.3 + vnoise(wp.xz * 2.1) * 0.2;
-	float fine = vnoise(wp.xz * 4.0) * 0.6 + vnoise(wp.xz * 9.0) * 0.4;
+	float big = vnoise(wp.xz * 0.07);
+	float s = vnoise(wp.xz * 0.5) * 0.65 + vnoise(wp.xz * 1.7 + 3.0) * 0.35;
+	float fine = vnoise(wp.xz * 5.0);
 	vec3 c = mix(lin(meadow), lin(meadow2), smoothstep(0.35, 0.75, big + (s - 0.5) * 0.5));
 	float fd = v_fd;  // густота леса
 	vec3 fl = mix(lin(forest), lin(litter), smoothstep(0.4, 0.7, s + big * 0.3 - 0.2));
 	c = mix(c, fl, smoothstep(0.35, 0.65, fd + (s - 0.5) * 0.3));
 	float slope = 1.0 - wn.y;
 	c = mix(c, lin(stone) * (0.85 + fine * 0.3), smoothstep(0.28, 0.42, slope + (s - 0.5) * 0.12));
-	// отвесная скала: серый камень, пятна лишайника, вертикальные потёки и тёмные расщелины
-	vec2 cuv = vec2(wp.x + wp.z, wp.y);
-	float blocks = vnoise(cuv * vec2(0.9, 0.35)) * 0.6 + vnoise(cuv * vec2(2.3, 0.8)) * 0.4;
-	float streak = vnoise(vec2(cuv.x * 3.0, cuv.y * 0.15));
-	float crev = smoothstep(0.72, 0.82, vnoise(cuv * vec2(1.6, 0.25)));
-	vec3 cliff = lin(vec3(0.43, 0.42, 0.39)) * (0.72 + blocks * 0.35) * (0.9 + streak * 0.15);
-	cliff = mix(cliff, lin(vec3(0.5, 0.54, 0.4)), smoothstep(0.62, 0.8, vnoise(cuv * 0.5 + 7.0)) * 0.45);
-	cliff *= 1.0 - crev * 0.5;
-	c = mix(c, cliff, smoothstep(0.5, 0.7, slope));
+	// отвесная скала: серый камень, блоки и тёмные расщелины (считаем только на крутом)
+	if (slope > 0.45) {
+		vec2 cuv = vec2(wp.x + wp.z, wp.y);
+		float blocks = vnoise(cuv * vec2(1.2, 0.5));
+		float crev = smoothstep(0.72, 0.82, vnoise(cuv * vec2(1.6, 0.25)));
+		vec3 cliff = lin(vec3(0.43, 0.42, 0.39)) * (0.78 + blocks * 0.3) * (1.0 - crev * 0.45);
+		c = mix(c, cliff, smoothstep(0.5, 0.7, slope));
+	}
 	// особые участки: гарь, болото, курумник, бурелом (края рваные от шума)
 	float ze = (s - 0.5) * 0.5 + (big - 0.5) * 0.3;
 	float kb = smoothstep(0.35, 0.65, zw.x + ze);
@@ -175,15 +174,17 @@ void fragment() {
 	kur = mix(kur, lin(vec3(0.68, 0.7, 0.56)), smoothstep(0.6, 0.85, s) * 0.6);
 	c = mix(c, kur, kr * 0.85);
 	c = mix(c, lin(litter) * (0.8 + fine * 0.3), kw * 0.6);
-	// дно и берег: песок с округлыми камешками
+	// дно и берег: песок с округлыми камешками (только у воды)
 	float sh = smoothstep(water_y + 0.5, water_y - 0.1, wp.y);
-	vec2 pq = wp.xz * 1.6 + vec2(vnoise(wp.xz * 1.3), vnoise(wp.zx * 1.3 + 5.0)) * 0.9;
-	vec2 cell = floor(pq);
-	vec2 f = fract(pq) - 0.5;
-	float pr = h21(cell);
-	float peb = 0.5 * smoothstep(0.32, 0.22, length(f + (vec2(h21(cell + 3.1), h21(cell + 7.7)) - 0.5) * 0.3)) * step(0.6, pr);
-	vec3 bc = mix(lin(bed), lin(mix(vec3(0.42, 0.42, 0.38), vec3(0.62, 0.58, 0.48), pr)), peb);
-	c = mix(c, bc * (0.9 + fine * 0.2), sh);
+	if (sh > 0.01) {
+		vec2 pq = wp.xz * 1.6 + vec2(vnoise(wp.xz * 1.3), vnoise(wp.zx * 1.3 + 5.0)) * 0.9;
+		vec2 cell = floor(pq);
+		vec2 f = fract(pq) - 0.5;
+		float pr = h21(cell);
+		float peb = 0.5 * smoothstep(0.32, 0.22, length(f + (vec2(h21(cell + 3.1), h21(cell + 7.7)) - 0.5) * 0.3)) * step(0.6, pr);
+		vec3 bc = mix(lin(bed), lin(mix(vec3(0.42, 0.42, 0.38), vec3(0.62, 0.58, 0.48), pr)), peb);
+		c = mix(c, bc * (0.9 + fine * 0.2), sh);
+	}
 	c *= 0.92 + fine * 0.16;
 	// build: натоптанная тропа и расчищенная площадка — вытертая трава, утоптанная земля
 	float worn = smoothstep(0.25, 0.65, v_wear + (s - 0.5) * 0.25);

@@ -17,8 +17,8 @@ const PRESETS := [
 ]
 
 var main: Node3D
-var preset := 1
-var fps := 60
+var preset := 0
+var fps := 30
 var volume := 0.8
 var gear: Button
 var sheet: Control
@@ -88,7 +88,7 @@ func _corner(b: Control, x: float) -> void:
 func _load() -> void:
 	var c := ConfigFile.new()
 	if c.load(CFG) == OK:
-		preset = clampi(int(c.get_value("video", "preset", 1)), 0, 2)
+		preset = clampi(int(c.get_value("video", "preset", 0)), 0, 2)
 		fps = int(c.get_value("video", "fps", PRESETS[preset]["fps"]))
 		volume = clampf(float(c.get_value("audio", "volume", 0.8)), 0.0, 1.0)
 		hero_mode = bool(c.get_value("game", "hero_mode", false))  # colony

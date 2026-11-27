@@ -793,6 +793,9 @@ func _can_step(p: Vector3, flying: bool = false) -> bool:
 	if main.blocked(p.x, p.z, 0.2 * scale_k):
 		return false
 	var gy: float = main.grid_height(p.x, p.z)
+	# купол камня, бревно или пень выше полуметра — зверь не взбирается, а обходит
+	if not flying and main.solid_top(p.x, p.z) - gy > 0.45:
+		return false
 	var g0: float = main.grid_height(position.x, position.z)
 	if gy < main.WATER_Y - 0.3 and not swimmer() and not flying:
 		return false
@@ -804,15 +807,29 @@ func _can_step(p: Vector3, flying: bool = false) -> bool:
 	return true
 
 
+## Зверь оказался внутри ствола или камня (родился, построили рядом) — вытолкнуть к ближайшему свободному месту.
+func _push_out() -> void:
+	if not main.blocked(position.x, position.z, 0.0) and main.solid_top(position.x, position.z) - main.grid_height(position.x, position.z) <= 0.45:
+		return
+	for r in [0.6, 1.1, 1.7, 2.5, 3.5]:
+		for k in 12:
+			var a := TAU * float(k) / 12.0 + float(r)
+			var q: Vector3 = position + Vector3(sin(a), 0.0, cos(a)) * float(r)
+			if _can_step(q):
+				position.x = q.x
+				position.z = q.z
+				return
+
 func _unstick(delta: float) -> void:
 	_chk_t += delta
-	if _chk_t < 2.0:
+	if _chk_t < 1.2:
 		return
+	_push_out()
 	var moved := Vector2(position.x - _chk_p.x, position.z - _chk_p.z).length()
 	var tried := want > 0.3
 	_chk_t = 0.0
 	_chk_p = position
-	if not tried or moved > 0.8:
+	if not tried or moved > 0.5:
 		_bump = 0
 		return
 	_turn_dir = -_turn_dir

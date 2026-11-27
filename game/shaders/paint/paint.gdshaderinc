@@ -8,7 +8,9 @@ uniform float shadow_fill = 0.5;
 
 void light() {
 	float ndl = dot(NORMAL, LIGHT);
-	float t = smoothstep(ramp_lo, ramp_hi, ndl) * mix(0.25, 1.0, ATTENUATION);
+	// мультяшный свет: три ступени (тень / полутень / свет) с узким переходом — дёшево и читаемо
+	float band = smoothstep(ramp_lo - 0.02, ramp_lo + 0.05, ndl) * 0.55 + smoothstep(ramp_hi - 0.04, ramp_hi + 0.04, ndl) * 0.45;
+	float t = band * mix(0.3, 1.0, smoothstep(0.3, 0.65, ATTENUATION));
 	// тень не проваливается в черноту: холодная подсветка от неба (shadow_fill)
 	vec3 c = mix(lin(shade_cool) * shadow_fill, vec3(1.0, 0.95, 0.85), t);
 	DIFFUSE_LIGHT += c * LIGHT_COLOR / PI;
@@ -29,9 +31,8 @@ float vnoise(vec2 p) {
 	return mix(mix(h21(i), h21(i + vec2(1.0, 0.0)), f.x), mix(h21(i + vec2(0.0, 1.0)), h21(i + vec2(1.0, 1.0)), f.x), f.y);
 }
 float strokes(vec2 p) {
-	// мазки вдоль одного направления: сжатие по оси и два слоя
-	vec2 q = vec2(p.x * 0.35 + p.y * 0.2, p.y * 1.6 - p.x * 0.3);
-	return vnoise(q) * 0.6 + vnoise(q * 2.3 + 7.1) * 0.4;
+	// одно пятно шума вместо двух слоёв: мультяшная заливка дешевле и чище
+	return vnoise(vec2(p.x * 0.35 + p.y * 0.2, p.y * 1.6 - p.x * 0.3));
 }
 
 float whash3(vec3 p) { p = mod(p, 1024.0); p = fract(p * 0.1031); p += dot(p, p.zyx + 31.32); return fract((p.x + p.y) * p.z); }

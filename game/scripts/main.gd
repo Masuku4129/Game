@@ -6,7 +6,7 @@ const SIZE := 512.0
 const SEG := 384
 const WATER_Y := -2.0
 const CELL := 64.0
-const FOREST_DENSITY_MULTIPLIER := 2.5
+const FOREST_DENSITY_MULTIPLIER := 1.7
 const FOREST_DENSITY_SPECIES := ["spruce", "pine", "birch", "larch", "aspen", "bare", "spruce_dead", "bush", "fern", "reeds", "twig", "berry", "bilberry", "mushroom", "fir", "cedar", "willow", "alder", "cherry", "rose", "horsetail", "hummock", "sedge", "juniper", "stlanik", "rowan", "anthill", "mossrock", "stump_rot", "stump_mush", "fungus_snag", "birch_dead", "mosslog", "ledum", "cloudberry", "cranberry", "cotton", "lingon", "ernik", "raspberry", "currant", "bells", "daisy", "angelica", "brushpile", "chanterelle", "cones"]
 
 var n_hill := FastNoiseLite.new()
@@ -241,6 +241,8 @@ func _ready() -> void:
 	if "a" in _hx:
 		animals.visible = false
 	# --- /colony ---
+	_update_near(true)
+	_grass_prebuild(player_rig.position)
 	# --- perf: PERF=1 — замер нагрузки без экрана (perf.gd) ---
 	if OS.get_environment("PERF") != "":
 		var pf: Node = preload("res://scripts/perf.gd").new()
@@ -701,7 +703,7 @@ var _sky_timer := 0.0
 ## Трава клетками 32 м вокруг героя (3×3): меньше вызовов отрисовки, чем 5×5 клеток по 16 м;
 ## клетка строится по частям за несколько кадров, без рывка.
 const GCELL := 32.0
-const GRADIUS := 1
+const GRADIUS := 2
 var _gb := {}
 
 var _shot_n := 0
@@ -943,6 +945,21 @@ func grid_height(x: float, z: float) -> float:
 	var i := iz * n + ix
 	return lerpf(lerpf(terrain_hs[i], terrain_hs[i + 1], tx), lerpf(terrain_hs[i + n], terrain_hs[i + n + 1], tx), tz)
 
+## Трава вокруг точки заранее, пока игрок не видит карту (при старте), без «вырастания» на глазах.
+func _grass_prebuild(c: Vector3) -> void:
+	var ck := Vector2i(floori((c.x + SIZE * 0.5) / GCELL), floori((c.z + SIZE * 0.5) / GCELL))
+	for r in range(0, GRADIUS + 1):
+		for dz in range(-r, r + 1):
+			for dx in range(-r, r + 1):
+				if maxi(absi(dx), absi(dz)) != r:
+					continue
+				var k := Vector2i(ck.x + dx, ck.y + dz)
+				if grass_cells.has(k) or k.x < 0 or k.y < 0 or k.x >= int(SIZE / GCELL) or k.y >= int(SIZE / GCELL):
+					continue
+				_grass_begin(k)
+				while not _gb.is_empty():
+					_grass_step()
+
 func _grass_begin(k: Vector2i) -> void:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = k.y * 7919 + k.x * 104729 + 13
@@ -1006,7 +1023,7 @@ func _grass_step() -> void:
 		mm.use_custom_data = true
 		mm.instance_count = xs.size()
 		# время постройки клетки: шейдер по нему плавно выращивает траву
-		var born := Color(0.0, 0.0, Time.get_ticks_msec() * 0.001 + 0.05, 0.0)
+		var born := Color(0.0, 0.0, -100.0, 0.0)  # уже выросла: трава не «вырастает» на глазах
 		for i in xs.size():
 			mm.set_instance_transform(i, xs[i])
 			mm.set_instance_custom_data(i, born)
@@ -1580,6 +1597,9 @@ func _scatter_all() -> void:
 						var ht2: float = rsc.y * 0.9 * b.y.length()
 						if ht2 > 0.12:
 							_add_solid([0, o, Vector3.ZERO, hr2, ht2])
+						# высокий камень (выше пояса) — преграда для людей и зверей; низкий можно перешагнуть
+						if ht2 > 0.85:
+							_add_blocker(o.x, o.z, maxf(hr2 * 0.82, 0.4))
 					elif kind == "stump":
 						_add_solid([2, o, Vector3.ZERO, 0.45 * s, 0.75 * s])
 						_add_seat(Vector3(x, height(x, z) + 0.7 * s, z), rng.randf() * TAU)
@@ -1832,7 +1852,7 @@ func _cliff_rocks(vars: Array) -> void:
 					var b := Basis(Vector3.UP, atan2(up.x, up.y) + rng.randf_range(-0.5, 0.5)).scaled(Vector3(sxz, sy, sxz * 0.8))
 					var o := Vector3(px - up.x * 0.6, hb - 0.4, pz - up.y * 0.6)
 					per_var[vi].append(Transform3D(b, o))
-					_add_blocker(o.x, o.z, sxz * 0.4)
+					_add_blocker(o.x, o.z, sxz * 0.72)
 					_occ_add(o.x, o.z, sxz * 0.9)
 					# осыпь у подножия
 					for k in 2:
