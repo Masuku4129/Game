@@ -16,6 +16,9 @@ var rng := RandomNumberGenerator.new()
 var _far_acc := 0.0
 var _bird_acc := 0.0
 var _classify_acc := 0.0
+var _spawn_serial := 0
+var streamed_chunks: Dictionary = {}
+var pending_saved_animals: Dictionary = {}
 var _far_i := 0
 var bird_mesh := {}
 # сетка зверей (ячейка GC м), перестраивается раз в 0,5 с: соседей ищем только в ближних ячейках
@@ -110,6 +113,60 @@ func populate() -> void:
 	add_child(fish)
 	fish.setup()
 
+func populate_stream_chunk(coord: Vector2i, chunk_seed: int) -> void:
+	var key := "%d,%d" % [coord.x, coord.y]
+	if streamed_chunks.has(key):
+		return
+	streamed_chunks[key] = true
+	var previous_seed := rng.seed
+	rng.seed = chunk_seed ^ 0x35A91D7
+	var origin := Vector3(float(coord.x) * 64.0, 0.0, float(coord.y) * 64.0)
+	var candidates: Array = []
+	for attempt in range(52):
+		var x := origin.x + rng.randf_range(3.0, 61.0)
+		var z := origin.z + rng.randf_range(3.0, 61.0)
+		var y: float = main.height(x, z)
+		if y < main.WATER_Y + 0.35 or main.normal_at(x, z).y < 0.78:
+			continue
+		if main.river_dist(x, z) < 4.0 or main.lake_k(x, z) > 0.55:
+			continue
+		if main.blocked(x, z, 0.8):
+			continue
+		candidates.append(Vector3(x, y, z))
+	if candidates.is_empty():
+		rng.seed = previous_seed
+		return
+	var zone_id: int = main.zone(origin.x + 32.0, origin.z + 32.0)
+	var group_id := 100000000 + posmod(chunk_seed, 900000000)
+	var herd_kind := "roe"
+	if zone_id == 2:
+		herd_kind = "moose" if rng.randf() < 0.38 else "boar"
+	elif main.biome(origin.x + 32.0, origin.z + 32.0) > 0.48:
+		herd_kind = "deer" if rng.randf() < 0.65 else "bear"
+	elif rng.randf() < 0.24:
+		herd_kind = "boar"
+	var center_pos: Vector3 = candidates[rng.randi_range(0, candidates.size() - 1)]
+	var herd_size := rng.randi_range(1, 3) if herd_kind in ["roe", "deer", "boar"] else 1
+	for i in range(herd_size):
+		var p := center_pos
+		if i > 0:
+			p = _near(center_pos, 7.0)
+		_spawn(herd_kind, p, rng.randf_range(0.82, 1.08), group_id, "chunk:%s:herd:%d" % [key, i])
+	# Мелкая живность населяет каждый подходящий лесной чанк; белки появляются
+	# только там, где уже создана древесная опора для карабканья.
+	if rng.randf() < 0.72:
+		var small_kind := "hare"
+		if main.forest_density(center_pos.x, center_pos.z) > 0.55 and rng.randf() < 0.55:
+			small_kind = "squirrel"
+		var small_pos := candidates[rng.randi_range(0, candidates.size() - 1)]
+		_spawn(small_kind, small_pos, rng.randf_range(0.88, 1.08), -1, "chunk:%s:small:0" % key)
+	# Лиса или волк появляются редко, чтобы не создавать искусственную плотность хищников.
+	if rng.randf() < 0.16:
+		var predator := "fox" if zone_id != 4 or rng.randf() < 0.5 else "wolf"
+		var predator_pos := candidates[rng.randi_range(0, candidates.size() - 1)]
+		_spawn(predator, predator_pos, rng.randf_range(0.9, 1.08), group_id + 1, "chunk:%s:predator:0" % key)
+	rng.seed = previous_seed
+
 func _spot(cond: Callable, start: Vector3, min_d: float) -> Vector3:
 	var half: float = main.SIZE * 0.5 - 20.0
 	for t in 400:
@@ -134,12 +191,17 @@ func _near(c: Vector3, r: float) -> Vector3:
 			return p
 	return c
 
-func _spawn(k: String, p: Vector3, sc: float, grp: int) -> Node3D:
+func _spawn(k: String, p: Vector3, sc: float, grp: int, stable_id: String = "") -> Node3D:
 	var a := Animal.new()
 	add_child(a)
 	a.setup(k, main, self, Vector3(p.x, main.ground_at(p.x, p.z), p.z), rng.randi(), sc)
+	_spawn_serial += 1
+	a.world_id = stable_id if stable_id != "" else "base:%d" % _spawn_serial
 	a.group = grp
 	list.append(a)
+	if pending_saved_animals.has(a.world_id):
+		_apply_saved_animal(a, pending_saved_animals[a.world_id])
+		pending_saved_animals.erase(a.world_id)
 	if grp >= 0:
 		if not groups.has(grp):
 			groups[grp] = []
@@ -670,28 +732,43 @@ func to_save() -> Dictionary:
 	var SV = preload("res://scripts/save.gd")
 	var out: Array = []
 	for a in list:
-		var e := {"p": SV.enc(a.position), "h": float(a.heading)}
+		var e := {"id": a.world_id, "kind": a.kind, "p": SV.enc(a.position), "h": float(a.heading), "scale": float(a.scale_k), "group": int(a.group)}
 		if a.dead:
 			e["dead"] = true
 			e["meat"] = float(a.meat)
 			e["resp"] = float(a.respawn_at)
 		out.append(e)
-	return {"n": list.size(), "list": out}
+	return {"n": list.size(), "list": out, "streamed_chunks": streamed_chunks.duplicate(true)}
+
+func _apply_saved_animal(a: Node3D, e: Dictionary) -> void:
+	var SV = preload("res://scripts/save.gd")
+	a.position = SV.dec(e.get("p", SV.enc(a.position)))
+	a.heading = float(e.get("h", a.heading))
+	a.rotation.y = a.heading
+	if bool(e.get("dead", false)):
+		if not a.dead:
+			a.kill()
+		a.meat = float(e.get("meat", a.meat))
+		a.respawn_at = float(e.get("resp", a.respawn_at))
 
 func from_save(d: Dictionary) -> void:
-	var SV = preload("res://scripts/save.gd")
 	var arr: Array = d.get("list", [])
-	if int(d.get("n", -1)) != list.size():
+	streamed_chunks = d.get("streamed_chunks", {}).duplicate(true)
+	pending_saved_animals.clear()
+	var legacy := arr.size() > 0 and not arr[0].has("id") and int(d.get("n", -1)) == list.size()
+	if legacy:
+		for i in mini(arr.size(), list.size()):
+			_apply_saved_animal(list[i], arr[i])
 		return
-	for i in arr.size():
-		var a = list[i]
-		var e: Dictionary = arr[i]
-		a.position = SV.dec(e["p"])
-		a.heading = float(e.get("h", 0.0))
-		a.rotation.y = a.heading
-		if bool(e.get("dead", false)):
-			if not a.dead:
-				a.kill()
-			a.meat = float(e.get("meat", a.meat))
-			a.respawn_at = float(e.get("resp", a.respawn_at))
+	for e: Variant in arr:
+		if not e is Dictionary:
+			continue
+		var id := String(e.get("id", ""))
+		if id == "":
+			continue
+		pending_saved_animals[id] = e
+	for a in list:
+		if pending_saved_animals.has(a.world_id):
+			_apply_saved_animal(a, pending_saved_animals[a.world_id])
+			pending_saved_animals.erase(a.world_id)
 # --- /core ---
