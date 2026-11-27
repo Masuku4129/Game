@@ -399,7 +399,8 @@ func _process(delta: float) -> void:
 			a._acc += delta
 		if was_far and not a.far:
 			a._acc = 0.0
-		a.visible = d < (40.0 if a.kind in ["hare", "squirrel", "beaver"] else SHOW_R) and (not a.dead or a.meat > 0.0) and a.state != "sleep" and a.state != "inlodge"
+		var show_r: float = 40.0 if a.kind in ["hare", "squirrel", "beaver"] else SHOW_R
+		a.visible = d2 < show_r * show_r and (not a.dead or a.meat > 0.0) and a.state != "sleep" and a.state != "inlodge"
 		if a.parts.has("ap"):
 			a.parts["ap"].active = a.visible and not a.dead and not a.far
 	# perf: дальние (за NEAR_R) — по кругу, каждый примерно раз в секунду
