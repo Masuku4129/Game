@@ -46,8 +46,9 @@ func _process(delta: float) -> void:
 		center = next
 		_refresh = 0.35
 		_rebuild_queue()
+		_unload_distant()
+	# Drain chunk-generation work every frame, not only on refresh ticks.
 	_process_queue()
-	_unload_distant()
 
 func _sync_chunk_weather() -> void:
 	if main == null or main.weather == null:
