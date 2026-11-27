@@ -1021,7 +1021,7 @@ func _update_stats(dt: float) -> void:
 	var clothing_warmth := 0.0
 	for slot: String in worn:
 		var clothing_id := String(worn[slot])
-		clothing_warmth += float(IT.DEF.get(clothing_id, {}).get("warm", 0.0))
+		clothing_warmth += float(preload("res://scripts/items.gd").DEF.get(clothing_id, {}).get("warm", 0.0))
 	var target_w := clampf(0.55 + tc * 0.025 - soak * 0.35 - weather.wind * 0.05 - (0.25 if hero.swimb > 0.5 else 0.0) + clothing_warmth, 0.02, 0.95)
 	# --- build: костёр, шалаш, изба с печью греют; укрытие ослабляет ветер ---
 	if camp != null:
