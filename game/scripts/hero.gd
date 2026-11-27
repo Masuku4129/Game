@@ -628,6 +628,10 @@ func _process_main(delta: float) -> void:
 	climbing = lerpf(climbing, want_climb, minf(1.0, 6.0 * delta))
 	lean = lerpf(lean, 0.05 * run_mag + maxf(incline, 0.0) * 0.5 - maxf(-incline, 0.0) * 0.15, minf(1.0, 5.0 * delta))
 	var amp := 0.5 * minf(run_mag, 1.5)
+	# В трясине шаг становится коротким и тяжёлым; чем глубже увязание,
+	# тем сильнее герой пытается вытащить ноги, а не шагает обычной походкой.
+	var bog_anim := clampf(swamp_sink / 1.05, 0.0, 1.0) * clampf(swamp_depth / 0.45, 0.0, 1.0)
+	var bog_stride := 1.0 - bog_anim * 0.78
 	var sw := sin(phase)
 	if moving and signf(sw) != signf(last_sw) and main.feet != null and swimb < 0.2 and depth < 0.6:
 		var side := 1.0 if sw > 0.0 else -1.0
@@ -637,10 +641,10 @@ func _process_main(delta: float) -> void:
 	var cw := cos(phase)
 	var up := 1.0 + maxf(incline, 0.0) * 0.8
 	var br := sin(Time.get_ticks_msec() * 0.0017) * 0.012 * (1.0 - run_mag)
-	leg_l.rotation.x = sw * amp
-	leg_r.rotation.x = -sw * amp
-	knee_l.rotation.x = maxf(0.0, -cw) * amp * 1.5 * up + 0.04
-	knee_r.rotation.x = maxf(0.0, cw) * amp * 1.5 * up + 0.04
+	leg_l.rotation.x = sw * amp * bog_stride
+	leg_r.rotation.x = -sw * amp * bog_stride
+	knee_l.rotation.x = maxf(0.0, -cw) * amp * (1.5 * up + bog_anim * 1.2) + 0.04
+	knee_r.rotation.x = maxf(0.0, cw) * amp * (1.5 * up + bog_anim * 1.2) + 0.04
 	ank_l.rotation.x = -(leg_l.rotation.x + knee_l.rotation.x) * 0.7 + maxf(0.0, sw) * amp * 0.5
 	ank_r.rotation.x = -(leg_r.rotation.x + knee_r.rotation.x) * 0.7 + maxf(0.0, -sw) * amp * 0.5
 	# руки с инерцией: догоняют нужный угол, а не прыгают
@@ -652,6 +656,14 @@ func _process_main(delta: float) -> void:
 	arm_r.rotation.z = -0.05
 	elb_l.rotation.x = -0.2 - maxf(0.0, sw) * amp * 0.5
 	elb_r.rotation.x = -0.2 - maxf(0.0, -sw) * amp * 0.5
+	# В глубокой жиже руки разводятся для равновесия и работают рывками.
+	var bog_brace := bog_anim * (0.28 + 0.12 * absf(sin(Time.get_ticks_msec() * 0.006)))
+	arm_l.rotation.x = lerpf(arm_l.rotation.x, -0.85 - sw * 0.18, bog_brace)
+	arm_r.rotation.x = lerpf(arm_r.rotation.x, -0.85 + sw * 0.18, bog_brace)
+	arm_l.rotation.z = lerpf(arm_l.rotation.z, 0.42, bog_brace)
+	arm_r.rotation.z = lerpf(arm_r.rotation.z, -0.42, bog_brace)
+	elb_l.rotation.x = lerpf(elb_l.rotation.x, -0.75, bog_brace)
+	elb_r.rotation.x = lerpf(elb_r.rotation.x, -0.75, bog_brace)
 	var cl := climbing
 	if cl > 0.01:
 		# руки тянутся вперёд-вверх и перехватывают склон, колени высоко
@@ -663,7 +675,7 @@ func _process_main(delta: float) -> void:
 		leg_r.rotation.x = lerpf(leg_r.rotation.x, -sw * 0.45 - 0.45, cl)
 		knee_l.rotation.x = lerpf(knee_l.rotation.x, 0.6 + maxf(0.0, -cw) * 0.6, cl)
 		knee_r.rotation.x = lerpf(knee_r.rotation.x, 0.6 + maxf(0.0, cw) * 0.6, cl)
-	torso.rotation.x = lean + br + cl * 0.45
+	torso.rotation.x = lean + br + cl * 0.45 + bog_anim * 0.16
 	# полы кафтана идут за ногой наполовину
 	skirt_l.rotation.x = leg_l.rotation.x * 0.5
 	skirt_r.rotation.x = leg_r.rotation.x * 0.5
