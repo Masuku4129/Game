@@ -86,23 +86,76 @@ func save_game() -> bool:
 	var t0 := Time.get_ticks_usec()
 	var d := snapshot()
 	var active_path := _active_path()
-	var f := FileAccess.open(active_path + ".tmp", FileAccess.WRITE)
+	var active_bin := _active_bin_path()
+	var json_tmp := active_path + ".tmp"
+	var bin_tmp := active_bin + ".tmp"
+	var json_bak := active_path + ".bak"
+	var bin_bak := active_bin + ".bak"
+
+	# Сначала полностью записываем оба временных файла. Старое сохранение
+	# остаётся нетронутым, если запись любого из них не удалась.
+	var fb := FileAccess.open(bin_tmp, FileAccess.WRITE)
+	if fb == null:
+		last_status = "не удалось подготовить двоичное сохранение"
+		return false
+	fb.store_var(_bytes)
+	fb.flush()
+	fb.close()
+
+	var f := FileAccess.open(json_tmp, FileAccess.WRITE)
 	if f == null:
-		last_status = "не записать сохранение"
+		DirAccess.remove_absolute(ProjectSettings.globalize_path(bin_tmp))
+		last_status = "не удалось подготовить сохранение"
 		return false
 	f.store_string(JSON.stringify(d))
+	f.flush()
 	f.close()
-	var fb := FileAccess.open(_active_bin_path(), FileAccess.WRITE)
-	if fb != null:
-		fb.store_var(_bytes)
-		fb.close()
-	var rename_err := DirAccess.rename_absolute(ProjectSettings.globalize_path(active_path + ".tmp"), ProjectSettings.globalize_path(active_path))
-	if rename_err != OK:
+
+	# Сохраняем предыдущую согласованную пару как резервную копию.
+	for p: String in [json_bak, bin_bak]:
+		if FileAccess.file_exists(p):
+			DirAccess.remove_absolute(ProjectSettings.globalize_path(p))
+	var had_json := FileAccess.file_exists(active_path)
+	var had_bin := FileAccess.file_exists(active_bin)
+	if had_json and DirAccess.rename_absolute(ProjectSettings.globalize_path(active_path), ProjectSettings.globalize_path(json_bak)) != OK:
+		_cleanup_temps(json_tmp, bin_tmp)
+		last_status = "не удалось сохранить резервную копию"
+		return false
+	if had_bin and DirAccess.rename_absolute(ProjectSettings.globalize_path(active_bin), ProjectSettings.globalize_path(bin_bak)) != OK:
+		if had_json:
+			DirAccess.rename_absolute(ProjectSettings.globalize_path(json_bak), ProjectSettings.globalize_path(active_path))
+		_cleanup_temps(json_tmp, bin_tmp)
+		last_status = "не удалось сохранить резервную копию данных"
+		return false
+
+	var bin_err := DirAccess.rename_absolute(ProjectSettings.globalize_path(bin_tmp), ProjectSettings.globalize_path(active_bin))
+	if bin_err != OK:
+		_restore_save_pair(active_path, active_bin, json_bak, bin_bak, had_json, had_bin)
+		_cleanup_temps(json_tmp, bin_tmp)
+		last_status = "не удалось заменить двоичное сохранение"
+		return false
+	var json_err := DirAccess.rename_absolute(ProjectSettings.globalize_path(json_tmp), ProjectSettings.globalize_path(active_path))
+	if json_err != OK:
+		DirAccess.remove_absolute(ProjectSettings.globalize_path(active_bin))
+		_restore_save_pair(active_path, active_bin, json_bak, bin_bak, had_json, had_bin)
+		_cleanup_temps(json_tmp, bin_tmp)
 		last_status = "не удалось завершить запись сохранения"
 		return false
+
 	last_status = "сохранено за %.0f мс" % ((Time.get_ticks_usec() - t0) / 1000.0)
 	print("SAVE ", last_status)
 	return true
+
+func _cleanup_temps(json_tmp: String, bin_tmp: String) -> void:
+	for p: String in [json_tmp, bin_tmp]:
+		if FileAccess.file_exists(p):
+			DirAccess.remove_absolute(ProjectSettings.globalize_path(p))
+
+func _restore_save_pair(active_path: String, active_bin: String, json_bak: String, bin_bak: String, had_json: bool, had_bin: bool) -> void:
+	if had_json and FileAccess.file_exists(json_bak):
+		DirAccess.rename_absolute(ProjectSettings.globalize_path(json_bak), ProjectSettings.globalize_path(active_path))
+	if had_bin and FileAccess.file_exists(bin_bak):
+		DirAccess.rename_absolute(ProjectSettings.globalize_path(bin_bak), ProjectSettings.globalize_path(active_bin))
 
 func load_game() -> bool:
 	var active_path := _active_path()
