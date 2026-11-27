@@ -17,14 +17,14 @@ func _init() -> void:
 	var fol := load("res://shaders/paint/foliage.gdshader")
 	var brk := load("res://shaders/paint/bark.gdshader")
 	for f in [
-		["spruce", Color(0.035, 0.105, 0.075), Color(0.13, 0.29, 0.16), Color(0.31, 0.49, 0.25), 0.0],
-		["pine", Color(0.045, 0.12, 0.075), Color(0.18, 0.34, 0.16), Color(0.42, 0.59, 0.27), 0.35],
-		["birch", Color(0.09, 0.19, 0.075), Color(0.28, 0.43, 0.13), Color(0.62, 0.73, 0.25), 1.0],
+		["spruce", Color(0.10, 0.22, 0.13), Color(0.29, 0.46, 0.25), Color(0.50, 0.66, 0.37), 0.0],
+		["pine", Color(0.12, 0.24, 0.13), Color(0.33, 0.51, 0.26), Color(0.57, 0.72, 0.40), 0.35],
+		["birch", Color(0.12, 0.23, 0.09), Color(0.34, 0.48, 0.16), Color(0.69, 0.78, 0.31), 1.0],
 		["leaf", Color(0.11, 0.22, 0.045), Color(0.29, 0.46, 0.09), Color(0.66, 0.76, 0.22), 1.0],
 		["bush", Color(0.045, 0.12, 0.035), Color(0.19, 0.34, 0.085), Color(0.47, 0.63, 0.18), 0.8],
-		["larch", Color(0.16, 0.23, 0.06), Color(0.42, 0.54, 0.14), Color(0.78, 0.77, 0.29), 1.0],
-		["fir", Color(0.025, 0.085, 0.06), Color(0.105, 0.23, 0.13), Color(0.28, 0.43, 0.2), 0.0],
-		["cedar", Color(0.025, 0.075, 0.045), Color(0.12, 0.26, 0.11), Color(0.33, 0.48, 0.19), 0.0],
+		["larch", Color(0.20, 0.29, 0.08), Color(0.48, 0.60, 0.18), Color(0.84, 0.82, 0.36), 1.0],
+		["fir", Color(0.06, 0.14, 0.10), Color(0.18, 0.32, 0.18), Color(0.39, 0.55, 0.29), 0.0],
+		["cedar", Color(0.07, 0.15, 0.08), Color(0.2, 0.35, 0.16), Color(0.42, 0.59, 0.29), 0.0],
 		["willow", Color(0.13, 0.2, 0.09), Color(0.35, 0.48, 0.22), Color(0.69, 0.75, 0.44), 0.9],
 		["rowan", Color(0.13, 0.18, 0.055), Color(0.39, 0.48, 0.12), Color(0.76, 0.75, 0.24), 1.0],
 		["juniper", Color(0.08, 0.15, 0.11), Color(0.2, 0.32, 0.22), Color(0.42, 0.52, 0.34), 0.0],
@@ -217,11 +217,16 @@ func _icosphere() -> Array:
 var cards: SurfaceTool = null
 
 func clump(st: SurfaceTool, c: Vector3, sc: Vector3, shade: float) -> void:
-	leafblob(st, cards, c, sc, shade)
-	for i in rng.randi_range(2, 4):
-		var o := Vector3(R(-0.72, 0.72), R(-0.35, 0.45), R(-0.72, 0.72)) * sc
-		var sat := Vector3(R(0.48, 0.72), R(0.42, 0.7), R(0.48, 0.72))
-		leafblob(st, cards, c + o, sc * sat, clampf(shade + R(-0.28, 0.32), 0.0, 1.0))
+	# Крона в едином мультяшном стиле: крупный основной силуэт + асимметричные
+	# округлые листовые массы. Силуэт читается издали, без одинаковых шаров.
+	leafblob(st, cards, c, sc * Vector3(1.0, 0.86, 1.0), shade)
+	var lobes := rng.randi_range(3, 5)
+	for i in lobes:
+		var a := TAU * float(i) / float(lobes) + R(-0.35, 0.35)
+		var radial := R(0.48, 0.82)
+		var o := Vector3(cos(a) * radial, R(-0.18, 0.34), sin(a) * radial) * sc
+		var sat := Vector3(R(0.48, 0.70), R(0.38, 0.58), R(0.48, 0.70))
+		leafblob(st, cards, c + o, sc * sat, clampf(shade + R(-0.18, 0.24), 0.0, 1.0))
 
 ## Мелкая деталь (ягода, мутовка, соцветие): икосаэдр в 20 граней вместо 80.
 func dot(st: SurfaceTool, c: Vector3, sc: Vector3, shade: float) -> void:
@@ -238,10 +243,12 @@ func blob(st: SurfaceTool, c: Vector3, sc: Vector3, shade: float, autumn_k: floa
 	var pts: Array = []
 	for p in verts:
 		var q: Vector3 = p
-		var n := 1.0 + 0.25 * sin(q.x * 3.1 + off) * cos(q.z * 2.7 + off) + 0.15 * sin(q.y * 5.3 + off * 2.0) + 0.06 * sin(q.x * 17.3 + q.y * 11.1 + q.z * 7.7 + off)
-		# низ облака приплюснут — как у настоящих крон
+		# Большие мягкие неровности мультяшной формы; микрорябь убрана,
+		# чтобы объекты не выглядели зернистыми или «пластилиновыми».
+		var n := 1.0 + 0.19 * sin(q.x * 2.6 + off) * cos(q.z * 2.3 + off) + 0.11 * sin(q.y * 4.1 + off * 1.7) + 0.035 * sin(q.x * 9.0 + q.y * 6.0 + q.z * 5.0 + off)
+		# Уплощённое основание и более широкая верхняя масса — стилизованный силуэт.
 		if q.y < 0:
-			q.y *= 0.7
+			q.y *= 0.62
 		pts.append(c + q * sc * n)
 	for tri in faces:
 		for k in [0, 2, 1]:
@@ -767,15 +774,23 @@ func hummock(seed_v: int) -> Array:
 	var core := _st()
 	var cd: SurfaceTool = null if lod else _st()
 	var g := _st()
-	var w := R(0.35, 0.55)
-	moss_pad(core, cd, Vector3(0, 0.12, 0), Vector3(w, R(0.4, 0.6), w))
-	# пучок осоки из макушки
-	for k in 7:
-		var a := TAU * k / 7.0 + R(-0.3, 0.3)
+	# Болотная кочка как отдельный объем: широкий торфяной низ, две моховые
+	# подушки и небольшой неровный верх. Не плоская зелёная шайба.
+	var w := R(0.42, 0.66)
+	moss_pad(core, cd, Vector3(0, 0.10, 0), Vector3(w, R(0.38, 0.56), w))
+	for i in rng.randi_range(2, 3):
+		var a := R(0.0, TAU)
+		var d := R(0.18, 0.36)
+		var p := Vector3(cos(a) * d, R(0.16, 0.25), sin(a) * d)
+		moss_pad(core, cd, p, Vector3(R(0.22, 0.34), R(0.12, 0.20), R(0.22, 0.34)))
+	# Небольшой пучок осоки и хвоща, направленные в разные стороны.
+	for k in rng.randi_range(8, 12):
+		var a := R(0, TAU)
 		var o := Vector3(cos(a), 0, sin(a))
-		var b := o * 0.08 + Vector3(0, 0.2, 0)
-		trunk(g, b, b + o * 0.12 + Vector3(0, 0.22, 0), b + o * 0.3 + Vector3(0, 0.38, 0), 0.012, 0.003, 2, 3)
-	return [_mesh([[core, "moss"], [cd, "moss_card"], [g, "horsetail"]]), 0.4]
+		var b := o * R(0.05, 0.16) + Vector3(0, 0.20, 0)
+		var h := R(0.26, 0.48)
+		trunk(g, b, b + o * R(0.08, 0.16) + Vector3(0, h * 0.55, 0), b + o * R(0.14, 0.30) + Vector3(0, h, 0), 0.014, 0.003, 2, 3)
+	return [_mesh([[core, "moss"], [cd, "moss_card"], [g, "horsetail"]]), 0.5]
 
 ## Хвощ: пучок тонких зелёных стеблей с мутовками.
 func horsetail(seed_v: int) -> Array:

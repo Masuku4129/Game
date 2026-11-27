@@ -512,8 +512,8 @@ func _make_environment() -> void:
 	env.fog_density = 1.0
 	# дымка по глубине: дальний лес растворяется раньше, чем кончается дальность видимости
 	env.fog_mode = Environment.FOG_MODE_DEPTH
-	env.fog_depth_begin = 45.0
-	env.fog_depth_end = 115.0
+	env.fog_depth_begin = 40.0
+	env.fog_depth_end = 120.0
 	env.fog_depth_curve = 1.6
 	env.fog_sky_affect = 0.55
 	env.fog_sun_scatter = 0.25
@@ -535,9 +535,9 @@ func _make_environment() -> void:
 	add_child(we)
 	sun = DirectionalLight3D.new()
 	sun.shadow_enabled = true
-	sun.directional_shadow_max_distance = 32.0
+	sun.directional_shadow_max_distance = 26.0
 	sun.directional_shadow_mode = DirectionalLight3D.SHADOW_ORTHOGONAL
-	sun.shadow_blur = 1.5
+	sun.shadow_blur = 1.2
 	add_child(sun)
 	moon = DirectionalLight3D.new()
 	moon.light_color = Color(0.55, 0.66, 0.95)
@@ -605,8 +605,8 @@ func _update_sky() -> void:
 		# глубинная дымка: в тумане и дождь начинается ближе и гуще
 		# камера ниже — видно дальше: дымка ближе, чтобы дальний край мира не появлялся на глазах
 		var low: float = clampf((45.0 - float(rig.pitch)) / 20.0, 0.0, 1.0) if rig != null else 0.0
-		env.fog_depth_begin = 45.0 - low * 17.0 - fogv * 36.0 - wet_air * 14.0 - mist * 8.0
-		env.fog_depth_end = 100.0 - low * 18.0 - fogv * 62.0 - wet_air * 24.0
+		env.fog_depth_begin = 40.0 - low * 14.0 - fogv * 32.0 - wet_air * 12.0 - mist * 7.0
+		env.fog_depth_end = 118.0 - low * 20.0 - fogv * 58.0 - wet_air * 22.0
 		# туман в низинах: высотная дымка над рекой и в лощинах (утром и после дождя)
 		env.fog_height = WATER_Y + 1.6 + mist * 1.6
 		env.fog_height_density = mist * 0.22
@@ -1472,7 +1472,7 @@ func _scatter_all() -> void:
 		["spruce", 8, Vector2(0.18, 0.35), 75.0, true, "under"],
 		["bush", 48, Vector2(0.8, 1.5), 75.0, false, "under"],
 		["fern", 90, Vector2(0.7, 1.2), 62.0, false, "fern"],
-		["reeds", 14, Vector2(0.8, 1.4), 110.0, false, "reed"],
+		["reeds", 20, Vector2(0.8, 1.4), 110.0, false, "reed"],
 		["twig", 90, Vector2(0.8, 1.3), 45.0, false, "under"],
 		["pebble", 40, Vector2(0.15, 0.45), 55.0, false, "pebble"],
 		["rock", 12, Vector2(0.5, 2.2), 115.0, true, "rock"],
@@ -1505,9 +1505,9 @@ func _scatter_all() -> void:
 		["cherry", 2, Vector2(0.9, 1.3), 90.0, true, "edge"],
 		["rose", 12, Vector2(0.8, 1.2), 65.0, false, "edge"],
 		["horsetail", 30, Vector2(0.8, 1.3), 45.0, false, "bank"],
-		["horsetail", 30, Vector2(0.8, 1.3), 45.0, false, "bog_z"],
-		["hummock", 55, Vector2(0.9, 1.7), 50.0, false, "bog_z"],
-		["sedge", 40, Vector2(0.9, 1.4), 45.0, false, "bog_z"],
+		["horsetail", 42, Vector2(0.8, 1.3), 48.0, false, "bog_z"],
+		["hummock", 76, Vector2(0.9, 1.7), 52.0, false, "bog_z"],
+		["sedge", 58, Vector2(0.9, 1.4), 48.0, false, "bog_z"],
 		["juniper", 10, Vector2(0.7, 1.2), 60.0, false, "rocky"],
 		["stlanik", 16, Vector2(0.8, 1.3), 80.0, true, "rocky_z"],
 		["rowan", 4, Vector2(0.9, 1.3), 90.0, true, "edge"],
@@ -1521,13 +1521,13 @@ func _scatter_all() -> void:
 		["fungus_snag", 2, Vector2(0.9, 1.2), 100.0, true, "tree"],
 		["birch_dead", 2, Vector2(0.9, 1.2), 100.0, true, "edge"],
 		["mosslog", 5, Vector2(0.9, 1.2), 90.0, true, "under"],
-		["ledum", 36, Vector2(0.8, 1.3), 45.0, false, "bog_z"],
+		["ledum", 48, Vector2(0.8, 1.3), 48.0, false, "bog_z"],
 		["ledum", 6, Vector2(0.8, 1.2), 45.0, false, "under"],
-		["cloudberry", 30, Vector2(0.8, 1.3), 40.0, false, "bog_z"],
-		["cranberry", 32, Vector2(0.8, 1.3), 40.0, false, "bog_z"],
-		["cotton", 25, Vector2(0.8, 1.3), 45.0, false, "bog_z"],
+		["cloudberry", 38, Vector2(0.8, 1.3), 42.0, false, "bog_z"],
+		["cranberry", 40, Vector2(0.8, 1.3), 42.0, false, "bog_z"],
+		["cotton", 34, Vector2(0.8, 1.3), 48.0, false, "bog_z"],
 		["lingon", 32, Vector2(0.8, 1.4), 40.0, false, "under"],
-		["ernik", 32, Vector2(0.7, 1.2), 55.0, false, "bog_z"],
+		["ernik", 40, Vector2(0.7, 1.2), 58.0, false, "bog_z"],
 		["raspberry", 30, Vector2(0.8, 1.2), 60.0, false, "burnt_z"],
 		["raspberry", 5, Vector2(0.8, 1.2), 60.0, false, "edge"],
 		["currant", 8, Vector2(0.8, 1.2), 60.0, false, "river"],
