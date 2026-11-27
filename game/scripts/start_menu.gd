@@ -107,5 +107,11 @@ func _new() -> void:
 	if seed_file != null:
 		seed_file.store_string(str(seed_value))
 		seed_file.close()
+	# Явно передаём сцене признак запуска новой игры. Без него _core_setup()
+	# после reload_current_scene() снова открывал стартовое меню и ставил игру на паузу.
+	var start_file := FileAccess.open("user://pending_new_game.flag", FileAccess.WRITE)
+	if start_file != null:
+		start_file.store_string("1")
+		start_file.close()
 	get_tree().paused = false
 	get_tree().reload_current_scene()
