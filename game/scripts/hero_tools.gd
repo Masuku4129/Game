@@ -140,6 +140,12 @@ func setup(h: Node3D, s: Skeleton3D) -> void:
 		mi.visible = false
 		pelvis_att.add_child(mi)
 		nodes[id] = mi
+	# Винтовка появляется в правой руке при выборе в инвентаре.
+	var rifle_mi := MeshInstance3D.new()
+	rifle_mi.mesh = TM.rifle()
+	rifle_mi.visible = false
+	hand_att.add_child(rifle_mi)
+	nodes["rifle"] = rifle_mi
 	sk.add_child(long_n)
 	long_n.visible = false
 	for i in LOGS_MAX:
