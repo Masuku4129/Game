@@ -241,7 +241,7 @@ func _grow(bark: Surf, lf: Surf, P: Dictionary, st: Vector3, d: Vector3, L: floa
 	if kind.begins_with("birch") and lv >= 2:
 		en.y -= L * 0.15
 	if not lod:
-		tube(bark, st, mid, en, r, r * 0.62, 8 if lv == 0 else 4, 8 if lv == 0 else 5)
+		tube(bark, st, mid, en, r, r * 0.62, 10 if lv == 0 else 6, 9 if lv == 0 else 6)
 	elif lv < 2:
 		tube(bark, st, mid, en, r, r * 0.62, 3 if lv == 0 else 2, 5 if lv == 0 else 3)
 	var maxlv: int = P["lv"]
@@ -458,6 +458,9 @@ func reeds(seed_v: int) -> Array:
 		var h := R(1.0, 1.8)
 		var offset := Vector3(cos(yaw), 0, sin(yaw)) * R(0.04, 0.18)
 		card(lf, offset + Vector3(0, R(-0.03, 0.04), 0), basis, R(0.55, 0.9), h, R(0.78, 1.1))
+		if k % 2 == 0:
+			var cross := _basis_along(_rand_dir(lean, R(0.2, 0.45)), R(-0.3, 0.3))
+			card(lf, offset * 0.5, cross, R(0.4, 0.65), h * 0.72, R(0.72, 1.04))
 		if k % 2 == 0:
 			var secondary := _basis_along(_rand_dir(lean, R(0.15, 0.35)), R(-0.25, 0.25))
 			card(lf, offset * 0.65, secondary, R(0.45, 0.75), h * 0.78, R(0.75, 1.05))
