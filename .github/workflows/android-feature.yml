@@ -34,7 +34,7 @@ jobs:
           cd game
           parse_failed=0
           for f in scripts/*.gd tests/*.gd; do
-            log=$(godot --headless --check-only --script "$f" 2>&1); rc=$?
+            rc=0; log=$(godot --headless --check-only --script "$f" 2>&1) || rc=$?
             if [ $rc -ne 0 ]; then
               msg=$(echo "$log" | grep -vE '^\s*$' | tail -10 | sed ':a;N;$!ba;s/\n/%0A/g')
               echo "::error file=game/$f::check-only rc=$rc: $msg"
