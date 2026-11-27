@@ -27,7 +27,7 @@ jobs:
           cd game
           set -o pipefail
           /tmp/godot/Godot_v4.3-stable_linux.x86_64 --headless --path . --script res://tests/model_geometry_test.gd
-          /tmp/godot/Godot_v4.3-stable_linux.x86_64 --headless --path . --script res://tests/animal_model_visual_test.gd
+          timeout 300 /tmp/godot/Godot_v4.3-stable_linux.x86_64 --headless --path . --script res://tests/animal_model_visual_test.gd
           /tmp/godot/Godot_v4.3-stable_linux.x86_64 --headless --path . --script res://tests/animal_collision_test.gd
           /tmp/godot/Godot_v4.3-stable_linux.x86_64 --headless --path . --script res://tests/animal_animation_speed_test.gd
           /tmp/godot/Godot_v4.3-stable_linux.x86_64 --headless --path . --script res://tests/animal_scheduler_test.gd
