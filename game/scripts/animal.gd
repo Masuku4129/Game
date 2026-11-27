@@ -1127,7 +1127,7 @@ func _animate(delta: float) -> void:
 		var to: Vector3 = main.hero.position - position
 		head.rotation.y = clampf(wrapf(atan2(to.x, to.z) - heading, -PI, PI), -0.9, 0.9)
 	else:
-			head.rotation.y = lerpf(head.rotation.y, sin(_breath * 0.31 + float(rng.seed % 13)) * 0.035 * (1.0 - mv), minf(1.0, delta * 2.4))
+		head.rotation.y = lerpf(head.rotation.y, sin(_breath * 0.31 + float(rng.seed % 13)) * 0.035 * (1.0 - mv), minf(1.0, delta * 2.4))
 	var tail: Node3D = parts["tail"]
 	var tail_idle := sin(_breath * 0.72 + float(rng.seed % 17)) * 0.10
 	var tail_gait := sin(phase * 2.0) * 0.1 * mv
