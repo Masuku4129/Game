@@ -16,7 +16,7 @@ void fragment() {
 	float blot = vnoise(UV * 11.0) * 0.6 + vnoise(UV * 27.0) * 0.4;
 	float s = mix(grain, blot, stone);
 	vec3 c = lin(COLOR.rgb) * mix(0.8, 1.12, s);
-	ALBEDO = c * (1.0 - wet * 0.25);
+	ALBEDO = cartoon(c * (1.0 - wet * 0.25));
 	ROUGHNESS = mix(0.92, 0.5, stone);
 	SPECULAR = mix(0.12, 0.35, stone);
 	float rim = pow(1.0 - clamp(dot(NORMAL, VIEW), 0.0, 1.0), 3.0);

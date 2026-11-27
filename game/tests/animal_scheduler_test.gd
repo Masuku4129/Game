@@ -46,7 +46,7 @@ func run_test() -> void:
 		manager._process(0.05)
 	var near_ok := near_a.ticks >= 18
 	var mid_ok := mid_a.ticks >= 8 and mid_a.ticks <= near_a.ticks / 2 + 1
-	var far_ok := far_a.ticks <= 2 and not far_a.parts["ap"].active
+	var far_ok: bool = far_a.ticks <= 2 and not far_a.parts["ap"].active
 	print("WILDLIFE_SCHEDULER near=", near_a.ticks, " mid=", mid_a.ticks, " far=", far_a.ticks, " far_anim=", far_a.parts["ap"].active)
 	manager.queue_free()
 	world.queue_free()

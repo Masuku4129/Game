@@ -1,5 +1,6 @@
 shader_type spatial;
-render_mode diffuse_burley;
+render_mode cull_back;
+#include "res://shaders/paint/paint.gdshaderinc"
 #include "res://shaders/fade.gdshaderinc"
 #include "res://shaders/weather.gdshaderinc"
 uniform sampler2D tex : source_color, filter_linear_mipmap_anisotropic, repeat_enable;
@@ -16,8 +17,7 @@ void fragment() {
 	if (fade_discard(wpf, FRAGCOORD.xy)) {
 		discard;
 	}
-	vec3 col = texture(tex, UV).rgb * tint.rgb * COLOR.rgb * (1.0 - wet * 0.3);
+	vec3 col = textureLod(tex, UV, 1.2).rgb * tint.rgb * COLOR.rgb * (1.0 - wet * 0.3);
 	col = mix(col, vec3(0.88, 0.9, 0.94), snow_cover(upn, wpf) * 0.9);
-	ALBEDO = col;
-	ROUGHNESS = mix(1.0, 0.6, wet);
+	ALBEDO = cartoon(col);
 }

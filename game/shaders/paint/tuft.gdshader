@@ -28,7 +28,7 @@ void vertex() {
 void fragment() {
 	vec3 c = mix(lin(col_root), lin(col_tip), smoothstep(0.0, 1.0, hgt)) * (0.85 + COLOR.r * 0.3);
 	c = mix(c, lin(vec3(0.78, 0.66, 0.38)) * (0.6 + hgt * 0.5), dry);
-	ALBEDO = c;
+	ALBEDO = cartoon(c);
 	ROUGHNESS = 1.0;
 	SPECULAR = 0.0;
 	BACKLIGHT = c * 0.4;

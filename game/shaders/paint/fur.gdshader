@@ -19,7 +19,7 @@ void vertex() {
 void fragment() {
 	vec3 base = use_vc ? COLOR.rgb : tint;
 	base = lin(base);
-	float s = vnoise(vec2(UV.x * 9.0, UV.y * 2.2)) * 0.55 + vnoise(vec2(UV.x * 23.0, UV.y * 5.0)) * 0.45;
+	float s = vnoise(vec2(UV.x * 7.0, UV.y * 2.0));
 	vec3 c = base * mix(0.78, 1.12, s);
 	if (stripes > 0.5) {
 		float st = sin(UV.y * 26.0 + vnoise(UV * vec2(4.0, 9.0)) * 5.0 + UV.x * 3.0);
@@ -38,7 +38,7 @@ void fragment() {
 	}
 	c = mix(c, vec3(0.85, 0.88, 0.92), smoothstep(0.55, 0.9, wn.y) * snow * 0.6);
 	c *= 1.0 - wet * 0.25;
-	ALBEDO = c;
+	ALBEDO = cartoon(c);
 	ROUGHNESS = mix(0.95, 0.55, wet);
 	SPECULAR = 0.15;
 	float rim = pow(1.0 - clamp(dot(NORMAL, VIEW), 0.0, 1.0), 3.0);

@@ -7,11 +7,11 @@ render_mode cull_disabled;
 // Рядом с героем лежит мелкая сетка-«заплатка» (COLOR.a = 0): она повторяет землю и снег
 // точно так же, но ещё и продавлена следами из track_tex (вмятины, ямы, траншеи).
 // Крупная земля под заплаткой опущена, чтобы не мешать.
-uniform vec3 meadow = vec3(0.3, 0.4, 0.14);
-uniform vec3 meadow2 = vec3(0.47, 0.5, 0.2);
-uniform vec3 forest = vec3(0.16, 0.22, 0.11);
-uniform vec3 litter = vec3(0.30, 0.23, 0.14);
-uniform vec3 stone = vec3(0.36, 0.34, 0.29);
+uniform vec3 meadow = vec3(0.30, 0.38, 0.20);
+uniform vec3 meadow2 = vec3(0.42, 0.46, 0.24);
+uniform vec3 forest = vec3(0.20, 0.24, 0.16);
+uniform vec3 litter = vec3(0.36, 0.29, 0.20);
+uniform vec3 stone = vec3(0.42, 0.40, 0.36);
 uniform vec3 bed = vec3(0.46, 0.42, 0.3);
 uniform vec3 mud_col = vec3(0.24, 0.16, 0.1);
 uniform float water_y = -2.0;
@@ -142,7 +142,8 @@ void vertex() {
 void fragment() {
 	float big = vnoise(wp.xz * 0.07);
 	float s = vnoise(wp.xz * 0.5) * 0.65 + vnoise(wp.xz * 1.7 + 3.0) * 0.35;
-	float fine = vnoise(wp.xz * 5.0);
+	float fine = vnoise(wp.xz * 1.3);
+	float paint_detail = vnoise(wp.xz * 0.55) * 0.82 + fine * 0.18;
 	vec3 c = mix(lin(meadow), lin(meadow2), smoothstep(0.35, 0.75, big + (s - 0.5) * 0.5));
 	float fd = v_fd;  // густота леса
 	vec3 fl = mix(lin(forest), lin(litter), smoothstep(0.4, 0.7, s + big * 0.3 - 0.2));
@@ -166,9 +167,18 @@ void fragment() {
 	vec3 ash = mix(lin(vec3(0.13, 0.11, 0.1)), lin(vec3(0.42, 0.4, 0.36)), smoothstep(0.4, 0.8, fine + s * 0.4 - 0.2));
 	ash = mix(ash, lin(vec3(0.36, 0.42, 0.16)), smoothstep(0.55, 0.8, big) * 0.6);
 	c = mix(c, ash, kb);
-	vec3 bog = mix(lin(vec3(0.5, 0.5, 0.18)), lin(vec3(0.3, 0.36, 0.12)), smoothstep(0.3, 0.7, s));
-	bog = mix(bog, lin(vec3(0.62, 0.36, 0.22)), smoothstep(0.7, 0.85, fine) * 0.5);
-	bog = mix(bog, lin(vec3(0.08, 0.1, 0.07)), smoothstep(0.62, 0.7, big + s * 0.3) * 0.8);
+	// Болото: не одно зелёное пятно, а торф, моховые островки и мокрые окна.
+	float bog_macro = vnoise(wp.xz * 0.11 + vec2(17.0, -9.0));
+	float bog_moss = smoothstep(0.42, 0.72, vnoise(wp.xz * 0.22 + vec2(-4.0, 13.0)));
+	float bog_peat = smoothstep(0.36, 0.68, vnoise(wp.xz * 0.19 + vec2(8.0, 21.0)));
+	vec3 bog = mix(lin(vec3(0.34, 0.39, 0.17)), lin(vec3(0.20, 0.27, 0.12)), smoothstep(0.3, 0.7, s));
+	bog = mix(bog, lin(vec3(0.43, 0.34, 0.20)), bog_peat * 0.62);
+	bog = mix(bog, lin(vec3(0.48, 0.53, 0.25)), bog_moss * 0.72);
+	bog = mix(bog, lin(vec3(0.08, 0.13, 0.10)), smoothstep(0.64, 0.78, big + bog_macro * 0.25) * 0.7);
+	// irregular, shallow standing-water pockets, edged by dark saturated peat
+	float bog_water_mask = smoothstep(0.66, 0.82, vnoise(wp.xz * 0.16 + vec2(29.0, 4.0))) * (1.0 - bog_moss * 0.7);
+	float bog_water = bog_water_mask * kg * (0.25 + wet * 0.75);
+	bog = mix(bog, lin(vec3(0.10, 0.19, 0.20)), bog_water * 0.9);
 	c = mix(c, bog, kg);
 	vec3 kur = lin(vec3(0.45, 0.44, 0.4)) * (0.7 + fine * 0.4);
 	kur = mix(kur, lin(vec3(0.68, 0.7, 0.56)), smoothstep(0.6, 0.85, s) * 0.6);
@@ -185,7 +195,10 @@ void fragment() {
 		vec3 bc = mix(lin(bed), lin(mix(vec3(0.42, 0.42, 0.38), vec3(0.62, 0.58, 0.48), pr)), peb);
 		c = mix(c, bc * (0.9 + fine * 0.2), sh);
 	}
-	c *= 0.92 + fine * 0.16;
+	// Широкие цветовые пятна + мягкая постеризация: мультяшная палитра без мелкого шума.
+	c *= 0.9 + paint_detail * 0.16;
+	vec3 poster = floor(c * 7.0 + 0.5) / 7.0;
+	c = mix(c, poster, 0.40);
 	// build: натоптанная тропа и расчищенная площадка — вытертая трава, утоптанная земля
 	float worn = smoothstep(0.25, 0.65, v_wear + (s - 0.5) * 0.25);
 	c = mix(c, lin(vec3(0.36, 0.29, 0.2)) * (0.85 + fine * 0.3), worn * 0.8);
@@ -229,7 +242,8 @@ void fragment() {
 	c *= 1.0 - wet * 0.25 * (1.0 - cover);
 	ALBEDO = c;
 	float gloss = max(wet, mudv * 0.8) * (1.0 - cover);
-	ROUGHNESS = mix(mix(1.0, 0.6, wet), 0.85, cover) - gloss * 0.2 * mudv - puddle * 0.2;
-	SPECULAR = (mudv * 0.2 + puddle * 0.15) * (1.0 - cover);
+	float bog_gloss = bog_water * (1.0 - cover);
+	ROUGHNESS = mix(mix(1.0, 0.6, wet), 0.85, cover) - gloss * 0.2 * mudv - puddle * 0.2 - bog_gloss * 0.22;
+	SPECULAR = (mudv * 0.2 + puddle * 0.15 + bog_gloss * 0.12) * (1.0 - cover);
 	NORMAL = normalize((VIEW_MATRIX * vec4(nw, 0.0)).xyz);
 }
