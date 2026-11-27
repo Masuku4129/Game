@@ -56,11 +56,11 @@ func _run() -> void:
 					ok = false
 				for node in mesh_nodes:
 					ok = _check_mesh(node.mesh, species + "_winter_" + str(winter)) and ok
-				var skel := root.find_child("*", "Skeleton3D", true, false)
-				if skel != null and skel.get_bone_count() == 0:
+				var skeletons := root.find_children("*", "Skeleton3D", true, false)
+				if not skeletons.is_empty() and skeletons[0].get_bone_count() == 0:
 					push_error("Empty skeleton for " + species)
 					ok = false
-			count += 1
+				count += 1
 			holder.free()
 	print("ANIMAL_MODEL_VISUAL_TEST count=", count, " passed=", ok)
 	quit(0 if ok and count == SPECIES.size() * 2 else 1)
