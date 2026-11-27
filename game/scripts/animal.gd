@@ -723,6 +723,12 @@ func tick(delta: float) -> void:
 	elif swim_k > 0.05:
 		var sv: float = float(SWIM_V.get(kind, 0.5)) * (0.75 + 0.25 * minf(scale_k, 1.0))
 		want = minf(want, lerpf(want, sv, clampf(swim_k * 1.5, 0.0, 1.0)))
+	# Топкая почва замедляет зверей по-разному: мелкие виды почти не заходят
+	# в глубокую трясину, крупные копытные и медведи проходят, но тяжело.
+	var bog_depth := main.swamp_depth_at(position.x, position.z) if main.has_method("swamp_depth_at") else 0.0
+	if bog_depth > 0.08:
+		var bog_resistance := float({"squirrel": 3.2, "hare": 2.8, "capercaillie": 2.4, "fox": 1.9, "lynx": 1.8, "muskdeer": 1.5, "roe": 1.35, "deer": 1.15, "moose": 0.72, "bear": 0.85, "boar": 1.1, "wolf": 1.2, "wolverine": 1.0, "beaver": 0.45}.get(kind, 1.2))
+		want *= 1.0 / (1.0 + bog_depth * bog_resistance)
 	# поворот к цели и разгон
 	var to := goal - position
 	to.y = 0
@@ -828,6 +834,14 @@ func _can_step(p: Vector3, flying: bool = false) -> bool:
 	if main.blocked(p.x, p.z, _obstacle_radius()):
 		return false
 	var base_y: float = main.grid_height(p.x, p.z)
+	# Избегаем непроходимых окон трясины, если зверь ещё на твёрдой почве.
+	# Если уже оказался внутри — разрешаем шаги наружу, чтобы не создать soft-lock.
+	if main.has_method("swamp_depth_at"):
+		var bog_here: float = main.swamp_depth_at(p.x, p.z)
+		var bog_current: float = main.swamp_depth_at(position.x, position.z)
+		var bog_limit := float({"squirrel": 0.18, "hare": 0.22, "capercaillie": 0.2, "fox": 0.38, "lynx": 0.42, "muskdeer": 0.62, "roe": 0.68, "deer": 0.78, "moose": 1.05, "bear": 0.95, "boar": 0.72, "wolf": 0.7, "wolverine": 0.65, "beaver": 1.4}.get(kind, 0.65))
+		if bog_here > bog_limit and bog_current <= bog_limit:
+			return false
 	var solid_y: float = main.solid_top(p.x, p.z)
 	var obstacle_h: float = solid_y - base_y
 	# Животные могут забираться на низкие камни, но обходят отвесные валуны.
