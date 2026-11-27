@@ -20,9 +20,14 @@ func run_test() -> void:
 				if world.height(float(x), float(z)) < world.WATER_Y - 0.05:
 					wetland_pools += 1
 	var coverage := float(wetland) / maxf(float(total), 1.0)
-	print("WETLAND_SAMPLE total=", total, " wetland=", wetland, " pools=", wetland_pools, " coverage=", coverage)
+	var reed_variants: Array = world._variants("reeds")
+	var reed_models := 0
+	for variant in reed_variants:
+		if variant.size() > 0 and variant[0] is ArrayMesh:
+			reed_models += 1
+	print("WETLAND_SAMPLE total=", total, " wetland=", wetland, " pools=", wetland_pools, " coverage=", coverage, " reed_models=", reed_models)
 	world.queue_free()
-	if coverage < 0.04 or coverage > 0.25 or wetland_pools < 1:
+	if coverage < 0.04 or coverage > 0.25 or wetland_pools < 1 or reed_models < 3:
 		quit(1)
 	else:
 		quit(0)
