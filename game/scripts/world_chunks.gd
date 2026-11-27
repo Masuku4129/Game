@@ -475,6 +475,8 @@ func _build_tree_cover(c: Vector2i) -> void:
 			blockers_for_chunk.append([Vector2i(floori(p.x / 8.0), floori(p.z / 8.0)), Vector3(p.x, p.z, radius)])
 	tree_mmis[k] = created
 	blocker_records[k] = blockers_for_chunk
+	if main.tools_world != null:
+		main.tools_world.restore_pending_tree_fells()
 
 func _build_understory(c: Vector2i) -> void:
 	var k := _key(c)
