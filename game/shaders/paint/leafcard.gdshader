@@ -63,7 +63,7 @@ void fragment() {
 	c = mix(c, lin(col_bloom) * (0.8 + g * 0.25), bloom_k * blossom * step(0.45, fract(drop_h * 3.7)));
 	c *= 1.0 - wet * 0.15;
 	c = mix(c, vec3(0.9, 0.93, 0.97), smoothstep(0.6, 0.85, wn.y + b.g * 0.2) * snow);
-	ALBEDO = c;
+	ALBEDO = cartoon(c);
 	ALPHA = b.a;
 	ALPHA_SCISSOR_THRESHOLD = 0.5;
 	ROUGHNESS = 1.0;

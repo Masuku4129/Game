@@ -55,7 +55,7 @@ void fragment() {
 	// снег на верхних гранях снаружи
 	base = mix(base, vec3(0.86, 0.9, 0.96), smoothstep(0.55, 0.85, n.y + (s - 0.5) * 0.3) * snow * COLOR.a);
 	base *= 1.0 - wet * 0.25 * COLOR.a;
-	ALBEDO = base;
+	ALBEDO = cartoon(base);
 	NORMAL = normalize((VIEW_MATRIX * vec4(n, 0.0)).xyz);
 	ROUGHNESS = mix(0.95, 0.6, wet * COLOR.a);
 	SPECULAR = 0.05;

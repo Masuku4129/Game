@@ -35,7 +35,7 @@ void fragment() {
 	c *= mix(0.94, 1.06, vnoise(wp.xz * 0.75));
 	c = mix(c, vec3(0.9, 0.93, 0.97), smoothstep(0.5, 0.75, wn.y + s * 0.2) * snow);
 	c *= 1.0 - wet * 0.3;
-	ALBEDO = c;
+	ALBEDO = cartoon(c);
 	NORMAL = n;
 	ROUGHNESS = mix(0.98, 0.58, wet);
 	SPECULAR = 0.1;

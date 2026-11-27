@@ -55,7 +55,7 @@ void fragment() {
 	c = mix(c, lin(col_bloom) * (0.75 + g * 0.3), bloom_k * blossom * smoothstep(0.35, 0.6, s + tree_r * 0.3));
 	c *= 1.0 - wet * 0.15;
 	c = mix(c, vec3(0.9, 0.93, 0.97), smoothstep(0.42, 0.74, wn.y + s * 0.2) * snow);
-	ALBEDO = c;
+	ALBEDO = cartoon(c);
 	ROUGHNESS = 0.92;
 	SPECULAR = 0.0;
 	BACKLIGHT = c * 0.35;
