@@ -990,6 +990,7 @@ class FellTree extends Node3D:
 
 	## Лёг: ствол становится твёрдым (по нему можно пройти).
 	var _solid: Array = []
+	var _stump_solid: Array = []
 	func _lay() -> void:
 		# Вызывается только после затухания отскоков в step(); до этого момента
 		# виден один и тот же поворачивающийся исходный ствол.
@@ -1004,17 +1005,24 @@ class FellTree extends Node3D:
 		_remove_solid()
 		var a := _world_y(clip + 0.3 / s)
 		var b := _world_y(H * float(CLEAN.get(kind, 0.4)))
-		if a.distance_to(b) < 0.5:
-			return
-		_solid = [1, a, b, _r_at(clip) * s * 0.9, 0.0]
-		main._add_solid(_solid)
+		if a.distance_to(b) >= 0.5:
+			_solid = [1, a, b, _r_at(clip) * s * 0.9, 0.0]
+			main._add_solid(_solid)
+		# Пень остаётся отдельной опорой после падения ствола.
+		if stump.visible:
+			_stump_solid = [2, xf.origin, r0 * s * 0.92, 0.0, notch * s]
+			main._add_solid(_stump_solid)
 
 	func _remove_solid() -> void:
-		if _solid.is_empty():
+		if main == null:
 			return
 		for arr: Array in main.solids.values():
-			arr.erase(_solid)
+			if not _solid.is_empty():
+				arr.erase(_solid)
+			if not _stump_solid.is_empty():
+				arr.erase(_stump_solid)
 		_solid = []
+		_stump_solid = []
 
 	func _world_y(y: float) -> Vector3:
 		return top.global_transform * Vector3(0, y, 0)
