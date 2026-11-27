@@ -107,26 +107,31 @@ def blob(b, center, radii, rng, cc, sub=2, jit=.16, soft=.58, key="foliage"):
 
 
 def skirt(b, z, r, h, teeth, rng, key="foliage"):
-    """Jagged drooping tier of a spruce/larch: cone with scalloped edge, soft outward normals."""
-    n = teeth * 2
-    verts = [np.array([0, 0, z + h * .5]), np.array([0, 0, z - h * .45])]
-    for i in range(n):
-        a = 2 * math.pi * i / n
-        outer = i % 2 == 0
-        rr = r * (rng.uniform(.9, 1.1) if outer else .62)
-        zz = z - h * (.5 if outer else .12) + rng.uniform(-.05, .05) * h
-        verts.append(np.array([math.cos(a) * rr, math.sin(a) * rr, zz]))
-    verts = np.array(verts)
-    faces = []
-    for i in range(n):
-        j = 2 + i; k = 2 + (i + 1) % n
-        faces += [[0, j, k], [1, k, j]]
-    nrm = np.zeros_like(verts)
-    nrm[0] = UP
-    nrm[1] = -UP
-    for i in range(2, len(verts)):
-        nrm[i] = unit(np.array([verts[i][0], verts[i][1], r * .55]))
-    b.add(key, verts, faces, np.zeros((len(verts), 2)), nrm)
+    """Broad rounded cartoon bough tier with a soft scalloped skirt, not a sharp cone."""
+    n = max(24, teeth * 4)
+    verts, faces = [], []
+    rings = [(0.34, 0.42), (0.72, 0.12), (1.0, -0.23), (0.78, -0.43)]
+    phase = rng.uniform(0.0, math.tau)
+    for ri, (rf, zf) in enumerate(rings):
+        for i in range(n):
+            a = math.tau * i / n
+            wave = (0.055 * math.sin(a * teeth + phase)
+                    + 0.022 * math.sin(a * teeth * 2.0 - phase * 0.7))
+            edge = 1.0 + wave if ri >= 2 else 1.0 + wave * 0.35
+            rr = r * rf * edge * rng.uniform(.985, 1.015)
+            zz = z + h * zf + (wave * h * 0.55 if ri >= 2 else 0.0)
+            verts.append([math.cos(a) * rr, math.sin(a) * rr, zz])
+    for ri in range(len(rings) - 1):
+        for i in range(n):
+            a = ri * n + i
+            c = ri * n + (i + 1) % n
+            d = (ri + 1) * n + i
+            e = (ri + 1) * n + (i + 1) % n
+            faces += [[a, d, c], [c, d, e]]
+    verts = np.asarray(verts, float)
+    center = np.array([0.0, 0.0, z + h * 0.12])
+    normals = unit(verts - center)
+    b.add(key, verts, faces, np.zeros((len(verts), 2)), normals)
 
 
 def disc(b, center, radius, axis, key="cut", n=14):
@@ -232,27 +237,52 @@ def alder():
 
 # --------------------------------------------------------------- small things ---
 def bush():
+    """Layered, asymmetrical berry shrub with visible woody stems and broad leaf clusters."""
     rng = np.random.default_rng(8)
     b = Builder()
-    cc = np.array([0, 0, .5])
-    for i in range(5):
-        a = 2 * math.pi * i / 5 + rng.uniform(-.3, .3); L = rng.uniform(.9, 1.4)
-        tube(b, (0, 0, .02), (math.cos(a) * L * .5, math.sin(a) * L * .5, L), .035, .01, 3, 4, (0, 0, .06))
-    for i in range(7):
-        a = 2 * math.pi * i / 7 + rng.uniform(-.3, .3); r = rng.uniform(.2, .6)
-        blob(b, (math.cos(a) * r, math.sin(a) * r, rng.uniform(.4, 1.0)), (rng.uniform(.4, .6), rng.uniform(.4, .6), rng.uniform(.3, .5)), rng, cc, 1, .24, .5)
+    cc = np.array([0.0, 0.0, 0.62])
+    count = 9
+    for i in range(count):
+        a = math.tau * i / count + rng.uniform(-.22, .22)
+        reach = rng.uniform(.62, 1.05)
+        height = rng.uniform(.72, 1.28)
+        end = np.array([math.cos(a) * reach, math.sin(a) * reach, height])
+        tube(b, (0, 0, .04), end * np.array([.78, .78, .86]), .055, .018, 4, 5,
+             (rng.uniform(-.08, .08), rng.uniform(-.08, .08), .08))
+        # Two overlapping lobes per branch create a continuous leafy silhouette.
+        for side in (-1, 1):
+            offset = np.array([math.cos(a + side * .34) * .18,
+                               math.sin(a + side * .34) * .18,
+                               rng.uniform(-.08, .16)])
+            center = end + offset
+            radii = (rng.uniform(.34, .48), rng.uniform(.30, .43), rng.uniform(.28, .40))
+            blob(b, center, radii, rng, cc, 2, .12, .62)
+    blob(b, (0.0, 0.0, 1.05), (.48, .44, .42), rng, cc, 2, .11, .65)
     export("taiga_bush.glb", b)
 
 
 def stump():
+    """Broken cartoon stump with a jagged crown, flared roots and layered growth rings."""
     rng = np.random.default_rng(13)
     b = Builder()
-    h = .85; r = .36
-    tube(b, (0, 0, 0), (0, 0, h), r * 1.02, r * .86, 4, 9, flare=.9, rng=rng, wobble=.05)
-    disc(b, (0, 0, h), r * .86, UP)
-    for i in range(4):
-        a = 2 * math.pi * i / 4 + rng.uniform(-.3, .3)
-        tube(b, (math.cos(a) * .2, math.sin(a) * .2, .25), (math.cos(a) * .7, math.sin(a) * .7, -.03), .1, .03, 3, 5, (0, 0, .05))
+    h, r = .92, .37
+    tube(b, (0, 0, 0), (.025, -.015, h * .48), (0, 0, h), r * 1.12, r * .82,
+         6, 11, flare=1.0, rng=rng, wobble=.085)
+    # Uneven broken rim gives the cut surface a hand-shaped silhouette.
+    rim = []
+    for i in range(18):
+        a = math.tau * i / 18
+        rim.append([math.cos(a) * r * .84, math.sin(a) * r * .84,
+                    h + .10 * math.sin(a * 3.0 + .4) + .035 * math.sin(a * 7.0)])
+    verts = [[0.0, 0.0, h]] + rim
+    faces = [[0, 1 + i, 1 + (i + 1) % len(rim)] for i in range(len(rim))]
+    b.add("cut", verts, faces, np.zeros((len(verts), 2)), np.tile(UP, (len(verts), 1)))
+    for i in range(6):
+        a = math.tau * i / 6 + rng.uniform(-.2, .2)
+        reach = rng.uniform(.48, .72)
+        tube(b, (math.cos(a) * .16, math.sin(a) * .16, .24),
+             (math.cos(a) * reach, math.sin(a) * reach, -.025),
+             rng.uniform(.09, .13), .018, 4, 6, (0, 0, .07), flare=.35, rng=rng, wobble=.08)
     export("taiga_stump.glb", b)
 
 
@@ -269,14 +299,22 @@ def fallen_log():
 
 
 def rock():
+    """Low, broad cartoon boulder: flattened base, broad planes and an irregular crown."""
     rng = np.random.default_rng(12)
     m = trimesh.creation.icosphere(subdivisions=2, radius=1)
     v = np.asarray(m.vertices)
-    f = 1 + .16 * np.sin(v[:, 0] * 7 + v[:, 2] * 3) + .1 * np.cos(v[:, 1] * 9 - v[:, 0] * 2) + .05 * rng.uniform(-1, 1, len(v))
-    v = v * f[:, None] * np.array([1.25, .72, .92]) + np.array([0, 0, .6])
-    v[:, 2] = np.maximum(v[:, 2], .02)
+    az = np.arctan2(v[:, 1], v[:, 0])
+    crown = 1.0 + .10 * np.sin(az * 5.0 + v[:, 2] * 2.0) + .045 * np.cos(az * 9.0)
+    broad = 1.0 + .09 * np.sin(v[:, 0] * 3.0 + v[:, 2] * 2.0) * np.cos(v[:, 1] * 2.5)
+    f = crown * broad + .025 * rng.uniform(-1, 1, len(v))
+    v = v * f[:, None] * np.array([1.34, .94, .78]) + np.array([0, 0, .61])
+    # Flatten the foot into a stable, grounded cartoon silhouette.
+    v[:, 2] = np.maximum(v[:, 2], .035)
+    center = np.array([0.0, 0.0, .61])
+    n = unit(v - center)
+    # Broad, softened facets instead of a noisy pebble surface.
     b = Builder()
-    b.add("rock", v, m.faces, np.zeros((len(v), 2)), unit(v - np.array([0, 0, .6])))
+    b.add("rock", v, m.faces, np.zeros((len(v), 2)), n)
     export("taiga_rock.glb", b)
 
 
