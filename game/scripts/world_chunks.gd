@@ -833,6 +833,7 @@ func _build_understory(c: Vector2i) -> void:
 		var h: float = main.height(wx, wz)
 		var zone_id: int = main.zone(wx, wz)
 		var slope: float = main.normal_at(wx, wz).y
+		var moisture: float = main.wet_k(wx, wz, h)
 		if h < main.WATER_Y + 0.45 or main.river_dist(wx, wz) < 3.2 or main.lake_k(wx, wz) > 0.65:
 			continue
 		var kind := "fern"
@@ -851,26 +852,31 @@ func _build_understory(c: Vector2i) -> void:
 			else:
 				kind = "mushroom"
 		else:
-			if rng.randf() > clampf(0.18 + density * 0.78, 0.0, 0.96):
+			var understory_density := clampf(0.14 + density * 0.9 + moisture * 0.22, 0.0, 0.98)
+			if rng.randf() > understory_density:
 				continue
 			var pick := rng.randf()
 			if slope < 0.72:
 				kind = "rock"
-			elif pick < 0.23:
-				kind = "fern"
-			elif pick < 0.42:
-				kind = "bush"
-			elif pick < 0.53:
-				kind = "hazel"
-			elif pick < 0.62:
-				kind = "dogrose"
-			elif pick < 0.76:
+			elif moisture > 0.62 and pick < 0.18:
 				kind = "moss"
-			elif pick < 0.85:
+			elif moisture > 0.45 and pick < 0.32:
+				kind = "fern"
+			elif pick < 0.22:
+				kind = "fern"
+			elif pick < 0.38:
+				kind = "bush"
+			elif pick < 0.49:
+				kind = "hazel"
+			elif pick < 0.60:
+				kind = "dogrose"
+			elif pick < 0.73:
+				kind = "moss"
+			elif pick < 0.82:
 				kind = "mushroom"
-			elif pick < 0.92:
+			elif pick < 0.90:
 				kind = "rock"
-			elif pick < 0.97:
+			elif pick < 0.96:
 				kind = "stump"
 			else:
 				kind = "fallen0"
