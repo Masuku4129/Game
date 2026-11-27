@@ -7,7 +7,7 @@ const SEG := 384
 const WATER_Y := -2.0
 const CELL := 64.0
 const START_CHUNK_COORD := Vector2i(4, 4) # чанк начальной позиции около мирового нуля
-const START_CHUNK_SEED := 20261127
+const START_CHUNK_SEED := 20261129
 const FOREST_DENSITY_MULTIPLIER := 1.7
 const FOREST_DENSITY_SPECIES := ["spruce", "pine", "birch", "larch", "aspen", "bare", "spruce_dead", "bush", "fern", "reeds", "twig", "berry", "bilberry", "mushroom", "fir", "cedar", "willow", "alder", "cherry", "rose", "horsetail", "hummock", "sedge", "juniper", "stlanik", "rowan", "anthill", "mossrock", "stump_rot", "stump_mush", "fungus_snag", "birch_dead", "mosslog", "ledum", "cloudberry", "cranberry", "cotton", "lingon", "ernik", "raspberry", "currant", "bells", "daisy", "angelica", "brushpile", "chanterelle", "cones"]
 
@@ -837,7 +837,7 @@ func _process(delta: float) -> void:
 			_respawn()
 	_near_t -= delta
 	if _near_t <= 0.0:
-		_near_t = 0.12
+		_near_t = 0.06
 		_update_near()
 	if joy != null:
 		hero.move_vec = joy.value if health > 0.0 else Vector2.ZERO
@@ -1222,7 +1222,7 @@ func _variants(kind: String) -> Array:
 	return out
 
 const TREE_KINDS := ["spruce", "pine", "birch", "larch", "aspen", "fir", "cedar", "rowan"]
-const NEAR_R := 44.0
+const NEAR_R := 60.0
 var tree_grid := {}
 var near_mesh := {}
 var near_mmi := {}
@@ -1235,7 +1235,10 @@ var _tree_id := 0
 ## дизерингом (шейдер сравнивает расстояние до near_c), поэтому смены моделей не видно.
 func _update_near(force: bool = false) -> void:
 	var c: Vector3 = rig.position
-	if not force and Vector2(c.x - _near_at.x, c.z - _near_at.z).length() < 1.1:
+	# Detail models are prepared ahead of the camera so the visible forest does not pop in at the view edge.
+	var view_forward := Vector3(sin(rig.rotation.y), 0.0, -cos(rig.rotation.y))
+	c += view_forward * 18.0
+	if not force and Vector2(c.x - _near_at.x, c.z - _near_at.z).length() < 0.55:
 		return
 	_near_at = c
 	var by_key := {}
@@ -1490,10 +1493,11 @@ func move_factor() -> float:
 const BLOCK_R := {"fungus_snag": 0.22, "birch_dead": 0.2, "snag": 0.25, "snag_b": 0.25, "cherry": 0.15, "fir": 0.36, "cedar": 0.38, "rowan": 0.2, "spruce": 0.4, "pine": 0.32, "birch": 0.28, "bare": 0.3, "spruce_dead": 0.3, "stump": 0.45, "rock": 0.5, "boulder": 0.6, "larch": 0.32, "aspen": 0.26}
 
 func _chunk_seed(cx: int, cz: int) -> int:
-	# Перегенерируем только стартовый чанк; остальные клетки сохраняют прежнюю раскладку.
+	# Stable coordinate hash; the starting chunk has its own deliberately refreshed seed.
 	if Vector2i(cx, cz) == START_CHUNK_COORD:
 		return START_CHUNK_SEED
-	return cz * 1000 + cx
+	var h := int(cx * 73856093) ^ int(cz * 19349663) ^ 0x5F3759DF
+	return abs(h)
 
 func _scatter_all() -> void:
 	# вид, попыток на клетку 32 м, масштаб, дальность видимости, тень, правило
@@ -1621,7 +1625,7 @@ func _scatter_all() -> void:
 					# широкие вещи не висят над склоном: опора — самая низкая точка под ними
 					var foot: float = FOOT_R.get(kind, 0.0) * s
 					if kind in ROCKISH:
-						var rv: Vector3 = vars[vi][2]
+						var rv: Vector3 = _rock_half_extents(vars[vi])
 						foot = (rv.x + rv.z) * 0.35 * s
 					if foot > 0.0:
 						var hm := by + 0.05
@@ -1664,7 +1668,7 @@ func _scatter_all() -> void:
 					per_var[vi].append(Transform3D(b, o))
 					if kind in ROCKISH:
 						# камень — твёрдый купол: на него можно встать или залезть
-						var rsc: Vector3 = vars[vi][2]
+						var rsc: Vector3 = _rock_half_extents(vars[vi])
 						var hr2: float = (rsc.x + rsc.z) * 0.6 * s
 						var ht2: float = rsc.y * 0.9 * b.y.length()
 						if ht2 > 0.12:
@@ -1840,11 +1844,18 @@ const HUG := ["scree", "brushpile", "bones", "cones", "chanterelle", "twig", "pe
 const ROCKISH := ["rock", "slab", "mossrock", "split_rock", "outcrop"]
 var cliff_mmi: Array = []
 
+func _rock_half_extents(v: Array) -> Vector3:
+	if v.size() > 2 and v[2] is Vector3:
+		return v[2]
+	if not v.is_empty() and v[0] is Mesh:
+		return (v[0] as Mesh).get_aabb().size * 0.5
+	return Vector3.ONE
+
 func _occ_radius(kind: String, v: Array, s: float) -> float:
 	if kind in TREE_KINDS or kind in ["bare", "spruce_dead", "snag", "snag_b"]:
 		return (0.5 if s > 0.5 else 0.0) * s
 	if kind in ROCKISH:
-		var rsc: Vector3 = v[2]
+		var rsc: Vector3 = _rock_half_extents(v)
 		return (rsc.x + rsc.z) * 0.62 * s
 	if kind in ["fungus_snag", "birch_dead"]:
 		return 0.4 * s
@@ -1918,7 +1929,7 @@ func _cliff_rocks(vars: Array) -> void:
 				var dh := ht - hb
 				if dh > 3.0:
 					var vi := rng.randi() % vars.size()
-					var rsc: Vector3 = vars[vi][2]
+					var rsc: Vector3 = _rock_half_extents(vars[vi])
 					var sxz := rng.randf_range(2.0, 3.2)
 					var sy := dh * rng.randf_range(0.75, 1.05) / rsc.y
 					var b := Basis(Vector3.UP, atan2(up.x, up.y) + rng.randf_range(-0.5, 0.5)).scaled(Vector3(sxz, sy, sxz * 0.8))
