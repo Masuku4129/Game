@@ -327,8 +327,20 @@ func recipes() -> Array:
 	for id: String in ITEMS:
 		if ITEMS[id].has("craft"):
 			out.append(id)
-	var ok := func(id: String) -> int: return 1 if missing(id).is_empty() else 0
-	out.sort_custom(func(a: String, b: String) -> bool: return ok.call(a) > ok.call(b))
+	var readiness := func(id: String) -> Array:
+		var miss: Dictionary = missing(id)
+		var total := 0
+		for amount: int in miss.values():
+			total += amount
+		return [1 if miss.is_empty() and station_ok(_station(id)) and _tool_ok(id) else 0, -total, _name(id)]
+	out.sort_custom(func(a: String, b: String) -> bool:
+		var ra: Array = readiness.call(a)
+		var rb: Array = readiness.call(b)
+		if int(ra[0]) != int(rb[0]):
+			return int(ra[0]) > int(rb[0])
+		if int(ra[1]) != int(rb[1]):
+			return int(ra[1]) > int(rb[1])
+		return String(ra[2]) < String(rb[2])))
 	return out
 
 ## Чего не хватает: {id: сколько}.
