@@ -1590,6 +1590,13 @@ func hurt(amount: float, from: Vector3, kind: String) -> void:
 		colony.hurt_nearest(amount, from, kind)
 		return
 	# --- /colony ---
+	# В творческом режиме урон не должен даже кратковременно запускать смерть,
+	# отбрасывание, кровотечение или прерывание текущего действия.
+	if creative_mode:
+		health = 1.0
+		bleed = 0.0
+		injuries.clear()
+		return
 	if health <= 0.0:
 		return
 	var big := kind in ["bear", "tiger"]
