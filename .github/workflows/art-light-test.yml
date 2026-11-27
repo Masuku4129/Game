@@ -41,7 +41,7 @@ jobs:
         run: |
           mkdir -p /tmp/art
           cd game
-          SHOTS=/tmp/art timeout 600 xvfb-run -a -s "-screen 0 1920x864x24" godot --rendering-driver vulkan --resolution 1920x864 > /tmp/art/gameplay.log 2>&1
+          SHOTS=/tmp/art timeout 600 xvfb-run -a -s "-screen 0 1920x864x24" godot --rendering-driver vulkan --resolution 1920x864 --quit-after 180 > /tmp/art/gameplay.log 2>&1
           grep -E "SCRIPT ERROR|Parse Error|shot game" /tmp/art/gameplay.log
           test -s /tmp/art/game_20.png
           test -s /tmp/art/game_80.png
