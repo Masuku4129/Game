@@ -84,10 +84,6 @@ jobs:
         run: |
           cd game
           timeout 120 godot --headless --script res://tests/animal_animation_speed_test.gd
-      - name: Wetland coverage and water-pocket regression test
-        run: |
-          cd game
-          timeout 180 godot --headless --script res://tests/wetland_biome_test.gd
       - name: Check scripts (strict)
         run: |
           cd game
@@ -106,6 +102,10 @@ jobs:
           cd game
           timeout 300 godot --headless --quit-after 60 res://scenes/main.tscn 2>&1 | tee ../smoke.log | tail -40
           ! grep -E "SCRIPT ERROR|Invalid|Cannot|Nonexistent" ../smoke.log
+      - name: Wetland coverage and water-pocket regression test
+        run: |
+          cd game
+          timeout 180 godot --headless --script res://tests/wetland_biome_test.gd
       - name: Export APK
         run: |
           mkdir -p build
