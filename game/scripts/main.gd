@@ -2299,6 +2299,8 @@ func from_save(d: Dictionary) -> void:
 		injuries[k] = float(inj[k])
 	inv = SV.int_dict(d.get("inv", {}))
 	worn = d.get("worn", {}).duplicate(true)
+	if hero != null:
+		hero.refresh_clothing()
 	var p: Vector3 = SV.dec(d.get("pos", SV.enc(hero.position)))
 	hero.position = p
 	hero.vel = Vector3.ZERO
