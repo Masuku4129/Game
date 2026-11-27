@@ -26,6 +26,10 @@ jobs:
           cd game
           timeout 600 godot --headless --import 2>&1 | tee /tmp/pv/import.log
           ! grep -E "Parse Error|Failed loading resource" /tmp/pv/import.log
+      - name: Imported environment GLB regression test
+        run: |
+          cd game
+          timeout 180 godot --headless --script res://tests/environment_glb_test.gd
       - name: Render style test shots
         run: |
           mkdir -p /tmp/pv
