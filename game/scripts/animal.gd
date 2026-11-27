@@ -730,21 +730,28 @@ func tick(delta: float) -> void:
 			want = 0.0
 	if face != Vector3.INF and want <= 0.0:
 		heading = lerp_angle(heading, atan2(face.x - position.x, face.z - position.z), minf(1.0, delta * 4.0))
-	# беличье дерево: вверх по стволу и обратно
+	# Белка карабкается по коре устойчивой спиралью. Срубленное дерево
+	# перестаёт быть точкой привязки: зверёк спускается и уходит на землю.
 	if kind == "squirrel":
+		if climb_h > 0.0 and tree != Vector3.ZERO and main.tree_height_at(tree) <= 0.5:
+			climb_h = 0.0
+			state = "flee"
+			state_t = 2.8
+			target = position + Vector3(sin(heading + PI * 0.5), 0.0, cos(heading + PI * 0.5)) * 5.0
+			position.y = main.ground_at(position.x, position.z)
+			tree = Vector3.ZERO
 		if state == "tree":
-			climb_h = minf(climb_h + delta * 1.25, maxf(tree_top, 2.8))
+			climb_h = minf(climb_h + delta * 1.45, maxf(tree_top, 2.8))
 		elif climb_h > 0.0:
-			climb_h = maxf(climb_h - delta * 1.15, 0.0)
+			climb_h = maxf(climb_h - delta * 1.25, 0.0)
 			if climb_h <= 0.0 and state == "down_tree":
+				tree = Vector3.ZERO
 				_new_wander()
-		# Держим белку у поверхности ствола и слегка обводим вокруг коры по мере подъёма.
 		if climb_h > 0.0 and tree != Vector3.ZERO:
-			# Подъём идёт плавной спиралью: угол накапливается от высоты,
-			# а не пересчитывается из дрожащей позиции модели каждый кадр.
-			var climb_angle: float = tree_orbit_angle + climb_h * 0.24 + sin(climb_h * 1.1) * 0.035
+			var climb_progress := clampf(climb_h / maxf(tree_top, 0.1), 0.0, 1.0)
+			var climb_angle: float = tree_orbit_angle + smoothstep(0.0, 1.0, climb_progress) * TAU * 0.58 + sin(climb_progress * TAU * 2.0) * 0.025
 			var radial := Vector2(sin(climb_angle), cos(climb_angle))
-			var bark_offset: float = main.tree_radius_at(tree) + maxf(0.10, _obstacle_radius() * 0.35)
+			var bark_offset: float = main.tree_radius_at(tree) + maxf(0.12, _obstacle_radius() * 0.55)
 			position.x = tree.x + radial.x * bark_offset
 			position.z = tree.z + radial.y * bark_offset
 			heading = atan2(tree.x - position.x, tree.z - position.z)
