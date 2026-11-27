@@ -888,6 +888,15 @@ func _can_step(p: Vector3, flying: bool = false, from_pos: Vector3 = Vector3.INF
 	if main.blocked(p.x, p.z, _obstacle_radius()):
 		return false
 	var base_y: float = main.grid_height(p.x, p.z)
+	# Неплавающие виды обходят глубокую воду, включая подпруженные бобрами участки.
+	# Если зверь уже оказался в воде, разрешаем только шаги без увеличения глубины,
+	# чтобы восстановление маршрута могло вывести его обратно на сушу.
+	var water_depth := maxf(0.0, main.water_level(p.x, p.z) - base_y)
+	var current_depth := maxf(0.0, main.water_level(reference.x, reference.z) - main.grid_height(reference.x, reference.z))
+	if not swimmer():
+		var water_limit := 0.16 if kind in ["squirrel", "hare", "capercaillie"] else (0.28 if kind in ["fox", "lynx", "muskdeer", "wolverine"] else 0.38)
+		if water_depth > water_limit and water_depth > current_depth + 0.025:
+			return false
 	# Избегаем непроходимых окон трясины, если зверь ещё на твёрдой почве.
 	# Если уже оказался внутри — разрешаем шаги наружу, чтобы не создать soft-lock.
 	if main.has_method("swamp_depth_at"):
