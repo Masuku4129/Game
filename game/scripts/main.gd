@@ -1330,21 +1330,28 @@ func _record_resource(kind: String, amount: int = 1) -> void:
 		inv[kind] = int(inv.get(kind, 0)) + amount
 	resource_gained[kind] = int(resource_gained.get(kind, 0)) + amount
 
-func take_pick(it: Array) -> void:
-	if inventory != null and not inventory.can_add(String(it[1])):
-		_say("Короб полон")
-		return
+func take_pick(it: Array) -> bool:
+	# Подбор — атомарная операция: предмет остаётся в мире, если инвентарь не принимает его.
+	if it.size() < 4:
+		return false
 	var q: Vector3 = it[0]
 	var k := Vector2i(floori(q.x / 8.0), floori(q.z / 8.0))
-	pickables[k].erase(it)
+	if not pickables.has(k) or not (pickables[k] as Array).has(it):
+		return false
+	var kind: String = String(it[1])
+	if inventory != null and not inventory.can_add(kind):
+		_say("Короб полон")
+		return false
+	(pickables[k] as Array).erase(it)
+	if (pickables[k] as Array).is_empty():
+		pickables.erase(k)
 	var mm: MultiMesh = it[2]
 	mm.set_instance_transform(it[3], Transform3D(Basis().scaled(Vector3(0.001, 0.001, 0.001)), q - Vector3(0, 5, 0)))
-	var kind: String = it[1]
-	# съедобное теперь кладём в короб (есть — из инвентаря), если хватает места
+	# съедобное кладём в короб, если он доступен; камни/хворост фиксируются тем же регистратором.
 	if inventory != null and kind in ["berry", "mushroom", "amanita"]:
 		_record_resource(kind, 1)
-		_say("+1 %s — в короб" % PICK_NAME[kind])
-		return
+		_say("+1 %s — в короб" % PICK_NAME.get(kind, kind))
+		return true
 	match kind:
 		"berry":
 			hunger = minf(1.0, hunger + 0.05)
@@ -1360,7 +1367,8 @@ func take_pick(it: Array) -> void:
 			_say("Мухомор! Отравление")
 		_:
 			_record_resource(kind, 1)
-			_say("+1 %s" % PICK_NAME[kind])
+			_say("+1 %s" % PICK_NAME.get(kind, kind))
+	return true
 
 func near_water(p: Vector3) -> bool:
 	for a in 8:
