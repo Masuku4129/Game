@@ -42,6 +42,8 @@ var soaked := 0.0
 var depth := 0.0
 var sink := 0.0      # погружение в снег, м
 var mud_sink := 0.0  # погружение в грязь, м (модель опускается)
+var swamp_sink := 0.0 # провал в трясину, м; требуется жердь для выхода
+var swamp_depth := 0.0
 var vy := 0.0
 var airborne := false
 var fallb := 0.0
@@ -358,6 +360,8 @@ func action_label() -> String:
 		return "Встать"
 	if swimb > 0.3:
 		return ""
+	if swamp_sink > 0.72 and int(main.inv.get("branch", 0)) > 0:
+		return "Упереться жердью"
 	if state == "butcher":
 		return "Прервать"
 	if tools != null:
@@ -386,6 +390,14 @@ func do_action() -> void:
 		return
 	if state == "sit":
 		_stand_up()
+		return
+	if swamp_sink > 0.72 and int(main.inv.get("branch", 0)) > 0:
+		main.stamina = maxf(0.0, float(main.stamina) - 0.12)
+		swamp_sink = 0.28
+		mud_sink = minf(mud_sink, 0.2)
+		vel = Vector3.ZERO
+		land_t = 0.45
+		land_k = 0.35
 		return
 	if tools != null and tools.action_label() != "" and main.bleed <= 0.02:
 		tools.do_action()
@@ -482,6 +494,12 @@ func _process_main(delta: float) -> void:
 	leg_l.rotation.z = 0.0
 	leg_r.rotation.z = 0.0
 	var mag := minf(move_vec.length(), 1.0)
+	swamp_depth = main.swamp_depth_at(position.x, position.z) if main.has_method("swamp_depth_at") else 0.0
+	if swamp_depth > 0.22 and not airborne and depth < 0.6:
+		var exertion := 0.12 + mag * 0.34
+		swamp_sink = minf(1.3, swamp_sink + delta * swamp_depth * exertion)
+	else:
+		swamp_sink = maxf(0.0, swamp_sink - delta * 0.045)
 	var n: Vector3 = main.ground_normal(position.x, position.z)
 	var down := Vector3(n.x, 0, n.z)
 	var slope := down.length() / maxf(n.y, 0.01)
@@ -500,7 +518,10 @@ func _process_main(delta: float) -> void:
 		var stam: float = main.stamina
 		running = mag > 0.92 and stam > 0.08 and (tools == null or tools.can_run()) and not crouch
 		var sp_base := run_speed if running else speed
-		var wf := 1.0
+		var wf := 1.0 / (1.0 + swamp_depth * 1.15)
+		if swamp_sink > 0.72 and int(main.inv.get("branch", 0)) <= 0:
+			wf *= lerpf(0.22, 0.035, clampf((swamp_sink - 0.72) / 0.58, 0.0, 1.0))
+			running = false
 		if depth > 1.25:
 			wf = 0.45
 			running = false
@@ -657,7 +678,7 @@ func _process_main(delta: float) -> void:
 	torso.rotation.y = -sw * 0.09 * run_mag
 	torso.rotation.z = sw * 0.03 * run_mag - turn
 	head_n.rotation.y = sw * 0.05 * run_mag
-	body.position.y = (absf(cw) - 0.6) * 0.05 * run_mag + minf(slope, 1.0) * 0.08 - cl * 0.15
+	body.position.y = (absf(cw) - 0.6) * 0.05 * run_mag + minf(slope, 1.0) * 0.08 - cl * 0.15 - swamp_sink * 0.42
 	# хромота: при ране ноги корпус проседает на больную сторону
 	var limp: float = 1.0 - main.move_factor()
 	if limp > 0.05:
@@ -677,7 +698,7 @@ func _update_sink(delta: float) -> void:
 func _sink_slow() -> float:
 	if main.feet == null:
 		return 1.0
-	return main.feet.slow(Vector2(sink, mud_sink))
+	return main.feet.slow(Vector2(sink, mud_sink)) / (1.0 + swamp_sink * 1.8)
 
 ## Падение: руки в стороны и вверх, ноги поджаты. Приземление: глубокий присед.
 func _pose_fall_land() -> void:
