@@ -1099,59 +1099,68 @@ func _pk_part(parent: Node3D, mesh: Mesh, m: Material, pos: Vector3, rot: Vector
 	parent.add_child(mi)
 	return mi
 
-## Короб: корпус 34×40×20 см, крышка со скаткой, котелок сбоку, две лямки.
+## Мягкий заплечный вещмешок: объёмный корпус из ткани, горловина, клапан,
+## кожаные усиления, прошитые швы и регулируемые плечевые ремни.
 func _build_pack(sk: Skeleton3D, ty: float, wood: Material, roll: Material, metal: Material, belt: Material) -> void:
-	var bark := HS.mat(Color(1, 1, 1), _bark_tex())
-	var rim := HS.mat(Color(0.42, 0.3, 0.18))
-	var inner := HS.mat(Color(0.12, 0.08, 0.05))
+	var canvas := HS.mat(Color(0.48, 0.31, 0.18))
+	var canvas_dark := HS.mat(Color(0.29, 0.19, 0.12))
+	var leather := HS.mat(Color(0.19, 0.12, 0.075))
+	var seam := HS.mat(Color(0.72, 0.55, 0.34))
+	var inner := HS.mat(Color(0.12, 0.085, 0.055))
 	pack = Node3D.new()
-	pack.name = "Pack"
-	var body_m := BoxMesh.new()
-	body_m.size = Vector3(0.34, 0.4, 0.2)
-	_pk_part(pack, body_m, bark, Vector3(0, 0.2, 0))
-	# обвязка: обод сверху и снизу, планки по углам
-	for yy in [0.015, 0.385]:
-		var rb := BoxMesh.new()
-		rb.size = Vector3(0.355, 0.03, 0.215)
-		_pk_part(pack, rb, rim, Vector3(0, yy, 0))
+	pack.name = "ClothTravelSack"
+	# Мешок имеет мягкое округлое сечение, расширяется в середине и стягивается у горловины.
+	var sack := _loft([
+		[0.015, 0.075, 0.065, 0.0],
+		[0.055, 0.125, 0.085, 0.0],
+		[0.15, 0.16, 0.105, 0.0],
+		[0.27, 0.155, 0.105, 0.0],
+		[0.345, 0.125, 0.09, 0.0],
+		[0.385, 0.105, 0.078, 0.0]
+	], 24, true, true)
+	_pk_part(pack, sack, canvas, Vector3(0, 0, 0))
+	# Тёмное дно и усиленная кожаная нижняя окантовка.
+	_pk_part(pack, _tor(0.105, 0.125), leather, Vector3(0, 0.045, 0), Vector3.ZERO, Vector3(1, 0.42, 0.82))
+	# Горловина: ткань собирается под шнуром, а не заканчивается жёсткой крышкой.
+	_pk_part(pack, _tor(0.078, 0.105), canvas_dark, Vector3(0, 0.374, 0), Vector3.ZERO, Vector3(1, 0.55, 0.78))
+	_pk_part(pack, _tor(0.087, 0.096), leather, Vector3(0, 0.39, 0), Vector3.ZERO, Vector3(1, 0.42, 0.78))
+	_pk_part(pack, _cyl(0.009, 0.009, 0.22), seam, Vector3(0.105, 0.375, 0.0), Vector3(0, 0, PI * 0.5))
+	# Два вертикальных шва и короткие поперечные закрепки на передней стороне.
 	for sx in [-1.0, 1.0]:
-		for sz in [-1.0, 1.0]:
-			var cb := BoxMesh.new()
-			cb.size = Vector3(0.02, 0.38, 0.02)
-			_pk_part(pack, cb, rim, Vector3(sx * 0.17, 0.2, sz * 0.1))
-	# нутро: тёмное дно у верха и пара вещей (видны, когда крышка открыта)
-	var im := BoxMesh.new()
-	im.size = Vector3(0.31, 0.01, 0.17)
-	_pk_part(pack, im, inner, Vector3(0, 0.392, 0))
-	_pk_part(pack, _cyl(0.012, 0.012, 0.22), wood, Vector3(0.05, 0.4, 0.02), Vector3(0, 0.4, PI * 0.5))
-	_pk_part(pack, _sph(), HS.mat(Color(0.5, 0.5, 0.48)), Vector3(-0.08, 0.398, -0.03), Vector3.ZERO, Vector3(0.07, 0.04, 0.06))
-	_pk_part(pack, _sph(), HS.mat(Color(0.55, 0.12, 0.14)), Vector3(-0.1, 0.4, 0.04), Vector3.ZERO, Vector3(0.05, 0.04, 0.05))
-	# котелок на ремешке сбоку
-	_pk_part(pack, _cyl(0.06, 0.055, 0.1), metal, Vector3(0.23, 0.2, 0.0))
-	_pk_part(pack, _tor(0.055, 0.065), belt, Vector3(0.23, 0.26, 0.0), Vector3(0, 0, PI * 0.5), Vector3(1, 1, 0.6))
-	# крышка: петли у дальней стенки (−Z), край к спине (+Z); на ней приторочена скатка
+		_pk_part(pack, _cyl(0.006, 0.006, 0.27), seam, Vector3(sx * 0.105, 0.19, 0.092), Vector3(0, 0, PI * 0.5))
+		for yy in [0.075, 0.31]:
+			_pk_part(pack, _cyl(0.004, 0.004, 0.09), seam, Vector3(sx * 0.105, yy, 0.092), Vector3(PI * 0.5, 0, 0))
+	# Кожаные вертикальные накладки и ремни, охватывающие мешок.
+	for sx in [-1.0, 1.0]:
+		var strap := BoxMesh.new()
+		strap.size = Vector3(0.035, 0.34, 0.012)
+		_pk_part(pack, strap, leather, Vector3(sx * 0.115, 0.2, 0.096))
+		var buckle := _tor(0.018, 0.024)
+		_pk_part(pack, buckle, metal, Vector3(sx * 0.115, 0.29, 0.108), Vector3(PI * 0.5, 0, 0), Vector3(1, 1, 0.35))
+	# Скатка/плед сверху и небольшой котелок сбоку сохраняют походный силуэт.
+	_pk_part(pack, _cyl(0.065, 0.065, 0.32), roll, Vector3(0, 0.425, -0.015), Vector3(0, 0, PI * 0.5))
+	_pk_part(pack, _cyl(0.052, 0.048, 0.09), metal, Vector3(0.205, 0.19, 0.0))
+	_pk_part(pack, _tor(0.05, 0.058), leather, Vector3(0.205, 0.235, 0.0), Vector3(0, 0, PI * 0.5), Vector3(1, 1, 0.55))
+	# Мягкий клапан на шарнире: его можно поднять при открытии вещмешка.
 	pack_lid = Node3D.new()
-	pack_lid.position = Vector3(0, 0.4, -0.105)
+	pack_lid.position = Vector3(0, 0.365, -0.075)
 	pack.add_child(pack_lid)
-	var lm := BoxMesh.new()
-	lm.size = Vector3(0.36, 0.035, 0.225)
-	_pk_part(pack_lid, lm, bark, Vector3(0, 0.017, 0.11))
-	var lr := BoxMesh.new()
-	lr.size = Vector3(0.37, 0.02, 0.03)
-	_pk_part(pack_lid, lr, rim, Vector3(0, 0.02, 0.215))
-	_pk_part(pack_lid, _cyl(0.07, 0.07, 0.46), roll, Vector3(0, 0.1, 0.1), Vector3(0, 0, PI * 0.5))
-	for sx in [-1.0, 1.0]:
-		_pk_part(pack_lid, _tor(0.068, 0.08), belt, Vector3(sx * 0.14, 0.1, 0.1), Vector3(0, 0, PI * 0.5))
-	# лямки: петли со стороны спины (+Z); снятая лямка повисает и прижимается к коробу
-	var sm := _strap_mesh(0.26, 0.36, 0.05)
+	var flap := _loft([
+		[0.0, 0.105, 0.025, 0.0],
+		[0.025, 0.14, 0.035, 0.0],
+		[0.045, 0.13, 0.03, 0.0]
+	], 20, true, true)
+	_pk_part(pack_lid, flap, canvas_dark, Vector3(0, 0.025, -0.015))
+	_pk_part(pack_lid, _tor(0.105, 0.115), leather, Vector3(0, 0.035, -0.015), Vector3.ZERO, Vector3(1, 0.35, 0.65))
+	# Лямки — широкие мягкие петли с кожаными концами; сохраняется прежняя IK-анимация снятия.
+	var sm := _strap_mesh(0.26, 0.36, 0.055)
 	for sx in [-1.0, 1.0]:
 		var sn := Node3D.new()
 		sn.position = Vector3(-sx * 0.12, 0.2, 0.1)
 		pack.add_child(sn)
-		_pk_part(sn, sm, belt, Vector3.ZERO)
+		_pk_part(sn, sm, leather, Vector3.ZERO)
 		pack_straps.append(sn)
-	pack_straps.reverse()  # [левая (+X), правая (−X)]
-	# крепление к спине
+	pack_straps.reverse()
 	var bi := sk.find_bone("spine_03")
 	pack_back = BoneAttachment3D.new()
 	pack_back.bone_name = "spine_03"
@@ -1167,8 +1176,6 @@ func _build_pack(sk: Skeleton3D, ty: float, wood: Material, roll: Material, meta
 	_pk_mod = PackMod.new()
 	_pk_mod.hero = self
 	sk.add_child(_pk_mod)
-
-## Можно ли сейчас снять короб.
 func can_open_pack() -> bool:
 	return state == "walk" and pack != null and not airborne and swimb < 0.2 and depth < 0.3 and land_t <= 0.0
 
