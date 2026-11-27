@@ -749,9 +749,9 @@ func tick(delta: float) -> void:
 				_new_wander()
 		if climb_h > 0.0 and tree != Vector3.ZERO:
 			var climb_progress := clampf(climb_h / maxf(tree_top, 0.1), 0.0, 1.0)
-			var climb_angle: float = tree_orbit_angle + smoothstep(0.0, 1.0, climb_progress) * TAU * 0.58 + sin(climb_progress * TAU * 2.0) * 0.025
+			var climb_angle: float = tree_orbit_angle + smoothstep(0.0, 1.0, climb_progress) * TAU * 1.35 + sin(climb_progress * TAU * 3.0) * 0.018
 			var radial := Vector2(sin(climb_angle), cos(climb_angle))
-			var bark_offset: float = main.tree_radius_at(tree) + maxf(0.12, _obstacle_radius() * 0.55)
+			var bark_offset: float = main.tree_radius_at(tree) + maxf(0.08, _obstacle_radius() * 0.42)
 			position.x = tree.x + radial.x * bark_offset
 			position.z = tree.z + radial.y * bark_offset
 			heading = atan2(tree.x - position.x, tree.z - position.z)
