@@ -363,21 +363,26 @@ func craft(id: String) -> bool:
 	var rc := recipe(id)
 	var output_count := int(EXTRA_OUT.get(id, ITEMS.get(id, {}).get("out", 1)))
 	var creative := main != null and bool(main.get("creative_mode"))
+	# Транзакция крафта: проверяем вместимость до списания, затем фиксируем
+	# снимок инвентаря и откатываем его целиком при любом отказе выдачи.
+	var before: Dictionary = main.inv.duplicate(true)
 	if not creative:
-		# Сначала считаем итоговый вес. Рецепт не должен списать материалы,
-		# а затем потерять готовый предмет из-за переполненного короба.
 		var consumed_weight := 0.0
 		for k: String in rc:
 			consumed_weight += float(ITEMS.get(k, {}).get("w", 0.3)) * float(rc[k])
 		var output_weight := float(ITEMS.get(id, {}).get("w", 0.3)) * float(output_count)
 		if weight() - consumed_weight + output_weight > CAPACITY + 0.001:
-			if main != null:
-				main._say("В коробе нет места для готового предмета")
+			main._say("В коробе нет места для готового предмета")
 			return false
 		for k: String in rc:
 			if not remove_item(k, int(rc[k])):
+				main.inv = before
+				main.hero.tools.sync()
 				return false
-	add_item(id, output_count)  # core: out из items.gd
+	if not add_item(id, output_count):
+		main.inv = before
+		main.hero.tools.sync()
+		return false
 	main._say("Сделано: " + _name(id).to_lower())
 	if main.sfx != null:
 		main.sfx.play_at("chop" if id == "flint" else "cut", main.hero.position + Vector3(0, 0.6, 0), -2.0, 1.3)
