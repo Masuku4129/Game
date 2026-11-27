@@ -240,20 +240,26 @@ func _create_record(c: Vector2i) -> Dictionary:
 	rng.seed = _seed(c)
 	var x := (float(c.x) + 0.5) * CHUNK_SIZE
 	var z := (float(c.y) + 0.5) * CHUNK_SIZE
+	var elevation := float(main.height(x, z))
+	var wetness := float(main.wet_k(x, z, elevation))
+	var forest_density := float(main.forest_density(x, z))
+	var slope := 1.0 - float(main.normal_at(x, z).y)
+	var river_distance := float(main.river_dist(x, z))
+	var biome := int(main.zone(x, z))
+	var ecology := {
+		"wetness": wetness, "forest_density": forest_density, "slope": slope,
+		"river_distance": river_distance,
+		"forest_class": "dense" if forest_density > 0.72 else "woodland" if forest_density > 0.38 else "open",
+		"terrain_class": "steep" if slope > 0.42 else "rolling" if slope > 0.16 else "flat",
+		"habitat": "wetland" if biome == 2 or wetness > 0.68 else "burned" if biome == 1 else "windfall" if biome == 4 else "forest" if forest_density > 0.38 else "clearing",
+		"water_edge": river_distance < 28.0 or float(main.lake_k(x, z)) > 0.2
+	}
 	return {
-		"coord": [c.x, c.y],
-		"seed": _seed(c),
-		"biome": int(main.zone(x, z)),
-		"elevation": float(main.height(x, z)),
-		"water": float(main.water_level(x, z)),
-		"vegetation_seed": rng.randi(),
-		"resource_state": {},
-		"terrain_delta": {},
-		"structures": [],
-		"animals": [],
-		"explored": false,
-		"loaded": false,
-		"revision": 0
+		"coord": [c.x, c.y], "seed": _seed(c), "biome": biome,
+		"elevation": elevation, "water": float(main.water_level(x, z)),
+		"vegetation_seed": rng.randi(), "ecology": ecology,
+		"resource_state": {}, "terrain_delta": {}, "structures": [], "animals": [],
+		"explored": false, "loaded": false, "revision": 0
 	}
 
 func mark_explored(world_position: Vector3) -> void:
