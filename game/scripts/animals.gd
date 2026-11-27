@@ -475,15 +475,16 @@ func _process(delta: float) -> void:
 			var d2 := Vector2(a.position.x - hp.x, a.position.z - hp.z).length_squared()
 			var was_far: bool = a.far
 			a.far = d2 > NEAR_R * NEAR_R
-			a._sim_tick_interval = NEAR_DT if d2 < MID_R * MID_R else MID_DT
+			a._sim_tick_interval = 0.72 if a.far else (NEAR_DT if d2 < MID_R * MID_R else MID_DT)
 			if was_far and not a.far:
 				a._acc = 0.0
 			var show_r: float = 40.0 if a.kind in ["hare", "squirrel", "beaver"] else SHOW_R
 			a.visible = d2 < show_r * show_r and (not a.dead or a.meat > 0.0) and a.state != "sleep" and a.state != "inlodge"
 			if a.parts.has("ap"):
 				a.parts["ap"].active = a.visible and not a.dead and not a.far
-		# Ближняя симуляция сохраняет прежние интервалы 30/12.5 Гц.
-		if not a.far and a._acc >= a._sim_tick_interval:
+		# Дальняя фауна продолжает менять состояние и перемещаться упрощённым
+		# редким шагом; ближние животные сохраняют 30/12.5 Гц.
+		if a._acc >= a._sim_tick_interval:
 			a.tick(a._acc)
 			a._acc = 0.0
 	# perf: дальние (за NEAR_R) — по кругу, каждый примерно раз в секунду
