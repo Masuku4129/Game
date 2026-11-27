@@ -196,6 +196,7 @@ func _ready() -> void:
 	fps_lbl.add_theme_constant_override("outline_size", 6)
 	fps_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	ui.add_child(fps_lbl)
+	fps_lbl.visible = OS.get_environment("PERF") != ""
 	flash = ColorRect.new()
 	flash.anchor_right = 1.0
 	flash.anchor_bottom = 1.0
