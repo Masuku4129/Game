@@ -1397,14 +1397,25 @@ func find_pick(p: Vector3) -> Array:
 					best = it
 	return best
 
-func _record_resource(kind: String, amount: int = 1) -> void:
+func _record_resource(kind: String, amount: int = 1) -> bool:
 	if amount <= 0:
-		return
+		return false
+	var before := int(inv.get(kind, 0))
 	if inventory != null:
-		inventory.add_item(kind, amount)
+		if not inventory.add_item(kind, amount):
+			return false
 	else:
-		inv[kind] = int(inv.get(kind, 0)) + amount
-	resource_gained[kind] = int(resource_gained.get(kind, 0)) + amount
+		inv[kind] = before + amount
+	var received := int(inv.get(kind, 0)) - before
+	if received != amount:
+		# Защита от частичной выдачи: откатить то, что успело попасть в инвентарь.
+		if received > 0:
+			inv[kind] = before
+			if before <= 0:
+				inv.erase(kind)
+		return false
+	resource_gained[kind] = int(resource_gained.get(kind, 0)) + received
+	return true
 
 func take_pick(it: Array) -> bool:
 	# Подбор — атомарная операция: предмет остаётся в мире, если инвентарь не принимает его.
@@ -1418,14 +1429,21 @@ func take_pick(it: Array) -> bool:
 	if inventory != null and not inventory.can_add(kind):
 		_say("Короб полон")
 		return false
+	# Сначала подтверждаем фактическое получение. Только после этого удаляем
+	# экземпляр из мира — при отказе инвентаря ресурс остаётся доступен.
+	var stored := false
+	if inventory != null and (kind in ["berry", "mushroom", "amanita"] or kind not in ["berry", "mushroom", "amanita"]):
+		stored = _record_resource(kind, 1)
+		if not stored:
+			_say("Не удалось положить ресурс в короб")
+			return false
 	(pickables[k] as Array).erase(it)
 	if (pickables[k] as Array).is_empty():
 		pickables.erase(k)
 	var mm: MultiMesh = it[2]
 	mm.set_instance_transform(it[3], Transform3D(Basis().scaled(Vector3(0.001, 0.001, 0.001)), q - Vector3(0, 5, 0)))
-	# съедобное кладём в короб, если он доступен; камни/хворост фиксируются тем же регистратором.
+	# Ягоды и грибы в коробе не съедаются автоматически. Без инвентаря действует прежний сбор. 
 	if inventory != null and kind in ["berry", "mushroom", "amanita"]:
-		_record_resource(kind, 1)
 		_say("+1 %s — в короб" % PICK_NAME.get(kind, kind))
 		return true
 	match kind:
@@ -1442,7 +1460,8 @@ func take_pick(it: Array) -> bool:
 			flash.color.a = 0.25
 			_say("Мухомор! Отравление")
 		_:
-			_record_resource(kind, 1)
+			if inventory == null and not _record_resource(kind, 1):
+				return false
 			_say("+1 %s" % PICK_NAME.get(kind, kind))
 	return true
 
