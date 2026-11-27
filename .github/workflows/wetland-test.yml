@@ -45,7 +45,7 @@ jobs:
         run: |
           mkdir -p /tmp/wetland
           cd game
-          SHOTS=/tmp/wetland timeout 600 xvfb-run -a -s "-screen 0 1920x864x24" godot --rendering-driver vulkan --resolution 1920x864 > /tmp/wetland/gameplay.log 2>&1
+          SHOTS=/tmp/wetland timeout 600 xvfb-run -a -s "-screen 0 1920x864x24" godot --rendering-driver vulkan --resolution 1920x864 --quit-after 180 > /tmp/wetland/gameplay.log 2>&1
           grep -E "SCRIPT ERROR|Parse Error|shot game" /tmp/wetland/gameplay.log
           test -s /tmp/wetland/game_20.png
           test -s /tmp/wetland/game_80.png
