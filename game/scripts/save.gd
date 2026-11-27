@@ -50,11 +50,18 @@ func put_bytes(key: String, b: PackedByteArray) -> void:
 func get_bytes(key: String) -> PackedByteArray:
 	return _bytes.get(key, PackedByteArray())
 
+func _active_path() -> String:
+	return "user://creative_save.json" if main != null and bool(main.get("creative_mode")) else PATH
+
+func _active_bin_path() -> String:
+	return "user://creative_save.bin" if main != null and bool(main.get("creative_mode")) else BIN
+
+
 static func has_save() -> bool:
 	return FileAccess.file_exists(PATH)
 
 static func delete_save() -> void:
-	for p: String in [PATH, BIN]:
+	for p: String in [PATH, BIN, "user://creative_save.json", "user://creative_save.bin"]:
 		if FileAccess.file_exists(p):
 			DirAccess.remove_absolute(ProjectSettings.globalize_path(p))
 
@@ -73,25 +80,30 @@ func save_game() -> bool:
 		return false
 	var t0 := Time.get_ticks_usec()
 	var d := snapshot()
-	var f := FileAccess.open(PATH + ".tmp", FileAccess.WRITE)
+	var active_path := _active_path()
+	var f := FileAccess.open(active_path + ".tmp", FileAccess.WRITE)
 	if f == null:
 		last_status = "не записать сохранение"
 		return false
 	f.store_string(JSON.stringify(d))
 	f.close()
-	var fb := FileAccess.open(BIN, FileAccess.WRITE)
+	var fb := FileAccess.open(_active_bin_path(), FileAccess.WRITE)
 	if fb != null:
 		fb.store_var(_bytes)
 		fb.close()
-	DirAccess.rename_absolute(ProjectSettings.globalize_path(PATH + ".tmp"), ProjectSettings.globalize_path(PATH))
+	var rename_err := DirAccess.rename_absolute(ProjectSettings.globalize_path(active_path + ".tmp"), ProjectSettings.globalize_path(active_path))
+	if rename_err != OK:
+		last_status = "не удалось завершить запись сохранения"
+		return false
 	last_status = "сохранено за %.0f мс" % ((Time.get_ticks_usec() - t0) / 1000.0)
 	print("SAVE ", last_status)
 	return true
 
 func load_game() -> bool:
-	if not has_save():
+	var active_path := _active_path()
+	if not FileAccess.file_exists(active_path):
 		return false
-	var f := FileAccess.open(PATH, FileAccess.READ)
+	var f := FileAccess.open(active_path, FileAccess.READ)
 	if f == null:
 		return false
 	var txt := f.get_as_text()
@@ -101,8 +113,9 @@ func load_game() -> bool:
 		push_warning("save.json повреждён")
 		return false
 	_bytes = {}
-	if FileAccess.file_exists(BIN):
-		var fb := FileAccess.open(BIN, FileAccess.READ)
+	var active_bin := _active_bin_path()
+	if FileAccess.file_exists(active_bin):
+		var fb := FileAccess.open(active_bin, FileAccess.READ)
 		var v: Variant = fb.get_var()
 		fb.close()
 		if v is Dictionary:
