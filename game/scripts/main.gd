@@ -2225,6 +2225,14 @@ func _core_setup(_ui: CanvasLayer) -> void:
 			saver.load_game()
 		saver.enabled = auto != ""
 		return
+	# Новая игра перезагружает сцену ради применения нового seed до генерации мира.
+	# Флаг, созданный стартовым меню, запрещает повторно показывать меню и оставлять
+	# дерево на паузе после этой перезагрузки.
+	if FileAccess.file_exists("user://pending_new_game.flag"):
+		DirAccess.remove_absolute(ProjectSettings.globalize_path("user://pending_new_game.flag"))
+		get_tree().paused = false
+		saver.enabled = true
+		return
 	var menu: Control = preload("res://scripts/start_menu.gd").new()
 	menu.main = self
 	ui.add_child(menu)
