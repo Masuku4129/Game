@@ -46,6 +46,7 @@ jobs:
             echo "No model changes."
           else
             git commit -m "Regenerate textured Taiga environment GLB models"
+            git pull --rebase origin "$GITHUB_REF_NAME"
             git push
           fi
       - name: Upload importable GLB pack
