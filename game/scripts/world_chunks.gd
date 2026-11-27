@@ -19,8 +19,9 @@ var _refresh := 0.0
 var _sequence := 0
 var terrain_nodes: Dictionary = {}
 var tree_mmis: Dictionary = {}
+var prop_mmis: Dictionary = {}
 var blocker_records: Dictionary = {}
-var _tree_variant_cache: Dictionary = {}
+var _model_variant_cache: Dictionary = {}
 const STREAM_TREE_KINDS := ["spruce", "pine", "birch", "larch", "aspen", "fir", "cedar", "alder", "willow", "rowan"]
 
 func _process(delta: float) -> void:
@@ -79,6 +80,7 @@ func _process_queue() -> void:
 		if not _inside_base_world(c):
 			_build_terrain_chunk(c)
 			_build_tree_cover(c)
+			_build_understory(c)
 		budget -= 1
 
 func _create_record(c: Vector2i) -> Dictionary:
@@ -264,10 +266,10 @@ func _build_terrain_chunk(c: Vector2i) -> void:
 	add_child(root)
 	terrain_nodes[k] = root
 
-func _tree_variants(kind: String) -> Array:
-	if not _tree_variant_cache.has(kind):
-		_tree_variant_cache[kind] = main._variants(kind)
-	return _tree_variant_cache[kind]
+func _model_variants(kind: String) -> Array:
+	if not _model_variant_cache.has(kind):
+		_model_variant_cache[kind] = main._variants(kind)
+	return _model_variant_cache[kind]
 
 func _build_tree_cover(c: Vector2i) -> void:
 	var k := _key(c)
@@ -309,7 +311,7 @@ func _build_tree_cover(c: Vector2i) -> void:
 				kind = "cedar"
 			elif pick < 0.87:
 				kind = "fir"
-		var variants: Array = _tree_variants(kind)
+		var variants: Array = _model_variants(kind)
 		if variants.is_empty():
 			continue
 		var variant_index := rng.randi_range(0, variants.size() - 1)
@@ -326,7 +328,7 @@ func _build_tree_cover(c: Vector2i) -> void:
 		var group: Dictionary = groups[bucket_key]
 		var kind := String(group.kind)
 		var vi := int(group.variant)
-		var variants: Array = _tree_variants(kind)
+		var variants: Array = _model_variants(kind)
 		var mesh: Mesh = variants[vi][0]
 		var transforms: Array = group.transforms
 		if transforms.is_empty():
@@ -355,6 +357,133 @@ func _build_tree_cover(c: Vector2i) -> void:
 			blockers_for_chunk.append([Vector2i(floori(p.x / 8.0), floori(p.z / 8.0)), Vector3(p.x, p.z, radius)])
 	tree_mmis[k] = created
 	blocker_records[k] = blockers_for_chunk
+
+func _build_understory(c: Vector2i) -> void:
+	var k := _key(c)
+	if prop_mmis.has(k) or main == null:
+		return
+	var rng := RandomNumberGenerator.new()
+	rng.seed = _seed(c) ^ 0x6C8E9CF5
+	var groups: Dictionary = {}
+	# Низкорослые GLB-модели заполняют просветы между деревьями.
+	# Плотность привязана к лесу и болотному микрорельефу, а не к квадратному биому.
+	for attempt in range(260):
+		var wx := float(c.x) * CHUNK_SIZE + rng.randf_range(1.0, CHUNK_SIZE - 1.0)
+		var wz := float(c.y) * CHUNK_SIZE + rng.randf_range(1.0, CHUNK_SIZE - 1.0)
+		var density: float = main.forest_density(wx, wz)
+		var h: float = main.height(wx, wz)
+		var zone_id: int = main.zone(wx, wz)
+		var slope: float = main.normal_at(wx, wz).y
+		if h < main.WATER_Y + 0.45 or main.river_dist(wx, wz) < 3.2 or main.lake_k(wx, wz) > 0.65:
+			continue
+		var kind := "fern"
+		if zone_id == 2:
+			var wet_pick := rng.randf()
+			if wet_pick < 0.24:
+				kind = "sedge"
+			elif wet_pick < 0.42:
+				kind = "reeds"
+			elif wet_pick < 0.62:
+				kind = "moss"
+			elif wet_pick < 0.78:
+				kind = "fern"
+			elif wet_pick < 0.9:
+				kind = "bush"
+			else:
+				kind = "mushroom"
+		else:
+			if rng.randf() > clampf(0.18 + density * 0.78, 0.0, 0.96):
+				continue
+			var pick := rng.randf()
+			if slope < 0.72:
+				kind = "rock"
+			elif pick < 0.23:
+				kind = "fern"
+			elif pick < 0.42:
+				kind = "bush"
+			elif pick < 0.53:
+				kind = "hazel"
+			elif pick < 0.62:
+				kind = "dogrose"
+			elif pick < 0.76:
+				kind = "moss"
+			elif pick < 0.85:
+				kind = "mushroom"
+			elif pick < 0.94:
+				kind = "rock"
+			else:
+				kind = "stump"
+		var variants: Array = _model_variants(kind)
+		if variants.is_empty():
+			continue
+		var vi := rng.randi_range(0, variants.size() - 1)
+		var bucket := "%s:%d" % [kind, vi]
+		if not groups.has(bucket):
+			groups[bucket] = {"kind": kind, "variant": vi, "transforms": []}
+		var scale := rng.randf_range(0.72, 1.28)
+		if kind in ["rock", "stump"]:
+			scale = rng.randf_range(0.65, 1.45)
+		var yaw := rng.randf_range(-PI, PI)
+		var xf := Transform3D(Basis(Vector3.UP, yaw).scaled(Vector3.ONE * scale), Vector3(wx, h, wz))
+		groups[bucket].transforms.append(xf)
+	var created: Array = []
+	for bucket: String in groups:
+		var group: Dictionary = groups[bucket]
+		var kind := String(group.kind)
+		var vi := int(group.variant)
+		var variants: Array = _model_variants(kind)
+		var transforms: Array = group.transforms
+		if transforms.is_empty():
+			continue
+		var mm := MultiMesh.new()
+		mm.transform_format = MultiMesh.TRANSFORM_3D
+		mm.use_custom_data = true
+		mm.mesh = variants[vi][0]
+		mm.instance_count = transforms.size()
+		for i in transforms.size():
+			mm.set_instance_transform(i, transforms[i])
+			mm.set_instance_custom_data(i, Color(90.0, 0.0, 0.0, 0.0))
+		var mmi := MultiMeshInstance3D.new()
+		mmi.name = "StreamUnderstory_%s_%d" % [kind, vi]
+		mmi.multimesh = mm
+		mmi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		add_child(mmi)
+		created.append(mm)
+		# Подключаем ягоды/грибы/валежник к штатным системам сбора и инструментов.
+		main._place_cell_records(mm, transforms, [kind], vi, variants, false, "mushroom" if kind == "mushroom" else "")
+	prop_mmis[k] = created
+
+func _remove_prop_cover(k: String) -> void:
+	var meshes: Array = prop_mmis.get(k, [])
+	if meshes.is_empty():
+		return
+	for mm: MultiMesh in meshes:
+		for node in get_children():
+			if node is MultiMeshInstance3D and node.multimesh == mm:
+				node.queue_free()
+		for cell_key in main.pickables.keys():
+			var picks: Array = main.pickables[cell_key]
+			for i in range(picks.size() - 1, -1, -1):
+				if picks[i].size() > 2 and picks[i][2] == mm:
+					picks.remove_at(i)
+			if picks.is_empty():
+				main.pickables.erase(cell_key)
+		for cell_key in main.res_spots.keys():
+			var spots: Array = main.res_spots[cell_key]
+			for i in range(spots.size() - 1, -1, -1):
+				var p: Vector3 = spots[i][0]
+				if floori(p.x / CHUNK_SIZE) == int(k.split(",")[0]) and floori(p.z / CHUNK_SIZE) == int(k.split(",")[1]):
+					spots.remove_at(i)
+			if spots.is_empty():
+				main.res_spots.erase(cell_key)
+		for cell_key in main.fallen_spots.keys():
+			var fallen: Array = main.fallen_spots[cell_key]
+			for i in range(fallen.size() - 1, -1, -1):
+				if fallen[i].get("mm") == mm:
+					fallen.remove_at(i)
+			if fallen.is_empty():
+				main.fallen_spots.erase(cell_key)
+	prop_mmis.erase(k)
 
 func _remove_tree_cover(k: String) -> void:
 	var meshes: Array = tree_mmis.get(k, [])
@@ -405,6 +534,7 @@ func _unload_distant() -> void:
 		rec["loaded"] = false
 		persistent[k] = rec
 		_remove_tree_cover(k)
+		_remove_prop_cover(k)
 		_remove_terrain_chunk(k)
 		active.erase(k)
 	_prune()
