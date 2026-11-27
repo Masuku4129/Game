@@ -187,11 +187,14 @@ func confirm() -> bool:
 	var d: Dictionary = camp.DEFS[kind]
 	if kind != "cabin":
 		camp.pay(d["cost"])
-	camp.place(kind, gpos, gyaw)
-	main._say(("Заложена стройка: " if kind == "cabin" else "Построено: ") + String(d["name"]).to_lower())
+	var placed: Dictionary = camp.place(kind, gpos, gyaw)
+	# В творческом режиме изба должна появляться готовой, а не оставаться площадкой.
+	if kind == "cabin" and bool(main.get("creative_mode")):
+		camp.start_building(placed)
+	main._say(("Построено: " if kind != "cabin" or bool(main.get("creative_mode")) else "Заложена стройка: ") + String(d["name"]).to_lower())
 	var k := kind
 	select("")
-	if k == "cabin":
+	if k == "cabin" and not bool(main.get("creative_mode")):
 		main._say("Вносите брёвна, мох, глину, доски и камни на стройку")
 	return true
 
