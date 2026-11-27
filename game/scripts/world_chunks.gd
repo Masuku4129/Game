@@ -276,22 +276,6 @@ func save_map_cell(world_x: float, world_z: float, cell_key: String, data: Dicti
 	rec["revision"] = int(rec.get("revision", 0)) + 1
 	persistent[k] = rec
 
-func save_map_cells(chunk_coord: Vector2i, cells_to_add: Dictionary) -> void:
-	if cells_to_add.is_empty():
-		return
-	var k := _key(chunk_coord)
-	if not persistent.has(k):
-		persistent[k] = _create_record(chunk_coord)
-	var rec: Dictionary = persistent[k]
-	var cells: Dictionary = rec.get("map_cells", {})
-	for cell_key in cells_to_add:
-		if not cells.has(cell_key):
-			cells[cell_key] = cells_to_add[cell_key].duplicate(true)
-	rec["map_cells"] = cells
-	rec["explored"] = true
-	rec["revision"] = int(rec.get("revision", 0)) + 1
-	persistent[k] = rec
-
 func read_map_cells(chunk_coord: Vector2i) -> Dictionary:
 	var rec: Dictionary = persistent.get(_key(chunk_coord), {})
 	var cells: Variant = rec.get("map_cells", {})
