@@ -100,9 +100,11 @@ func _new() -> void:
 	# Новая игра должна получить другой seed ещё до генерации рельефа и растительности.
 	var rng := RandomNumberGenerator.new()
 	rng.randomize()
-	var seed_value := int(rng.randi() & 0x7fffffff)
-	if seed_value == 0:
-		seed_value = int(Time.get_unix_time_from_system())
+	var previous_seed := int(main.map_seed) if main != null else 0
+	var seed_value := rng.randi_range(1, 2147483646)
+	# Даже при повторном нажатии «Новая игра» ядро мира гарантированно меняется.
+	while seed_value == previous_seed:
+		seed_value = rng.randi_range(1, 2147483646)
 	var seed_file := FileAccess.open("user://pending_world_seed.txt", FileAccess.WRITE)
 	if seed_file != null:
 		seed_file.store_string(str(seed_value))
