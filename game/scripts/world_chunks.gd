@@ -134,7 +134,7 @@ func mark_explored(world_position: Vector3) -> void:
 	persistent[k] = rec
 
 func write_state(world_position: Vector3, section: String, state: Dictionary) -> void:
-	if section not in ["resource_state", "tree_state", "terrain_delta", "structures", "animals"]:
+	if section not in ["resource_state", "tree_state", "fallen_state", "terrain_delta", "structures", "animals"]:
 		return
 	var c := Vector2i(floori(world_position.x / CHUNK_SIZE), floori(world_position.z / CHUNK_SIZE))
 	var k := _key(c)
