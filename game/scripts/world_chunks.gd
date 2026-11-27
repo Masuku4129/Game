@@ -752,7 +752,10 @@ func _build_tree_cover(c: Vector2i) -> void:
 		var bucket_key := "%s:%d" % [kind, variant_index]
 		if not groups.has(bucket_key):
 			groups[bucket_key] = {"kind": kind, "variant": variant_index, "transforms": []}
-		var scale := rng.randf_range(0.62, 1.52)
+		# Broad age/size spread: saplings and mature canopy trees share the forest.
+		var scale := rng.randf_range(0.54, 1.66)
+		if rng.randf() < 0.035:
+			scale = rng.randf_range(1.68, 1.92)
 		var yaw := rng.randf_range(-PI, PI)
 		var xf := Transform3D(Basis(Vector3.UP, yaw).scaled(Vector3.ONE * scale), Vector3(wx, h, wz))
 		groups[bucket_key].transforms.append(xf)
