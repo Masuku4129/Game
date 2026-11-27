@@ -805,6 +805,7 @@ func tick(delta: float) -> void:
 		# Nearby animal spacing prevents crowding/overlap during otherwise obstacle-safe
 		# steering, while allowing members of the same herd to stay comparatively close.
 		var neighbors: Array = mgr.near(position, maxf(3.0, body_len * 1.8)) if mgr != null else []
+		var avoid_strength := 1.0 if state in ["flee", "chase", "charge"] else 0.62
 		for off in offsets:
 			var candidate: float = lerp_angle(heading, desired, 0.35) + float(off)
 			var cd := Vector3(sin(candidate), 0.0, cos(candidate))
@@ -822,7 +823,7 @@ func tick(delta: float) -> void:
 				var min_sep := (body_len + float(other.parts.get("L", 1.0))) * 0.22
 				if sep < min_sep:
 					var same_group := group >= 0 and group == other.group
-					score -= (1.0 if same_group else 1.65) * (1.0 - clampf(sep / maxf(min_sep, 0.01), 0.0, 1.0))
+					score -= avoid_strength * (0.55 if same_group else 1.4) * (1.0 - clampf(sep / maxf(min_sep, 0.01), 0.0, 1.0))
 			if score > best_score:
 				best_score = score
 				chosen = candidate
