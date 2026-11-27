@@ -1363,6 +1363,9 @@ func from_save(d: Dictionary) -> void:
 				f.pivot.basis = Basis(f.axis, f.th)
 			"down":
 				f.phase = "down"
+				f.top.visible = true
+				f.upper.visible = false
+				f.stump.visible = true
 				f.th = f.th_g
 				f.pivot.basis = Basis(f.axis, f.th)
 				f._lay()
