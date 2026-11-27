@@ -123,6 +123,10 @@ func populate_stream_chunk(coord: Vector2i, chunk_seed: int) -> void:
 	rng.seed = chunk_seed ^ 0x35A91D7
 	var origin := Vector3(float(coord.x) * 64.0, 0.0, float(coord.y) * 64.0)
 	var candidates: Array = []
+	var bog_candidates: Array = []
+	var forest_candidates: Array = []
+	var open_candidates: Array = []
+	var waterside_candidates: Array = []
 	for attempt in range(176):
 		var x := origin.x + rng.randf_range(3.0, 61.0)
 		var z := origin.z + rng.randf_range(3.0, 61.0)
@@ -133,7 +137,20 @@ func populate_stream_chunk(coord: Vector2i, chunk_seed: int) -> void:
 			continue
 		if main.blocked(x, z, 0.8):
 			continue
-		candidates.append(Vector3(x, y, z))
+		var candidate := Vector3(x, y, z)
+		candidates.append(candidate)
+		var local_zone := main.zone(x, z)
+		var local_forest := main.forest_density(x, z)
+		var local_wet := main.wet_k(x, z, y)
+		var river_d := main.river_dist(x, z)
+		if local_zone == 2 or local_wet > 0.62:
+			bog_candidates.append(candidate)
+		if local_forest > 0.48 and local_zone != 1:
+			forest_candidates.append(candidate)
+		if local_forest < 0.38 and local_zone != 2:
+			open_candidates.append(candidate)
+		if river_d < 28.0 and river_d > 5.0:
+			waterside_candidates.append(candidate)
 	if candidates.is_empty():
 		rng.seed = previous_seed
 		return
@@ -146,7 +163,14 @@ func populate_stream_chunk(coord: Vector2i, chunk_seed: int) -> void:
 		herd_kind = "deer" if rng.randf() < 0.65 else "bear"
 	elif rng.randf() < 0.24:
 		herd_kind = "boar"
-	var center_pos: Vector3 = candidates[rng.randi_range(0, candidates.size() - 1)]
+	var habitat_candidates: Array = candidates
+	if herd_kind in ["moose", "boar"] and not bog_candidates.is_empty() and zone_id == 2:
+		habitat_candidates = bog_candidates
+	elif herd_kind in ["deer", "roe"] and not forest_candidates.is_empty():
+		habitat_candidates = forest_candidates
+	elif herd_kind in ["fox", "wolf"] and not open_candidates.is_empty():
+		habitat_candidates = open_candidates
+	var center_pos: Vector3 = habitat_candidates[rng.randi_range(0, habitat_candidates.size() - 1)]
 	var herd_size := rng.randi_range(1, 3) if herd_kind in ["roe", "deer", "boar"] else 1
 	for i in range(herd_size):
 		var p := center_pos
@@ -159,7 +183,8 @@ func populate_stream_chunk(coord: Vector2i, chunk_seed: int) -> void:
 		var small_kind := "hare"
 		if main.forest_density(center_pos.x, center_pos.z) > 0.55 and rng.randf() < 0.55:
 			small_kind = "squirrel"
-		var small_center: Vector3 = candidates[rng.randi_range(0, candidates.size() - 1)]
+		var small_pool: Array = forest_candidates if small_kind == "squirrel" and not forest_candidates.is_empty() else open_candidates if small_kind == "hare" and not open_candidates.is_empty() else candidates
+		var small_center: Vector3 = small_pool[rng.randi_range(0, small_pool.size() - 1)]
 		var small_group := rng.randi_range(1, 3)
 		for small_i in range(small_group):
 			var small_pos := small_center if small_i == 0 else _near(small_center, 4.0)
@@ -180,7 +205,8 @@ func populate_stream_chunk(coord: Vector2i, chunk_seed: int) -> void:
 		extra_kind = "fox"
 		extra_chance = 0.13
 	if extra_kind != "" and rng.randf() < extra_chance:
-		var extra_pos: Vector3 = candidates[rng.randi_range(0, candidates.size() - 1)]
+		var extra_pool: Array = bog_candidates if extra_kind == "wolverine" and not bog_candidates.is_empty() else forest_candidates if extra_kind == "lynx" and not forest_candidates.is_empty() else open_candidates if extra_kind == "fox" and not open_candidates.is_empty() else candidates
+		var extra_pos: Vector3 = extra_pool[rng.randi_range(0, extra_pool.size() - 1)]
 		_spawn(extra_kind, extra_pos, rng.randf_range(0.9, 1.1), group_id + 2, "chunk:%s:extra:%s" % [key, extra_kind])
 	# Лиса или волк появляются редко, чтобы не создавать искусственную плотность хищников.
 	if rng.randf() < 0.20:
