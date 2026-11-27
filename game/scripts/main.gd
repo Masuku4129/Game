@@ -1000,7 +1000,7 @@ func _process(delta: float) -> void:
 		_update_sky()
 		_update_stats(0.25)
 		_core_tick(0.25)  # core
-		weather.apply(veg.fade_list + pv.fade_list, terrain_mat, pv.mats["tuft"], water_mat)
+		weather.apply(veg.fade_list, pv.fade_list, terrain_mat, pv.mats["tuft"], water_mat)
 		if joy != null:
 			var lbl: String = hero.action_label()
 			act_btn.visible = lbl != ""
