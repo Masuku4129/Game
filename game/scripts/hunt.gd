@@ -64,9 +64,13 @@ var carried: Node3D = null       # тушка на поясе героя
 var debug := false
 var _keys := {}
 var rng := RandomNumberGenerator.new()
+var traveler_seed := 0
 
 func setup() -> void:
 	rng.seed = 5150
+	var traveler_rng := RandomNumberGenerator.new()
+	traveler_rng.randomize()
+	traveler_seed = traveler_rng.randi()
 	t0 = now_h()
 	blood = BloodMM.new()
 	add_child(blood)
@@ -85,9 +89,8 @@ func setup() -> void:
 func _spawn_rare_swamp_traveler() -> void:
 	if bool(main.get("colony_mode")):
 		return
-	var map_seed := int(main.get("map_seed"))
 	var srng := RandomNumberGenerator.new()
-	srng.seed = map_seed ^ 0x4A71B
+	srng.seed = traveler_seed
 	if srng.randf() > 0.22:
 		return
 	var half := float(main.SIZE) * 0.5
@@ -1292,10 +1295,11 @@ func to_save() -> Dictionary:
 				var i: int = main.animals.list.find(a)
 				if i >= 0:
 					cs.append({"i": i, "p": float(carc[a]["p"]), "done": bool(carc[a]["done"])})
-	return {"piles": ps, "carc": cs}
+	return {"piles": ps, "carc": cs, "traveler_seed": traveler_seed}
 
 func from_save(d: Dictionary) -> void:
 	var SV = preload("res://scripts/save.gd")
+	traveler_seed = int(d.get("traveler_seed", main.get("map_seed")))
 	for pl: Dictionary in piles:
 		(pl["node"] as Node3D).queue_free()
 	piles.clear()
