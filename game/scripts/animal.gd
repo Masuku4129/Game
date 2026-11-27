@@ -731,7 +731,9 @@ func tick(delta: float) -> void:
 			var candidate: float = lerp_angle(heading, desired, 0.35) + float(off)
 			var cd := Vector3(sin(candidate), 0.0, cos(candidate))
 			var probe: Vector3 = position + cd * step_len
-			if not _can_step(probe, flying):
+			# Sample the full movement segment; mid-distance ticks may be long enough
+			# to otherwise cross narrow obstacles when only the endpoint is checked.
+			if not _can_move_segment(position, probe, flying):
 				continue
 			var align := cd.dot(to.normalized())
 			var turn_cost := absf(wrapf(candidate - heading, -PI, PI)) * 0.08
@@ -744,7 +746,7 @@ func tick(delta: float) -> void:
 			heading = lerp_angle(heading, chosen, minf(1.0, delta * 7.0))
 			var move_dir := Vector3(sin(heading), 0.0, cos(heading))
 			var np2 := position + move_dir * step_len
-			if _can_step(np2, flying):
+			if _can_move_segment(position, np2, flying):
 				position.x = np2.x
 				position.z = np2.z
 				_bump = maxi(0, _bump - 1)
@@ -788,10 +790,24 @@ func _sense() -> float:
 ## Застрял (упирается в склон, ствол или воду и почти не движется) — новая цель в сторону,
 ## откуда пришёл, со сменой направления обхода; долго не выходит — переносится к дому.
 ## Проверка короткого шага: коллизии, вода, границы карты и непроходимый подъём.
+func _obstacle_radius() -> float:
+	# Approximate animal footprint by body length; prevents large species from
+	# squeezing through visually impassable gaps while keeping small animals agile.
+	return clampf(float(parts.get("L", 0.5)) * 0.18, 0.18, 0.75)
+
+func _can_move_segment(from: Vector3, to: Vector3, flying: bool = false) -> bool:
+	var distance := Vector2(to.x - from.x, to.z - from.z).length()
+	var steps := maxi(1, ceili(distance / 0.6))
+	for i in range(1, steps + 1):
+		var sample := from.lerp(to, float(i) / float(steps))
+		if not _can_step(sample, flying):
+			return false
+	return true
+
 func _can_step(p: Vector3, flying: bool = false) -> bool:
 	if absf(p.x) > main.SIZE * 0.5 - 10.0 or absf(p.z) > main.SIZE * 0.5 - 10.0:
 		return false
-	if main.blocked(p.x, p.z, 0.2 * scale_k):
+	if main.blocked(p.x, p.z, _obstacle_radius()):
 		return false
 	var gy: float = main.grid_height(p.x, p.z)
 	# купол камня, бревно или пень выше полуметра — зверь не взбирается, а обходит
