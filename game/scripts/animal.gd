@@ -1102,7 +1102,6 @@ func _animate(delta: float) -> void:
 	var bob := absf(sin(phase * (1.0 if gait != "bound" else 1.0))) * H * (0.03 + r * (0.18 if gait == "bound" else 0.06)) * mv
 	body.position.y = lerpf(H + bob, H * 0.45, rest_k)
 	_breath += delta * (1.4 + r * 4.0)
-	body.rotation.x = lerpf(body.rotation.x, pitch + (sin(phase) * 0.18 * r if gait == "bound" else 0.0), minf(1.0, delta * 8.0))
 	# покачивание корпуса с шагом и дыхание в покое
 	# Небольшое живое движение сохраняется и в неподвижной позе:
 	# дыхание не должно выглядеть как масштабирование всей модели.
