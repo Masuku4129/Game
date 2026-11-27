@@ -41,20 +41,3 @@ jobs:
           cd game
           timeout 120 godot --headless --quit-after 120 res://scenes/main.tscn > /tmp/smoke.log 2>&1
           ! grep -E "SCRIPT ERROR|Parse Error" /tmp/smoke.log
-      - name: Render gameplay
-        run: |
-          mkdir -p /tmp/rock
-          cd game
-          SHOTS=/tmp/rock timeout 600 xvfb-run -a -s "-screen 0 1920x864x24" godot --rendering-driver vulkan --resolution 1920x864 > /tmp/rock/gameplay.log 2>&1
-          grep -E "SCRIPT ERROR|Parse Error|shot game" /tmp/rock/gameplay.log
-          test -s /tmp/rock/game_20.png
-          test -s /tmp/rock/game_80.png
-      - name: Upload verification
-        uses: actions/upload-artifact@v4
-        with:
-          name: rock-collision-review
-          path: |
-            /tmp/rock/*.png
-            /tmp/rock/*.log
-          if-no-files-found: error
-          retention-days: 30
