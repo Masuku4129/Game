@@ -1,0 +1,39 @@
+name: Rock Collision Tests
+on:
+  push:
+    branches: [rock-collision]
+concurrency:
+  group: taiga-rock-collision-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    container:
+      image: barichello/godot-ci:4.3
+    steps:
+      - uses: actions/checkout@v4
+      - name: Import project
+        run: |
+          cd game
+          timeout 300 godot --headless --import 2>&1 | tee /tmp/import.log
+          ! grep -E "Parse Error|Failed loading resource" /tmp/import.log
+      - name: Animal obstacle-clearance regression
+        run: |
+          cd game
+          timeout 120 godot --headless --script res://tests/animal_collision_test.gd
+      - name: Rock footprint regression
+        run: |
+          cd game
+          timeout 180 godot --headless --script res://tests/rock_collision_test.gd
+      - name: Strict script parse
+        run: |
+          cd game
+          for f in scripts/*.gd tests/*.gd; do
+            godot --headless --check-only --script "$f"
+          done
+      - name: Smoke scene
+        run: |
+          cd game
+          timeout 120 godot --headless --quit-after 120 res://scenes/main.tscn > /tmp/smoke.log 2>&1
+          ! grep -E "SCRIPT ERROR|Parse Error" /tmp/smoke.log
