@@ -573,6 +573,19 @@ func _build_understory(c: Vector2i) -> void:
 		created.append(mm)
 		# Подключаем ягоды/грибы/валежник к штатным системам сбора и инструментов.
 		main._place_cell_records(mm, transforms, [kind], vi, variants, false, "mushroom" if kind == "mushroom" else "")
+		if kind in ["fallen0", "fallen1"]:
+			var fallen_state := read_state(Vector3(float(c.x) * CHUNK_SIZE, 0.0, float(c.y) * CHUNK_SIZE), "fallen_state")
+			for i in transforms.size():
+				var origin: Vector3 = transforms[i].origin
+				var fallen_id := "%d_%d" % [int(round(origin.x * 4.0)), int(round(origin.z * 4.0))]
+				var saved_fallen: Variant = fallen_state.get(fallen_id, {})
+				if saved_fallen is Dictionary and bool(saved_fallen.get("done", false)):
+					mm.set_instance_transform(i, Transform3D(Basis().scaled(Vector3(0.0001, 0.0001, 0.0001)), origin - Vector3(0, 500, 0)))
+					for cell_key in main.fallen_spots:
+						for fallen_rec: Dictionary in main.fallen_spots[cell_key]:
+							if fallen_rec.get("mm") == mm and int(fallen_rec.get("i", -1)) == i:
+								fallen_rec["done"] = true
+								break
 		if kind == "rock":
 			var bounds: AABB = (variants[vi][0] as Mesh).get_aabb()
 			for xf: Transform3D in transforms:
