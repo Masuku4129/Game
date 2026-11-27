@@ -307,7 +307,9 @@ func _build_terrain_chunk(c: Vector2i) -> void:
 			var index := z * side + x
 			var h: float = main.height(wx, wz)
 			vertices[index] = Vector3(float(x) * step, h, float(z) * step)
-			var e := 0.5
+			# Нормаль считается с тем же шагом, что у исходной сетки 512×512,
+			# поэтому освещение не выдаёт стык между центральной картой и чанком.
+			var e := step
 			normals[index] = Vector3(
 				main.height(wx - e, wz) - main.height(wx + e, wz),
 				2.0 * e,
