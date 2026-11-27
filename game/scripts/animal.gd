@@ -983,21 +983,32 @@ func _unstick(delta: float) -> void:
 		_bump = 0
 		var escape := heading + rng.randf_range(-PI * 0.75, PI * 0.75)
 		var recovered := false
-		# Recovery targets must be reachable, not merely free at their endpoint.
-		# Use a wider search around dense rocks/structures without teleporting wildlife.
+		var best_probe := Vector3.INF
+		var best_score := -INF
+		# Score all reachable probes instead of accepting the first open angle.
+		# Favor progress toward the current destination while avoiding immediate reversals.
+		var goal_vector := Vector2(target.x - position.x, target.z - position.z)
+		var goal_len := goal_vector.length()
+		var goal_dir := goal_vector.normalized() if goal_len > 0.1 else Vector2(sin(heading), cos(heading))
 		for radius in [2.0, 3.5, 5.0, 7.0, 10.0, 14.0, 18.0, 24.0, 32.0]:
 			for turn in range(32):
 				var ang := escape + TAU * float(turn) / 32.0
 				var probe: Vector3 = position + Vector3(sin(ang), 0.0, cos(ang)) * float(radius)
-				# Dense angular probes let animals escape narrow gaps, rocks and log ends;
-				# the full route is sampled before accepting the destination.
-				if _can_step(probe) and _can_move_segment(position, probe):
-					target = probe
+				if not _can_step(probe) or not _can_move_segment(position, probe):
+					continue
+				var candidate_dir := Vector2(sin(ang), cos(ang))
+				var alignment := candidate_dir.dot(goal_dir)
+				var remaining := Vector2(target.x - probe.x, target.z - probe.z).length()
+				var score := alignment * 4.0 - remaining * 0.35 - radius * 0.025
+				if score > best_score:
+					best_score = score
+				best_probe = probe
 					recovered = true
-					break
-			if recovered:
+			if recovered and radius >= 10.0 and best_score > 1.0:
 				break
-		if not recovered:
+		if recovered:
+			target = best_probe
+		else:
 			state_t = 0.0
 			want = 0.0
 
