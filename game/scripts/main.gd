@@ -1437,7 +1437,7 @@ func take_pick(it: Array) -> bool:
 	# Сначала подтверждаем фактическое получение. Только после этого удаляем
 	# экземпляр из мира — при отказе инвентаря ресурс остаётся доступен.
 	var stored := false
-	if inventory != null and (kind in ["berry", "mushroom", "amanita"] or kind not in ["berry", "mushroom", "amanita"]):
+	if inventory != null:
 		stored = _record_resource(kind, 1)
 		if not stored:
 			_say("Не удалось положить ресурс в короб")
