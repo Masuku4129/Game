@@ -1104,8 +1104,12 @@ func _animate(delta: float) -> void:
 	_breath += delta * (1.4 + r * 4.0)
 	body.rotation.x = lerpf(body.rotation.x, pitch + (sin(phase) * 0.18 * r if gait == "bound" else 0.0), minf(1.0, delta * 8.0))
 	# покачивание корпуса с шагом и дыхание в покое
-	body.rotation.z = sin(phase) * 0.035 * mv * (1.0 - r * 0.5)
-	body.scale = Vector3(1.0 + sin(_breath) * 0.012 * (1.0 - mv), 1.0 + sin(_breath) * 0.018 * (1.0 - mv), 1.0)
+	# Небольшое живое движение сохраняется и в неподвижной позе:
+	# дыхание не должно выглядеть как масштабирование всей модели.
+	var idle_k := 1.0 - mv
+	body.rotation.z = sin(phase) * 0.035 * mv * (1.0 - r * 0.5) + sin(_breath * 0.48) * 0.012 * idle_k
+	body.rotation.x = lerpf(body.rotation.x, pitch + (sin(phase) * 0.18 * r if gait == "bound" else 0.0) + sin(_breath) * 0.008 * idle_k, minf(1.0, delta * 8.0))
+	body.scale = Vector3(1.0 + sin(_breath) * 0.004 * idle_k, 1.0 + sin(_breath) * 0.009 * idle_k, 1.0)
 	if kind == "squirrel" and climb_h > 0.0:
 		body.rotation.x = -1.45
 		body.position.y = H + 0.1
@@ -1123,10 +1127,12 @@ func _animate(delta: float) -> void:
 		var to: Vector3 = main.hero.position - position
 		head.rotation.y = clampf(wrapf(atan2(to.x, to.z) - heading, -PI, PI), -0.9, 0.9)
 	else:
-		head.rotation.y = lerpf(head.rotation.y, 0.0, minf(1.0, delta * 3.0))
+			head.rotation.y = lerpf(head.rotation.y, sin(_breath * 0.31 + float(rng.seed % 13)) * 0.035 * (1.0 - mv), minf(1.0, delta * 2.4))
 	var tail: Node3D = parts["tail"]
-	tail.rotation.x = sin(phase * 2.0) * 0.1 * mv + (0.4 if r > 0.5 else 0.0)
-	tail.rotation.y = sin(Time.get_ticks_msec() * 0.003) * 0.15 * (1.0 - mv)
+	var tail_idle := sin(_breath * 0.72 + float(rng.seed % 17)) * 0.10
+	var tail_gait := sin(phase * 2.0) * 0.1 * mv
+	tail.rotation.x = tail_gait + (0.4 if r > 0.5 else 0.0) + tail_idle * (1.0 - mv)
+	tail.rotation.y = sin(_breath * 0.53 + float(rng.seed % 11)) * 0.12 * (1.0 - mv) + sin(phase * 1.4) * 0.035 * mv
 
 # ---------- Походка зверей на скелете (модели build_taiga) ----------
 # Поворачиваются кости: нога (лопатка/таз, плечо/бедро, предплечье/голень, пясть/плюсна,
