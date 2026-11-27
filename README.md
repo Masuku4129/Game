@@ -7,6 +7,7 @@
 - **Проект Godot:** `game/`
 - **Визуальные требования и критерии приёмки:** [ART_DIRECTION.md](ART_DIRECTION.md)
 - **Полный план реализации 11 направлений:** [WORLD_SURVIVAL_OVERHAUL_2026-11-27.md](WORLD_SURVIVAL_OVERHAUL_2026-11-27.md)
+- **План доведения до 100% по всем 11 направлениям:** [PLAN_TO_100_PERCENT_2026-11-27.md](PLAN_TO_100_PERCENT_2026-11-27.md)
 - **Импортируемые модели окружения:** [game/models/environment](game/models/environment/)
 - **Генератор моделей:** [tools/generate_taiga_models.py](tools/generate_taiga_models.py)
 - **Изолированная галерея GLB:** [game/scenes/asset_gallery.tscn](game/scenes/asset_gallery.tscn)
