@@ -902,6 +902,20 @@ func tick(delta: float) -> void:
 			var align := cd.dot(to.normalized())
 			var turn_cost := absf(wrapf(candidate - heading, -PI, PI)) * 0.10
 			var score := align - turn_cost
+			# Prefer stable, dry footing when several routes are equally viable.
+			# This reduces animals skirting sharp rock ledges and entering deep bog
+			# pockets that pass endpoint checks but are poor corridors for their bodies.
+			var current_ground: float = main.grid_height(position.x, position.z)
+			var probe_ground: float = main.grid_height(probe.x, probe.z)
+			var ground_delta: float = absf(probe_ground - current_ground)
+			score -= minf(1.0, ground_delta / maxf(0.25, step_len + 0.25)) * 0.18
+			var probe_water: float = maxf(0.0, main.water_level(probe.x, probe.z) - probe_ground)
+			score -= minf(1.0, probe_water / 0.5) * 0.28
+			if main.has_method("swamp_depth_at"):
+				var probe_bog: float = main.swamp_depth_at(probe.x, probe.z)
+				var current_bog: float = main.swamp_depth_at(position.x, position.z)
+				if probe_bog > current_bog + 0.04:
+					score -= minf(1.0, probe_bog / 0.9) * 0.32
 			for other in neighbors:
 				if other == self or other.dead or other.state == "inlodge":
 					continue
