@@ -1,0 +1,59 @@
+name: Woodland UI Motion Tests
+on:
+  push:
+    branches: [ui-motion-rebased]
+concurrency:
+  group: taiga-ui-motion-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    container:
+      image: barichello/godot-ci:4.3
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install software GPU
+        run: |
+          apt-get update -qq
+          DEBIAN_FRONTEND=noninteractive apt-get install -y -qq xvfb mesa-vulkan-drivers libvulkan1 libgl1-mesa-dri >/dev/null
+      - name: Import project
+        run: |
+          cd game
+          timeout 300 godot --headless --import 2>&1 | tee /tmp/import.log
+          ! grep -E "Parse Error|Failed loading resource" /tmp/import.log
+      - name: Animal obstacle-clearance regression
+        run: |
+          cd game
+          timeout 120 godot --headless --script res://tests/animal_collision_test.gd
+      - name: Strict script parse
+        run: |
+          cd game
+          for f in scripts/*.gd tests/*.gd; do
+            godot --headless --check-only --script "$f"
+          done
+      - name: Smoke scene
+        run: |
+          cd game
+          timeout 120 godot --headless --quit-after 120 res://scenes/main.tscn > /tmp/smoke.log 2>&1
+          ! grep -E "SCRIPT ERROR|Parse Error" /tmp/smoke.log
+      - name: Render UI panels
+        run: |
+          mkdir -p /tmp/ui
+          cd game
+          UI_SHOTS=/tmp/ui timeout 600 xvfb-run -a -s "-screen 0 1920x864x24" godot --rendering-driver vulkan --resolution 1920x864 > /tmp/ui.log 2>&1
+          grep -E "SCRIPT ERROR|Parse Error|ui shot" /tmp/ui.log
+          test -s /tmp/ui/guide_res_clay.png
+          test -s /tmp/ui/settings.png
+          test -s /tmp/ui/start_menu.png
+          test -s /tmp/ui/inventory_craft.png
+          test -s /tmp/ui/build_cards.png
+      - name: Upload UI evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: woodland-ui-motion-review
+          path: |
+            /tmp/ui/*.png
+            /tmp/ui.log
+          if-no-files-found: error
+          retention-days: 30

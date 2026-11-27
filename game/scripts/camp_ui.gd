@@ -38,6 +38,7 @@ var _sig := ""
 var _t := 0.0
 var _store: Dictionary = {}
 var _move_all := false
+var _panel_tween: Tween
 
 ## Лист-пергамент: рваный край, пятна краски, берестяная шапка с заголовком.
 class Sheet extends Control:
@@ -465,16 +466,41 @@ func fade_night() -> void:
 func _open(fn: Callable, two_cols: bool = false) -> void:
 	_fn = fn
 	_sig = ""
-	panel.visible = true
+	_transition_panel(true)
 	scroll.visible = not two_cols
 	cols.visible = two_cols
 	mode_btn.visible = two_cols
 	_refresh_panel()
 
 func close_panel() -> void:
-	panel.visible = false
+	_transition_panel(false)
 	_fn = Callable()
 	_store = {}
+
+func _transition_panel(opening: bool) -> void:
+	if _panel_tween != null and _panel_tween.is_running():
+		_panel_tween.kill()
+	if opening:
+		panel.visible = true
+		panel.pivot_offset = panel.size * 0.5
+		panel.modulate = Color(1.0, 1.0, 1.0, 0.0)
+		panel.scale = Vector2(0.98, 0.98)
+		_panel_tween = panel.create_tween()
+		_panel_tween.set_parallel(true)
+		_panel_tween.tween_property(panel, "modulate", Color.WHITE, 0.18)
+		_panel_tween.tween_property(panel, "scale", Vector2.ONE, 0.18).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	else:
+		if not panel.visible:
+			return
+		_panel_tween = panel.create_tween()
+		_panel_tween.set_parallel(true)
+		_panel_tween.tween_property(panel, "modulate", Color(1.0, 1.0, 1.0, 0.0), 0.12)
+		_panel_tween.tween_property(panel, "scale", Vector2(0.98, 0.98), 0.12)
+		_panel_tween.chain().tween_callback(func() -> void:
+			panel.visible = false
+			panel.modulate = Color.WHITE
+			panel.scale = Vector2.ONE
+		)
 
 func _refresh_panel() -> void:
 	var d: Dictionary = _fn.call()
