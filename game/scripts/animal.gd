@@ -1028,7 +1028,7 @@ func _animate_model(delta: float) -> void:
 	if want_a != "" and want_a != parts["cur"]:
 		ap.play(want_a, 0.35)
 		parts["cur"] = want_a
-	ap.speed_scale = sc
+	ap.speed_scale = lerpf(ap.speed_scale, sc, clampf(delta * 6.0, 0.0, 1.0))
 	# наклон по склону
 	var L: float = parts["L"]
 	var fwd := Vector3(sin(heading), 0, cos(heading))
