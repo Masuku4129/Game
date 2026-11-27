@@ -2,7 +2,7 @@ name: Generate Taiga 3D models
 on:
   workflow_dispatch:
   push:
-    branches: [main]
+    branches: [main, visual-run]
     paths:
       - "tools/generate_taiga_models.py"
       - "tools/requirements-models.txt"
