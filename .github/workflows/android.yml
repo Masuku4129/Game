@@ -76,6 +76,10 @@ jobs:
           cp -r /root/.local/share/godot/export_templates/${GODOT_VERSION}.stable ~/.local/share/godot/export_templates/ || true
       - name: Import project
         run: cd game && (timeout 600 godot --headless --import || true)
+      - name: Animal obstacle-clearance regression test
+        run: |
+          cd game
+          timeout 120 godot --headless --script res://tests/animal_collision_test.gd
       - name: Check scripts (strict)
         run: |
           cd game
