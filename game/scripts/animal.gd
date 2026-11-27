@@ -701,8 +701,9 @@ func tick(delta: float) -> void:
 				var away := dt2.normalized()
 				if away.length_squared() < 0.01:
 					away = Vector2(cos(heading), sin(heading))
-				position.x = tree.x - away.x * 0.42
-				position.z = tree.z - away.y * 0.42
+				var trunk_clearance: float = main.tree_radius_at(tree) + _obstacle_radius() + 0.12
+				position.x = tree.x - away.x * trunk_clearance
+				position.z = tree.z - away.y * trunk_clearance
 				heading = atan2(tree.x - position.x, tree.z - position.z)
 				tree_top = clampf(main.tree_height_at(tree) * 0.82, 2.8, 10.0)
 				state = "tree"
@@ -724,7 +725,7 @@ func tick(delta: float) -> void:
 			var radial := Vector2(position.x - tree.x, position.z - tree.z).normalized()
 			if radial.length_squared() < 0.01:
 				radial = Vector2(cos(heading), sin(heading))
-			var bark_offset: float = main.tree_radius_at(tree) + 0.10 + sin(climb_h * 1.7) * 0.025
+			var bark_offset: float = main.tree_radius_at(tree) + maxf(0.10, _obstacle_radius() * 0.35) + sin(climb_h * 1.7) * 0.025
 			position.x = tree.x + radial.x * bark_offset
 			position.z = tree.z + radial.y * bark_offset
 			heading = atan2(tree.x - position.x, tree.z - position.z)
