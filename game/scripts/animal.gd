@@ -73,6 +73,7 @@ var tree_orbit_angle := 0.0 # устойчивый угол спиральног
 var climb_h := 0.0
 var far := false
 var group := -1
+var world_id := ""
 var _acc := randf() * 0.05  # perf: сдвиг шага между зверями
 var _sim_tick_interval := 0.08
 var trk := 0.0       # путь с последнего следа
