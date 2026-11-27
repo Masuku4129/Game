@@ -858,13 +858,17 @@ func build_confirm() -> bool:
 	main.camp.pay(d.get("cost", {}))
 	var pos := Vector3(ghost_pos.x, _ghost_y(), ghost_pos.z)
 	var s: Dictionary = main.camp.place(type, pos, ghost_yaw)
-	if not (d.get("need", {}) as Dictionary).is_empty() and type != "cabin":
-		s["stage"] = "site"
-		s["var"] = place_var
-		s["have"] = {}
-		s["prog"] = 0.0
-		main.camp._rebuild(s)
-		main.camp._register(s)
+	if bool(main.get("creative_mode")) and not (d.get("need", {}) as Dictionary).is_empty() and type != "cabin":
+		# Creative bypass: skip site/material/work stages and complete the structure immediately.
+		main.camp.start_building(s)
+	else:
+		if not (d.get("need", {}) as Dictionary).is_empty() and type != "cabin":
+			s["stage"] = "site"
+			s["var"] = place_var
+			s["have"] = {}
+			s["prog"] = 0.0
+			main.camp._rebuild(s)
+			main.camp._register(s)
 	nav.invalidate(pos.x, pos.z, 8.0)
 	build_cancel()
 	note("Начато: %s" % String(d["name"]))
