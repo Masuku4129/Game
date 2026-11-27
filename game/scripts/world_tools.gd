@@ -546,6 +546,43 @@ func stab(p: Vector3, tip: Vector3, yaw: float) -> void:
 			return
 	_snd("whoosh", tip, -8.0, 1.3)
 
+func _restore_pending_gen() -> void:
+	if pending_gen.is_empty() or main == null or main.fallen_spots.is_empty():
+		return
+	var restored := 0
+	for index in range(pending_gen.size() - 1, -1, -1):
+		if restored >= 3:
+			break
+		var saved: Dictionary = pending_gen[index]
+		var p: Vector3 = saved["pos"]
+		var kind := String(saved.get("kind", "fallen0"))
+		var center := Vector2i(floori(p.x / 16.0), floori(p.z / 16.0))
+		var found: Dictionary = {}
+		for dz in range(-1, 2):
+			for dx in range(-1, 2):
+				var cell := Vector2i(center.x + dx, center.y + dz)
+				if not main.fallen_spots.has(cell):
+					continue
+				for spot: Dictionary in main.fallen_spots[cell]:
+					if String(spot.get("kind", "")) == kind and (spot["xf"] as Transform3D).origin.distance_to(p) < 0.35:
+						found = spot
+						break
+				if not found.is_empty():
+					break
+		if found.is_empty() or bool(found.get("done", false)):
+			continue
+		found["done"] = true
+		var trunk := GenTrunk.new()
+		add_child(trunk)
+		trunk.setup(found, main)
+		trunk.set_meta("spot", found)
+		trunk.cur = float(saved.get("cur", 0.0))
+		trunk._rebuild()
+		_unblock_spot(found)
+		trunks.append(trunk)
+		pending_gen.remove_at(index)
+		restored += 1
+
 func _process(delta: float) -> void:
 	if main == null:
 		return
@@ -559,6 +596,7 @@ func _process(delta: float) -> void:
 				_snd("thud", f.landing_point(), 10.0)
 				trunks.append(f)
 	_fly(delta)
+	_restore_pending_gen()
 	for i in range(wounds.size() - 1, -1, -1):
 		var w: Array = wounds[i]
 		var a: Node3D = w[0]
@@ -1317,11 +1355,16 @@ func to_save() -> Dictionary:
 	for t: Node3D in trunks:
 		if t is GenTrunk:
 			var g: GenTrunk = t
-			for k in main.fallen_spots:
-				var i: int = (main.fallen_spots[k] as Array).find(_spot_of(g))
-				if i >= 0:
-					gen.append({"k": SV.enc(k), "i": i, "cur": g.cur})
-					break
+			var spot := _spot_of(g)
+			if not spot.is_empty():
+				var origin: Vector3 = (spot["xf"] as Transform3D).origin
+				gen.append({"pos": SV.enc(origin), "kind": String(spot.get("kind", "fallen0")), "cur": g.cur})
+			else:
+				for k in main.fallen_spots:
+					var i: int = (main.fallen_spots[k] as Array).find(_spot_of(g))
+					if i >= 0:
+						gen.append({"k": SV.enc(k), "i": i, "cur": g.cur})
+						break
 	var logs: Array = []
 	var others: Array = []
 	for it: Dictionary in items:
@@ -1420,7 +1463,12 @@ func from_save(d: Dictionary) -> void:
 				f.top.visible = false
 				f.upper.visible = false
 				f.stump.visible = false
+	pending_gen.clear()
 	for e: Dictionary in d.get("gen", []):
+		if e.has("pos"):
+			pending_gen.append({"pos": SV.dec(e["pos"]), "kind": String(e.get("kind", "fallen0")), "cur": float(e.get("cur", 0.0))})
+			continue
+		# Поддержка старого формата сохранений с индексом записи в сетке.
 		var k: Vector2i = SV.dec(e["k"])
 		var arr: Array = main.fallen_spots.get(k, [])
 		var i := int(e["i"])
@@ -1438,6 +1486,7 @@ func from_save(d: Dictionary) -> void:
 		g._rebuild()
 		_unblock_spot(sp)
 		trunks.append(g)
+	_restore_pending_gen()
 	for e2: Dictionary in d.get("logs", []):
 		if e2.has("xf"):
 			var xf: Transform3D = SV.dec(e2["xf"])
