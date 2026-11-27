@@ -828,9 +828,10 @@ func _can_step(p: Vector3, flying: bool = false) -> bool:
 func _push_out() -> void:
 	if not main.blocked(position.x, position.z, 0.0) and main.solid_top(position.x, position.z) - main.grid_height(position.x, position.z) <= 0.45:
 		return
-	for r in [0.6, 1.1, 1.7, 2.5, 3.5]:
-		for k in 12:
-			var a := TAU * float(k) / 12.0 + float(r)
+	# Search wider and more densely so animals can escape tree/rock gaps.
+	for r in [0.5, 0.9, 1.3, 1.8, 2.4, 3.2, 4.2, 5.4]:
+		for k in 24:
+			var a := TAU * float(k) / 24.0 + float(r) * 0.31
 			var q: Vector3 = position + Vector3(sin(a), 0.0, cos(a)) * float(r)
 			if _can_step(q):
 				position.x = q.x
