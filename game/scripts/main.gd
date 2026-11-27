@@ -1349,7 +1349,7 @@ func _variants(kind: String) -> Array:
 			out.append(pv.bones(7500))
 	return out
 
-const TREE_KINDS := ["spruce", "pine", "birch", "larch", "aspen", "fir", "cedar", "rowan"]
+const TREE_KINDS := ["spruce", "pine", "birch", "larch", "aspen", "fir", "cedar", "alder", "willow", "rowan"]
 const NEAR_R := 60.0
 var tree_grid := {}
 var near_mesh := {}
