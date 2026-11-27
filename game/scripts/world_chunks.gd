@@ -7,7 +7,7 @@ const ACTIVE_RADIUS := 2
 const PRELOAD_RADIUS := 3
 const LOAD_BUDGET := 4
 const MAX_SAVED_CHUNKS := 4096
-const TERRAIN_SEGMENTS := 48
+const TERRAIN_SEGMENTS := 64
 const BASE_HALF_EXTENT := 256.0
 
 var main: Node3D
@@ -644,7 +644,7 @@ func _build_tree_cover(c: Vector2i) -> void:
 		mmi.name = "StreamTrees_%s_%d" % [kind, vi]
 		mmi.multimesh = mm
 		mmi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
-		mmi.visibility_range_end = 118.0
+		mmi.visibility_range_end = 145.0
 		mmi.extra_cull_margin = 8.0
 		add_child(mmi)
 		created.append(mm)
