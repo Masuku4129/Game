@@ -324,6 +324,60 @@ func _resolve_world_seed() -> void:
 	if map_seed == 0:
 		map_seed = MAP_SEED
 
+func _upgrade_explored_map() -> void:
+	# Upgrade older save files in-place so the map's richer legend works across
+	# saves made before terrain/landmark metadata was introduced.
+	for key: String in explored_map.keys():
+		var data: Variant = explored_map[key]
+		if not data is Dictionary or data.has("zone_name"):
+			continue
+		var grid: PackedStringArray = key.split(",")
+		if grid.size() != 2:
+			continue
+		var gx := int(grid[0])
+		var gz := int(grid[1])
+		var wx := (float(gx) + 0.5) * 16.0
+		var wz := (float(gz) + 0.5) * 16.0
+		var h := height(wx, wz)
+		var wl := water_level(wx, wz)
+		var zkind := int(data.get("zone", zone(wx, wz)))
+		var forest_k := forest_density(wx, wz)
+		var wet_k_value := wet_k(wx, wz, h)
+		var slope_dx := absf(height(wx + 4.0, wz) - height(wx - 4.0, wz)) / 8.0
+		var slope_dz := absf(height(wx, wz + 4.0) - height(wx, wz - 4.0)) / 8.0
+		var slope_k := sqrt(slope_dx * slope_dx + slope_dz * slope_dz)
+		var zone_name := "forest"
+		match zkind:
+			1:
+				zone_name = "burned_forest"
+			2:
+				zone_name = "bog"
+			4:
+				zone_name = "windfall"
+		data["zone_name"] = zone_name
+		data["forest_class"] = "dense_taiga" if forest_k > 0.72 else "woodland" if forest_k > 0.38 else "sparse_trees" if forest_k > 0.12 else "clearing"
+		data["terrain_class"] = "steep_slope" if slope_k > 0.42 else "rolling" if slope_k > 0.16 else "flat"
+		data["forest"] = forest_k
+		data["wetness"] = wet_k_value
+		data["slope"] = slope_k
+		var landmarks: Array[String] = data.get("landmarks", [])
+		if float(data.get("river_distance", river_dist(wx, wz))) < 12.0 and not landmarks.has("river_corridor"):
+			landmarks.append("river_corridor")
+		if h < wl + 1.0 and not landmarks.has("water_edge"):
+			landmarks.append("water_edge")
+		if wet_k_value > 0.68 and not landmarks.has("wet_ground"):
+			landmarks.append("wet_ground")
+		if slope_k > 0.5 and not landmarks.has("steep_terrain"):
+			landmarks.append("steep_terrain")
+		if forest_k < 0.15 and not landmarks.has("open_area"):
+			landmarks.append("open_area")
+		if h > WATER_Y + 12.0 and not landmarks.has("elevated_ground"):
+			landmarks.append("elevated_ground")
+		data["landmarks"] = landmarks
+		explored_map[key] = data
+		if chunk_stream != null:
+			chunk_stream.save_map_cell(wx, wz, key, data)
+
 func _reveal_map_area() -> void:
 	# Открываем только пройденную местность. Храним компактные данные по клеткам 16×16 м.
 	if chunk_stream != null:
@@ -2443,6 +2497,7 @@ func from_save(d: Dictionary) -> void:
 	if chunk_stream != null:
 		chunk_stream.from_save(d.get("world_chunks", {}))
 	explored_map = d.get("explored_map", {}).duplicate(true)
+	_upgrade_explored_map()
 	t_hours = float(d.get("t_hours", t_hours))
 	day_count = int(d.get("day", day_count))
 	hunger = float(d.get("hunger", hunger))
