@@ -62,6 +62,31 @@ Test on Android at target resolution and record:
 - visibility of chunk boundaries/generation;
 - visual consistency across biomes and seasons.
 
+
+### P0 — Rendering performance and heat control
+- Profile CPU/GPU and frame time on-device; target a stable frame budget rather than peak FPS.
+- Move procedural calculations off the main frame where safe; spread scene creation over frames with strict per-frame spawn budgets and prewarm ahead of the visible edge.
+- Use chunk lifecycle pooling, deterministic caching, instancing/batching, culling, and distance tiers; avoid unnecessary transparent foliage and shadow casting.
+- Add quality tiers that adapt foliage density, shadow distance/resolution, water effects, and ambient detail to frame time and thermal state; avoid abrupt quality flicker.
+
+### P1 — Lighting and cohesive stylized rendering
+- Establish consistent cartoon material palette, surface roughness, shape language, color ramps, and ambient treatment across the world, props, fauna, UI.
+- Tune sunlight direction/intensity, sky/environment illumination, ambient occlusion, shadow distance and softness, fog depth, and exposure for readable forest depth without excessive real-time cost.
+- Prefer baked/static or low-cost lighting where feasible; avoid many dynamic lights and expensive per-object shader effects.
+- Validate that rock, terrain, water, foliage, and animals remain legible under daylight, overcast, fog, dusk/night and seasonal variants.
+
+### P1 — UI overhaul
+- Redesign HUD and menus as a single stylized, readable visual system (typography, icons, spacing, panels, palette, feedback and touch targets).
+- Make mobile controls and information hierarchy usable in landscape; avoid clutter and obstruction of terrain view.
+- Replace inconsistent default UI widgets with themed components; maintain accessibility contrast, scalable layout and safe-area handling.
+- Review inventory, crafting, survival indicators, map, pause/settings and contextual interaction states for coherent interaction patterns.
+
+### P1 — Animation overhaul (character work deferred)
+- Improve all animal animation cycles and state transitions: idle, alert, walk, trot, run, turn, stop, graze/forage, drink, flee and rest as appropriate per species.
+- Use smooth acceleration/deceleration, turn-radius constraints, speed-to-gait matching, foot placement and transition blending; prevent sliding and snapping.
+- Ensure locomotion speed, animation playback rate and navigation velocity remain synchronized; remove unnatural burst speeds.
+- Character visual model stays unchanged; animation/control foundations may be reviewed without replacing the model until reprioritized.
+
 ## Definition of done for this priority cycle
 1. The cartoon style is visibly and consistently applied to the world and fauna; no placeholder primitives remain in the main view.
 2. Terrain variety is materially improved, including a playable marsh biome with transitions.
