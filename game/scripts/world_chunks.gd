@@ -28,12 +28,17 @@ var _model_variant_cache: Dictionary = {}
 var _far_mesh_cache: Dictionary = {}
 var stream_water_material: ShaderMaterial
 var _water_state_clock := 0.0
+var _chunk_weather_clock := 0.0
 const STREAM_TREE_KINDS := ["spruce", "pine", "birch", "larch", "aspen", "fir", "cedar", "alder", "willow", "rowan"]
 
 func _process(delta: float) -> void:
 	if main == null or main.hero == null or main.rig == null:
 		return
 	_update_stream_water(delta)
+	_chunk_weather_clock -= delta
+	if _chunk_weather_clock <= 0.0:
+		_chunk_weather_clock = 0.25
+		_sync_chunk_weather()
 	_refresh -= delta
 	var p: Vector3 = main.rig.position
 	var next := Vector2i(floori(p.x / CHUNK_SIZE), floori(p.z / CHUNK_SIZE))
@@ -43,6 +48,26 @@ func _process(delta: float) -> void:
 		_rebuild_queue()
 	_process_queue()
 	_unload_distant()
+
+func _sync_chunk_weather() -> void:
+	if main == null or main.weather == null:
+		return
+	var w = main.weather
+	var freeze_now := clampf(-float(w.temp) * 0.5, 0.0, 1.0)
+	var rain_now := float(w.precip) if float(w.temp) >= 0.5 else 0.0
+	var snow_depth_now := float(w.snow) * 0.42
+	var mud_depth_now := float(w.wet) * 0.24
+	for material: ShaderMaterial in terrain_materials.values():
+		material.set_shader_parameter("snow", w.snow)
+		material.set_shader_parameter("wet", w.wet)
+		material.set_shader_parameter("autumn", w.autumn)
+		material.set_shader_parameter("leaf_drop", w.leaf_drop)
+		material.set_shader_parameter("wind", w.wind)
+		material.set_shader_parameter("blossom", w.blossom)
+		material.set_shader_parameter("freeze", freeze_now)
+		material.set_shader_parameter("rain", rain_now)
+		material.set_shader_parameter("snow_m", snow_depth_now)
+		material.set_shader_parameter("mud_m", mud_depth_now
 
 func _key(c: Vector2i) -> String:
 	return "%d,%d" % [c.x, c.y]
