@@ -7,7 +7,7 @@ const ACTIVE_RADIUS := 2
 const PRELOAD_RADIUS := 3
 const LOAD_BUDGET := 2
 const MAX_SAVED_CHUNKS := 4096
-const TERRAIN_SEGMENTS := 32
+const TERRAIN_SEGMENTS := 48
 const BASE_HALF_EXTENT := 256.0
 
 var main: Node3D
