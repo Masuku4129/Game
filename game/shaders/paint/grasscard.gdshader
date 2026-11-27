@@ -55,7 +55,7 @@ void fragment() {
 	vec4 s = texture(strokes_tex, UV);
 	vec3 c = mix(lin(col_root), lin(col_tip), smoothstep(0.0, 1.0, hgt) * (0.7 + s.g * 0.5)) * (0.85 + COLOR.r * 0.3);
 	c = mix(c, lin(vec3(0.78, 0.66, 0.38)) * (0.6 + hgt * 0.5), dry);
-	ALBEDO = c;
+	ALBEDO = cartoon(c);
 	ALPHA = s.a;
 	ALPHA_SCISSOR_THRESHOLD = 0.5;
 	ROUGHNESS = 1.0;

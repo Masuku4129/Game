@@ -3,9 +3,9 @@ render_mode cull_disabled;
 #include "res://shaders/paint/paint.gdshaderinc"
 #include "res://shaders/fade.gdshaderinc"
 // Крона пятнами: цвет от тени к свету по высоте и нормали, мазки, лёгкое покачивание.
-uniform vec3 col_dark = vec3(0.12, 0.22, 0.14);
-uniform vec3 col_mid = vec3(0.30, 0.46, 0.22);
-uniform vec3 col_light = vec3(0.62, 0.70, 0.32);
+uniform vec3 col_dark = vec3(0.18, 0.26, 0.16);
+uniform vec3 col_mid = vec3(0.36, 0.52, 0.24);
+uniform vec3 col_light = vec3(0.70, 0.78, 0.38);
 uniform float sway = 0.04;
 uniform float wind = 0.5;
 uniform float snow = 0.0;
@@ -55,7 +55,7 @@ void fragment() {
 	c = mix(c, lin(col_bloom) * (0.75 + g * 0.3), bloom_k * blossom * smoothstep(0.35, 0.6, s + tree_r * 0.3));
 	c *= 1.0 - wet * 0.15;
 	c = mix(c, vec3(0.9, 0.93, 0.97), smoothstep(0.42, 0.74, wn.y + s * 0.2) * snow);
-	ALBEDO = c;
+	ALBEDO = cartoon(c);
 	ROUGHNESS = 0.92;
 	SPECULAR = 0.0;
 	BACKLIGHT = c * 0.35;

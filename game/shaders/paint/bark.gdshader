@@ -46,7 +46,7 @@ void fragment() {
 		c = mix(c, vec3(0.32, 0.30, 0.26), stripe * 0.28);
 	}
 	c = mix(c, vec3(0.9, 0.93, 0.97), smoothstep(0.6, 0.9, wn.y) * snow);
-	ALBEDO = c;
+	ALBEDO = cartoon(c);
 	ROUGHNESS = 1.0;
 	SPECULAR = 0.0;
 }

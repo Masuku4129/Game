@@ -7,11 +7,11 @@ render_mode cull_disabled;
 // Рядом с героем лежит мелкая сетка-«заплатка» (COLOR.a = 0): она повторяет землю и снег
 // точно так же, но ещё и продавлена следами из track_tex (вмятины, ямы, траншеи).
 // Крупная земля под заплаткой опущена, чтобы не мешать.
-uniform vec3 meadow = vec3(0.3, 0.4, 0.14);
-uniform vec3 meadow2 = vec3(0.47, 0.5, 0.2);
-uniform vec3 forest = vec3(0.16, 0.22, 0.11);
-uniform vec3 litter = vec3(0.30, 0.23, 0.14);
-uniform vec3 stone = vec3(0.36, 0.34, 0.29);
+uniform vec3 meadow = vec3(0.30, 0.38, 0.20);
+uniform vec3 meadow2 = vec3(0.42, 0.46, 0.24);
+uniform vec3 forest = vec3(0.20, 0.24, 0.16);
+uniform vec3 litter = vec3(0.36, 0.29, 0.20);
+uniform vec3 stone = vec3(0.42, 0.40, 0.36);
 uniform vec3 bed = vec3(0.46, 0.42, 0.3);
 uniform vec3 mud_col = vec3(0.24, 0.16, 0.1);
 uniform float water_y = -2.0;
@@ -195,8 +195,10 @@ void fragment() {
 		vec3 bc = mix(lin(bed), lin(mix(vec3(0.42, 0.42, 0.38), vec3(0.62, 0.58, 0.48), pr)), peb);
 		c = mix(c, bc * (0.9 + fine * 0.2), sh);
 	}
-	// Reduce micro-noise: broad painterly color breakup reads better on mobile screens.
-	c *= 0.92 + paint_detail * 0.14;
+	// Широкие цветовые пятна + мягкая постеризация: мультяшная палитра без мелкого шума.
+	c *= 0.9 + paint_detail * 0.16;
+	vec3 poster = floor(c * 7.0 + 0.5) / 7.0;
+	c = mix(c, poster, 0.40);
 	// build: натоптанная тропа и расчищенная площадка — вытертая трава, утоптанная земля
 	float worn = smoothstep(0.25, 0.65, v_wear + (s - 0.5) * 0.25);
 	c = mix(c, lin(vec3(0.36, 0.29, 0.2)) * (0.85 + fine * 0.3), worn * 0.8);

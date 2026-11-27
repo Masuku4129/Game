@@ -3,9 +3,9 @@ render_mode cull_disabled;
 #include "res://shaders/paint/paint.gdshaderinc"
 #include "res://shaders/fade.gdshaderinc"
 // Камень гранями: плоские грани, тёплый серый, мох сверху, мазки.
-uniform vec3 col = vec3(0.40, 0.37, 0.31);
-uniform vec3 col_dark = vec3(0.21, 0.21, 0.2);
-uniform vec3 moss = vec3(0.36, 0.45, 0.22);
+uniform vec3 col = vec3(0.48, 0.45, 0.38);
+uniform vec3 col_dark = vec3(0.27, 0.27, 0.25);
+uniform vec3 moss = vec3(0.42, 0.54, 0.27);
 uniform float moss_k = 0.4;
 uniform float snow = 0.0;
 uniform float wet = 0.0;
@@ -35,7 +35,7 @@ void fragment() {
 	c *= mix(0.94, 1.06, vnoise(wp.xz * 0.75));
 	c = mix(c, vec3(0.9, 0.93, 0.97), smoothstep(0.5, 0.75, wn.y + s * 0.2) * snow);
 	c *= 1.0 - wet * 0.3;
-	ALBEDO = c;
+	ALBEDO = cartoon(c);
 	NORMAL = n;
 	ROUGHNESS = mix(0.98, 0.58, wet);
 	SPECULAR = 0.1;

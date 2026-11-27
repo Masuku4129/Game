@@ -5,9 +5,9 @@ render_mode skip_vertex_transform, cull_disabled;
 // Мазки листвы: каждая вершина кроны — карточка-мазок, повёрнутая к камере.
 // Нормаль берётся от центра облака, поэтому крона освещается как цельный объём, а край рваный.
 uniform sampler2D brush : filter_linear_mipmap, repeat_disable;
-uniform vec3 col_dark = vec3(0.12, 0.22, 0.14);
-uniform vec3 col_mid = vec3(0.30, 0.46, 0.22);
-uniform vec3 col_light = vec3(0.62, 0.70, 0.32);
+uniform vec3 col_dark = vec3(0.18, 0.26, 0.16);
+uniform vec3 col_mid = vec3(0.36, 0.52, 0.24);
+uniform vec3 col_light = vec3(0.70, 0.78, 0.38);
 uniform float wind = 0.5;
 uniform float snow = 0.0;
 uniform float autumn = 0.0;
@@ -63,7 +63,7 @@ void fragment() {
 	c = mix(c, lin(col_bloom) * (0.8 + g * 0.25), bloom_k * blossom * step(0.45, fract(drop_h * 3.7)));
 	c *= 1.0 - wet * 0.15;
 	c = mix(c, vec3(0.9, 0.93, 0.97), smoothstep(0.6, 0.85, wn.y + b.g * 0.2) * snow);
-	ALBEDO = c;
+	ALBEDO = cartoon(c);
 	ALPHA = b.a;
 	ALPHA_SCISSOR_THRESHOLD = 0.5;
 	ROUGHNESS = 1.0;
