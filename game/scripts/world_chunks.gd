@@ -113,6 +113,13 @@ func read_state(world_position: Vector3, section: String) -> Dictionary:
 	var value: Variant = rec.get(section, {})
 	return value.duplicate(true) if value is Dictionary else {}
 
+func mark_resource_collected(world_position: Vector3, kind: String) -> void:
+	var state := read_state(world_position, "resource_state")
+	var cell := "%d:%d:%s" % [roundi(world_position.x * 10.0), roundi(world_position.z * 10.0), kind]
+	state[cell] = {"kind": kind, "collected": true}
+	write_state(world_position, "resource_state", state)
+
+
 func _unload_distant() -> void:
 	for k: String in active.keys():
 		var rec: Dictionary = active[k]
