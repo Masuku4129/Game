@@ -279,6 +279,8 @@ func apply(mats_a: Array, mats_b: Array, terrain: ShaderMaterial, blade: ShaderM
 		m.set_shader_parameter("blossom", blossom)
 	terrain.set_shader_parameter("snow", snow)
 	terrain.set_shader_parameter("wet", wet)
+	terrain.set_shader_parameter("snow_m", snow * 0.42)
+	terrain.set_shader_parameter("mud_m", wet * 0.24)
 	terrain.set_shader_parameter("freeze", freeze_now)
 	terrain.set_shader_parameter("rain", rain_now)
 	blade.set_shader_parameter("snow", snow)
