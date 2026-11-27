@@ -1171,13 +1171,16 @@ const MODEL_DIR := "res://models/environment/"
 ## Цвета, мазки, свет, снег, осень и растворение дают шейдеры игры (paint/*), а не текстуры GLB.
 const MODEL_KINDS := {
 	"spruce": ["taiga_spruce.glb", 6, 1.0, "bark", "spruce"],
-	"fir": ["taiga_spruce.glb", 5, 1.3, "bark", "fir"],
+	"fir": ["taiga_fir.glb", 5, 1.0, "bark", "fir"],
 	"pine": ["taiga_pine.glb", 5, 1.0, "bark_pine", "pine"],
 	"cedar": ["taiga_cedar.glb", 5, 1.0, "bark", "cedar"],
 	"larch": ["taiga_larch.glb", 5, 1.0, "bark", "larch"],
 	"birch": ["taiga_birch.glb", 5, 1.1, "bark_birch", "birch"],
 	"aspen": ["taiga_aspen.glb", 5, 1.0, "bark_aspen", "leaf"],
 	"alder": ["taiga_alder.glb", 5, 0.55, "bark", "alder"],
+	"willow": ["taiga_willow.glb", 5, 0.85, "bark", "willow"],
+	"rowan": ["taiga_rowan.glb", 5, 0.85, "bark", "rowan"],
+	"juniper": ["taiga_juniper.glb", 5, 0.85, "bark", "juniper"],
 	"bush": ["taiga_bush.glb", 5, 0.75, "bark", "bush"],
 	"fern": ["taiga_fern.glb", 4, 0.85, "bark", "fern"],
 	"reeds": ["taiga_reed.glb", 4, 0.8, "bark", "reed_glb"],
