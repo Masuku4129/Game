@@ -34,7 +34,17 @@ func _initialize() -> void:
 	for _i in 5:
 		animal._animate_model(0.1)
 	ok = ok and absf(ap.speed_scale - 0.5) < 0.02
-	print("ANIMAL_ANIMATION_SPEED_TEST passed=", ok, " playback_scales=", [1.0, 0.75, 1.0, 0.5])
+	# Hysteresis prevents walk/gallop flicker near threshold.
+	animal.speed = 2.7
+	animal._animate_model(0.1)
+	ok = ok and animal._gallop_mode
+	animal.speed = 2.4
+	animal._animate_model(0.1)
+	ok = ok and animal._gallop_mode
+	animal.speed = 2.2
+	animal._animate_model(0.1)
+	ok = ok and not animal._gallop_mode
+	print("ANIMAL_ANIMATION_SPEED_TEST passed=", ok, " playback_scales=", [1.0, 0.75, 1.0, 0.5], " hysteresis=", ok)
 	animal.free()
 	world.free()
 	quit(0 if ok else 1)
