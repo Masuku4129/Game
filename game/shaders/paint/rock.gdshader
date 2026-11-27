@@ -3,9 +3,9 @@ render_mode cull_disabled;
 #include "res://shaders/paint/paint.gdshaderinc"
 #include "res://shaders/fade.gdshaderinc"
 // Камень гранями: плоские грани, тёплый серый, мох сверху, мазки.
-uniform vec3 col = vec3(0.40, 0.37, 0.31);
-uniform vec3 col_dark = vec3(0.21, 0.21, 0.2);
-uniform vec3 moss = vec3(0.36, 0.45, 0.22);
+uniform vec3 col = vec3(0.48, 0.45, 0.38);
+uniform vec3 col_dark = vec3(0.27, 0.27, 0.25);
+uniform vec3 moss = vec3(0.42, 0.54, 0.27);
 uniform float moss_k = 0.4;
 uniform float snow = 0.0;
 uniform float wet = 0.0;
