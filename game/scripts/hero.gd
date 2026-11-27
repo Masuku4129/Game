@@ -375,7 +375,9 @@ func _can_walk(p: Vector3) -> bool:
 	if y < position.y - 0.6 or airborne:
 		return not main.blocked(p.x, p.z, 0.32)
 	var n: Vector3 = main.ground_normal(p.x, p.z)
-	if n.y < 0.42:
+	# Проходимые скальные склоны не должны превращаться в невидимую стену.
+	# Почти отвесные участки остаются зоной отдельного лазания.
+	if n.y < 0.25:
 		return false
 	return not main.blocked(p.x, p.z, 0.32)
 
@@ -607,7 +609,7 @@ func _process_main(delta: float) -> void:
 			# упёрлись в крутую стену: если это скала, а не дерево — начинаем лезть
 			var q := position + d * 0.5
 			var nq: Vector3 = main.ground_normal(q.x, q.z)
-			if mag > 0.5 and nq.y < 0.42 and depth < 0.5 and not main.blocked(q.x, q.z, 0.2) and float(main.stamina) > 0.1:
+			if mag > 0.5 and nq.y < 0.25 and depth < 0.5 and not main.blocked(q.x, q.z, 0.2) and float(main.stamina) > 0.1:
 				state = "climb"
 			vel = Vector3.ZERO
 	position.x = p.x
