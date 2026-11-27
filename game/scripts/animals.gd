@@ -139,10 +139,10 @@ func populate_stream_chunk(coord: Vector2i, chunk_seed: int) -> void:
 			continue
 		var candidate := Vector3(x, y, z)
 		candidates.append(candidate)
-		var local_zone := main.zone(x, z)
-		var local_forest := main.forest_density(x, z)
-		var local_wet := main.wet_k(x, z, y)
-		var river_d := main.river_dist(x, z)
+		var local_zone: int = main.zone(x, z)
+		var local_forest: float = main.forest_density(x, z)
+		var local_wet: float = main.wet_k(x, z, y)
+		var river_d: float = main.river_dist(x, z)
 		if local_zone == 2 or local_wet > 0.62:
 			bog_candidates.append(candidate)
 		if local_forest > 0.48 and local_zone != 1:
@@ -242,7 +242,7 @@ func populate_stream_chunk(coord: Vector2i, chunk_seed: int) -> void:
 	# Лиса или волк появляются редко, чтобы не создавать искусственную плотность хищников.
 	if rng.randf() < 0.20:
 		var predator := "fox" if zone_id != 4 or rng.randf() < 0.5 else "wolf"
-		var predator_pos := candidates[rng.randi_range(0, candidates.size() - 1)]
+		var predator_pos: Vector3 = candidates[rng.randi_range(0, candidates.size() - 1)]
 		_spawn(predator, predator_pos, rng.randf_range(0.9, 1.08), group_id + 1, "chunk:%s:predator:0" % key)
 	# Rare ground birds appear on forest edges as a separate encounter from
 	# the ambient airborne flock; deterministic IDs keep them stable when chunks reload.
@@ -545,8 +545,8 @@ func near(p: Vector3, r: float) -> Array:
 			for a in grid[k]:
 				if a == null or not is_instance_valid(a):
 					continue
-				var dx := a.position.x - p.x
-				var dz := a.position.z - p.z
+				var dx: float = a.position.x - p.x
+				var dz: float = a.position.z - p.z
 				if dx * dx + dz * dz <= r2:
 					out.append(a)
 	return out
@@ -883,7 +883,7 @@ func from_save(d: Dictionary) -> void:
 	var arr: Array = d.get("list", [])
 	streamed_chunks = d.get("streamed_chunks", {}).duplicate(true)
 	pending_saved_animals.clear()
-	var legacy := arr.size() > 0 and not arr[0].has("id") and int(d.get("n", -1)) == list.size()
+	var legacy: bool = arr.size() > 0 and not arr[0].has("id") and int(d.get("n", -1)) == list.size()
 	if legacy:
 		for i in mini(arr.size(), list.size()):
 			_apply_saved_animal(list[i], arr[i])

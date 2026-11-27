@@ -199,7 +199,7 @@ func _new_wander() -> void:
 			for radius in [0.7, 1.2, 1.8, 2.6, 3.6, 4.8, 6.2]:
 				for probe_i in range(36):
 					var probe_angle := TAU * float(probe_i) / 36.0
-					var probe := position + Vector3(cos(probe_angle), 0.0, sin(probe_angle)) * radius
+					var probe: Vector3 = position + Vector3(cos(probe_angle), 0.0, sin(probe_angle)) * radius
 					var probe_y: float = main.height(probe.x, probe.z)
 					if probe_y < main.water_level(probe.x, probe.z) - 0.2 and not swimmer():
 						continue
@@ -209,7 +209,7 @@ func _new_wander() -> void:
 						continue
 					if not _can_move_segment(position, probe):
 						continue
-					var score := _habitat_score(probe) - radius * 0.035
+					var score: float = _habitat_score(probe) - float(radius) * 0.035
 					if score > recovery_score:
 						recovery_score = score
 						recovery_point = probe
@@ -226,10 +226,10 @@ func _new_wander() -> void:
 			target = ld.position + Vector3(cos(a2), 0, sin(a2)) * rng.randf_range(2.5, 8.0)
 	# цель на другом ярусе уступа или в воде (воду обходят все, кроме бобра) — ближе к дому
 	var th: float = main.height(target.x, target.z)
-	var target_water := main.water_level(target.x, target.z)
-	var current_water := main.water_level(position.x, position.z)
-	var target_is_deep_water := th < target_water - 0.3
-	var current_is_deep_water := main.height(position.x, position.z) < current_water - 0.3
+	var target_water: float = main.water_level(target.x, target.z)
+	var current_water: float = main.water_level(position.x, position.z)
+	var target_is_deep_water: bool = th < target_water - 0.3
+	var current_is_deep_water: bool = main.height(position.x, position.z) < current_water - 0.3
 	# Пруд за бобровой плотиной и изменённый уровень воды учитываются так же,
 	# как основное русло: неплавающие звери не получают цель под поверхностью.
 	if absf(th - main.height(position.x, position.z)) > 4.0 or (target_is_deep_water and kind != "beaver" and not swimmer()):
@@ -954,7 +954,7 @@ func tick(delta: float) -> void:
 				var sep := Vector2(probe.x - other.position.x, probe.z - other.position.z).length()
 				var min_sep := (body_len + float(other.parts.get("L", 1.0))) * 0.22
 				if sep < min_sep:
-					var same_group := group >= 0 and group == other.group
+					var same_group: bool = group >= 0 and group == other.group
 					score -= avoid_strength * (0.55 if same_group else 1.4) * (1.0 - clampf(sep / maxf(min_sep, 0.01), 0.0, 1.0))
 			if score > best_score:
 				best_score = score
@@ -1150,7 +1150,7 @@ func _unstick(delta: float) -> void:
 				var candidate_dir := Vector2(sin(ang), cos(ang))
 				var alignment := candidate_dir.dot(goal_dir)
 				var remaining := Vector2(target.x - probe.x, target.z - probe.z).length()
-				var score := alignment * 4.0 - remaining * 0.35 - radius * 0.025
+				var score: float = alignment * 4.0 - remaining * 0.35 - float(radius) * 0.025
 				if score > best_score:
 					best_score = score
 					best_probe = probe
