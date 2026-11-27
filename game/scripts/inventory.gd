@@ -418,6 +418,10 @@ func _take(kind: String) -> void:
 func _sheet_input(e: InputEvent) -> void:
 	var rs := recipes() if tab == 1 else []
 	var max_scroll := maxf(0.0, float(rs.size()) * ROW_H - (640.0 - GRID.y))
+	if e is InputEventScreenTouch and e.pressed and e.position.y < 100.0 and e.position.x > 210.0 and e.position.x < 800.0:
+		tab = 0 if e.position.x < 410.0 else (1 if e.position.x < 600.0 else 2)
+		sheet.queue_redraw()
+		return
 	if tab == 1:
 		if e is InputEventMouseButton:
 			var mb := e as InputEventMouseButton
