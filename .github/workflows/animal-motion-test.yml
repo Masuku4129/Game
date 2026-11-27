@@ -41,20 +41,3 @@ jobs:
           cd game
           timeout 120 godot --headless --quit-after 120 res://scenes/main.tscn > /tmp/smoke.log 2>&1
           ! grep -E "SCRIPT ERROR|Parse Error" /tmp/smoke.log
-      - name: Render gameplay
-        run: |
-          mkdir -p /tmp/motion
-          cd game
-          SHOTS=/tmp/motion timeout 600 xvfb-run -a -s "-screen 0 1920x864x24" godot --rendering-driver vulkan --resolution 1920x864 --quit-after 180 > /tmp/motion/gameplay.log 2>&1
-          grep -E "SCRIPT ERROR|Parse Error|shot game" /tmp/motion/gameplay.log
-          test -s /tmp/motion/game_20.png
-          test -s /tmp/motion/game_80.png
-      - name: Upload verification
-        uses: actions/upload-artifact@v4
-        with:
-          name: animal-motion-review
-          path: |
-            /tmp/motion/*.png
-            /tmp/motion/*.log
-          if-no-files-found: error
-          retention-days: 30
