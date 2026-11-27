@@ -22,11 +22,14 @@ var tree_mmis: Dictionary = {}
 var prop_mmis: Dictionary = {}
 var blocker_records: Dictionary = {}
 var _model_variant_cache: Dictionary = {}
+var stream_water_material: ShaderMaterial
+var _water_state_clock := 0.0
 const STREAM_TREE_KINDS := ["spruce", "pine", "birch", "larch", "aspen", "fir", "cedar", "alder", "willow", "rowan"]
 
 func _process(delta: float) -> void:
 	if main == null or main.hero == null or main.rig == null:
 		return
+	_update_stream_water(delta)
 	_refresh -= delta
 	var p: Vector3 = main.rig.position
 	var next := Vector2i(floori(p.x / CHUNK_SIZE), floori(p.z / CHUNK_SIZE))
@@ -184,6 +187,81 @@ func _apply_resource_state() -> void:
 	main.pickables = pickables
 
 
+func _update_stream_water(delta: float) -> void:
+	if stream_water_material == null:
+		var shader := load("res://shaders/paint/stream_water.gdshader") as Shader
+		if shader == null:
+			return
+		stream_water_material = ShaderMaterial.new()
+		stream_water_material.shader = shader
+	_water_state_clock -= delta
+	if _water_state_clock > 0.0:
+		return
+	_water_state_clock = 0.5
+	if main.weather == null:
+		return
+	var temperature: float = main.weather.temp
+	stream_water_material.set_shader_parameter("ice", clampf((-temperature - 0.5) / 5.0, 0.0, 1.0))
+	stream_water_material.set_shader_parameter("rain", clampf(main.weather.precip, 0.0, 1.0))
+	stream_water_material.set_shader_parameter("wind", clampf(main.weather.wind, 0.0, 1.0))
+
+func _build_water_surface(c: Vector2i, parent: Node3D) -> void:
+	if stream_water_material == null:
+		_update_stream_water(0.0)
+	if stream_water_material == null:
+		return
+	var seg := TERRAIN_SEGMENTS
+	var step := CHUNK_SIZE / float(seg)
+	var ox := float(c.x) * CHUNK_SIZE
+	var oz := float(c.y) * CHUNK_SIZE
+	var vertices := PackedVector3Array()
+	var normals := PackedVector3Array()
+	var uvs := PackedVector2Array()
+	var indices := PackedInt32Array()
+	for z in range(seg):
+		for x in range(seg):
+			var wx := ox + (float(x) + 0.5) * step
+			var wz := oz + (float(z) + 0.5) * step
+			var ground: float = main.height(wx, wz)
+			var level: float = main.water_level(wx, wz)
+			if ground >= level - 0.035:
+				continue
+			var in_river: bool = main.river_dist(wx, wz) < 9.5
+			var in_lake: bool = main.lake_k(wx, wz) > 0.28
+			var in_bog: bool = main.zone(wx, wz) == 2 and main.swamp_depth_at(wx, wz) > 0.72
+			if not (in_river or in_lake or in_bog):
+				continue
+			var base := vertices.size()
+			var x0 := float(x) * step
+			var z0 := float(z) * step
+			var y := level + 0.025
+			vertices.append(Vector3(x0, y, z0))
+			vertices.append(Vector3(x0 + step, y, z0))
+			vertices.append(Vector3(x0, y, z0 + step))
+			vertices.append(Vector3(x0 + step, y, z0 + step))
+			for uv in [Vector2(wx - step * 0.5, wz - step * 0.5), Vector2(wx + step * 0.5, wz - step * 0.5), Vector2(wx - step * 0.5, wz + step * 0.5), Vector2(wx + step * 0.5, wz + step * 0.5)]:
+				uvs.append(uv * 0.08)
+			for n in 4:
+				normals.append(Vector3.UP)
+			indices.append_array(PackedInt32Array([base, base + 2, base + 1, base + 1, base + 2, base + 3]))
+	if vertices.is_empty():
+		return
+	var arrays: Array = []
+	arrays.resize(Mesh.ARRAY_MAX)
+	arrays[Mesh.ARRAY_VERTEX] = vertices
+	arrays[Mesh.ARRAY_NORMAL] = normals
+	arrays[Mesh.ARRAY_TEX_UV] = uvs
+	arrays[Mesh.ARRAY_INDEX] = indices
+	var mesh := ArrayMesh.new()
+	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
+	mesh.surface_set_material(0, stream_water_material)
+	var water := MeshInstance3D.new()
+	water.name = "StreamWater"
+	water.mesh = mesh
+	water.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	water.position.y = 0.0
+	parent.add_child(water)
+
 func _inside_base_world(c: Vector2i) -> bool:
 	var x0 := float(c.x) * CHUNK_SIZE
 	var z0 := float(c.y) * CHUNK_SIZE
@@ -263,6 +341,7 @@ func _build_terrain_chunk(c: Vector2i) -> void:
 	collision.shape = shape
 	body.add_child(collision)
 	root.add_child(body)
+	_build_water_surface(c, root)
 	add_child(root)
 	terrain_nodes[k] = root
 
