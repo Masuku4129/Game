@@ -802,6 +802,7 @@ func _shots() -> void:
 		get_tree().quit()
 
 var _dbgf := 0
+var _visual_uniform_t := 0.0 # perf: expensive per-instance shader uniforms обновляются 20 раз/с, не каждый кадр
 func _process(delta: float) -> void:
 	_dbgf += 1
 	if hero == null or (joy == null and colony == null):
@@ -816,18 +817,23 @@ func _process(delta: float) -> void:
 		hp = Vector3(0, -1000.0, 0)
 		cp = colony.veg_focus()
 	# --- /colony ---
-	for m in veg.fade_list:
-		m.set_shader_parameter("hero_pos", hp)
-		m.set_shader_parameter("cam_pos", cp)
-	for m in pv.fade_list:
-		m.set_shader_parameter("hero_pos", hp)
-		m.set_shader_parameter("cam_pos", cp)
-	pv.mats["tuft"].set_shader_parameter("hero_pos", hp)
-	pv.mats["tuft"].set_shader_parameter("cam_pos", cp)
-	pv.mats["tuft"].set_shader_parameter("grass_now", Time.get_ticks_msec() * 0.001)
-	water_mat.set_shader_parameter("hero_pos", hero.position)
-	water_mat.set_shader_parameter("swim", hero.swimb if colony == null else 0.0)
-	water_mat.set_shader_parameter("swim_move", clampf(hero.run_mag, 0.0, 1.0))
+	# Обновление uniforms на каждом кадре обходило весь список растительности и
+	# создавало лишнюю CPU-нагрузку. 20 Гц достаточно для плавного fade и реакции воды.
+	_visual_uniform_t -= delta
+	if _visual_uniform_t <= 0.0:
+		_visual_uniform_t = 0.05
+		for m in veg.fade_list:
+			m.set_shader_parameter("hero_pos", hp)
+			m.set_shader_parameter("cam_pos", cp)
+		for m in pv.fade_list:
+			m.set_shader_parameter("hero_pos", hp)
+			m.set_shader_parameter("cam_pos", cp)
+		pv.mats["tuft"].set_shader_parameter("hero_pos", hp)
+		pv.mats["tuft"].set_shader_parameter("cam_pos", cp)
+		pv.mats["tuft"].set_shader_parameter("grass_now", Time.get_ticks_msec() * 0.001)
+		water_mat.set_shader_parameter("hero_pos", hero.position)
+		water_mat.set_shader_parameter("swim", hero.swimb if colony == null else 0.0)
+		water_mat.set_shader_parameter("swim_move", clampf(hero.run_mag, 0.0, 1.0))
 	_fps_t -= delta
 	if _fps_t <= 0.0:
 		_fps_t = 0.5
