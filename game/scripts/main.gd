@@ -12,7 +12,7 @@ var map_seed: int = MAP_SEED
 var explored_map: Dictionary = {}
 var _map_reveal_t := 0.0
 const FOREST_DENSITY_MULTIPLIER := 2.5
-const FOREST_DENSITY_SPECIES := ["spruce", "pine", "birch", "larch", "aspen", "bare", "spruce_dead", "bush", "fern", "reeds", "moss", "flower", "twig", "berry", "bilberry", "mushroom", "fir", "cedar", "willow", "alder", "cherry", "rose", "horsetail", "hummock", "sedge", "juniper", "stlanik", "rowan", "anthill", "mossrock", "stump_rot", "stump_mush", "fungus_snag", "birch_dead", "mosslog", "ledum", "cloudberry", "cranberry", "cotton", "lingon", "ernik", "raspberry", "currant", "bells", "daisy", "angelica", "brushpile", "chanterelle", "cones"]
+const FOREST_DENSITY_SPECIES := ["spruce", "pine", "birch", "larch", "aspen", "bare", "spruce_dead", "dead_birch", "hazel", "dogrose", "sedge", "bush", "fern", "reeds", "moss", "flower", "twig", "berry", "bilberry", "mushroom", "fir", "cedar", "willow", "alder", "cherry", "rose", "horsetail", "hummock", "sedge", "juniper", "stlanik", "rowan", "anthill", "mossrock", "stump_rot", "stump_mush", "fungus_snag", "birch_dead", "mosslog", "ledum", "cloudberry", "cranberry", "cotton", "lingon", "ernik", "raspberry", "currant", "bells", "daisy", "angelica", "brushpile", "chanterelle", "cones"]
 
 var n_hill := FastNoiseLite.new()
 var n_cliff := FastNoiseLite.new()
