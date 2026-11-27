@@ -465,19 +465,29 @@ func blocked(x: float, z: float, rad: float) -> bool:
 					return true
 	return false
 
+func _world_stream_seed(stream_id: int) -> int:
+	# Разводим независимые поля рельефа/биомов хешированием, а не соседними
+	# значениями map_seed: это сохраняет детерминизм и уменьшает корреляцию слоёв.
+	const MOD := 2147483647
+	var h := posmod(map_seed, MOD)
+	h = posmod(h + posmod(stream_id, MOD) * 104729, MOD)
+	h = posmod((h ^ (h >> 13)) * 1274126177, MOD)
+	h = posmod((h ^ (h >> 16)) * 1597334677, MOD)
+	return maxi(1, h)
+
 func _setup_noise() -> void:
-	n_hill.seed = map_seed + 1640; n_hill.frequency = 0.004; n_hill.fractal_octaves = 4
-	n_cliff.seed = map_seed + 77; n_cliff.frequency = 0.0045; n_cliff.fractal_octaves = 2
-	n_detail.seed = map_seed + 5; n_detail.frequency = 0.05; n_detail.fractal_octaves = 3
-	n_crag.seed = map_seed + 31; n_crag.frequency = 0.16; n_crag.fractal_octaves = 4
-	n_crag2.seed = map_seed + 32; n_crag2.frequency = 0.55; n_crag2.fractal_octaves = 2
-	n_biome.seed = map_seed + 4242; n_biome.frequency = 0.0042; n_biome.fractal_octaves = 2
-	n_forest.seed = map_seed + 909; n_forest.frequency = 0.02; n_forest.fractal_octaves = 3
-	n_zone.seed = map_seed + 2024; n_zone.noise_type = FastNoiseLite.TYPE_CELLULAR; n_zone.frequency = 0.018
+	n_hill.seed = _world_stream_seed(1640); n_hill.frequency = 0.004; n_hill.fractal_octaves = 4
+	n_cliff.seed = _world_stream_seed(77); n_cliff.frequency = 0.0045; n_cliff.fractal_octaves = 2
+	n_detail.seed = _world_stream_seed(5); n_detail.frequency = 0.05; n_detail.fractal_octaves = 3
+	n_crag.seed = _world_stream_seed(31); n_crag.frequency = 0.16; n_crag.fractal_octaves = 4
+	n_crag2.seed = _world_stream_seed(32); n_crag2.frequency = 0.55; n_crag2.fractal_octaves = 2
+	n_biome.seed = _world_stream_seed(4242); n_biome.frequency = 0.0042; n_biome.fractal_octaves = 2
+	n_forest.seed = _world_stream_seed(909); n_forest.frequency = 0.02; n_forest.fractal_octaves = 3
+	n_zone.seed = _world_stream_seed(2024); n_zone.noise_type = FastNoiseLite.TYPE_CELLULAR; n_zone.frequency = 0.018
 	n_zone.cellular_return_type = FastNoiseLite.RETURN_CELL_VALUE; n_zone.fractal_type = FastNoiseLite.FRACTAL_NONE
-	n_open.seed = map_seed + 313; n_open.frequency = 0.0055; n_open.fractal_octaves = 2
-	n_wet.seed = map_seed + 777; n_wet.frequency = 0.007; n_wet.fractal_octaves = 3
-	n_glade.seed = map_seed + 555; n_glade.frequency = 0.011; n_glade.fractal_octaves = 2
+	n_open.seed = _world_stream_seed(313); n_open.frequency = 0.0055; n_open.fractal_octaves = 2
+	n_wet.seed = _world_stream_seed(777); n_wet.frequency = 0.007; n_wet.fractal_octaves = 3
+	n_glade.seed = _world_stream_seed(555); n_glade.frequency = 0.011; n_glade.fractal_octaves = 2
 
 ## Уровень воды в точке: у бобровых плотин выше (пруд) или ниже (после плотины).
 func water_level(x: float, z: float) -> float:
