@@ -1005,7 +1005,7 @@ func _unstick(delta: float) -> void:
 				var score := alignment * 4.0 - remaining * 0.35 - radius * 0.025
 				if score > best_score:
 					best_score = score
-				best_probe = probe
+					best_probe = probe
 					recovered = true
 			if recovered and radius >= 10.0 and best_score > 1.0:
 				break
