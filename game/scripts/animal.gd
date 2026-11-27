@@ -953,7 +953,8 @@ func _unstick(delta: float) -> void:
 			for turn in range(12):
 				var ang := escape + TAU * float(turn) / 12.0
 				var probe: Vector3 = position + Vector3(sin(ang), 0.0, cos(ang)) * float(radius)
-				if _can_move_segment(position, probe):
+				# Reject blocked endpoints cheaply before sampling the whole route.
+				if _can_step(probe) and _can_move_segment(position, probe):
 					target = probe
 					recovered = true
 					break
