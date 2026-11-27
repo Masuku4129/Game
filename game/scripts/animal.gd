@@ -880,8 +880,8 @@ func _obstacle_radius() -> float:
 
 func _can_move_segment(from: Vector3, to: Vector3, flying: bool = false) -> bool:
 	var distance := Vector2(to.x - from.x, to.z - from.z).length()
-	# Half-metre sampling could skip thin trunks and narrow collision blockers on a diagonal.
-	var steps := maxi(1, ceili(distance / 0.3))
+	# Fine 20 cm sampling helps detect narrow trunks, rocks and blocker edges on diagonal routes.
+	var steps := maxi(1, ceili(distance / 0.2))
 	var previous := from
 	for i in range(1, steps + 1):
 		var sample := from.lerp(to, float(i) / float(steps))
