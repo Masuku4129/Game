@@ -339,7 +339,7 @@ func _flee_from(t: Node3D, tm: float) -> void:
 		var tp: Vector3 = main.nearest_tree(position, 15.0)
 		if tp != Vector3.INF:
 			tree = tp
-			tree_top = clampf(main.tree_height_at(tp) * 0.72, 2.5, 8.0)
+			tree_top = clampf(main.tree_height_at(tp) * 0.82, 2.8, 10.0)
 			state = "to_tree"
 
 ## Чем заняться: спать/отдыхать, водопой на заре и закате, рыбалка, дозор, пастьба, бродить.
@@ -681,10 +681,10 @@ func tick(delta: float) -> void:
 				var away := dt2.normalized()
 				if away.length_squared() < 0.01:
 					away = Vector2(cos(heading), sin(heading))
-				position.x = tree.x - away.x * 0.52
-				position.z = tree.z - away.y * 0.52
+				position.x = tree.x - away.x * 0.42
+				position.z = tree.z - away.y * 0.42
 				heading = atan2(tree.x - position.x, tree.z - position.z)
-				tree_top = clampf(main.tree_height_at(tree) * 0.72, 2.5, 8.0)
+				tree_top = clampf(main.tree_height_at(tree) * 0.82, 2.8, 10.0)
 				state = "tree"
 				state_t = rng.randf_range(15.0, 30.0)
 		"down_tree":
@@ -694,11 +694,20 @@ func tick(delta: float) -> void:
 	# беличье дерево: вверх по стволу и обратно
 	if kind == "squirrel":
 		if state == "tree":
-			climb_h = minf(climb_h + delta * 1.6, maxf(tree_top, 2.5))
+			climb_h = minf(climb_h + delta * 1.25, maxf(tree_top, 2.8))
 		elif climb_h > 0.0:
-			climb_h = maxf(climb_h - delta * 1.5, 0.0)
+			climb_h = maxf(climb_h - delta * 1.15, 0.0)
 			if climb_h <= 0.0 and state == "down_tree":
 				_new_wander()
+		# Держим белку у поверхности ствола и слегка обводим вокруг коры по мере подъёма.
+		if climb_h > 0.0 and tree != Vector3.ZERO:
+			var radial := Vector2(position.x - tree.x, position.z - tree.z).normalized()
+			if radial.length_squared() < 0.01:
+				radial = Vector2(cos(heading), sin(heading))
+			var bark_offset := 0.38 + sin(climb_h * 1.7) * 0.045
+			position.x = tree.x + radial.x * bark_offset
+			position.z = tree.z + radial.y * bark_offset
+			heading = atan2(tree.x - position.x, tree.z - position.z)
 	# глухарь: спугнутый — взлетает и летит низко над землёй, потом садится
 	if kind == "capercaillie":
 		var wet_below: bool = main.grid_height(position.x, position.z) < main.WATER_Y - 0.2
@@ -818,17 +827,21 @@ func _can_step(p: Vector3, flying: bool = false) -> bool:
 		return false
 	if main.blocked(p.x, p.z, _obstacle_radius()):
 		return false
-	var gy: float = main.grid_height(p.x, p.z)
-	# купол камня, бревно или пень выше полуметра — зверь не взбирается, а обходит
-	if not flying and main.solid_top(p.x, p.z) - gy > 0.45:
+	var base_y: float = main.grid_height(p.x, p.z)
+	var solid_y: float = main.solid_top(p.x, p.z)
+	var obstacle_h: float = solid_y - base_y
+	# Животные могут забираться на низкие камни, но обходят отвесные валуны.
+	var step_limit := 0.58 if kind in ["hare", "squirrel", "fox"] else (0.78 if kind in ["roe", "deer", "muskdeer", "lynx"] else 0.68)
+	if not flying and obstacle_h > step_limit:
 		return false
-	var g0: float = main.grid_height(position.x, position.z)
+	var gy: float = maxf(base_y, solid_y)
+	var g0: float = maxf(main.grid_height(position.x, position.z), main.solid_top(position.x, position.z))
 	if gy < main.WATER_Y - 0.3 and not swimmer() and not flying:
 		return false
 	if swimmer() and kind != "beaver" and not flying and swim_k < 0.2 and not cross and not (state in ["flee", "chase", "charge"]):
 		if main.water_level(p.x, p.z) - gy > 0.6:
 			return false
-	if (gy - g0) > 0.35 and gy > main.WATER_Y and not flying:
+	if (gy - g0) > step_limit and gy > main.WATER_Y and not flying:
 		return false
 	return true
 
