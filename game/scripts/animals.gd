@@ -269,23 +269,32 @@ func nearest_predator(a: Node3D, r: float) -> Node3D:
 	if preds.is_empty():
 		return null
 	var best: Node3D = null
-	var bd := r
+	var best_score := -INF
 	for o in near(a.position, r):
-		if o.dead or not (o.kind in preds) or o.state == "sleep" or o.state == "inlodge":
+		if o.dead or not (o.kind in preds) or o.state in ["sleep", "inlodge"]:
 			continue
-		# в погоне хищник заметен издалека, подкрадывающийся — вполовину, в засаде — почти нет
-		var k := 0.4
+		var visibility := 0.4
 		match o.state:
 			"chase":
-				k = 1.0
+				visibility = 1.0
 			"stalk":
-				k = 0.55
+				visibility = 0.55
 			"ambush":
-				k = 0.15
-		var d: float = a.position.distance_to(o.position)
-		if d < bd * k:
-			bd = d / k
-			best = o
+				visibility = 0.15
+			# Не полагаемся только на состояние: активное движение повышает заметность.
+			if o.speed > 1.8:
+				visibility = maxf(visibility, 0.72)
+			elif o.speed > 0.6:
+				visibility = maxf(visibility, 0.52)
+			var d: float = a.position.distance_to(o.position)
+			if d >= r * visibility:
+				continue
+			# Сильнее реагируют на близкую угрозу и внезапное движение.
+			var urgency := 1.0 - d / maxf(r * visibility, 0.01)
+			var score := urgency * visibility + (0.18 if o.state == "chase" else 0.0)
+			if score > best_score:
+				best_score = score
+				best = o
 	return best
 
 func nearest_of(a: Node3D, kinds: Array, r: float) -> Node3D:
