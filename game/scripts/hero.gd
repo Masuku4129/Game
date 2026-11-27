@@ -442,9 +442,11 @@ func do_action() -> void:
 		if main.stamina < 0.045:
 			main._say("Не хватает сил упереться жердью")
 			return
-		# Тяжёлый рюкзак требует больше сил при упоре жердью, а глубина трясины
-		# снижает эффективность каждого рывка. Нагрузка уже рассчитана в начале кадра.
-		var pole_effort := 0.045 + carried_load * 0.025
+		# Inventory load is calculated at the moment this action is performed.
+		var carried_load: float = 0.0
+		if main.inventory != null:
+			carried_load = clampf(main.inventory.weight() / main.inventory.CAPACITY, 0.0, 1.0)
+		var pole_effort: float = 0.045 + carried_load * 0.025
 		var escape_gain := (0.24 + swamp_depth * 0.035) * (1.0 - carried_load * 0.38)
 		main.stamina = maxf(0.0, float(main.stamina) - pole_effort)
 		swamp_escape_progress = minf(1.0, swamp_escape_progress + escape_gain)

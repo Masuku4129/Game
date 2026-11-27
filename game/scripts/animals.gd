@@ -370,20 +370,20 @@ func nearest_predator(a: Node3D, r: float) -> Node3D:
 				visibility = 0.55
 			"ambush":
 				visibility = 0.15
-			# Не полагаемся только на состояние: активное движение повышает заметность.
-			if o.speed > 1.8:
-				visibility = maxf(visibility, 0.72)
-			elif o.speed > 0.6:
-				visibility = maxf(visibility, 0.52)
-			var d: float = a.position.distance_to(o.position)
-			if d >= r * visibility:
-				continue
-			# Сильнее реагируют на близкую угрозу и внезапное движение.
-			var urgency := 1.0 - d / maxf(r * visibility, 0.01)
-			var score := urgency * visibility + (0.18 if o.state == "chase" else 0.0)
-			if score > best_score:
-				best_score = score
-				best = o
+		# Active movement raises detectability regardless of AI state.
+		if o.speed > 1.8:
+			visibility = maxf(visibility, 0.72)
+		elif o.speed > 0.6:
+			visibility = maxf(visibility, 0.52)
+		var d: float = a.position.distance_to(o.position)
+		if d >= r * visibility:
+			continue
+		# Close range and sudden movement raise the threat response.
+		var urgency := 1.0 - d / maxf(r * visibility, 0.01)
+		var score := urgency * visibility + (0.18 if o.state == "chase" else 0.0)
+		if score > best_score:
+			best_score = score
+			best = o
 	return best
 
 func nearest_of(a: Node3D, kinds: Array, r: float) -> Node3D:

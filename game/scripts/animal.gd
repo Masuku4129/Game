@@ -254,7 +254,7 @@ func _new_wander() -> void:
 func _habitat_score(p: Vector3) -> float:
 	var forest := clampf(float(main.forest_density(p.x, p.z)), 0.0, 1.0)
 	var wet := clampf(float(main.wet_k(p.x, p.z, main.height(p.x, p.z))), 0.0, 1.0)
-	var water_d := float(main.river_dist(p.x, p.z)
+	var water_d := float(main.river_dist(p.x, p.z))
 	var slope := 1.0 - clampf(float(main.normal_at(p.x, p.z).y), 0.0, 1.0)
 	var prefs: Dictionary = {
 		"squirrel": [0.92, 0.28, 0.1], "capercaillie": [0.82, 0.4, 0.1],
