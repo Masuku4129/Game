@@ -948,7 +948,9 @@ func _animate_model(delta: float) -> void:
 	_hspeed = lerpf(_hspeed, Vector2(d.x, d.z).length() / maxf(delta, 0.001), minf(1.0, delta * 8.0))
 	# только поворот: наклоны старого тела (присед при остановке, крен) модели не нужны
 	model.rotation = Vector3(0, body.rotation.y, 0)
-	model.position = Vector3(0, -mud_sink, 0)
+	# GLB-модель должна опускаться вместе с физическим провалом в трясину,
+	# а не только с мелкой грязью из карты следов.
+	model.position = Vector3(0, -mud_sink - swamp_sink * 0.72, 0)
 	if state == "dead":
 		_play("Death01", 1.0, 0.2)
 		return
