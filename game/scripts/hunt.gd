@@ -121,9 +121,9 @@ func _create_traveler_body(parent: Node3D) -> void:
 	var built: Dictionary = preload("res://scripts/hero_skin.gd").build(parent, palette)
 	var model: Node3D = built["model"]
 	model.scale = Vector3(0.9, 0.9, 0.9)
-	# Положение на боку, лицом вверх; голова направлена к северному краю тела.
-	model.rotation.x = -PI * 0.5
-	model.position = Vector3(0.0, 0.08, 0.82)
+	# Лежит лицом в мох, на спине виден вещмешок; голова направлена к южному краю.
+	model.rotation.x = PI * 0.5
+	model.position = Vector3(0.0, 0.08, -0.82)
 	# Потёртый дорожный вещмешок остаётся на спине путника.
 	var pack_mat := StandardMaterial3D.new()
 	pack_mat.albedo_color = Color(0.19, 0.12, 0.07)
