@@ -245,8 +245,32 @@ func update_visual(cam_target: Vector3) -> void:
 	atmo.update(cam_target)
 
 ## Раздать параметры шейдерам.
-func apply(mats: Array, terrain: ShaderMaterial, blade: ShaderMaterial, water: ShaderMaterial) -> void:
-	for m in mats:
+var _last_shader_weather := PackedFloat32Array()
+
+func apply(mats_a: Array, mats_b: Array, terrain: ShaderMaterial, blade: ShaderMaterial, water: ShaderMaterial) -> void:
+	# Погодные значения интерполируются каждый тик, но микроскопические изменения
+	# не требуют повторной отправки параметров сотням материалов.
+	var freeze_now := clampf(-temp * 0.5, 0.0, 1.0)
+	var rain_now := precip if temp >= 0.5 else 0.0
+	var dry_now := clampf(autumn * 0.8 + (1.0 - smoothstep(0.0, 0.4, temp)) * 0.3, 0.0, 1.0)
+	var values := PackedFloat32Array([snow, wet, autumn, leaf_drop, wind, blossom, freeze_now, rain_now, dry_now, ice])
+	var changed := _last_shader_weather.size() != values.size()
+	if not changed:
+		for i in values.size():
+			if absf(values[i] - _last_shader_weather[i]) >= 0.003:
+				changed = true
+				break
+	if not changed:
+		return
+	_last_shader_weather = values
+	for m in mats_a:
+		m.set_shader_parameter("snow", snow)
+		m.set_shader_parameter("wet", wet)
+		m.set_shader_parameter("autumn", autumn)
+		m.set_shader_parameter("leaf_drop", leaf_drop)
+		m.set_shader_parameter("wind", wind)
+		m.set_shader_parameter("blossom", blossom)
+	for m in mats_b:
 		m.set_shader_parameter("snow", snow)
 		m.set_shader_parameter("wet", wet)
 		m.set_shader_parameter("autumn", autumn)
@@ -255,13 +279,13 @@ func apply(mats: Array, terrain: ShaderMaterial, blade: ShaderMaterial, water: S
 		m.set_shader_parameter("blossom", blossom)
 	terrain.set_shader_parameter("snow", snow)
 	terrain.set_shader_parameter("wet", wet)
-	terrain.set_shader_parameter("freeze", clampf(-temp * 0.5, 0.0, 1.0))
-	terrain.set_shader_parameter("rain", precip if temp >= 0.5 else 0.0)
+	terrain.set_shader_parameter("freeze", freeze_now)
+	terrain.set_shader_parameter("rain", rain_now)
 	blade.set_shader_parameter("snow", snow)
-	blade.set_shader_parameter("dry", clampf(autumn * 0.8 + (1.0 - smoothstep(0.0, 0.4, temp)) * 0.3, 0.0, 1.0))
+	blade.set_shader_parameter("dry", dry_now)
 	blade.set_shader_parameter("wind", wind)
 	water.set_shader_parameter("ice", ice)
-	water.set_shader_parameter("rain", precip if temp >= 0.5 else 0.0)
+	water.set_shader_parameter("rain", rain_now)
 
 # --- core: сохранение (save.gd, раздел «weather») ---
 const _SAVE_KEYS := ["next_change", "cloud", "precip", "fogv", "wind", "temp", "snow", "wet", "autumn", "leaf_drop", "ice", "mist", "blossom", "t_cloud", "t_precip", "t_fog", "t_wind", "_hours_acc"]
