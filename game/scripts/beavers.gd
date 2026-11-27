@@ -188,8 +188,8 @@ func _push_levels() -> void:
 
 ## Колония: створ плотины поперёк реки, полоса воды, хатка ниже по течению, деревья для работы.
 func _colony(x: float, first: bool) -> void:
-	var zc: float = RP.zc(x)
-	var t := Vector3(1.0, 0.0, RP.dzc(x)).normalized()
+	var zc: float = RP.zc(x, main.map_seed)
+	var t := Vector3(1.0, 0.0, RP.dzc(x, main.map_seed)).normalized()
 	var across := Vector3(-t.z, 0.0, t.x)
 	var cp := Vector3(x, 0.0, zc)
 	var crest_full: float = main.WATER_Y + RISE + 0.25
@@ -293,7 +293,7 @@ func _make_strip(c: Dictionary) -> void:
 	for uu in us:
 		# поперечные ряды вдоль оси реки: центр ряда — на русле
 		var p0 := cp + t * uu
-		var zc: float = RP.zc(p0.x)
+		var zc: float = RP.zc(p0.x, main.map_seed)
 		for vv in vs:
 			var p := Vector3(p0.x, 0.0, zc) + across * vv
 			verts.append(p)
@@ -735,7 +735,7 @@ func _tick_colony(c: Dictionary, delta: float) -> bool:
 				var xf: Transform3D = rec[2]
 				var o := xf.origin
 				# встать со стороны реки, к стволу мордой
-				var zc: float = RP.zc(o.x)
+				var zc: float = RP.zc(o.x, main.map_seed)
 				var to_r := Vector3(0, 0, signf(zc - o.z) if absf(zc - o.z) > 0.1 else 1.0)
 				var s := xf.basis.get_scale().x
 				c["fell"] = {"rec": rec, "xf": xf, "o": o, "s": s, "k": 0.0, "dir": to_r.rotated(Vector3.UP, rng.randf_range(-0.5, 0.5)), "phase": "stand", "vis": false}
