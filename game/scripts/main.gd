@@ -1372,9 +1372,14 @@ var _tree_id := 0
 ## дизерингом (шейдер сравнивает расстояние до near_c), поэтому смены моделей не видно.
 func _update_near(force: bool = false) -> void:
 	var c: Vector3 = rig.position
-	# Detail models are prepared ahead of the camera so the visible forest does not pop in at the view edge.
+	# Детальные деревья готовятся с запасом по направлению взгляда и движения.
+	# Скорость добавляет упреждение, чтобы при быстром перемещении не догонять камеру.
 	var view_forward := Vector3(sin(rig.rotation.y), 0.0, -cos(rig.rotation.y))
-	c += view_forward * 42.0
+	var look_ahead := 54.0
+	if hero != null:
+		var horizontal_speed := Vector2(hero.vel.x, hero.vel.z).length()
+		look_ahead += clampf((horizontal_speed - 2.0) * 2.0, 0.0, 18.0)
+	c += view_forward * look_ahead
 	if not force and Vector2(c.x - _near_at.x, c.z - _near_at.z).length_squared() < 1.0:
 		return
 	_near_at = c
