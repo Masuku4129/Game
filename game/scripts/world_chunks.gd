@@ -67,7 +67,7 @@ func _sync_chunk_weather() -> void:
 		material.set_shader_parameter("freeze", freeze_now)
 		material.set_shader_parameter("rain", rain_now)
 		material.set_shader_parameter("snow_m", snow_depth_now)
-		material.set_shader_parameter("mud_m", mud_depth_now
+		material.set_shader_parameter("mud_m", mud_depth_now)
 
 func _key(c: Vector2i) -> String:
 	return "%d,%d" % [c.x, c.y]
