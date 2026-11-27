@@ -1,4 +1,5 @@
 extends Node3D
+const RP := preload("res://scripts/river_path.gd")
 ## Бобровые колонии на реке. Плотина из брёвен, веток и ила поднимает воду перед собой
 ## и опускает после; хатка ниже по течению. Бобр-работник валит прибрежные деревья
 ## (лиственные — в первую очередь): подгрызает ствол «песочными часами», дерево падает
@@ -187,8 +188,8 @@ func _push_levels() -> void:
 
 ## Колония: створ плотины поперёк реки, полоса воды, хатка ниже по течению, деревья для работы.
 func _colony(x: float, first: bool) -> void:
-	var zc := 70.0 * sin(x / 95.0) + 20.0
-	var t := Vector3(1.0, 0.0, 70.0 / 95.0 * cos(x / 95.0)).normalized()
+	var zc: float = RP.zc(x)
+	var t := Vector3(1.0, 0.0, RP.dzc(x)).normalized()
 	var across := Vector3(-t.z, 0.0, t.x)
 	var cp := Vector3(x, 0.0, zc)
 	var crest_full: float = main.WATER_Y + RISE + 0.25
@@ -292,7 +293,7 @@ func _make_strip(c: Dictionary) -> void:
 	for uu in us:
 		# поперечные ряды вдоль оси реки: центр ряда — на русле
 		var p0 := cp + t * uu
-		var zc := 70.0 * sin(p0.x / 95.0) + 20.0
+		var zc: float = RP.zc(p0.x)
 		for vv in vs:
 			var p := Vector3(p0.x, 0.0, zc) + across * vv
 			verts.append(p)
@@ -734,7 +735,7 @@ func _tick_colony(c: Dictionary, delta: float) -> bool:
 				var xf: Transform3D = rec[2]
 				var o := xf.origin
 				# встать со стороны реки, к стволу мордой
-				var zc := 70.0 * sin(o.x / 95.0) + 20.0
+				var zc: float = RP.zc(o.x)
 				var to_r := Vector3(0, 0, signf(zc - o.z) if absf(zc - o.z) > 0.1 else 1.0)
 				var s := xf.basis.get_scale().x
 				c["fell"] = {"rec": rec, "xf": xf, "o": o, "s": s, "k": 0.0, "dir": to_r.rotated(Vector3.UP, rng.randf_range(-0.5, 0.5)), "phase": "stand", "vis": false}

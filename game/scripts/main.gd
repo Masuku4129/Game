@@ -17,6 +17,12 @@ var n_crag := FastNoiseLite.new()
 var n_crag2 := FastNoiseLite.new()
 var n_biome := FastNoiseLite.new()
 var n_zone := FastNoiseLite.new()
+var n_open := FastNoiseLite.new()
+var n_wet := FastNoiseLite.new()
+var n_glade := FastNoiseLite.new()
+const RP := preload("res://scripts/river_path.gd")
+## Озёра: [x, z, радиус, м]. Вдали от русла и от старта.
+const LAKES := [[-150.0, -140.0, 34.0], [125.0, 160.0, 46.0], [-60.0, 205.0, 28.0], [185.0, -150.0, 30.0]]
 
 var t_hours := 9.0
 var day_count := 1
@@ -387,13 +393,31 @@ func _setup_noise() -> void:
 	n_forest.seed = 909; n_forest.frequency = 0.02; n_forest.fractal_octaves = 3
 	n_zone.seed = 2024; n_zone.noise_type = FastNoiseLite.TYPE_CELLULAR; n_zone.frequency = 0.018
 	n_zone.cellular_return_type = FastNoiseLite.RETURN_CELL_VALUE; n_zone.fractal_type = FastNoiseLite.FRACTAL_NONE
+	n_open.seed = 313; n_open.frequency = 0.0055; n_open.fractal_octaves = 2
+	n_wet.seed = 777; n_wet.frequency = 0.007; n_wet.fractal_octaves = 3
+	n_glade.seed = 555; n_glade.frequency = 0.011; n_glade.fractal_octaves = 2
 
 ## Уровень воды в точке: у бобровых плотин выше (пруд) или ниже (после плотины).
 func water_level(x: float, z: float) -> float:
 	return WATER_Y + (beavers.level_off(x, z) if beavers != null else 0.0)
 
+## Расстояние до русла по нормали к оси (на крутой излучине река не сужается).
 func river_dist(x: float, z: float) -> float:
-	return absf(z - 70.0 * sin(x / 95.0) - 20.0)
+	var d: float = RP.dzc(x)
+	return absf(z - RP.zc(x)) / sqrt(1.0 + d * d)
+
+## 1 в центре озера, плавно к 0 у берега.
+func lake_k(x: float, z: float) -> float:
+	var k := 0.0
+	for l in LAKES:
+		var d := Vector2(x - float(l[0]), z - float(l[1])).length()
+		var r: float = float(l[2]) * (1.0 + n_detail.get_noise_2d(x * 0.6 + float(l[0]), z * 0.6) * 0.35)
+		k = maxf(k, 1.0 - smoothstep(r * 0.55, r, d))
+	return k
+
+## Болотистость низины (0..1): плоская мочажинная равнина с озерками.
+func wet_k(x: float, z: float, h: float) -> float:
+	return clampf((WATER_Y + 4.0 - h) / 3.0, 0.0, 1.0) * smoothstep(-0.08, 0.3, n_wet.get_noise_2d(x, z))
 
 ## Особые участки леса (ячейки ~90 м): 0 обычный, 1 гарь, 2 болото, 3 курумник, 4 бурелом.
 func zone(x: float, z: float) -> int:
@@ -404,9 +428,10 @@ func zone(x: float, z: float) -> int:
 	# зоны редкие и небольшие: ~1/3 прежней площади
 	if v < -0.86:
 		return 1
-	if v < -0.7 and y < WATER_Y + 4.0:
+	if (v < -0.7 and y < WATER_Y + 4.0) or (y > WATER_Y + 0.1 and y < WATER_Y + 3.0 and wet_k(x, z, y) > 0.3):
 		return 2
-	if v > 0.88 or (v > 0.76 and biome(x, z) > 0.2):
+	# каменистые склоны и курумники: в скалистой части карты крупными пятнами
+	if v > 0.88 or (v > 0.76 and biome(x, z) > 0.2) or (biome(x, z) > 0.42 and n_detail.get_noise_2d(x * 0.3, z * 0.3) > 0.1):
 		return 3
 	if v > 0.2 and v < 0.3:
 		return 4
@@ -433,6 +458,12 @@ func height(x: float, z: float) -> float:
 	var h := n_hill.get_noise_2d(x, z) * (3.0 + rocky * 2.0) + n_detail.get_noise_2d(x, z) * 0.35 + 2.5
 	h += cliff_k(x, z) * cliff_h(x, z)
 	h = maxf(h, WATER_Y + 0.6 + n_detail.get_noise_2d(x * 0.5, z * 0.5) * 0.3)
+	# болотистая низина: ровная мочажина чуть выше воды, в ней озерки-окна
+	var wk := wet_k(x, z, h)
+	if wk > 0.0:
+		h = lerpf(h, WATER_Y + 0.5 + n_detail.get_noise_2d(x * 0.8, z * 0.8) * 0.12, wk * 0.85)
+		h = lerpf(h, WATER_Y - 0.9, smoothstep(0.5, 0.62, n_detail.get_noise_2d(x * 0.25 + 90.0, z * 0.25)) * wk)
+	h = lerpf(h, WATER_Y - 2.2, lake_k(x, z))
 	var r := 1.0 - smoothstep(7.0, 26.0, river_dist(x, z))
 	return lerpf(h, WATER_Y - 2.5, r)
 
@@ -447,6 +478,9 @@ func forest_density(x: float, z: float) -> float:
 		d -= b * 0.75
 	else:
 		d += b * 0.5
+	# густая тайга ↔ редколесье: широкое пятно открытости; поляны — округлые просветы
+	d += n_open.get_noise_2d(x, z) * 0.55
+	d *= 1.0 - smoothstep(0.5, 0.62, n_glade.get_noise_2d(x, z)) * 0.92
 	return clampf(d, 0.0, 1.0)
 
 var sky_mat: ProceduralSkyMaterial

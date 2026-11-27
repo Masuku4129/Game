@@ -1,4 +1,5 @@
 extends Node3D
+const RP := preload("res://scripts/river_path.gd")
 ## Зверь: модель из animal_model.gd, походка по скорости (шаг, рысь, галоп, прыжки),
 ## поведение-автомат: отдых, пастьба, бродит, настороже, бегство, выслеживание, погоня, нападение.
 
@@ -166,7 +167,7 @@ func _new_wander() -> void:
 	state_t = rng.randf_range(8.0, 20.0)
 
 static func _river_zc(x: float) -> float:
-	return 70.0 * sin(x / 95.0) + 20.0
+	return RP.zc(x)
 
 func _bank_side(p: Vector3) -> float:
 	return signf(p.z - _river_zc(p.x))

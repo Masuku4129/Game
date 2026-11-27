@@ -1,4 +1,5 @@
 extends Node3D
+const RP := preload("res://scripts/river_path.gd")
 ## Рыба в реке: косячки хариуса под поверхностью (один MultiMesh на все), стоят против течения,
 ## покачиваясь, при опасности рассыпаются; изредка рыба выпрыгивает с плеском. Зимой подо льдом —
 ## меньше косяков, глубже, без прыжков. Медведь ловит рыбу на мелководье у берега (spot_near, catch_at).
@@ -110,7 +111,7 @@ func _make_mesh() -> void:
 	mat.shader = sh
 
 static func _zc(x: float) -> float:
-	return 70.0 * sin(x / 95.0) + 20.0
+	return RP.zc(x)
 
 ## Отдельная рыбина (в пасти медведя, на берегу).
 func make_fish() -> MeshInstance3D:
