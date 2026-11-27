@@ -1168,7 +1168,16 @@ const MODEL_KINDS := {
 	"aspen": ["taiga_aspen.glb", 5, 1.0, "bark_aspen", "leaf"],
 	"alder": ["taiga_alder.glb", 5, 0.55, "bark", "alder"],
 	"bush": ["taiga_bush.glb", 5, 0.75, "bark", "bush"],
-	"stump": ["taiga_stump.glb", 2, 1.0, "log", "moss"],
+	"stump": ["taiga_stump.glb", 3, 1.0, "log", "moss"],
+	"rock": ["taiga_rock.glb", 6, 1.0, "rock", "moss"],
+	"pebble": ["taiga_rock.glb", 4, 0.42, "rock", "moss"],
+	"slab": ["taiga_rock.glb", 4, 1.25, "rock", "moss"],
+	"split_rock": ["taiga_rock.glb", 4, 1.15, "rock", "moss"],
+	"outcrop": ["taiga_rock.glb", 4, 1.65, "rock", "moss"],
+	"scree": ["taiga_rock.glb", 5, 0.72, "rock", "moss"],
+	"fallen0": ["taiga_fallen_log.glb", 4, 1.0, "log", "moss"],
+	"fallen1": ["taiga_fallen_log.glb", 4, 1.15, "log", "moss"],
+	"windfall": ["taiga_fallen_log.glb", 5, 1.2, "log", "moss"],
 }
 
 ## Варианты породы из GLB: [[ArrayMesh, высота], ...] или [] если породы нет в таблице.
