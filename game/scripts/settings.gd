@@ -187,7 +187,7 @@ func _label(t: String, p: Vector2, fs: int) -> Label:
 	l.text = t
 	l.position = p
 	l.add_theme_font_size_override("font_size", fs)
-	l.add_theme_color_override("font_color", Color(0.24, 0.15, 0.08))
+	l.add_theme_color_override("font_color", UI.TEXT)
 	sheet.add_child(l)
 	return l
 
