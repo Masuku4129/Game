@@ -939,12 +939,15 @@ func _push_out() -> void:
 	var overhead: float = main.solid_top(position.x, position.z) - position.y
 	if not main.blocked(position.x, position.z, _obstacle_radius()) and overhead <= 0.55:
 		return
-	# Search wider and more densely so animals can escape tree/rock gaps.
-	for r in [0.5, 0.9, 1.3, 1.8, 2.4, 3.2, 4.2, 5.4]:
-		for k in 24:
-			var a := TAU * float(k) / 24.0 + float(r) * 0.31
-			var q: Vector3 = position + Vector3(sin(a), 0.0, cos(a)) * float(r)
-			if _can_step(q):
+	# Recovery searches several rings with alternating angular offsets. A candidate
+	# must be both free and connected by a valid sampled path, preventing escapes
+	# through rock walls or tree trunks.
+	var origin := position
+	for r in [0.45, 0.7, 1.0, 1.4, 1.9, 2.5, 3.2, 4.0, 5.0, 6.2]:
+		for k in 32:
+			var a := TAU * float(k) / 32.0 + float(r) * 0.23
+			var q: Vector3 = origin + Vector3(sin(a), 0.0, cos(a)) * float(r)
+			if _can_step(q) and _can_move_segment(origin, q):
 				position.x = q.x
 				position.z = q.z
 				return
