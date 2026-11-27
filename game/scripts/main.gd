@@ -1419,7 +1419,28 @@ func tree_height_at(p: Vector3) -> float:
 					best = d
 					var key: String = rec[3]
 					if near_mesh.has(key):
-						result = (near_mesh[key] as Mesh).get_aabb().size.y
+						result = (near_mesh[key] as Mesh).get_aabb().size.y * t.basis.get_scale().y
+	return result
+
+## Радиус ствола по реальному GLB-габариту и масштабу экземпляра.
+func tree_radius_at(p: Vector3) -> float:
+	var c := Vector2i(floori(p.x / 16.0), floori(p.z / 16.0))
+	var best := 1e9
+	var result := 0.32
+	for dz in range(-1, 2):
+		for dx in range(-1, 2):
+			var k := Vector2i(c.x + dx, c.y + dz)
+			if not tree_grid.has(k):
+				continue
+			for rec in tree_grid[k]:
+				var t: Transform3D = rec[2]
+				var d := Vector2(t.origin.x - p.x, t.origin.z - p.z).length_squared()
+				if d < best:
+					best = d
+					var key: String = rec[3]
+					if near_mesh.has(key):
+						var aabb: AABB = (near_mesh[key] as Mesh).get_aabb()
+						result = maxf(aabb.size.x, aabb.size.z) * 0.5 * maxf(t.basis.get_scale().x, t.basis.get_scale().z)
 	return result
 
 ## Удар зверя: часть тела, кровотечение, переломы, отбрасывание.
