@@ -1215,7 +1215,7 @@ func _variants(kind: String) -> Array:
 		"rowan":
 			for i in 2: out.append(pv.birch(2300 + i, "rowan"))
 		"fern":
-			for i in 5: out.append(pv.fern(700 + i))
+			for i in 4: out.append(pv.fern(700 + i))
 		"grass":
 			for i in 4: out.append(veg.grass(800 + i))
 		"rock":
