@@ -453,7 +453,7 @@ func swamp_depth_at(x: float, z: float) -> float:
 	if weather != null:
 		depth *= 1.0 + clampf(weather.wet, 0.0, 1.0) * 0.18
 		if weather.temp < -2.0:
-			depth *= 1.0 - smoothstep(-2.0, -12.0, weather.temp) * clampf(weather.snow, 0.0, 1.0) * 0.32
+			depth *= 1.0 - (1.0 - smoothstep(-12.0, -2.0, weather.temp)) * clampf(weather.snow, 0.0, 1.0) * 0.32
 	return clampf(depth, 0.0, 1.45)
 
 func biome(x: float, z: float) -> float:
