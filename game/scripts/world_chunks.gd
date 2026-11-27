@@ -60,13 +60,15 @@ func _process(delta: float) -> void:
 func _record_exploration(player_pos: Vector3) -> void:
 	if main == null:
 		return
-	# Only the area physically visited by the player is revealed; chunk preloading
-	# and camera look-ahead never expose the map.
 	var step := MAP_SAMPLE_STEP
 	var gx := floori(player_pos.x / step)
 	var gz := floori(player_pos.z / step)
 	var radius_cells := ceili(MAP_DISCOVERY_RADIUS / step)
 	var stamp := int(main.day_count) * 24 + int(main.t_hours)
+	# Cache the existing cells once per chunk for this discovery pass. The previous
+	# per-cell deep-copy read made the map update unnecessarily expensive.
+	var staged: Dictionary = {}
+	var known: Dictionary = {}
 	for z in range(gz - radius_cells, gz + radius_cells + 1):
 		for x in range(gx - radius_cells, gx + radius_cells + 1):
 			var wx := (float(x) + 0.5) * step
@@ -75,8 +77,10 @@ func _record_exploration(player_pos: Vector3) -> void:
 				continue
 			var key := "%d:%d" % [x, z]
 			var coord := Vector2i(floori(wx / CHUNK_SIZE), floori(wz / CHUNK_SIZE))
-			var existing := read_map_cells(coord)
-			if existing.has(key):
+			var chunk_key := _key(coord)
+			if not known.has(chunk_key):
+				known[chunk_key] = read_map_cells(coord)
+			if known[chunk_key].has(key):
 				continue
 			var elevation := float(main.height(wx, wz))
 			var water := float(main.water_level(wx, wz))
@@ -91,8 +95,12 @@ func _record_exploration(player_pos: Vector3) -> void:
 				"wetness": wet, "river_distance": river, "forest_density": forest,
 				"terrain_type": terrain_type, "season": int(main.weather.season_index()) if main.weather != null else 0
 			}
-			if main.chunk_stream != null:
-				main.chunk_stream.save_map_cell(wx, wz, key, record)
+			if not staged.has(chunk_key):
+				staged[chunk_key] = {"coord": coord, "cells": {}}
+			staged[chunk_key]["cells"][key] = record
+	for batch in staged.values():
+		if main.chunk_stream != null:
+			main.chunk_stream.save_map_cells(batch["coord"], batch["cells"])
 
 func _sync_chunk_weather() -> void:
 	if main == null or main.weather == null:
@@ -225,6 +233,22 @@ func save_map_cell(world_x: float, world_z: float, cell_key: String, data: Dicti
 	var rec: Dictionary = persistent[k]
 	var cells: Dictionary = rec.get("map_cells", {})
 	cells[cell_key] = data.duplicate(true)
+	rec["map_cells"] = cells
+	rec["explored"] = true
+	rec["revision"] = int(rec.get("revision", 0)) + 1
+	persistent[k] = rec
+
+func save_map_cells(chunk_coord: Vector2i, cells_to_add: Dictionary) -> void:
+	if cells_to_add.is_empty():
+		return
+	var k := _key(chunk_coord)
+	if not persistent.has(k):
+		persistent[k] = _create_record(chunk_coord)
+	var rec: Dictionary = persistent[k]
+	var cells: Dictionary = rec.get("map_cells", {})
+	for cell_key in cells_to_add:
+		if not cells.has(cell_key):
+			cells[cell_key] = cells_to_add[cell_key].duplicate(true)
 	rec["map_cells"] = cells
 	rec["explored"] = true
 	rec["revision"] = int(rec.get("revision", 0)) + 1
