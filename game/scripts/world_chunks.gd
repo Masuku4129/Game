@@ -7,6 +7,8 @@ const ACTIVE_RADIUS := 2
 const PRELOAD_RADIUS := 3
 const LOAD_BUDGET := 2
 const MAX_SAVED_CHUNKS := 4096
+const TERRAIN_SEGMENTS := 32
+const BASE_HALF_EXTENT := 256.0
 
 var main: Node3D
 var active: Dictionary = {}
@@ -15,6 +17,7 @@ var pending: Array[Vector2i] = []
 var center := Vector2i(1 << 20, 1 << 20)
 var _refresh := 0.0
 var _sequence := 0
+var terrain_nodes: Dictionary = {}
 
 func _process(delta: float) -> void:
 	if main == null or main.hero == null or main.rig == null:
@@ -67,6 +70,10 @@ func _process_queue() -> void:
 		record["loaded"] = true
 		active[k] = record
 		persistent[k] = record
+		# Центральный участок уже покрыт основной высокодетальной сеткой.
+		# За его границей создаём продолжение теми же функциями рельефа и материалом.
+		if not _inside_base_world(c):
+			_build_terrain_chunk(c)
 		budget -= 1
 
 func _create_record(c: Vector2i) -> Dictionary:
@@ -170,6 +177,96 @@ func _apply_resource_state() -> void:
 	main.pickables = pickables
 
 
+func _inside_base_world(c: Vector2i) -> bool:
+	var x0 := float(c.x) * CHUNK_SIZE
+	var z0 := float(c.y) * CHUNK_SIZE
+	return x0 >= -BASE_HALF_EXTENT and x0 + CHUNK_SIZE <= BASE_HALF_EXTENT and z0 >= -BASE_HALF_EXTENT and z0 + CHUNK_SIZE <= BASE_HALF_EXTENT
+
+func _build_terrain_chunk(c: Vector2i) -> void:
+	var k := _key(c)
+	if terrain_nodes.has(k) or main == null or main.terrain_mat == null:
+		return
+	var seg := TERRAIN_SEGMENTS
+	var side := seg + 1
+	var origin_x := float(c.x) * CHUNK_SIZE
+	var origin_z := float(c.y) * CHUNK_SIZE
+	var step := CHUNK_SIZE / float(seg)
+	var vertices := PackedVector3Array()
+	var normals := PackedVector3Array()
+	var colors := PackedColorArray()
+	var uvs := PackedVector2Array()
+	vertices.resize(side * side)
+	normals.resize(side * side)
+	colors.resize(side * side)
+	uvs.resize(side * side)
+	for z in range(side):
+		for x in range(side):
+			var wx := origin_x + float(x) * step
+			var wz := origin_z + float(z) * step
+			var index := z * side + x
+			var h: float = main.height(wx, wz)
+			vertices[index] = Vector3(float(x) * step, h, float(z) * step)
+			var e := 0.5
+			normals[index] = Vector3(
+				main.height(wx - e, wz) - main.height(wx + e, wz),
+				2.0 * e,
+				main.height(wx, wz - e) - main.height(wx, wz + e)
+			).normalized()
+			var density: float = main.forest_density(wx, wz)
+			var mud := clampf((main.WATER_Y + 1.2 - h) / 1.5, 0.0, 1.0)
+			var leaves := clampf(main.n_detail.get_noise_2d(wx * 2.0, wz * 2.0) * 0.8 + density * 0.5, 0.0, 1.0)
+			colors[index] = Color(density, mud, leaves)
+			uvs[index] = Vector2(wx, wz) * 0.08
+	var indices := PackedInt32Array()
+	indices.resize(seg * seg * 6)
+	var cursor := 0
+	for z in range(seg):
+		for x in range(seg):
+			var a := z * side + x
+			indices[cursor] = a
+			indices[cursor + 1] = a + 1
+			indices[cursor + 2] = a + side
+			indices[cursor + 3] = a + 1
+			indices[cursor + 4] = a + side + 1
+			indices[cursor + 5] = a + side
+			cursor += 6
+	var arrays: Array = []
+	arrays.resize(Mesh.ARRAY_MAX)
+	arrays[Mesh.ARRAY_VERTEX] = vertices
+	arrays[Mesh.ARRAY_NORMAL] = normals
+	arrays[Mesh.ARRAY_COLOR] = colors
+	arrays[Mesh.ARRAY_TEX_UV] = uvs
+	arrays[Mesh.ARRAY_INDEX] = indices
+	var mesh := ArrayMesh.new()
+	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
+	mesh.surface_set_material(0, main.terrain_mat)
+	var root := Node3D.new()
+	root.name = "TerrainChunk_%d_%d" % [c.x, c.y]
+	root.position = Vector3(origin_x, 0.0, origin_z)
+	var visual := MeshInstance3D.new()
+	visual.mesh = mesh
+	visual.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	visual.extra_cull_margin = 8.0
+	root.add_child(visual)
+	var body := StaticBody3D.new()
+	body.name = "TerrainCollision"
+	var shape := ConcavePolygonShape3D.new()
+	shape.set_faces(mesh.get_faces())
+	var collision := CollisionShape3D.new()
+	collision.shape = shape
+	body.add_child(collision)
+	root.add_child(body)
+	add_child(root)
+	terrain_nodes[k] = root
+
+func _remove_terrain_chunk(k: String) -> void:
+	if not terrain_nodes.has(k):
+		return
+	var node: Node = terrain_nodes[k]
+	terrain_nodes.erase(k)
+	if is_instance_valid(node):
+		node.queue_free()
+
 func _unload_distant() -> void:
 	for k: String in active.keys():
 		var rec: Dictionary = active[k]
@@ -179,6 +276,7 @@ func _unload_distant() -> void:
 			continue
 		rec["loaded"] = false
 		persistent[k] = rec
+		_remove_terrain_chunk(k)
 		active.erase(k)
 	_prune()
 
