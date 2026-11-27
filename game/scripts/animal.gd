@@ -704,7 +704,7 @@ func tick(delta: float) -> void:
 			var radial := Vector2(position.x - tree.x, position.z - tree.z).normalized()
 			if radial.length_squared() < 0.01:
 				radial = Vector2(cos(heading), sin(heading))
-			var bark_offset := 0.38 + sin(climb_h * 1.7) * 0.045
+			var bark_offset := main.tree_radius_at(tree) + 0.10 + sin(climb_h * 1.7) * 0.025
 			position.x = tree.x + radial.x * bark_offset
 			position.z = tree.z + radial.y * bark_offset
 			heading = atan2(tree.x - position.x, tree.z - position.z)
