@@ -384,14 +384,14 @@ func _process(delta: float) -> void:
 	_far_acc += delta
 	var n := list.size()
 	for a in list:
-		var d := Vector2(a.position.x - hp.x, a.position.z - hp.z).length()
+		var d2 := Vector2(a.position.x - hp.x, a.position.z - hp.z).length_squared()
 		var was_far: bool = a.far
-		a.far = d > NEAR_R
+		a.far = d2 > NEAR_R * NEAR_R
 		# perf: вблизи (до MID_R) — каждый кадр; дальше в пределах NEAR_R — ~20 раз в секунду
 		# со сдвигом по зверям (накопленным шагом), чтобы не грелся телефон
 		if not a.far:
 			a._acc += delta
-			var tick_interval: float = NEAR_DT if d < MID_R else MID_DT
+			var tick_interval: float = NEAR_DT if d2 < MID_R * MID_R else MID_DT
 			if a._acc >= tick_interval:
 				a.tick(a._acc)
 				a._acc = 0.0
@@ -418,11 +418,11 @@ func _process(delta: float) -> void:
 	if bird_slow:
 		_bird_acc = 0.0
 	for b in birds:
-		var d := Vector2(b.position.x - hp.x, b.position.z - hp.z).length()
-		b.visible = d < 45.0
-		if d < 50.0:
+		var d2 := Vector2(b.position.x - hp.x, b.position.z - hp.z).length_squared()
+		b.visible = d2 < 45.0 * 45.0
+		if d2 < 50.0 * 50.0:
 			b.tick(delta)
-		elif d < 90.0 and bird_slow:
+		elif d2 < 90.0 * 90.0 and bird_slow:
 			b.tick(0.2)
 
 func _make_bird_mesh() -> void:
