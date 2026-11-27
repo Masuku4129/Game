@@ -4,8 +4,9 @@ extends Node3D
 const Animal = preload("res://scripts/animal.gd")
 const SHOW_R := 75.0
 const NEAR_R := 95.0
-const MID_R := 25.0   # perf: ближе — каждый кадр (камера видит ~25 м)
-const MID_DT := 0.04  # perf: шаг для средних дистанций (25 раз в секунду)
+const MID_R := 25.0   # ближайшая зона — животные детальнее реагируют
+const NEAR_DT := 0.033 # близкая симуляция 30 Гц вместо каждого кадра; AnimPlayer продолжает интерполировать циклы
+const MID_DT := 0.04  # средняя дистанция — 25 Гц
 
 var main: Node3D
 var list: Array = []
@@ -390,7 +391,8 @@ func _process(delta: float) -> void:
 		# со сдвигом по зверям (накопленным шагом), чтобы не грелся телефон
 		if not a.far:
 			a._acc += delta
-			if d < MID_R or a._acc >= MID_DT:
+			var tick_interval: float = NEAR_DT if d < MID_R else MID_DT
+			if a._acc >= tick_interval:
 				a.tick(a._acc)
 				a._acc = 0.0
 		else:
