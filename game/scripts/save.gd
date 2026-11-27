@@ -60,10 +60,15 @@ func _active_bin_path() -> String:
 static func has_save() -> bool:
 	return FileAccess.file_exists(PATH)
 
-static func delete_save() -> void:
-	for p: String in [PATH, BIN, "user://creative_save.json", "user://creative_save.bin"]:
+static func delete_slot(creative: bool) -> void:
+	var files: Array = ["user://creative_save.json", "user://creative_save.bin"] if creative else [PATH, BIN]
+	for p: String in files:
 		if FileAccess.file_exists(p):
 			DirAccess.remove_absolute(ProjectSettings.globalize_path(p))
+
+static func delete_save() -> void:
+	delete_slot(false)
+	delete_slot(true)
 
 ## Собрать всё состояние в словарь (без записи на диск).
 func snapshot() -> Dictionary:
