@@ -66,6 +66,7 @@ var msg := ""
 var water_mat: ShaderMaterial
 var beavers
 var inventory  # короб: inventory.gd
+var chunk_stream # постоянное состояние потокового мира
 # --- tools: инструменты, валка, брёвна, копья (world_tools.gd) ---
 var tools_world
 var res_spots := {}      # клетка 8 м → [[позиция, вид]] — кусты, ягодники (нож, руки)
@@ -153,6 +154,9 @@ func _ready() -> void:
 		rig.position = hero.position
 		player_rig = hero
 	# --- /colony ---
+	chunk_stream = preload("res://scripts/world_chunks.gd").new()
+	chunk_stream.main = self
+	add_child(chunk_stream)
 	var ui := CanvasLayer.new()
 	add_child(ui)
 	if not colony_mode:
@@ -1130,6 +1134,10 @@ func _update_stats(dt: float) -> void:
 
 ## Высота видимой земли: билинейно по сетке рельефа (как её рисует сетка, в десятки раз быстрее height()).
 func grid_height(x: float, z: float) -> float:
+	# Вне стартовой сетки используем ту же мировую функцию рельефа.
+	# Это не обрезает навигацию животных и расчёт опоры по краю старой карты.
+	if absf(x) > SIZE * 0.5 or absf(z) > SIZE * 0.5:
+		return height(x, z)
 	var n := SEG + 1
 	var fx := clampf((x + SIZE * 0.5) / (SIZE / SEG), 0.0, SEG - 0.001)
 	var fz := clampf((z + SIZE * 0.5) / (SIZE / SEG), 0.0, SEG - 0.001)
@@ -2370,7 +2378,7 @@ func to_save() -> Dictionary:
 		"belt": (t.belt as Array).duplicate() if t != null else [], "lamp_h": _lamp_h,
 		"back": String(t.get("back")) if t != null and t.get("back") != null else "",
 		"logs": int(t.get("logs")) if t != null and t.get("logs") != null else 0,
-		"bundle": _bundle_save(t)}
+		"bundle": _bundle_save(t), "world_chunks": chunk_stream.to_save() if chunk_stream != null else {}}
 
 ## Связка брёвен на верёвке (hero_tools.bundle, log_bundle.gd): брёвна [{r, L, bark}].
 func _bundle_save(t: Node) -> Array:
@@ -2385,6 +2393,8 @@ func _bundle_save(t: Node) -> Array:
 func from_save(d: Dictionary) -> void:
 	var SV = preload("res://scripts/save.gd")
 	map_seed = int(d.get("map_seed", map_seed))
+	if chunk_stream != null:
+		chunk_stream.from_save(d.get("world_chunks", {}))
 	explored_map = d.get("explored_map", {}).duplicate(true)
 	t_hours = float(d.get("t_hours", t_hours))
 	day_count = int(d.get("day", day_count))
