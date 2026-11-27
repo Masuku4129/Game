@@ -325,6 +325,8 @@ func _resolve_world_seed() -> void:
 
 func _reveal_map_area() -> void:
 	# Открываем только пройденную местность. Храним компактные данные по клеткам 16×16 м.
+	if chunk_stream != null:
+		chunk_stream.mark_explored(hero.position)
 	var cx := floori(hero.position.x / 16.0)
 	var cz := floori(hero.position.z / 16.0)
 	for dz in range(-2, 3):
@@ -1525,6 +1527,8 @@ func take_pick(it: Array) -> bool:
 	(pickables[k] as Array).erase(it)
 	if (pickables[k] as Array).is_empty():
 		pickables.erase(k)
+	if chunk_stream != null:
+		chunk_stream.mark_resource_collected(q, kind)
 	var mm: MultiMesh = it[2]
 	mm.set_instance_transform(it[3], Transform3D(Basis().scaled(Vector3(0.001, 0.001, 0.001)), q - Vector3(0, 5, 0)))
 	# Ягоды и грибы в коробе не съедаются автоматически. Без инвентаря действует прежний сбор. 
