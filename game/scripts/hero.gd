@@ -564,7 +564,12 @@ func _process_main(delta: float) -> void:
 			f = minf(1.0 + along * slope * 0.2, 1.15)
 		var stam: float = main.stamina
 		running = mag > 0.92 and stam > 0.08 and (tools == null or tools.can_run()) and not crouch
-		var sp_base := run_speed if running else speed
+		# Масса содержимого короба влияет на походку: пустой и перегруженный
+		# путник не должны двигаться с одинаковой скоростью и инерцией.
+		var load_k := 0.0
+		if main.inventory != null:
+			load_k = clampf(main.inventory.weight() / main.inventory.CAPACITY, 0.0, 1.0)
+		var sp_base := (run_speed if running else speed) * (1.0 - load_k * 0.16)
 		var wf := 1.0 / (1.0 + swamp_depth * 1.15)
 		if swamp_sink > 0.72 and int(main.inv.get("branch", 0)) <= 0:
 			wf *= lerpf(0.22, 0.035, clampf((swamp_sink - 0.72) / 0.58, 0.0, 1.0))
@@ -586,7 +591,11 @@ func _process_main(delta: float) -> void:
 	# Скользкая крутая поверхность: интенсивность зависит от уклона, а не обнуляется каждый кадр.
 	var s := 0.0 if airborne or depth > 0.6 else clampf((0.72 - n.y) / 0.42, 0.0, 1.0)
 	sliding = lerpf(sliding, s, minf(1.0, 5.0 * delta))
-	var accel := 11.0 * (1.0 - sliding * 0.75)
+	# Тяжёлый короб снижает не только скорость, но и отзывчивость разгона/торможения.
+	var carried_load := 0.0
+	if main.inventory != null:
+		carried_load = clampf(main.inventory.weight() / main.inventory.CAPACITY, 0.0, 1.0)
+	var accel := 11.0 * (1.0 - sliding * 0.75) * (1.0 - carried_load * 0.22)
 	if airborne:
 		accel = 0.5
 		target = vel
