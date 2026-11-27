@@ -148,7 +148,8 @@ func _new_wander() -> void:
 	# Pick a destination that is reachable from the local terrain. The former
 	# single random point could repeatedly land inside rocks, water or steep faces.
 	var chosen := Vector3.INF
-	for attempt in range(12):
+	var chosen_score := -INF
+	for attempt in range(18):
 		var a := rng.randf() * TAU
 		var r := rng.randf_range(5.0, 25.0)
 		var candidate := position + Vector3(cos(a), 0, sin(a)) * r
@@ -163,13 +164,16 @@ func _new_wander() -> void:
 			continue
 		if not _can_move_segment(position, candidate):
 			continue
-		chosen = candidate
-		break
+		var score := _habitat_score(candidate) + rng.randf_range(-0.18, 0.18)
+		if score > chosen_score:
+			chosen = candidate
+			chosen_score = score
 	if chosen == Vector3.INF:
 		# Fallback probes stay close to the animal and use the same habitat,
 		# slope and obstacle rules, preventing short random targets from trapping
 		# the animal inside a blocker or on a sharp terrain edge.
-		for fallback_attempt in range(10):
+		var fallback_score := -INF
+		for fallback_attempt in range(14):
 			var fallback_angle := rng.randf() * TAU
 			var fallback_radius := rng.randf_range(1.5, 5.0)
 			var fallback := position + Vector3(cos(fallback_angle), 0.0, sin(fallback_angle)) * fallback_radius
@@ -182,8 +186,10 @@ func _new_wander() -> void:
 				continue
 			if not _can_move_segment(position, fallback):
 				continue
-			chosen = fallback
-			break
+			var score := _habitat_score(fallback) + rng.randf_range(-0.1, 0.1)
+			if score > fallback_score:
+				chosen = fallback
+				fallback_score = score
 		if chosen == Vector3.INF:
 			chosen = position + Vector3(rng.randf_range(-1.0, 1.0), 0.0, rng.randf_range(-1.0, 1.0))
 	target = chosen
@@ -219,6 +225,32 @@ func _new_wander() -> void:
 	state = "wander"
 	attack_lane_locked = false
 	state_t = rng.randf_range(8.0, 20.0)
+
+## Видовые предпочтения биотопа влияют на выбор направления блуждания.
+func _habitat_score(p: Vector3) -> float:
+	var forest := clampf(float(main.forest_density(p.x, p.z)), 0.0, 1.0)
+	var wet := clampf(float(main.wet_k(p.x, p.z, main.height(p.x, p.z))), 0.0, 1.0)
+	var water_d := float(main.river_dist(p.x, p.z)
+	var slope := 1.0 - clampf(float(main.normal_at(p.x, p.z).y), 0.0, 1.0)
+	var prefs: Dictionary = {
+		"squirrel": [0.92, 0.28, 0.1], "capercaillie": [0.82, 0.4, 0.1],
+		"lynx": [0.78, 0.25, 0.1], "wolverine": [0.65, 0.32, 0.22],
+		"wolf": [0.65, 0.35, 0.15], "bear": [0.55, 0.58, 0.18],
+		"fox": [0.38, 0.28, 0.1], "hare": [0.28, 0.35, 0.12],
+		"roe": [0.42, 0.4, 0.18], "deer": [0.48, 0.42, 0.16],
+		"moose": [0.38, 0.78, 0.28], "muskdeer": [0.75, 0.35, 0.5],
+		"boar": [0.58, 0.62, 0.12], "beaver": [0.18, 0.75, 0.05]
+	}
+	var pref: Array = prefs.get(kind, [0.5, 0.4, 0.15])
+	var score := 1.0 - absf(forest - float(pref[0])) * 0.85
+	score += 1.0 - absf(wet - float(pref[1])) * 0.7
+	if water_d < 32.0:
+		score += (1.0 - water_d / 32.0) * float(pref[2])
+	if kind in ["muskdeer", "wolverine"]:
+		score += slope * 0.12
+	elif kind in ["hare", "roe", "deer", "moose", "beaver"]:
+		score -= slope * 0.16
+	return score
 
 static func _river_zc(x: float) -> float:
 	return RP.zc(x)
