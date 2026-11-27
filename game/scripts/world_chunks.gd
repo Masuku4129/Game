@@ -4,8 +4,8 @@ extends Node
 
 const CHUNK_SIZE := 64.0
 const ACTIVE_RADIUS := 2
-const PRELOAD_RADIUS := 4
-const LOAD_BUDGET := 2
+const PRELOAD_RADIUS := 5
+const LOAD_BUDGET := 3
 const MAX_SAVED_CHUNKS := 4096
 const TERRAIN_SEGMENTS := 64
 const BASE_HALF_EXTENT := 256.0
@@ -105,7 +105,13 @@ func _rebuild_queue() -> void:
 				ring_bonus = 100.0
 			elif distance <= 2.5:
 				ring_bonus = 25.0
-			var priority := distance * 10.0 - view_alignment * 14.0 - move_alignment * 18.0 - ring_bonus
+			var forward_alignment := maxf(view_alignment, move_alignment)
+			var forward_bonus := 0.0
+			# Reserve a wider ahead-of-camera corridor: terrain and foliage begin
+			# preparing before the player reaches the edge of the current preload ring.
+			if distance > 2.5 and forward_alignment > 0.62:
+				forward_bonus = (forward_alignment - 0.62) * 55.0
+			var priority := distance * 10.0 - view_alignment * 14.0 - move_alignment * 18.0 - ring_bonus - forward_bonus
 			candidates.append({"coord": c, "priority": priority})
 	candidates.sort_custom(func(a: Dictionary, b: Dictionary) -> bool: return float(a.priority) < float(b.priority)
 	for item: Dictionary in candidates:
