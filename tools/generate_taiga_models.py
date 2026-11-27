@@ -266,8 +266,8 @@ def stump():
     rng = np.random.default_rng(13)
     b = Builder()
     h, r = .92, .37
-    tube(b, (0, 0, 0), (.025, -.015, h * .48), (0, 0, h), r * 1.12, r * .82,
-         6, 11, flare=1.0, rng=rng, wobble=.085)
+    tube(b, (0, 0, 0), (0, 0, h), r * 1.12, r * .82,
+         6, 11, bend=(.025, -.015, 0), flare=1.0, rng=rng, wobble=.085)
     # Uneven broken rim gives the cut surface a hand-shaped silhouette.
     rim = []
     for i in range(18):
