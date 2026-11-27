@@ -424,20 +424,17 @@ func lake_k(x: float, z: float) -> float:
 func wet_k(x: float, z: float, h: float) -> float:
 	return clampf((WATER_Y + 4.0 - h) / 3.0, 0.0, 1.0) * smoothstep(-0.08, 0.3, n_wet.get_noise_2d(x, z))
 
-## Особые участки леса (ячейки ~90 м): 0 обычный, 1 гарь, 2 болото, 3 курумник, 4 бурелом.
+## Особые участки леса (ячейки ~90 м): 0 обычный, 1 гарь, 2 болото, 4 бурелом.
+## Каменный биом удалён: отдельные скалы и валуны размещаются по уклону и геологии локально.
 func zone(x: float, z: float) -> int:
 	var jx := x + n_detail.get_noise_2d(x * 0.7, z * 0.7) * 9.0
 	var jz := z + n_detail.get_noise_2d(z * 0.7 + 50.0, x * 0.7) * 9.0
 	var v := n_zone.get_noise_2d(jx, jz)
 	var y := height(x, z)
-	# зоны редкие и небольшие: ~1/3 прежней площади
 	if v < -0.86:
 		return 1
 	if (v < -0.7 and y < WATER_Y + 4.0) or (y > WATER_Y + 0.1 and y < WATER_Y + 3.0 and wet_k(x, z, y) > 0.3):
 		return 2
-	# каменистые склоны и курумники: в скалистой части карты крупными пятнами
-	if v > 0.88 or (v > 0.76 and biome(x, z) > 0.2) or (biome(x, z) > 0.42 and n_detail.get_noise_2d(x * 0.3, z * 0.3) > 0.1):
-		return 3
 	if v > 0.2 and v < 0.3:
 		return 4
 	return 0
@@ -2022,12 +2019,13 @@ func _accept(kind: String, x: float, z: float, rng: RandomNumberGenerator) -> bo
 		"bog_z":
 			return zn == 2 and slope < 0.2 and rng.randf() < 0.9
 		"rocky_z":
-			return zn == 3 and rng.randf() < 0.85
+			# Камни остаются локальными элементами склонов, а не отдельным биомом.
+			return slope > 0.16 and y > WATER_Y + 0.8 and rng.randf() < clampf((slope - 0.12) * 1.8, 0.08, 0.42)
 		"meadow":
 			return zn == 0 and slope < 0.2 and rng.randf() < (1.0 - fd) * 0.8
 		"bank":
 			return slope < 0.3 and y < WATER_Y + 0.9 and river_dist(x, z) < 22.0 and rng.randf() < 0.8
-	# на гари, болоте и курумнике живого леса мало
+	# на гари и болоте живого леса мало; отдельного каменного биома больше нет
 	var zk: float = [1.0, 0.06, 0.25, 0.3, 0.7][zn]
 	if kind.ends_with("_t") or kind in ["tree", "edge", "under", "fern"]:
 		if rng.randf() > zk:
