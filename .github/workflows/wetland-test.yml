@@ -1,0 +1,66 @@
+name: Wetland Biome Tests
+on:
+  push:
+    branches: [wetland-biome]
+concurrency:
+  group: taiga-wetland-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    container:
+      image: barichello/godot-ci:4.3
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install software GPU
+        run: |
+          apt-get update -qq
+          DEBIAN_FRONTEND=noninteractive apt-get install -y -qq xvfb mesa-vulkan-drivers libvulkan1 libgl1-mesa-dri >/dev/null
+      - name: Import project
+        run: |
+          cd game
+          timeout 300 godot --headless --import 2>&1 | tee /tmp/import.log
+          ! grep -E "Parse Error|Failed loading resource" /tmp/import.log
+      - name: Wetland coverage and water-pocket regression
+        run: |
+          cd game
+          timeout 180 godot --headless --script res://tests/wetland_biome_test.gd
+      - name: Animal obstacle-clearance regression
+        run: |
+          cd game
+          timeout 120 godot --headless --script res://tests/animal_collision_test.gd
+      - name: Strict script parse
+        run: |
+          cd game
+          for f in scripts/*.gd tests/*.gd; do
+            godot --headless --check-only --script "$f"
+          done
+      - name: Smoke scene
+        run: |
+          cd game
+          timeout 120 godot --headless --quit-after 120 res://scenes/main.tscn > /tmp/smoke.log 2>&1
+          ! grep -E "SCRIPT ERROR|Parse Error" /tmp/smoke.log
+      - name: Render gameplay
+        run: |
+          mkdir -p /tmp/wetland
+          cd game
+          SHOTS=/tmp/wetland timeout 600 xvfb-run -a -s "-screen 0 1920x864x24" godot --rendering-driver vulkan --resolution 1920x864 > /tmp/wetland/gameplay.log 2>&1
+          grep -E "SCRIPT ERROR|Parse Error|shot game" /tmp/wetland/gameplay.log
+          test -s /tmp/wetland/game_20.png
+          test -s /tmp/wetland/game_80.png
+      - name: Render asset gallery
+        run: |
+          cd game
+          ASSET_GALLERY_SHOTS=/tmp/wetland/taiga_asset_gallery.png timeout 180 xvfb-run -a -s "-screen 0 1920x864x24" godot --rendering-driver vulkan --resolution 1920x864 res://scenes/asset_gallery.tscn > /tmp/wetland/gallery.log 2>&1
+          grep "TAIGA_ASSET_GALLERY loaded=9" /tmp/wetland/gallery.log
+          test -s /tmp/wetland/taiga_asset_gallery.png
+      - name: Upload visual evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: taiga-wetland-review
+          path: |
+            /tmp/wetland/*.png
+            /tmp/wetland/*.log
+          if-no-files-found: error
+          retention-days: 30
