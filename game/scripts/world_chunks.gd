@@ -730,6 +730,8 @@ func _remove_tree_cover(k: String) -> void:
 			main.blockers.erase(grid_key)
 	tree_mmis.erase(k)
 	blocker_records.erase(k)
+	if main != null:
+		main._update_near(true)
 	# Кэш near_mesh оставляем: другие чанки могут использовать те же варианты GLB.
 
 func _remove_terrain_chunk(k: String) -> void:
