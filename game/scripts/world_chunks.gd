@@ -582,7 +582,7 @@ func _build_tree_cover(c: Vector2i) -> void:
 		var wx := float(c.x) * CHUNK_SIZE + rng.randf_range(2.0, CHUNK_SIZE - 2.0)
 		var wz := float(c.y) * CHUNK_SIZE + rng.randf_range(2.0, CHUNK_SIZE - 2.0)
 		var density: float = main.forest_density(wx, wz)
-		if rng.randf() > clampf(density * 1.08, 0.08, 0.98):
+		if rng.randf() > clampf(density * 1.22, 0.08, 0.995):
 			continue
 		var h: float = main.height(wx, wz)
 		if h < main.WATER_Y + 1.0 or main.river_dist(wx, wz) < 6.5 or main.lake_k(wx, wz) > 0.45:
