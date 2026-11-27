@@ -45,11 +45,11 @@ func _run() -> void:
 		for winter in [false, true]:
 			var holder := Node3D.new()
 			var result: Dictionary = builder.build(holder, species, 1.0, true, winter)
-			if result.is_empty() or not result.has("model"):
+			if result.is_empty():
 				push_error("Build failed for " + species + " winter=" + str(winter))
 				ok = false
 			else:
-				var root: Node = result["model"]
+				var root: Node = holder
 				var mesh_nodes := root.find_children("*", "MeshInstance3D", true, false)
 				if mesh_nodes.is_empty():
 					push_error("No MeshInstance for " + species)
