@@ -1,6 +1,9 @@
 name: Feature branch Android build
 on:
   workflow_dispatch:
+  push:
+    branches: [feature/world-survival-overhaul]
+    paths: [.github/taiga-build-now]
 concurrency:
   group: taiga-feature-android-${{ github.ref }}
   cancel-in-progress: true
