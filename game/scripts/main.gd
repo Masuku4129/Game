@@ -1047,7 +1047,7 @@ func _process(delta: float) -> void:
 			pv.mats["tuft"].set_shader_parameter("hero_pos", hp)
 			pv.mats["tuft"].set_shader_parameter("cam_pos", cp)
 		pv.mats["tuft"].set_shader_parameter("grass_now", Time.get_ticks_msec() * 0.001)
-		var swim_now := hero.swimb if colony == null else 0.0
+		var swim_now: float = hero.swimb if colony == null else 0.0
 		var move_now := clampf(hero.run_mag, 0.0, 1.0)
 		if hero.position.distance_squared_to(_last_water_hero_pos) > 0.0025:
 			_last_water_hero_pos = hero.position
@@ -1182,7 +1182,7 @@ func _update_stats(dt: float) -> void:
 	# Wet clothing loses insulating value in wind; the wind penalty rises with
 	# exposure and soaked gear, while dry layered clothing remains effective.
 	var exposure := clampf(weather.wind / 2.8, 0.0, 1.0)
-	var wind_cooling := weather.wind * 0.05 + exposure * soak * 0.12
+	var wind_cooling: float = weather.wind * 0.05 + exposure * soak * 0.12
 	var insulation_loss := clothing_warmth * exposure * soak * 0.35
 	var target_w := clampf(0.55 + tc * 0.025 - soak * 0.35 - wind_cooling - insulation_loss - (0.25 if hero.swimb > 0.5 else 0.0) + clothing_warmth, 0.02, 0.95)
 	# --- build: костёр, шалаш, изба с печью греют; укрытие ослабляет ветер ---

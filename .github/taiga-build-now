@@ -35,3 +35,5 @@ Build retry after GDScript parser corrections 2026-11-27
 Correct snow-roof mesh coordinate typing and climbing animation speed for build 2026-11-27
 
 Typed dynamic habitat expressions to unblock final Android build 2026-11-27
+
+Retry Android export after typed main-script values 2026-11-27
