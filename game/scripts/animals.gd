@@ -213,6 +213,14 @@ func populate_stream_chunk(coord: Vector2i, chunk_seed: int) -> void:
 		var predator := "fox" if zone_id != 4 or rng.randf() < 0.5 else "wolf"
 		var predator_pos := candidates[rng.randi_range(0, candidates.size() - 1)]
 		_spawn(predator, predator_pos, rng.randf_range(0.9, 1.08), group_id + 1, "chunk:%s:predator:0" % key)
+	# Rare ground birds appear on forest edges as a separate encounter from
+	# the ambient airborne flock; deterministic IDs keep them stable when chunks reload.
+	if not forest_candidates.is_empty() and rng.randf() < 0.075:
+		var bird_group := rng.randi_range(1, 2)
+		var bird_center: Vector3 = forest_candidates[rng.randi_range(0, forest_candidates.size() - 1)]
+		for bird_i in range(bird_group):
+			var bird_pos := bird_center if bird_i == 0 else _near(bird_center, 5.0)
+			_spawn("capercaillie", bird_pos, rng.randf_range(0.88, 1.06), group_id + 3, "chunk:%s:groundbird:%d" % [key, bird_i])
 	rng.seed = previous_seed
 
 func _restore_pending_chunk_animals(chunk_key: String) -> void:
