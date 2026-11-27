@@ -398,17 +398,26 @@ func _build_bog_cover(c: Vector2i, parent: Node3D) -> void:
 		var zone_id := main.zone(wx, wz)
 		if zone_id != 2 and wet < 0.56:
 			continue
+		# Smooth world-coordinate patch signal produces plant communities rather
+		# instead of a uniform dice mix: hummocks, reed beds and mossy pools.
+		var patch_signal := sin(wx * 0.041 + wz * 0.023) * cos(wz * 0.037 - wx * 0.019)
+		var roll := clampf(rng.randf() + patch_signal * 0.22 + wet * 0.12, 0.0, 1.0)
 		var kind := "sedge"
-		var roll := rng.randf()
-		if roll < 0.20:
+		if wet > 0.78 and roll < 0.32:
 			kind = "moss"
-		elif roll < 0.40:
-			kind = "fern"
-		elif roll < 0.59:
+		elif patch_signal > 0.48 and roll < 0.42:
 			kind = "reeds"
-		elif roll < 0.77:
+		elif patch_signal < -0.42 and roll < 0.28:
+			kind = "bush"
+		elif roll < 0.18:
+			kind = "moss"
+		elif roll < 0.36:
+			kind = "fern"
+		elif roll < 0.58:
+			kind = "reeds"
+		elif roll < 0.80:
 			kind = "sedge"
-		elif roll < 0.89:
+		elif roll < 0.92:
 			kind = "bush"
 		else:
 			kind = "rock"
