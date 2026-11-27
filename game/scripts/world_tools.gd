@@ -74,10 +74,9 @@ func _snd(n: String, p: Vector3, db: float, pitch: float = 1.0) -> void:
 func _give(id: String, n: int) -> int:
 	var got := 0
 	for i in n:
-		if main.inventory != null and not main.inventory.can_add(id):
+		# Счётчик добычи растёт только после подтверждённой выдачи предмета.
+		if not main._record_resource(id, 1):
 			break
-		# Единый регистратор обновляет и инвентарь, и счётчик реально полученных ресурсов.
-		main._record_resource(id, 1)
 		got += 1
 	if got > 0:
 		main._say("+%d %s" % [got, IT.name_of(id).to_lower()])
