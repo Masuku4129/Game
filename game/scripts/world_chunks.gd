@@ -5,7 +5,7 @@ extends Node
 const CHUNK_SIZE := 64.0
 const ACTIVE_RADIUS := 2
 const PRELOAD_RADIUS := 3
-const LOAD_BUDGET := 2
+const LOAD_BUDGET := 4
 const MAX_SAVED_CHUNKS := 4096
 const TERRAIN_SEGMENTS := 48
 const BASE_HALF_EXTENT := 256.0
@@ -290,21 +290,22 @@ func _build_bog_cover(c: Vector2i, parent: Node3D) -> void:
 		var h := main.height(wx, wz)
 		var scale := rng.randf_range(0.62, 1.36)
 		var xf := Transform3D(Basis(Vector3.UP, rng.randf_range(-PI, PI)).scaled(Vector3.ONE * scale), Vector3(wx, h, wz))
-		groups[key].xf.append(xf)
+		groups[key].xf.append({"transform": xf, "wet": wet})
 	for key: String in groups:
 		var g: Dictionary = groups[key]
 		var variants: Array = _model_variants(String(g.kind))
-		var transforms: Array = g.xf
-		if transforms.is_empty():
+		var entries: Array = g.xf
+		if entries.is_empty():
 			continue
 		var mm := MultiMesh.new()
 		mm.transform_format = MultiMesh.TRANSFORM_3D
 		mm.use_custom_data = true
 		mm.mesh = variants[int(g.variant)][0]
-		mm.instance_count = transforms.size()
-		for i in transforms.size():
-			mm.set_instance_transform(i, transforms[i])
-			mm.set_instance_custom_data(i, Color(70.0, wet, 0.0, 0.0))
+		mm.instance_count = entries.size()
+		for i in entries.size():
+			var entry: Dictionary = entries[i]
+			mm.set_instance_transform(i, entry.transform)
+			mm.set_instance_custom_data(i, Color(70.0, float(entry.wet), 0.0, 0.0))
 		var mmi := MultiMeshInstance3D.new()
 		mmi.multimesh = mm
 		mmi.name = "BogPlant_%s_%d" % [g.kind, g.variant]
