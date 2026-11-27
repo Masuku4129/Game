@@ -1358,7 +1358,7 @@ func _variants(kind: String) -> Array:
 	return out
 
 const TREE_KINDS := ["spruce", "pine", "birch", "larch", "aspen", "fir", "cedar", "alder", "willow", "rowan"]
-const NEAR_R := 60.0
+const NEAR_R := 66.0
 var tree_grid := {}
 var near_mesh := {}
 var near_mmi := {}
@@ -1374,8 +1374,8 @@ func _update_near(force: bool = false) -> void:
 	var c: Vector3 = rig.position
 	# Detail models are prepared ahead of the camera so the visible forest does not pop in at the view edge.
 	var view_forward := Vector3(sin(rig.rotation.y), 0.0, -cos(rig.rotation.y))
-	c += view_forward * 30.0
-	if not force and Vector2(c.x - _near_at.x, c.z - _near_at.z).length_squared() < 2.25:
+	c += view_forward * 42.0
+	if not force and Vector2(c.x - _near_at.x, c.z - _near_at.z).length_squared() < 1.0:
 		return
 	_near_at = c
 	var by_key := {}
