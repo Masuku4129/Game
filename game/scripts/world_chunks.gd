@@ -725,6 +725,7 @@ func _build_tree_cover(c: Vector2i) -> void:
 		if slope < 0.76:
 			continue
 		var zone_id: int = main.zone(wx, wz)
+		var moisture := main.wet_k(wx, wz, h)
 		var kind := "spruce"
 		if zone_id == 2:
 			kind = ["alder", "willow", "birch"][rng.randi_range(0, 2)]
@@ -732,17 +733,21 @@ func _build_tree_cover(c: Vector2i) -> void:
 			kind = ["cedar", "fir", "larch"][rng.randi_range(0, 2)]
 		else:
 			var pick := rng.randf()
-			if pick < 0.24:
+			if moisture > 0.62 and pick < 0.24:
+				kind = "alder"
+			elif moisture > 0.5 and pick < 0.38:
+				kind = "willow"
+			elif pick < 0.22:
 				kind = "pine"
-			elif pick < 0.43:
+			elif pick < 0.40:
 				kind = "birch"
-			elif pick < 0.58:
+			elif pick < 0.55:
 				kind = "larch"
-			elif pick < 0.69:
+			elif pick < 0.66:
 				kind = "aspen"
-			elif pick < 0.78:
+			elif pick < 0.76:
 				kind = "cedar"
-			elif pick < 0.87:
+			elif pick < 0.88:
 				kind = "fir"
 		var variants: Array = _model_variants(kind)
 		if variants.is_empty():
