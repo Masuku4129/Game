@@ -1665,8 +1665,15 @@ func move_factor() -> float:
 const BLOCK_R := {"fungus_snag": 0.22, "birch_dead": 0.2, "snag": 0.25, "snag_b": 0.25, "cherry": 0.15, "fir": 0.36, "cedar": 0.38, "rowan": 0.2, "spruce": 0.4, "pine": 0.32, "birch": 0.28, "bare": 0.3, "spruce_dead": 0.3, "stump": 0.45, "rock": 0.5, "boulder": 0.6, "larch": 0.32, "aspen": 0.26}
 
 func _chunk_seed(cx: int, cz: int) -> int:
-	# Один детерминированный seed для каждого чанка, производный от общего seed карты.
-	return map_seed + cx * 73856093 + cz * 19349663
+	# Независимое перемешивание координат: соседние чанки не наследуют простую
+	# линейную последовательность, а новый seed карты меняет весь рисунок леса.
+	const MOD := 2147483647
+	var h := posmod(map_seed, MOD)
+	h = posmod(h + posmod(cx, MOD) * 73856093, MOD)
+	h = posmod(h + posmod(cz, MOD) * 19349663, MOD)
+	h = posmod((h ^ (h >> 13)) * 1274126177, MOD)
+	h = posmod((h ^ (h >> 16)) * 1597334677, MOD)
+	return maxi(1, h)
 
 func _scatter_all() -> void:
 	# вид, попыток на клетку 32 м, масштаб, дальность видимости, тень, правило
