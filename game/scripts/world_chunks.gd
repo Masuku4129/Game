@@ -24,6 +24,7 @@ var blocker_records: Dictionary = {}
 var prop_blocker_records: Dictionary = {}
 var prop_solid_records: Dictionary = {}
 var _model_variant_cache: Dictionary = {}
+var _far_mesh_cache: Dictionary = {}
 var stream_water_material: ShaderMaterial
 var _water_state_clock := 0.0
 const STREAM_TREE_KINDS := ["spruce", "pine", "birch", "larch", "aspen", "fir", "cedar", "alder", "willow", "rowan"]
@@ -360,6 +361,34 @@ func _build_terrain_chunk(c: Vector2i) -> void:
 	add_child(root)
 	terrain_nodes[k] = root
 
+func _far_tree_mesh(source: Mesh) -> Mesh:
+	var cache_key := source.get_instance_id()
+	if _far_mesh_cache.has(cache_key):
+		return _far_mesh_cache[cache_key]
+	var out := ArrayMesh.new()
+	for surface in source.get_surface_count():
+		var arrays := source.surface_get_arrays(surface)
+		var vertices: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
+		var indices: PackedInt32Array = arrays[Mesh.ARRAY_INDEX]
+		if indices.is_empty():
+			indices.resize(vertices.size())
+			for i in vertices.size():
+				indices[i] = i
+		var reduced := PackedInt32Array()
+		var triangle_count := int(indices.size() / 3)
+		# Дальняя версия сохраняет общий силуэт GLB, сокращая плотность
+		# мелких кроновых полигонов. Ближний меш остаётся исходным.
+		for triangle in range(0, triangle_count, 2):
+			var base := triangle * 3
+			reduced.append(indices[base])
+			reduced.append(indices[base + 1])
+			reduced.append(indices[base + 2])
+		arrays[Mesh.ARRAY_INDEX] = reduced
+		out.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
+		out.surface_set_material(surface, source.surface_get_material(surface))
+	_far_mesh_cache[cache_key] = out
+	return out
+
 func _tree_state_key(p: Vector3) -> String:
 	return "%d:%d" % [roundi(p.x * 10.0), roundi(p.z * 10.0)]
 
@@ -433,7 +462,7 @@ func _build_tree_cover(c: Vector2i) -> void:
 		var mm := MultiMesh.new()
 		mm.transform_format = MultiMesh.TRANSFORM_3D
 		mm.use_custom_data = true
-		mm.mesh = mesh
+		mm.mesh = _far_tree_mesh(mesh)
 		mm.instance_count = transforms.size()
 		for i in transforms.size():
 			mm.set_instance_transform(i, transforms[i])
@@ -442,6 +471,7 @@ func _build_tree_cover(c: Vector2i) -> void:
 		mmi.name = "StreamTrees_%s_%d" % [kind, vi]
 		mmi.multimesh = mm
 		mmi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
+		mmi.visibility_range_end = 118.0
 		mmi.extra_cull_margin = 8.0
 		add_child(mmi)
 		created.append(mm)
