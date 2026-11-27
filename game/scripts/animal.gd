@@ -66,6 +66,7 @@ var respawn_at := 0.0
 var head_pitch := 0.0
 var rest_k := 0.0
 var tree := Vector3.ZERO
+var tree_top := 0.0
 var climb_h := 0.0
 var far := false
 var group := -1
@@ -338,6 +339,7 @@ func _flee_from(t: Node3D, tm: float) -> void:
 		var tp: Vector3 = main.nearest_tree(position, 15.0)
 		if tp != Vector3.INF:
 			tree = tp
+			tree_top = clampf(main.tree_height_at(tp) * 0.72, 2.5, 8.0)
 			state = "to_tree"
 
 ## Чем заняться: спать/отдыхать, водопой на заре и закате, рыбалка, дозор, пастьба, бродить.
@@ -675,8 +677,14 @@ func tick(delta: float) -> void:
 			want = run
 			var dt2 := Vector2(tree.x - position.x, tree.z - position.z)
 			if dt2.length() < 1.3:
-				position.x = tree.x - dt2.normalized().x * 0.3
-				position.z = tree.z - dt2.normalized().y * 0.3
+				# Остановиться у коры, а не внутри ствола; повернуться к дереву.
+				var away := dt2.normalized()
+				if away.length_squared() < 0.01:
+					away = Vector2(cos(heading), sin(heading))
+				position.x = tree.x - away.x * 0.52
+				position.z = tree.z - away.y * 0.52
+				heading = atan2(tree.x - position.x, tree.z - position.z)
+				tree_top = clampf(main.tree_height_at(tree) * 0.72, 2.5, 8.0)
 				state = "tree"
 				state_t = rng.randf_range(15.0, 30.0)
 		"down_tree":
@@ -686,7 +694,7 @@ func tick(delta: float) -> void:
 	# беличье дерево: вверх по стволу и обратно
 	if kind == "squirrel":
 		if state == "tree":
-			climb_h = minf(climb_h + delta * 2.0, 6.0)
+			climb_h = minf(climb_h + delta * 1.6, maxf(tree_top, 2.5))
 		elif climb_h > 0.0:
 			climb_h = maxf(climb_h - delta * 1.5, 0.0)
 			if climb_h <= 0.0 and state == "down_tree":
@@ -725,18 +733,19 @@ func tick(delta: float) -> void:
 		var step_len := maxf(0.18, speed * delta)
 		# Try the direct path first, then progressively wider arcs. This avoids
 		# the old fixed-angle bounce that trapped animals against the same blocker.
-		var offsets := [0.0, 0.38, -0.38, 0.78, -0.78, 1.25, -1.25, 1.85, -1.85, PI]
+		var offsets := [0.0, 0.32, -0.32, 0.65, -0.65, 1.0, -1.0, 1.4, -1.4, 1.9, -1.9, 2.45, -2.45, PI]
 		var found := false
+		# Look beyond the animal's immediate step: a 10 cm probe cannot see a way around a boulder.
+		var probe_len := maxf(1.25, minf(2.8, maxf(step_len * 7.0, to.length() * 0.12)))
 		for off in offsets:
 			var candidate: float = lerp_angle(heading, desired, 0.35) + float(off)
 			var cd := Vector3(sin(candidate), 0.0, cos(candidate))
-			var probe: Vector3 = position + cd * step_len
-			# Sample the full movement segment; mid-distance ticks may be long enough
-			# to otherwise cross narrow obstacles when only the endpoint is checked.
+			var probe: Vector3 = position + cd * probe_len
+			# Sample the full route, not only its endpoint, so rocks and trunks cannot trap the steering probe.
 			if not _can_move_segment(position, probe, flying):
 				continue
 			var align := cd.dot(to.normalized())
-			var turn_cost := absf(wrapf(candidate - heading, -PI, PI)) * 0.08
+			var turn_cost := absf(wrapf(candidate - heading, -PI, PI)) * 0.10
 			var score := align - turn_cost
 			if score > best_score:
 				best_score = score
