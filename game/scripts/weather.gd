@@ -19,6 +19,8 @@ var wind := 0.5
 var gust := 0.0
 var gust_target := 0.0
 var gust_timer := 0.0
+var wind_angle := 0.0
+var wind_angle_target := 0.0
 var temp := 8.0
 var snow := 0.0
 var wet := 0.0
@@ -185,6 +187,8 @@ func step(dh: float) -> void:
 	if gust_timer <= 0.0:
 		gust_timer = rng.randf_range(0.18, 0.9) if t_wind > 1.4 else rng.randf_range(0.6, 2.4)
 		gust_target = rng.randf_range(0.0, 0.45) if t_wind < 1.4 else rng.randf_range(0.25, 1.0)
+		wind_angle_target = rng.randf_range(-PI, PI)
+	wind_angle = lerp_angle(wind_angle, wind_angle_target, clampf(dh * (0.25 + gust * 0.25), 0.0, 1.0))
 	gust = lerpf(gust, gust_target, clampf(dh * (1.2 if gust_target > gust else 0.45), 0.0, 1.0))
 	wind = clampf(wind + gust * (0.25 if t_wind < 1.4 else 0.5), 0.0, 2.8)
 	var y := year_pos()
@@ -249,10 +253,11 @@ func update_visual(cam_target: Vector3) -> void:
 	flakes.emitting = amt > 0.05 and cold
 	rain.amount_ratio = amt
 	flakes.amount_ratio = amt
+	var drift := Vector3(cos(wind_angle), 0.0, sin(wind_angle))
 	var pm: ParticleProcessMaterial = flakes.process_material
-	pm.gravity = Vector3(wind * (1.2 + gust * 0.8), -1.3, wind * (0.5 + gust * 0.35))
+	pm.gravity = drift * wind * (1.2 + gust * 0.8) + Vector3(0, -1.3, 0)
 	var pr: ParticleProcessMaterial = rain.process_material
-	pr.gravity = Vector3(wind * (2.5 + gust * 1.5), -12.0, wind * (1.0 + gust * 0.6))
+	pr.gravity = drift * wind * (2.5 + gust * 1.5) + Vector3(0, -12.0, 0)
 	atmo.update(cam_target)
 
 ## Раздать параметры шейдерам.
@@ -301,7 +306,7 @@ func apply(mats_a: Array, mats_b: Array, terrain: ShaderMaterial, blade: ShaderM
 	water.set_shader_parameter("rain", rain_now)
 
 # --- core: сохранение (save.gd, раздел «weather») ---
-const _SAVE_KEYS := ["next_change", "cloud", "precip", "fogv", "wind", "gust", "gust_target", "gust_timer", "temp", "snow", "wet", "autumn", "leaf_drop", "ice", "mist", "blossom", "t_cloud", "t_precip", "t_fog", "t_wind", "_hours_acc"]
+const _SAVE_KEYS := ["next_change", "cloud", "precip", "fogv", "wind", "gust", "gust_target", "gust_timer", "wind_angle", "wind_angle_target", "temp", "snow", "wet", "autumn", "leaf_drop", "ice", "mist", "blossom", "t_cloud", "t_precip", "t_fog", "t_wind", "_hours_acc"]
 
 func to_save() -> Dictionary:
 	var d := {"kind": kind, "rng_state": rng.state}
