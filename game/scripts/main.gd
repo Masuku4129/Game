@@ -439,6 +439,16 @@ func zone(x: float, z: float) -> int:
 		return 4
 	return 0
 
+## Глубина трясины: только заболоченная зона; неоднородные окна топкого грунта.
+## Возвращает глубину потенциального провала в метрах (0..1.45), не подменяя уровень воды.
+func swamp_depth_at(x: float, z: float) -> float:
+	if zone(x, z) != 2:
+		return 0.0
+	var wet := smoothstep(-0.25, 0.42, n_wet.get_noise_2d(x * 0.72 + 137.0, z * 0.72 - 91.0))
+	var pockets := smoothstep(-0.18, 0.5, n_detail.get_noise_2d(x * 0.42 - 53.0, z * 0.42 + 211.0))
+	var low := clampf((WATER_Y + 3.8 - height(x, z)) / 3.2, 0.0, 1.0)
+	return clampf((0.18 + wet * 0.72 + pockets * 0.38) * low, 0.0, 1.45)
+
 func biome(x: float, z: float) -> float:
 	return clampf(n_biome.get_noise_2d(x, z) * 2.2, -1.0, 1.0)
 
