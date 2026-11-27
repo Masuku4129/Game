@@ -1,7 +1,5 @@
 name: Feature branch Android build
 on:
-  push:
-    branches: [feature/world-survival-overhaul]
   workflow_dispatch:
 concurrency:
   group: taiga-feature-android-${{ github.ref }}
