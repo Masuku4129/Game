@@ -12,7 +12,7 @@ var map_seed: int = MAP_SEED
 var explored_map: Dictionary = {}
 var _map_reveal_t := 0.0
 const FOREST_DENSITY_MULTIPLIER := 1.7
-const FOREST_DENSITY_SPECIES := ["spruce", "pine", "birch", "larch", "aspen", "bare", "spruce_dead", "bush", "fern", "reeds", "twig", "berry", "bilberry", "mushroom", "fir", "cedar", "willow", "alder", "cherry", "rose", "horsetail", "hummock", "sedge", "juniper", "stlanik", "rowan", "anthill", "mossrock", "stump_rot", "stump_mush", "fungus_snag", "birch_dead", "mosslog", "ledum", "cloudberry", "cranberry", "cotton", "lingon", "ernik", "raspberry", "currant", "bells", "daisy", "angelica", "brushpile", "chanterelle", "cones"]
+const FOREST_DENSITY_SPECIES := ["spruce", "pine", "birch", "larch", "aspen", "bare", "spruce_dead", "bush", "fern", "reeds", "moss", "flower", "twig", "berry", "bilberry", "mushroom", "fir", "cedar", "willow", "alder", "cherry", "rose", "horsetail", "hummock", "sedge", "juniper", "stlanik", "rowan", "anthill", "mossrock", "stump_rot", "stump_mush", "fungus_snag", "birch_dead", "mosslog", "ledum", "cloudberry", "cranberry", "cotton", "lingon", "ernik", "raspberry", "currant", "bells", "daisy", "angelica", "brushpile", "chanterelle", "cones"]
 
 var n_hill := FastNoiseLite.new()
 var n_cliff := FastNoiseLite.new()
@@ -1699,6 +1699,8 @@ func _scatter_all() -> void:
 		["berry", 25, Vector2(0.7, 1.3), 55.0, false, "under"],
 		["bilberry", 42, Vector2(0.9, 1.5), 55.0, false, "under"],
 		["mushroom", 14, Vector2(0.8, 1.4), 40.0, false, "under"],
+		["moss", 105, Vector2(0.75, 1.25), 48.0, false, "under"],
+		["flower", 18, Vector2(0.75, 1.25), 52.0, false, "meadow"],
 		["fir", 15, Vector2(1.05, 1.45), 110.0, true, "fir_t"],
 		["cedar", 8, Vector2(1.05, 1.5), 110.0, true, "cedar_t"],
 		["willow", 22, Vector2(0.8, 1.3), 75.0, true, "river"],
