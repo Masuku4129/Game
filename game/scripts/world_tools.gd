@@ -134,7 +134,16 @@ func chop_tree(rec: Array, hero_p: Vector3, hits: int) -> bool:
 		var kind := kind_of(rec)
 		f = FellTree.new()
 		add_child(f)
-		f.setup(main.near_mesh[rec[3]], rec[2], kind, main, hero_p)
+		# Берём mesh непосредственно из того MultiMeshInstance, где стоит дерево.
+		# Это гарантирует совпадение GLB/LOD/материалов при замене стоящего экземпляра
+		# анимированным поваленным стволом.
+		var source_mm: MultiMesh = rec[0]
+		var source_mesh: Mesh = source_mm.mesh
+		if source_mesh == null:
+			remove_child(f)
+			f.queue_free()
+			return false
+		f.setup(source_mesh, rec[2], kind, main, hero_p)
 		main.pv.fade_list.append(f.bm)
 		fells[id] = f
 	if f.phase != "stand":
@@ -925,6 +934,8 @@ class FellTree extends Node3D:
 			_start_fall()
 
 	func _start_fall() -> void:
+		# Пень физически и визуально отсутствует до полного завершения падения.
+		stump.visible = false
 		phase = "fall"
 		th = 0.025
 		w = 0.03
@@ -959,8 +970,11 @@ class FellTree extends Node3D:
 	## Лёг: ствол становится твёрдым (по нему можно пройти).
 	var _solid: Array = []
 	func _lay() -> void:
-		stump.visible = true
+		# Вызывается только после затухания отскоков в step(); до этого момента
+		# виден один и тот же поворачивающийся исходный ствол.
+		phase = "down"
 		upper.visible = false
+		stump.visible = true
 		_update_solid()
 
 	func _update_solid() -> void:
