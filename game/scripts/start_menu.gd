@@ -92,9 +92,12 @@ func _continue() -> void:
 	queue_free()
 
 func _new() -> void:
-	if SV.has_save() and not _confirm:
+	# Подтверждение проверяет именно активный слот: обычная и творческая
+	# кампании независимы и не должны случайно перезаписывать друг друга.
+	var active_save_path := "user://creative_save.json" if main != null and bool(main.creative_mode) else SV.PATH
+	if FileAccess.file_exists(active_save_path) and not _confirm:
 		_confirm = true
-		_new_btn.text = "Точно? Сохранение сотрётся"
+		_new_btn.text = "Точно? Сохранение этого режима сотрётся"
 		return
 	SV.delete_slot(main != null and bool(main.creative_mode))
 	# Новая игра должна получить другой seed ещё до генерации рельефа и растительности.
