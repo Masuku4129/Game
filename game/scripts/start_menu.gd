@@ -2,6 +2,7 @@ extends Control
 ## --- core: меню при запуске: «Продолжить» (если есть сохранение) и «Новая игра». ---
 ## Пока меню открыто, игра на паузе; после выбора включается автосохранение.
 
+const UI = preload("res://scripts/ui_palette.gd")
 const SHEET = preload("res://scripts/camp_ui.gd").Sheet
 const INV = preload("res://scripts/inventory.gd")
 const SV = preload("res://scripts/save.gd")
@@ -42,7 +43,7 @@ func _ready() -> void:
 		l.text = _save_info()
 		l.position = Vector2(60, y - 30)
 		l.add_theme_font_size_override("font_size", 22)
-		l.add_theme_color_override("font_color", Color(0.24, 0.15, 0.08, 0.8))
+		l.add_theme_color_override("font_color", UI.TEXT_MUTED)
 		sh.add_child(l)
 		y += 30.0
 	# --- colony: новая игра — сценарий «Первая зима» (в режиме острога) ---
