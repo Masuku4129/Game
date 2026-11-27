@@ -1,5 +1,7 @@
 shader_type spatial;
-render_mode cull_disabled, diffuse_burley;
+render_mode cull_disabled;
+#include "res://shaders/paint/paint.gdshaderinc"
+
 #include "res://shaders/fade.gdshaderinc"
 #include "res://shaders/weather.gdshaderinc"
 // Карточки хвои, листвы, травы: альфа-отсечение, качание на ветру, осень, листопад, снег.
@@ -49,7 +51,7 @@ void fragment() {
 	float s = snow_cover(upn * 0.6 + 0.4, wpf) * 0.85;
 	col = mix(col, vec3(0.88, 0.9, 0.94), s);
 	col *= 1.0 - wet * 0.18;
-	ALBEDO = col;
+	ALBEDO = cartoon(col);
 	ALPHA = c.a;
 	ALPHA_SCISSOR_THRESHOLD = 0.45;
 	ROUGHNESS = mix(0.85, 0.5, wet);

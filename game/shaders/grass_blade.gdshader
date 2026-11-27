@@ -1,5 +1,7 @@
 shader_type spatial;
-render_mode cull_disabled, diffuse_burley;
+render_mode cull_disabled;
+#include "res://shaders/paint/paint.gdshaderinc"
+
 // Ковёр из отдельных травинок. Цвет берётся из вершин, нормаль смотрит вверх (мягкий свет).
 uniform float sway = 0.06;
 uniform vec3 hero_pos = vec3(0.0, -1000.0, 0.0);
@@ -30,7 +32,7 @@ void fragment() {
 	vec3 c = COLOR.rgb * tint;
 	float l = dot(c, vec3(0.3, 0.55, 0.15));
 	c = mix(c, vec3(1.15, 0.9, 0.55) * l * 1.2, dry);
-	ALBEDO = c;
+	ALBEDO = cartoon(c);
 	NORMAL = normalize((VIEW_MATRIX * vec4(0.0, 1.0, 0.0, 0.0)).xyz);
 	ROUGHNESS = 0.9;
 	SPECULAR = 0.15;

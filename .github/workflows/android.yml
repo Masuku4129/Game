@@ -1,7 +1,7 @@
 name: Android APK
 on:
   push:
-    branches: [main]
+    branches: [main, visual-run]
   workflow_dispatch:
 concurrency:
   group: android-${{ github.ref }}
@@ -84,6 +84,10 @@ jobs:
         run: |
           cd game
           timeout 120 godot --headless --script res://tests/animal_animation_speed_test.gd
+      - name: Adaptive wildlife scheduler regression
+        run: |
+          cd game
+          timeout 120 godot --headless --script res://tests/animal_scheduler_test.gd
       - name: Debug overlay visibility regression
         run: |
           cd game
@@ -110,6 +114,10 @@ jobs:
         run: |
           cd game
           timeout 180 godot --headless --script res://tests/rock_collision_test.gd
+      - name: Wetland coverage and water-pocket regression test
+        run: |
+          cd game
+          timeout 180 godot --headless --script res://tests/wetland_biome_test.gd
       - name: Export APK
         run: |
           mkdir -p build
