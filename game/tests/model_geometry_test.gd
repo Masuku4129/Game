@@ -64,7 +64,11 @@ func _run() -> void:
 		["pveg_outcrop", p.outcrop(731)], ["pveg_stump2", p.stump2(732, false)],
 		["pveg_fungus_snag", p.fungus_snag(733, false)], ["pveg_mosslog", p.mosslog(734)],
 		["pveg_cotton", p.cotton(735)], ["pveg_angelica", p.angelica(736)], ["pveg_brushpile", p.brushpile(737)],
-		["pveg_chanterelles", p.chanterelles(738)], ["pveg_cones", p.cones(739)], ["pveg_bones", p.bones(740)]
+		["pveg_chanterelles", p.chanterelles(738)], ["pveg_cones", p.cones(739)], ["pveg_bones", p.bones(740)],
+		["glb_spruce", p.model_mesh("spruce")], ["glb_fir", p.model_mesh("fir")], ["glb_pine", p.model_mesh("pine")],
+		["glb_cedar", p.model_mesh("cedar")], ["glb_larch", p.model_mesh("larch")], ["glb_birch", p.model_mesh("birch")],
+		["glb_aspen", p.model_mesh("aspen")], ["glb_alder", p.model_mesh("alder")], ["glb_bush", p.model_mesh("bush")],
+		["glb_stump", p.model_mesh("stump")]
 	]
 	for entry in samples:
 		var model: Array = entry[1]
