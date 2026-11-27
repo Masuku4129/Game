@@ -535,8 +535,36 @@ static func arrow() -> ArrayMesh:
 	_cache["arrow"] = m
 	return m
 
+static func rifle() -> ArrayMesh:
+	if _cache.has("rifle"):
+		return _cache["rifle"]
+	var b := B.new(0x51F1E)
+	# Охотничья магазинная винтовка: деревянное ложе, стальная ствольная коробка и длинный ствол.
+	var wood := Color(0.34, 0.22, 0.13)
+	var wood_hi := Color(0.52, 0.36, 0.21)
+	var steel := Color(0.19, 0.22, 0.23)
+	var steel_hi := Color(0.38, 0.41, 0.4)
+	b.tube([Vector3(0, -0.43, 0), Vector3(0, -0.3, 0), Vector3(0, -0.12, 0), Vector3(0, 0.12, 0), Vector3(0, 0.24, 0)],
+		[0.052, 0.045, 0.034, 0.031, 0.025], [wood, wood_hi, wood, wood, wood], 8)
+	b.tube([Vector3(0, 0.02, 0), Vector3(0, 0.2, 0), Vector3(0, 0.64, 0)],
+		[0.021, 0.016, 0.012], [steel, steel_hi, steel], 9)
+	b.tube([Vector3(0, -0.02, 0), Vector3(0, 0.1, 0), Vector3(0, 0.22, 0)],
+		[0.036, 0.04, 0.032], [steel, steel_hi, steel], 8)
+	# мушка и целик
+	b.tube([Vector3(0, 0.56, 0), Vector3(0, 0.59, 0)], [0.006, 0.006], [steel_hi, steel_hi], 5)
+	b.tube([Vector3(0, 0.25, 0), Vector3(0, 0.28, 0)], [0.009, 0.009], [steel, steel], 6)
+	# спусковая скоба и спусковой крючок
+	b.tube([Vector3(0, -0.13, 0), Vector3(0, -0.19, 0.025), Vector3(0, -0.27, 0.02), Vector3(0, -0.29, 0)],
+		[0.004, 0.004, 0.004, 0.004], [steel, steel, steel, steel], 5)
+	b.tube([Vector3(0, -0.11, 0), Vector3(0, -0.17, 0)], [0.007, 0.005], [steel_hi, steel], 5)
+	var m := b.commit(mat())
+	_cache["rifle"] = m
+	return m
+
 static func mesh_of(id: String) -> Mesh:
 	match id:
+		"rifle":
+			return rifle()
 		"bow":
 			return bow()
 		"arrow":
