@@ -96,7 +96,7 @@ func _new() -> void:
 		_confirm = true
 		_new_btn.text = "Точно? Сохранение сотрётся"
 		return
-	SV.delete_save()
+	SV.delete_slot(main != null and bool(main.creative_mode))
 	# Новая игра должна получить другой seed ещё до генерации рельефа и растительности.
 	var rng := RandomNumberGenerator.new()
 	rng.randomize()
