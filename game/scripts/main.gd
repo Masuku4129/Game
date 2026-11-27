@@ -717,6 +717,7 @@ func _make_water() -> void:
 	var mat := ShaderMaterial.new()
 	mat.shader = preload("res://shaders/paint/water.gdshader")
 	mat.set_shader_parameter("hmap", hmap_tex)
+	mat.set_shader_parameter("zone_tex", terrain_mat.get_shader_parameter("zone_tex"))
 	mat.set_shader_parameter("hsize", SIZE)
 	plane.material = mat
 	water_mat = mat
@@ -1508,6 +1509,7 @@ func _scatter_all() -> void:
 		["horsetail", 42, Vector2(0.8, 1.3), 48.0, false, "bog_z"],
 		["hummock", 76, Vector2(0.9, 1.7), 52.0, false, "bog_z"],
 		["sedge", 58, Vector2(0.9, 1.4), 48.0, false, "bog_z"],
+		["reeds", 24, Vector2(0.9, 1.4), 14.0, false, "bog_z"],
 		["juniper", 10, Vector2(0.7, 1.2), 60.0, false, "rocky"],
 		["stlanik", 16, Vector2(0.8, 1.3), 80.0, true, "rocky_z"],
 		["rowan", 4, Vector2(0.9, 1.3), 90.0, true, "edge"],

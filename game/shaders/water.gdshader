@@ -2,6 +2,8 @@ shader_type spatial;
 render_mode diffuse_burley, specular_schlick_ggx, depth_draw_always;
 // Вода: две волны, преломление дна, цвет по глубине, пена у берега и вокруг камней, блики.
 uniform sampler2D wave : filter_linear_mipmap, repeat_enable;
+uniform sampler2D zone_tex : filter_nearest, repeat_disable;
+uniform float hsize = 512.0;
 uniform sampler2D depth_tex : hint_depth_texture, repeat_disable, filter_nearest;
 uniform sampler2D screen_tex : hint_screen_texture, repeat_disable, filter_linear_mipmap;
 uniform vec3 shallow_col : source_color = vec3(0.30, 0.42, 0.34);
@@ -38,6 +40,11 @@ void fragment() {
 	float t = clamp(thick / 3.5, 0.0, 1.0);
 	vec3 body = mix(shallow_col, deep_col, smoothstep(0.0, 1.0, t));
 	vec3 col = mix(under * mix(vec3(1.0), shallow_col * 1.8, t), body, smoothstep(0.05, 0.9, t));
+	// Wetland pools use a muted olive/brown palette, unlike clear river water.
+	vec2 map_uv = clamp(wp.xz / hsize + vec2(0.5), vec2(0.001), vec2(0.999));
+	float wetland = texture(zone_tex, map_uv).g;
+	vec3 bog_col = mix(vec3(0.15, 0.19, 0.10), vec3(0.28, 0.34, 0.18), smoothstep(0.0, 1.0, t));
+	col = mix(col, bog_col, wetland * 0.72);
 
 	// пена: у берега и вокруг камней, с бегущим шумом
 	float fn = w1.a * 0.6 + w2.a * 0.7;
@@ -57,7 +64,8 @@ void fragment() {
 	col = mix(col, ice_col, ic);
 	ALBEDO = col;
 	ROUGHNESS = mix(mix(0.04, 0.5, foam), 0.3, ic);
-	SPECULAR = 0.7;
+	ROUGHNESS = mix(ROUGHNESS, 0.72, wetland * 0.65);
+	SPECULAR = mix(0.7, 0.3, wetland * 0.8);
 	METALLIC = 0.0;
 	ALPHA = 1.0;
 }
