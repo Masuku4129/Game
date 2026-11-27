@@ -434,12 +434,12 @@ func _sheet_input(e: InputEvent) -> void:
 					_craft_dragging = true
 					_craft_drag_mode = "scrollbar"
 					var track_top := GRID.y
-					var track_h := 516.0
-					var thumb_h := maxf(42.0, track_h * track_h / (float(rs.size()) * ROW_H))
-					var thumb_y := track_top + (track_h - thumb_h) * craft_scroll / max_scroll
-					_craft_bar_offset = mb.position.y - thumb_y if mb.position.y >= thumb_y and mb.position.y <= thumb_y + thumb_h else thumb_h * 0.5
-					var next_top := clampf(mb.position.y - _craft_bar_offset, track_top, track_top + track_h - thumb_h)
-					craft_scroll = (next_top - track_top) / maxf(track_h - thumb_h, 1.0) * max_scroll
+					var track_h_mouse := 516.0
+					var thumb_h_mouse := maxf(42.0, track_h_mouse * track_h_mouse / (float(rs.size()) * ROW_H))
+					var thumb_y_mouse := track_top + (track_h_mouse - thumb_h_mouse) * craft_scroll / max_scroll
+					_craft_bar_offset = mb.position.y - thumb_y_mouse if mb.position.y >= thumb_y_mouse and mb.position.y <= thumb_y_mouse + thumb_h_mouse else thumb_h_mouse * 0.5
+					var next_top_mouse := clampf(mb.position.y - _craft_bar_offset, track_top, track_top + track_h_mouse - thumb_h_mouse)
+					craft_scroll = (next_top_mouse - track_top) / maxf(track_h_mouse - thumb_h_mouse, 1.0) * max_scroll
 					sheet.queue_redraw()
 					return
 				if mb.pressed and mb.position.x < 604.0 and mb.position.y >= GRID.y and mb.position.y <= 640.0:
@@ -463,12 +463,12 @@ func _sheet_input(e: InputEvent) -> void:
 				if touch.position.x >= 604.0 and touch.position.x <= 642.0 and max_scroll > 0.0:
 					_craft_dragging = true
 					_craft_drag_mode = "scrollbar"
-					var track_h := 516.0
-					var thumb_h := maxf(42.0, track_h * track_h / (float(rs.size()) * ROW_H))
-					var thumb_y := GRID.y + (track_h - thumb_h) * craft_scroll / max_scroll
-					_craft_bar_offset = touch.position.y - thumb_y if touch.position.y >= thumb_y and touch.position.y <= thumb_y + thumb_h else thumb_h * 0.5
-					var next_top := clampf(touch.position.y - _craft_bar_offset, GRID.y, GRID.y + track_h - thumb_h)
-					craft_scroll = (next_top - GRID.y) / maxf(track_h - thumb_h, 1.0) * max_scroll
+					var track_h_touch := 516.0
+					var thumb_h_touch := maxf(42.0, track_h_touch * track_h_touch / (float(rs.size()) * ROW_H))
+					var thumb_y_touch := GRID.y + (track_h_touch - thumb_h_touch) * craft_scroll / max_scroll
+					_craft_bar_offset = touch.position.y - thumb_y_touch if touch.position.y >= thumb_y_touch and touch.position.y <= thumb_y_touch + thumb_h_touch else thumb_h_touch * 0.5
+					var next_top_touch := clampf(touch.position.y - _craft_bar_offset, GRID.y, GRID.y + track_h_touch - thumb_h_touch)
+					craft_scroll = (next_top_touch - GRID.y) / maxf(track_h_touch - thumb_h_touch, 1.0) * max_scroll
 				elif touch.position.x < 604.0:
 					_craft_dragging = true
 					_craft_drag_mode = "list"
@@ -482,10 +482,10 @@ func _sheet_input(e: InputEvent) -> void:
 		if e is InputEventScreenDrag and _craft_dragging:
 			var drag := e as InputEventScreenDrag
 			if _craft_drag_mode == "scrollbar":
-				var track_h := 516.0
-				var thumb_h := maxf(42.0, track_h * track_h / (float(rs.size()) * ROW_H))
-				var top := clampf(drag.position.y - _craft_bar_offset, GRID.y, GRID.y + track_h - thumb_h)
-				craft_scroll = (top - GRID.y) / maxf(track_h - thumb_h, 1.0) * max_scroll
+				var track_h_drag := 516.0
+				var thumb_h_drag := maxf(42.0, track_h_drag * track_h_drag / (float(rs.size()) * ROW_H))
+				var top_drag := clampf(drag.position.y - _craft_bar_offset, GRID.y, GRID.y + track_h_drag - thumb_h_drag)
+				craft_scroll = (top_drag - GRID.y) / maxf(track_h_drag - thumb_h_drag, 1.0) * max_scroll
 			else:
 				craft_scroll = clampf(_craft_scroll_start - (drag.position.y - _craft_drag_y), 0.0, max_scroll)
 			sheet.queue_redraw()
@@ -493,10 +493,10 @@ func _sheet_input(e: InputEvent) -> void:
 		if e is InputEventMouseMotion and _craft_dragging:
 			var motion := e as InputEventMouseMotion
 			if _craft_drag_mode == "scrollbar":
-				var track_h := 516.0
-				var thumb_h := maxf(42.0, track_h * track_h / (float(rs.size()) * ROW_H))
-				var top := clampf(motion.position.y - _craft_bar_offset, GRID.y, GRID.y + track_h - thumb_h)
-				craft_scroll = (top - GRID.y) / maxf(track_h - thumb_h, 1.0) * max_scroll
+				var track_h_motion := 516.0
+				var thumb_h_motion := maxf(42.0, track_h_motion * track_h_motion / (float(rs.size()) * ROW_H))
+				var top_motion := clampf(motion.position.y - _craft_bar_offset, GRID.y, GRID.y + track_h_motion - thumb_h_motion)
+				craft_scroll = (top_motion - GRID.y) / maxf(track_h_motion - thumb_h_motion, 1.0) * max_scroll
 			else:
 				craft_scroll = clampf(_craft_scroll_start - (motion.position.y - _craft_drag_y), 0.0, max_scroll)
 			sheet.queue_redraw()
