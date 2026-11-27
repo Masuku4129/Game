@@ -157,8 +157,18 @@ func _new_wander() -> void:
 			target = ld.position + Vector3(cos(a2), 0, sin(a2)) * rng.randf_range(2.5, 8.0)
 	# цель на другом ярусе уступа или в воде (воду обходят все, кроме бобра) — ближе к дому
 	var th: float = main.height(target.x, target.z)
-	if absf(th - main.height(position.x, position.z)) > 4.0 or (th < main.WATER_Y - 0.3 and kind != "beaver"):
+	var target_water := main.water_level(target.x, target.z)
+	var current_water := main.water_level(position.x, position.z)
+	var target_is_deep_water := th < target_water - 0.3
+	var current_is_deep_water := main.height(position.x, position.z) < current_water - 0.3
+	# Пруд за бобровой плотиной и изменённый уровень воды учитываются так же,
+	# как основное русло: неплавающие звери не получают цель под поверхностью.
+	if absf(th - main.height(position.x, position.z)) > 4.0 or (target_is_deep_water and kind != "beaver" and not swimmer()):
 		target = home + Vector3(rng.randf_range(-8, 8), 0, rng.randf_range(-8, 8))
+	elif current_is_deep_water and kind != "beaver" and not swimmer():
+		var bank := _bank_spot(position.x, _bank_side(position))
+		if bank != Vector3.INF:
+			target = bank
 	# на тот берег — редко и только вплавь (переправа); иначе цель зеркалится на свой берег
 	cross = false
 	if mgr != null and kind != "beaver" and _bank_side(target) != _bank_side(position) and main.river_dist(position.x, position.z) < 45.0:
