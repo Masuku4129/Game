@@ -463,8 +463,8 @@ func water_level(x: float, z: float) -> float:
 
 ## Расстояние до русла по нормали к оси (на крутой излучине река не сужается).
 func river_dist(x: float, z: float) -> float:
-	var d: float = RP.dzc(x, main.map_seed)
-	return absf(z - RP.zc(x, main.map_seed)) / sqrt(1.0 + d * d)
+	var d: float = RP.dzc(x, map_seed)
+	return absf(z - RP.zc(x, map_seed)) / sqrt(1.0 + d * d)
 
 ## 1 в центре озера, плавно к 0 у берега.
 func lake_k(x: float, z: float) -> float:
