@@ -144,7 +144,9 @@ func chop_tree(rec: Array, hero_p: Vector3, hits: int) -> bool:
 		# Это гарантирует совпадение GLB/LOD/материалов при замене стоящего экземпляра
 		# анимированным поваленным стволом.
 		var source_mm: MultiMesh = rec[0]
-		var source_mesh: Mesh = source_mm.mesh
+		# Дальняя MultiMesh может содержать упрощённый LOD; при валке всегда
+		# берём исходную полноразмерную GLB-модель из near_mesh.
+		var source_mesh: Mesh = main.near_mesh.get(String(rec[3]), source_mm.mesh)
 		if source_mesh == null:
 			remove_child(f)
 			f.queue_free()
