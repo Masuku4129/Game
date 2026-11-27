@@ -828,9 +828,10 @@ func _can_step(p: Vector3, flying: bool = false) -> bool:
 func _push_out() -> void:
 	if not main.blocked(position.x, position.z, _obstacle_radius()) and main.solid_top(position.x, position.z) - main.grid_height(position.x, position.z) <= 0.45:
 		return
-	for r in [0.6, 1.1, 1.7, 2.5, 3.5]:
-		for k in 12:
-			var a := TAU * float(k) / 12.0 + float(r)
+	# Search wider and more densely so animals can escape tree/rock gaps.
+	for r in [0.5, 0.9, 1.3, 1.8, 2.4, 3.2, 4.2, 5.4]:
+		for k in 24:
+			var a := TAU * float(k) / 24.0 + float(r) * 0.31
 			var q: Vector3 = position + Vector3(sin(a), 0.0, cos(a)) * float(r)
 			if _can_step(q):
 				position.x = q.x
@@ -1012,10 +1013,10 @@ func _animate_model(delta: float) -> void:
 		sc = 0.85 if speed > 0.05 else 0.5
 	elif speed > walk * 1.7:
 		want_a = SK.find_anim(ap, ["Gallop"])
-		sc = clampf(speed / (float(sp["run"]) * 0.75), 0.6, 1.6)
+		sc = clampf(speed / float(sp["run"]), 0.7, 1.35)
 	elif speed > 0.08:
 		want_a = SK.find_anim(ap, ["Walk"])
-		sc = clampf(speed / walk, 0.4, 1.8)
+		sc = clampf(speed / walk, 0.45, 1.4)
 	elif state in ["graze", "feed", "drink", "eat"]:
 		want_a = SK.find_anim(ap, ["Eating"])
 	elif state in ["rest", "sleep", "ambush"]:
@@ -1027,7 +1028,7 @@ func _animate_model(delta: float) -> void:
 	if want_a != "" and want_a != parts["cur"]:
 		ap.play(want_a, 0.35)
 		parts["cur"] = want_a
-	ap.speed_scale = sc
+	ap.speed_scale = lerpf(ap.speed_scale, sc, clampf(delta * 6.0, 0.0, 1.0))
 	# наклон по склону
 	var L: float = parts["L"]
 	var fwd := Vector3(sin(heading), 0, cos(heading))
