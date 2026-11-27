@@ -1021,7 +1021,7 @@ func _process(delta: float) -> void:
 	if grass_timer > 0.0:
 		return
 	grass_timer = 0.1
-	var c := Vector2i(floori((player_rig.position.x + SIZE * 0.5) / GCELL), floori((player_rig.position.z + SIZE * 0.5) / GCELL))
+	var c := Vector2i(floori(player_rig.position.x / GCELL), floori(player_rig.position.z / GCELL))
 	# удалить далёкие клетки
 	for k in grass_cells.keys():
 		if absi(k.x - c.x) > GRADIUS + 1 or absi(k.y - c.y) > GRADIUS + 1:
@@ -1039,7 +1039,7 @@ func _process(delta: float) -> void:
 	for dz in range(-GRADIUS, GRADIUS + 1):
 		for dx in range(-GRADIUS, GRADIUS + 1):
 			var k := Vector2i(c.x + dx, c.y + dz)
-			if grass_cells.has(k) or k.x < 0 or k.y < 0 or k.x >= int(SIZE / GCELL) or k.y >= int(SIZE / GCELL):
+			if grass_cells.has(k):
 				continue
 			var d := float(dx * dx + dz * dz) - Vector2(dx, dz).dot(fwd) * 1.2
 			if d < best_d:
@@ -1152,14 +1152,14 @@ func grid_height(x: float, z: float) -> float:
 
 ## Трава вокруг точки заранее, пока игрок не видит карту (при старте), без «вырастания» на глазах.
 func _grass_prebuild(c: Vector3) -> void:
-	var ck := Vector2i(floori((c.x + SIZE * 0.5) / GCELL), floori((c.z + SIZE * 0.5) / GCELL))
+	var ck := Vector2i(floori(c.x / GCELL), floori(c.z / GCELL))
 	for r in range(0, GRADIUS + 1):
 		for dz in range(-r, r + 1):
 			for dx in range(-r, r + 1):
 				if maxi(absi(dx), absi(dz)) != r:
 					continue
 				var k := Vector2i(ck.x + dx, ck.y + dz)
-				if grass_cells.has(k) or k.x < 0 or k.y < 0 or k.x >= int(SIZE / GCELL) or k.y >= int(SIZE / GCELL):
+				if grass_cells.has(k):
 					continue
 				_grass_begin(k)
 				while not _gb.is_empty():
@@ -1181,8 +1181,8 @@ func _grass_step() -> void:
 	var k: Vector2i = _gb["k"]
 	var rng: RandomNumberGenerator = _gb["rng"]
 	var per_var: Array = _gb["pv"]
-	var x0 := k.x * GCELL - SIZE * 0.5
-	var z0 := k.y * GCELL - SIZE * 0.5
+	var x0 := float(k.x) * GCELL
+	var z0 := float(k.y) * GCELL
 	var step := 0.92
 	var z: float = _gb["z"]
 	var z_end := minf(z + 8.0, GCELL)
