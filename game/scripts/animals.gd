@@ -3,10 +3,10 @@ extends Node3D
 
 const Animal = preload("res://scripts/animal.gd")
 const SHOW_R := 75.0
-const NEAR_R := 95.0
+const NEAR_R := 70.0
 const MID_R := 25.0   # ближайшая зона — животные детальнее реагируют
 const NEAR_DT := 0.033 # близкая симуляция 30 Гц вместо каждого кадра; AnimPlayer продолжает интерполировать циклы
-const MID_DT := 0.04  # средняя дистанция — 25 Гц
+const MID_DT := 0.08  # средняя дистанция — 12,5 Гц
 
 var main: Node3D
 var list: Array = []
@@ -401,7 +401,7 @@ func _process(delta: float) -> void:
 			a._acc = 0.0
 		a.visible = d < (40.0 if a.kind in ["hare", "squirrel", "beaver"] else SHOW_R) and (not a.dead or a.meat > 0.0) and a.state != "sleep" and a.state != "inlodge"
 		if a.parts.has("ap"):
-			a.parts["ap"].active = a.visible and not a.dead
+			a.parts["ap"].active = a.visible and not a.dead and not a.far
 	# perf: дальние (за NEAR_R) — по кругу, каждый примерно раз в секунду
 	var per := maxi(1, n / 60)
 	for k in per:
