@@ -1190,6 +1190,14 @@ func model_variants(kind: String) -> Array:
 		var v := model(spec[0], 7000 + i * 31 + kind.hash() % 97, float(spec[2]), spec[3], spec[4])
 		if v.is_empty():
 			return []
+		# Keep the legacy placement/collision metadata contract while geometry comes from GLB.
+		var mesh := v[0] as ArrayMesh
+		var bounds: AABB = mesh.get_aabb()
+		if kind in ["rock", "pebble", "slab", "split_rock", "outcrop", "scree"]:
+			v.append(bounds.size * 0.5)
+		elif kind in ["fallen0", "fallen1"]:
+			var radius := maxf(bounds.size.y, bounds.size.z) * 0.5
+			v = [mesh, bounds.size.x, radius, maxf(0.0, -bounds.position.y), -bounds.position.x]
 		out.append(v)
 	return out
 
