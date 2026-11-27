@@ -995,7 +995,7 @@ func _can_move_segment(from: Vector3, to: Vector3, flying: bool = false) -> bool
 	# Adaptive sampling: large-bodied species use tighter collision sweeps;
 	# tiny wildlife retains a cheaper pass without skipping narrow obstacles.
 	var radius := _obstacle_radius()
-	var sample_spacing := clampf(radius * 0.35, 0.075, 0.16)
+	var sample_spacing := clampf(radius * 0.28, 0.06, 0.13)
 	var steps := maxi(1, ceili(distance / sample_spacing))
 	var previous := from
 	for i in range(1, steps + 1):
