@@ -1508,6 +1508,7 @@ func _scatter_all() -> void:
 		["horsetail", 30, Vector2(0.8, 1.3), 45.0, false, "bog_z"],
 		["hummock", 55, Vector2(0.9, 1.7), 50.0, false, "bog_z"],
 		["sedge", 40, Vector2(0.9, 1.4), 45.0, false, "bog_z"],
+		["reeds", 24, Vector2(0.9, 1.4), 14.0, false, "bog_z"],
 		["juniper", 10, Vector2(0.7, 1.2), 60.0, false, "rocky"],
 		["stlanik", 16, Vector2(0.8, 1.3), 80.0, true, "rocky_z"],
 		["rowan", 4, Vector2(0.9, 1.3), 90.0, true, "edge"],
