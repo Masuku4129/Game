@@ -197,9 +197,9 @@ func step(dh: float) -> void:
 	var cold := temp < 0.5
 	# снег копится в снегопад, тает в тепло
 	if cold and precip > 0.1:
-		snow = minf(1.0, snow + precip * dh * 0.09)
+		snow = minf(1.0, snow + precip * dh * (0.09 + wind * 0.012))
 	elif temp > 1.0:
-		snow = maxf(0.0, snow - (temp * 0.004 + precip * 0.02) * dh)
+		snow = maxf(0.0, snow - (temp * 0.004 + precip * 0.02 + wind * 0.003) * dh)
 	# в зимний мороз покров держится и понемногу растёт (позёмка, иней)
 	if season_index() == 1 and temp < -2.0:
 		snow = minf(maxf(snow, 0.35), snow + dh * 0.015) if snow < 0.95 else snow
