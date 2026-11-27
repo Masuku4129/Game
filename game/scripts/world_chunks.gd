@@ -527,10 +527,12 @@ func _build_understory(c: Vector2i) -> void:
 				kind = "moss"
 			elif pick < 0.85:
 				kind = "mushroom"
-			elif pick < 0.94:
+			elif pick < 0.92:
 				kind = "rock"
-			else:
+			elif pick < 0.97:
 				kind = "stump"
+			else:
+				kind = "fallen0"
 		var variants: Array = _model_variants(kind)
 		if variants.is_empty():
 			continue
@@ -582,6 +584,21 @@ func _build_understory(c: Vector2i) -> void:
 				var solid := [0, p, Vector3.ZERO, radius, maxf(0.25, bounds.size.y * xf.basis.y.length() * 0.72)]
 				main._add_solid(solid)
 				chunk_solids.append(solid)
+		elif kind in ["fallen0", "fallen1"]:
+			var spec: Array = variants[vi]
+			for xf: Transform3D in transforms:
+				var radius := maxf(0.12, float(spec[2]) * xf.basis.x.length())
+				var a: Vector3 = xf * Vector3(float(spec[4]), float(spec[3]), 0.0)
+				var b: Vector3 = xf * Vector3(float(spec[4]) + float(spec[1]) * 0.85, 0.12, 0.0)
+				var solid := [1, a, b, radius, 0.0]
+				main._add_solid(solid)
+				chunk_solids.append(solid)
+				var steps := maxi(1, ceili(a.distance_to(b) / 1.4))
+				for s in range(steps + 1):
+					var p := a.lerp(b, float(s) / float(steps))
+					var obstacle := Vector3(p.x, p.z, radius + 0.08)
+					main._add_blocker(p.x, p.z, radius + 0.08)
+					chunk_blockers.append([Vector2i(floori(p.x / 8.0), floori(p.z / 8.0)), obstacle])
 	prop_mmis[k] = created
 	prop_blocker_records[k] = chunk_blockers
 	prop_solid_records[k] = chunk_solids
