@@ -6,8 +6,11 @@ const SIZE := 512.0
 const SEG := 384
 const WATER_Y := -2.0
 const CELL := 64.0
-const MAP_SEED := 20261127 # единый seed всей карты: рельеф, биомы, река, озёра, лес и трава
+const MAP_SEED := 20261127 # fallback для старых сохранений
+const PENDING_SEED_PATH := "user://pending_world_seed.txt"
 var map_seed: int = MAP_SEED
+var explored_map: Dictionary = {}
+var _map_reveal_t := 0.0
 const FOREST_DENSITY_MULTIPLIER := 1.7
 const FOREST_DENSITY_SPECIES := ["spruce", "pine", "birch", "larch", "aspen", "bare", "spruce_dead", "bush", "fern", "reeds", "twig", "berry", "bilberry", "mushroom", "fir", "cedar", "willow", "alder", "cherry", "rose", "horsetail", "hummock", "sedge", "juniper", "stlanik", "rowan", "anthill", "mossrock", "stump_rot", "stump_mush", "fungus_snag", "birch_dead", "mosslog", "ledum", "cloudberry", "cranberry", "cotton", "lingon", "ernik", "raspberry", "currant", "bells", "daisy", "angelica", "brushpile", "chanterelle", "cones"]
 
@@ -76,6 +79,7 @@ var colony
 var colony_mode := true
 
 func _ready() -> void:
+	_resolve_world_seed()
 	_colony_pick_mode()
 	_setup_noise()
 	weather = preload("res://scripts/weather.gd").new()
@@ -262,6 +266,52 @@ func _ready() -> void:
 
 ## --- colony: какой режим запускать. Старые проверки (бой, инструменты, охота, стройка,
 ## сохранение, кадры, замер) идут по-прежнему от героя, поэтому для них — режим героя. ---
+func _resolve_world_seed() -> void:
+	# Новый мир получает собственный seed; продолжение читает seed до генерации рельефа.
+	if FileAccess.file_exists(PENDING_SEED_PATH):
+		var pending := FileAccess.open(PENDING_SEED_PATH, FileAccess.READ)
+		if pending != null:
+			map_seed = int(pending.get_as_text().strip_edges())
+			pending.close()
+		DirAccess.remove_absolute(ProjectSettings.globalize_path(PENDING_SEED_PATH))
+		if map_seed != 0:
+			return
+	if FileAccess.file_exists("user://save.json"):
+		var sf := FileAccess.open("user://save.json", FileAccess.READ)
+		if sf != null:
+			var parsed: Variant = JSON.parse_string(sf.get_as_text())
+			sf.close()
+			if parsed is Dictionary:
+				var md: Dictionary = (parsed as Dictionary).get("main", {})
+				if md.has("map_seed"):
+					map_seed = int(md["map_seed"])
+					return
+	var rng := RandomNumberGenerator.new()
+	rng.randomize()
+	map_seed = int(rng.randi() & 0x7fffffff)
+	if map_seed == 0:
+		map_seed = MAP_SEED
+
+func _reveal_map_area() -> void:
+	# Открываем только пройденную местность. Храним компактные данные по клеткам 16×16 м.
+	var cx := floori(hero.position.x / 16.0)
+	var cz := floori(hero.position.z / 16.0)
+	for dz in range(-2, 3):
+		for dx in range(-2, 3):
+			var gx := cx + dx
+			var gz := cz + dz
+			var key := "%d,%d" % [gx, gz]
+			if explored_map.has(key):
+				continue
+			var wx := (float(gx) + 0.5) * 16.0
+			var wz := (float(gz) + 0.5) * 16.0
+			explored_map[key] = {
+				"zone": zone(wx, wz),
+				"river": river_dist(wx, wz) < 9.0,
+				"lake": lake_k(wx, wz) > 0.28,
+				"water": height(wx, wz) < water_level(wx, wz) + 0.25
+			}
+
 func _colony_pick_mode() -> void:
 	colony_mode = true
 	var cf := ConfigFile.new()
@@ -389,18 +439,18 @@ func blocked(x: float, z: float, rad: float) -> bool:
 	return false
 
 func _setup_noise() -> void:
-	n_hill.seed = MAP_SEED + 1640; n_hill.frequency = 0.004; n_hill.fractal_octaves = 4
-	n_cliff.seed = MAP_SEED + 77; n_cliff.frequency = 0.0045; n_cliff.fractal_octaves = 2
-	n_detail.seed = MAP_SEED + 5; n_detail.frequency = 0.05; n_detail.fractal_octaves = 3
-	n_crag.seed = MAP_SEED + 31; n_crag.frequency = 0.16; n_crag.fractal_octaves = 4
-	n_crag2.seed = MAP_SEED + 32; n_crag2.frequency = 0.55; n_crag2.fractal_octaves = 2
-	n_biome.seed = MAP_SEED + 4242; n_biome.frequency = 0.0042; n_biome.fractal_octaves = 2
-	n_forest.seed = MAP_SEED + 909; n_forest.frequency = 0.02; n_forest.fractal_octaves = 3
-	n_zone.seed = MAP_SEED + 2024; n_zone.noise_type = FastNoiseLite.TYPE_CELLULAR; n_zone.frequency = 0.018
+	n_hill.seed = map_seed + 1640; n_hill.frequency = 0.004; n_hill.fractal_octaves = 4
+	n_cliff.seed = map_seed + 77; n_cliff.frequency = 0.0045; n_cliff.fractal_octaves = 2
+	n_detail.seed = map_seed + 5; n_detail.frequency = 0.05; n_detail.fractal_octaves = 3
+	n_crag.seed = map_seed + 31; n_crag.frequency = 0.16; n_crag.fractal_octaves = 4
+	n_crag2.seed = map_seed + 32; n_crag2.frequency = 0.55; n_crag2.fractal_octaves = 2
+	n_biome.seed = map_seed + 4242; n_biome.frequency = 0.0042; n_biome.fractal_octaves = 2
+	n_forest.seed = map_seed + 909; n_forest.frequency = 0.02; n_forest.fractal_octaves = 3
+	n_zone.seed = map_seed + 2024; n_zone.noise_type = FastNoiseLite.TYPE_CELLULAR; n_zone.frequency = 0.018
 	n_zone.cellular_return_type = FastNoiseLite.RETURN_CELL_VALUE; n_zone.fractal_type = FastNoiseLite.FRACTAL_NONE
-	n_open.seed = MAP_SEED + 313; n_open.frequency = 0.0055; n_open.fractal_octaves = 2
-	n_wet.seed = MAP_SEED + 777; n_wet.frequency = 0.007; n_wet.fractal_octaves = 3
-	n_glade.seed = MAP_SEED + 555; n_glade.frequency = 0.011; n_glade.fractal_octaves = 2
+	n_open.seed = map_seed + 313; n_open.frequency = 0.0055; n_open.fractal_octaves = 2
+	n_wet.seed = map_seed + 777; n_wet.frequency = 0.007; n_wet.fractal_octaves = 3
+	n_glade.seed = map_seed + 555; n_glade.frequency = 0.011; n_glade.fractal_octaves = 2
 
 ## Уровень воды в точке: у бобровых плотин выше (пруд) или ниже (после плотины).
 func water_level(x: float, z: float) -> float:
@@ -857,6 +907,10 @@ func _process(delta: float) -> void:
 		dead_t -= delta
 		if dead_t <= 0.0:
 			_respawn()
+	_map_reveal_t -= delta
+	if _map_reveal_t <= 0.0 and hero != null:
+		_map_reveal_t = 1.5
+		_reveal_map_area()
 	_near_t -= delta
 	if _near_t <= 0.0:
 		_near_t = 0.06
@@ -1548,7 +1602,7 @@ const BLOCK_R := {"fungus_snag": 0.22, "birch_dead": 0.2, "snag": 0.25, "snag_b"
 
 func _chunk_seed(cx: int, cz: int) -> int:
 	# Один детерминированный seed для каждого чанка, производный от общего seed карты.
-	return MAP_SEED + cx * 73856093 + cz * 19349663
+	return map_seed + cx * 73856093 + cz * 19349663
 
 func _scatter_all() -> void:
 	# вид, попыток на клетку 32 м, масштаб, дальность видимости, тень, правило
@@ -1961,7 +2015,7 @@ func _cliff_rocks(vars: Array) -> void:
 		push_warning("Cliff rock variants are empty; skipping cliff scatter")
 		return
 	var rng := RandomNumberGenerator.new()
-	rng.seed = MAP_SEED + 4711
+	rng.seed = map_seed + 4711
 	var per_var := []
 	for v in vars:
 		per_var.append([])
@@ -2178,7 +2232,7 @@ func _core_tick(dt: float) -> void:
 func to_save() -> Dictionary:
 	var SV = preload("res://scripts/save.gd")
 	var t: Node = hero.tools
-	return {"t_hours": t_hours, "day": day_count, "hunger": hunger, "thirst": thirst, "warmth": warmth,
+	return {"t_hours": t_hours, "day": day_count, "map_seed": map_seed, "explored_map": explored_map.duplicate(true), "hunger": hunger, "thirst": thirst, "warmth": warmth,
 		"stamina": stamina, "health": health, "bleed": bleed, "injuries": injuries.duplicate(),
 		"inv": inv.duplicate(), "pos": SV.enc(hero.position), "yaw": float(hero.body.rotation.y),
 		"cam_yaw": float(rig.rotation.y), "held": String(t.held) if t != null else "",
@@ -2199,6 +2253,8 @@ func _bundle_save(t: Node) -> Array:
 
 func from_save(d: Dictionary) -> void:
 	var SV = preload("res://scripts/save.gd")
+	map_seed = int(d.get("map_seed", map_seed))
+	explored_map = d.get("explored_map", {}).duplicate(true)
 	t_hours = float(d.get("t_hours", t_hours))
 	day_count = int(d.get("day", day_count))
 	hunger = float(d.get("hunger", hunger))
