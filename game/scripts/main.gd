@@ -1912,7 +1912,9 @@ func _scatter_all() -> void:
 						mmi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON if shadow else GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 						add_child(mmi)
 						_place_cell_records(mm, xs, r, vi, vars, is_tree, pick_kind)
-			await get_tree().process_frame
+				# Каждая группа вида/чанка отдаёт кадр; иначе один чанк с десятками
+				# видов растений надолго блокирует главный поток даже при async _ready().
+				await get_tree().process_frame
 
 ## Разбить экземпляры клетки 64 м на четыре клетки 32 м (fine) или оставить одной группой.
 func _split_cell(xs: Array, x0: float, z0: float, fine: bool) -> Array:
