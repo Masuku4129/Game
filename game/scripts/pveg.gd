@@ -1253,6 +1253,11 @@ func model(file: String, seed_v: int, base_scale: float, bark_mat: String, folia
 		var xf: Transform3D = entry[1]
 		var nm := String(mi.name).to_lower()
 		var msh: Mesh = mi.mesh
+		# Разбиваем одинаковые GLB-кроны по силуэту: лёгкий изгиб и асимметрия
+		# применяются только к листве, не деформируя стволы и ветви.
+		var crown_phase := rng.randf_range(0.0, TAU)
+		var crown_amp := rng.randf_range(0.045, 0.13)
+		var crown_depth := maxf(msh.get_aabb().size.y, 0.1)
 		for s in msh.get_surface_count():
 			var arr := msh.surface_get_arrays(s)
 			var verts: PackedVector3Array = arr[Mesh.ARRAY_VERTEX]
@@ -1267,6 +1272,12 @@ func model(file: String, seed_v: int, base_scale: float, bark_mat: String, folia
 				q.x += lean.x * q.y
 				q.z += lean.y * q.y
 				q = Vector3(q.x * sx, q.y * sy, q.z * sx)
+				if nm.begins_with("foliage"):
+					var crown_k := clampf(q.y / (crown_depth * sy), 0.0, 1.0)
+					var angle := atan2(q.z, q.x)
+					var lobes := sin(angle * 3.0 + crown_phase) * 0.55 + sin(angle * 5.0 - crown_phase * 0.7) * 0.25
+					q.x += sin(q.y * 1.35 + crown_phase) * crown_amp * crown_k + cos(angle * 2.0 + crown_phase) * crown_amp * lobes * crown_k
+					q.z += cos(q.y * 1.15 - crown_phase) * crown_amp * 0.65 * crown_k + sin(angle * 4.0 + crown_phase) * crown_amp * 0.35 * crown_k
 				verts[i] = q
 				s_top = maxf(s_top, q.y)
 				# Нормаль должна пройти обратное транспонирование всей деформации:
