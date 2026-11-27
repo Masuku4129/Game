@@ -288,12 +288,21 @@ func bush(seed_v: int) -> Array:
 func fern(seed_v: int) -> Array:
 	rng.seed = seed_v
 	var lf := Surf.new()
-	var n := rng.randi_range(7, 11)
+	# Layered fronds form a fuller fan; smaller leaflet strokes break the
+	# flat-card silhouette while keeping a lightweight mesh for mobile.
+	var n := rng.randi_range(9, 13)
 	for i in n:
 		var a := TAU * i / n + R(-0.2, 0.2)
-		var d := Vector3(cos(a) * R(0.6, 1.0), R(0.5, 0.9), sin(a) * R(0.6, 1.0)).normalized()
-		var L := R(0.8, 1.2)
-		card(lf, Vector3.ZERO, _basis_along(d, R(-0.4, 0.4)), L * 0.32, L, R(0.85, 1.05))
+		var radial := Vector3(cos(a), 0, sin(a))
+		var d := Vector3(cos(a) * R(0.62, 1.0), R(0.58, 0.95), sin(a) * R(0.62, 1.0)).normalized()
+		var L := R(1.0, 1.45)
+		var basis := _basis_along(d, R(-0.35, 0.35))
+		card(lf, Vector3(0, R(0.02, 0.06), 0), basis, L * 0.34, L, R(0.82, 1.08))
+		for leaf_i in 4:
+			var t := 0.28 + leaf_i * 0.15
+			var center := radial * L * t + Vector3(0, 0.45 * sin(t * PI * 0.8), 0)
+			var side := _basis_along(Vector3.UP * 0.7 + radial * 0.2, a + PI * 0.5)
+			card(lf, center - radial * 0.03, side, L * 0.22, L * 0.22, R(0.72, 1.04))
 	return [_commit([lf], ["fern"]), 1.0]
 
 ## Пучок травы: две скрещённые карточки.
@@ -431,10 +440,16 @@ func grass_patch(seed_v: int) -> Array:
 func reeds(seed_v: int) -> Array:
 	rng.seed = seed_v
 	var lf := Surf.new()
+	# Five overlapping fans at varied lean angles make a natural reed cluster
+	# with layered silhouettes instead of three identical flat planes.
 	var a := R(0, PI)
-	for k in 3:
-		card(lf, Vector3.ZERO, Basis(Vector3.UP, a + k * PI / 3.0), 1.1, 1.6, R(0.85, 1.05))
-	return [_commit([lf], ["reed"]), 1.6]
+	for k in 5:
+		var yaw := a + k * PI / 5.0 + R(-0.12, 0.12)
+		var lean := Vector3(cos(yaw), R(-0.12, 0.08), sin(yaw))
+		var basis := _basis_along(lean, R(-0.22, 0.22))
+		var h := R(1.25, 1.75)
+		card(lf, Vector3(0, R(-0.03, 0.04), 0), basis, R(0.88, 1.18), h, R(0.82, 1.08))
+	return [_commit([lf], ["reed"]), 1.7]
 
 ## Сухая ветка на земле.
 func twig(seed_v: int) -> Array:
