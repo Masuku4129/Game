@@ -145,11 +145,29 @@ func is_active() -> bool:
 	return true
 
 func _new_wander() -> void:
-	var a := rng.randf() * TAU
-	var r := rng.randf_range(5.0, 25.0)
-	target = position + Vector3(cos(a), 0, sin(a)) * r
-	if target.distance_to(home) > home_r:
-		target = home + (target - home).normalized() * home_r * 0.6
+	# Pick a destination that is reachable from the local terrain. The former
+	# single random point could repeatedly land inside rocks, water or steep faces.
+	var chosen := Vector3.INF
+	for attempt in range(12):
+		var a := rng.randf() * TAU
+		var r := rng.randf_range(5.0, 25.0)
+		var candidate := position + Vector3(cos(a), 0, sin(a)) * r
+		if candidate.distance_to(home) > home_r:
+			candidate = home + (candidate - home).normalized() * home_r * 0.6
+		var candidate_y: float = main.height(candidate.x, candidate.z)
+		if candidate_y < main.water_level(candidate.x, candidate.z) - 0.2 and not swimmer():
+			continue
+		if main.normal_at(candidate.x, candidate.z).y < 0.68:
+			continue
+		if main.blocked(candidate.x, candidate.z, maxf(0.35, _obstacle_radius() * 0.6)):
+			continue
+		chosen = candidate
+		break
+	if chosen == Vector3.INF:
+		# Safe fallback: choose a short local step rather than endlessly pursuing
+		# an invalid destination; the next decision cycle retries path selection.
+		chosen = home + Vector3(rng.randf_range(-4.0, 4.0), 0.0, rng.randf_range(-4.0, 4.0))
+	target = chosen
 	# цель на другом ярусе уступа или в реке (для тех, кто не плавает) — ближе к дому
 	# стадо держится вместе: не вожак — пасётся рядом с вожаком
 	if mgr != null and group >= 0 and kind in HERD:
