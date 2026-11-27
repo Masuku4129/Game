@@ -1357,7 +1357,7 @@ func _variants(kind: String) -> Array:
 			out.append(pv.bones(7500))
 	return out
 
-const TREE_KINDS := ["spruce", "pine", "birch", "larch", "aspen", "fir", "cedar", "alder", "willow", "rowan"]
+const TREE_KINDS := ["spruce", "pine", "birch", "larch", "aspen", "fir", "cedar", "alder", "willow", "rowan", "dead_birch"]
 const NEAR_R := 66.0
 var tree_grid := {}
 var near_mesh := {}
@@ -1710,6 +1710,9 @@ func _scatter_all() -> void:
 		["spruce_dead", 2, Vector2(0.9, 1.3), 110.0, true, "tree"],
 		["spruce", 8, Vector2(0.18, 0.35), 75.0, true, "under"],
 		["bush", 48, Vector2(0.8, 1.5), 75.0, false, "under"],
+		["hazel", 20, Vector2(0.75, 1.2), 58.0, false, "under"],
+		["dogrose", 12, Vector2(0.75, 1.15), 52.0, false, "edge"],
+		["dead_birch", 3, Vector2(0.9, 1.2), 100.0, true, "tree"],
 		["fern", 90, Vector2(0.7, 1.2), 62.0, false, "fern"],
 		["reeds", 20, Vector2(0.8, 1.4), 110.0, false, "reed"],
 		["twig", 90, Vector2(0.8, 1.3), 45.0, false, "under"],
