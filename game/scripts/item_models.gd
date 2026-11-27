@@ -66,6 +66,9 @@ func make(id: String) -> Node3D:
 func _build(id: String) -> void:
 	var g = geo
 	match id:
+		"rifle_round":
+			g.lathe("paint", Vector3.ZERO, [Vector2(0.0, 0.0), Vector2(0.012, 0.0), Vector2(0.012, 0.032), Vector2(0.009, 0.043), Vector2(0.0, 0.043)], Color(0.66, 0.48, 0.22), 10)
+			g.lathe("paint", Vector3(0, 0.043, 0), [Vector2(0.0, 0.0), Vector2(0.008, 0.0), Vector2(0.006, 0.016), Vector2(0.0, 0.02)], Color(0.42, 0.39, 0.32), 10)
 		"berry":
 			for k in 9:
 				var a := k * 2.4
