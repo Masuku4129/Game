@@ -692,7 +692,7 @@ func _draw_clothes(ci: CanvasItem, f: Font) -> void:
 		var id := String(main.worn.get(slot, ""))
 		if id != "":
 			total_warm += float(ITEMS.get(id, {}).get("warm", 0.0))
-		var slot_name := {"head": "Голова", "body": "Туловище", "feet": "Ноги"}.get(slot, slot)
+		var slot_name: String = {"head": "Голова", "body": "Туловище", "feet": "Ноги"}.get(slot, slot)
 		ci.draw_string(f, Vector2(660, y2), "%s: %s" % [slot_name, _name(id) if id != "" else "пусто"], HORIZONTAL_ALIGNMENT_LEFT, 265, 22, INK)
 		y2 += 48.0
 	ci.draw_string(f, Vector2(660, 382), "Тепло одежды: +%d%%" % int(round(total_warm * 100.0)), HORIZONTAL_ALIGNMENT_LEFT, 265, 24, OK_C)
