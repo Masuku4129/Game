@@ -639,19 +639,21 @@ func _build_tree_cover(c: Vector2i) -> void:
 			var tree_id := _tree_state_key(tree_pos)
 			var saved_tree: Variant = tree_state.get(tree_id, {})
 			var stable_id := 1000000000 + posmod(_seed(c) + kind.hash() + vi * 73856093 + i * 19349663, 1000000000)
-			var tree_rec_found := false
+			var found_record: Array = []
 			for cell_key in main.tree_grid:
 				for tree_rec: Array in main.tree_grid[cell_key]:
 					if tree_rec[0] == mm and int(tree_rec[1]) == i:
-						tree_rec[4] = stable_id
-					tree_rec_found = true
-						if saved_tree is Dictionary and bool(saved_tree.get("hidden", false)):
-							var hidden_xf := Transform3D(Basis().scaled(Vector3(0.0001, 0.0001, 0.0001)), Vector3(tree_pos.x, -500.0, tree_pos.z))
-							mm.set_instance_transform(i, hidden_xf)
-							tree_rec[2] = hidden_xf
-						break
-			if tree_rec_found:
-				continue
+						found_record = tree_rec
+					break
+				if not found_record.is_empty():
+					break
+			if not found_record.is_empty():
+				found_record[4] = stable_id
+			if saved_tree is Dictionary and bool(saved_tree.get("hidden", false)):
+				var hidden_xf := Transform3D(Basis().scaled(Vector3(0.0001, 0.0001, 0.0001)), Vector3(tree_pos.x, -500.0, tree_pos.z))
+				mm.set_instance_transform(i, hidden_xf)
+				if not found_record.is_empty():
+					found_record[2] = hidden_xf
 		for xf: Transform3D in transforms:
 			var p := xf.origin
 			var radius := float(main.BLOCK_R.get(kind, 0.38)) * xf.basis.x.length()
