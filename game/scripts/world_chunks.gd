@@ -360,12 +360,12 @@ func _build_tree_cover(c: Vector2i) -> void:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = _seed(c) ^ 0x4A17B39
 	var groups: Dictionary = {}
-	var count := 76
+	var count := 320
 	for attempt in range(count):
 		var wx := float(c.x) * CHUNK_SIZE + rng.randf_range(2.0, CHUNK_SIZE - 2.0)
 		var wz := float(c.y) * CHUNK_SIZE + rng.randf_range(2.0, CHUNK_SIZE - 2.0)
 		var density: float = main.forest_density(wx, wz)
-		if rng.randf() > density * 0.92:
+		if rng.randf() > clampf(density * 1.08, 0.08, 0.98):
 			continue
 		var h: float = main.height(wx, wz)
 		if h < main.WATER_Y + 1.0 or main.river_dist(wx, wz) < 6.5 or main.lake_k(wx, wz) > 0.45:
