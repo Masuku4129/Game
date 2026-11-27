@@ -22,9 +22,9 @@ func run_test() -> void:
 			seen[key] = true
 			var r: float = float(sd[3])
 			var edge_probe := Vector2(center.x + r + 0.2, center.z)
+				tested += 1
 			if world.blocked(edge_probe.x, edge_probe.y, 0.32):
 				edge_hits += 1
-				tested += 1
 		print("ROCK_COLLISION_TEST tall_rocks=", tested, " edge_clearance_hits=", edge_hits)
 	world.queue_free()
 	if tested < 10 or edge_hits < 5:
