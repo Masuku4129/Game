@@ -45,6 +45,8 @@ var craft_scroll := 0.0
 var _craft_dragging := false
 var _craft_drag_y := 0.0
 var _craft_scroll_start := 0.0
+var _craft_drag_mode := "list" # list | scrollbar
+var _craft_bar_offset := 0.0
 var _edge := PackedVector2Array()
 var _blots: Array = []
 
@@ -428,8 +430,21 @@ func _sheet_input(e: InputEvent) -> void:
 				sheet.queue_redraw()
 				return
 			if mb.button_index == MOUSE_BUTTON_LEFT:
-				if mb.pressed and mb.position.x < 620.0 and mb.position.y >= GRID.y and mb.position.y <= 640.0:
+				if mb.pressed and mb.position.x >= 604.0 and mb.position.x <= 642.0 and mb.position.y >= GRID.y and mb.position.y <= 640.0 and max_scroll > 0.0:
 					_craft_dragging = true
+					_craft_drag_mode = "scrollbar"
+					var track_top := GRID.y
+					var track_h := 516.0
+					var thumb_h := maxf(42.0, track_h * track_h / (float(rs.size()) * ROW_H))
+					var thumb_y := track_top + (track_h - thumb_h) * craft_scroll / max_scroll
+					_craft_bar_offset = mb.position.y - thumb_y if mb.position.y >= thumb_y and mb.position.y <= thumb_y + thumb_h else thumb_h * 0.5
+					var next_top := clampf(mb.position.y - _craft_bar_offset, track_top, track_top + track_h - thumb_h)
+					craft_scroll = (next_top - track_top) / maxf(track_h - thumb_h, 1.0) * max_scroll
+					sheet.queue_redraw()
+					return
+				if mb.pressed and mb.position.x < 604.0 and mb.position.y >= GRID.y and mb.position.y <= 640.0:
+					_craft_dragging = true
+					_craft_drag_mode = "list"
 					_craft_drag_y = mb.position.y
 					_craft_scroll_start = craft_scroll
 					var row_i := int((mb.position.y - GRID.y + craft_scroll) / ROW_H)
@@ -441,12 +456,24 @@ func _sheet_input(e: InputEvent) -> void:
 					_craft_dragging = false
 		if e is InputEventScreenDrag and _craft_dragging:
 			var drag := e as InputEventScreenDrag
-			craft_scroll = clampf(_craft_scroll_start - (drag.position.y - _craft_drag_y), 0.0, max_scroll)
+			if _craft_drag_mode == "scrollbar":
+				var track_h := 516.0
+				var thumb_h := maxf(42.0, track_h * track_h / (float(rs.size()) * ROW_H))
+				var top := clampf(drag.position.y - _craft_bar_offset, GRID.y, GRID.y + track_h - thumb_h)
+				craft_scroll = (top - GRID.y) / maxf(track_h - thumb_h, 1.0) * max_scroll
+			else:
+				craft_scroll = clampf(_craft_scroll_start - (drag.position.y - _craft_drag_y), 0.0, max_scroll)
 			sheet.queue_redraw()
 			return
 		if e is InputEventMouseMotion and _craft_dragging:
 			var motion := e as InputEventMouseMotion
-			craft_scroll = clampf(_craft_scroll_start - (motion.position.y - _craft_drag_y), 0.0, max_scroll)
+			if _craft_drag_mode == "scrollbar":
+				var track_h := 516.0
+				var thumb_h := maxf(42.0, track_h * track_h / (float(rs.size()) * ROW_H))
+				var top := clampf(motion.position.y - _craft_bar_offset, GRID.y, GRID.y + track_h - thumb_h)
+				craft_scroll = (top - GRID.y) / maxf(track_h - thumb_h, 1.0) * max_scroll
+			else:
+				craft_scroll = clampf(_craft_scroll_start - (motion.position.y - _craft_drag_y), 0.0, max_scroll)
 			sheet.queue_redraw()
 			return
 	if not (e is InputEventMouseButton and e.pressed and e.button_index == MOUSE_BUTTON_LEFT):
@@ -626,12 +653,13 @@ func _draw_craft(ci: CanvasItem, f: Font) -> void:
 			icon(ci, k, Vector2(x + 14, y + 22), 13.0)
 			ci.draw_string(f, Vector2(x + 30, y + 32), "%d" % int(rc[k]), HORIZONTAL_ALIGNMENT_LEFT, -1, 22, BAD_C if miss.has(k) else OK_C)
 			x += 66
-	var track := Rect2(616, GRID.y, 10, 516)
-	ci.draw_rect(track, Color(0.22, 0.19, 0.14, 0.22))
+	var track := Rect2(610, GRID.y, 20, 516)
+	ci.draw_rect(track, Color(0.22, 0.19, 0.14, 0.38))
 	if max_scroll > 0.0:
-		var thumb_h := maxf(36.0, track.size.y * track.size.y / (float(rs.size()) * ROW_H))
+		var thumb_h := maxf(42.0, track.size.y * track.size.y / (float(rs.size()) * ROW_H))
 		var thumb_y := track.position.y + (track.size.y - thumb_h) * craft_scroll / max_scroll
-		ci.draw_rect(Rect2(track.position.x, thumb_y, track.size.x, thumb_h), UI.ACCENT)
+		ci.draw_rect(Rect2(track.position.x + 3.0, thumb_y, 14.0, thumb_h), UI.ACCENT)
+		ci.draw_rect(Rect2(track.position.x + 7.0, thumb_y + 5.0, 6.0, maxf(8.0, thumb_h - 10.0)), Color(1.0, 0.88, 0.7, 0.55))
 	if rs.is_empty():
 		ci.draw_string(f, GRID + Vector2(0, 40), "Нечего мастерить", HORIZONTAL_ALIGNMENT_LEFT, -1, 26, Color(INK, 0.6))
 	var dr := Rect2(640, 124, 304, 500)
