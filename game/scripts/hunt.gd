@@ -177,7 +177,7 @@ func _create_traveler_body(parent: Node3D) -> void:
 	strap.position = Vector3(0.17, 0.3, -0.02)
 	parent.add_child(strap)
 
-func _create_traveler_pile(pos: Vector3, yaw: float, rounds: int) -> void:
+func _create_traveler_pile(pos: Vector3, yaw: float, rounds: int, has_rifle: bool = true) -> void:
 	var pl := _new_pile(pos, yaw)
 	pl["corpse"] = true
 	pl["r"] = 1.25
@@ -185,7 +185,8 @@ func _create_traveler_pile(pos: Vector3, yaw: float, rounds: int) -> void:
 	body.position.y = 0.015
 	(pl["node"] as Node3D).add_child(body)
 	_create_traveler_body(body)
-	_drop_generic("rifle", pos + Vector3(0.55, 0.0, 0.15))
+	if has_rifle:
+		_drop_generic("rifle", pos + Vector3(0.55, 0.0, 0.15))
 	for i in rounds:
 		_drop_generic("rifle_round", pos + Vector3(0.55, 0.0, 0.15))
 
@@ -1301,7 +1302,7 @@ func from_save(d: Dictionary) -> void:
 		var it := SV.int_dict(e.get("items", {}))
 		if bool(e.get("corpse", false)):
 			var rounds := int(it.get("rifle_round", 0))
-			_create_traveler_pile(pos, float(e.get("yaw", 0.0)), rounds)
+			_create_traveler_pile(pos, float(e.get("yaw", 0.0)), rounds, int(it.get("rifle", 0)) > 0)
 			it.erase("rifle_round")
 			it.erase("rifle")
 		for id: String in it:
