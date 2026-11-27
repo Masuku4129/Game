@@ -37,7 +37,7 @@ var flakes: GPUParticles3D
 var atmo
 
 func _ready() -> void:
-	rng.seed = 2026
+	rng.seed = int(main.map_seed) + 2026
 	rain = _make_particles(true)
 	flakes = _make_particles(false)
 	atmo = preload("res://scripts/atmo.gd").new()
@@ -267,13 +267,15 @@ func apply(mats: Array, terrain: ShaderMaterial, blade: ShaderMaterial, water: S
 const _SAVE_KEYS := ["next_change", "cloud", "precip", "fogv", "wind", "temp", "snow", "wet", "autumn", "leaf_drop", "ice", "mist", "blossom", "t_cloud", "t_precip", "t_fog", "t_wind", "_hours_acc"]
 
 func to_save() -> Dictionary:
-	var d := {"kind": kind}
+	var d := {"kind": kind, "rng_state": rng.state}
 	for k: String in _SAVE_KEYS:
 		d[k] = float(get(k))
 	return d
 
 func from_save(d: Dictionary) -> void:
 	kind = String(d.get("kind", kind))
+	if d.has("rng_state"):
+		rng.state = int(d["rng_state"])
 	for k: String in _SAVE_KEYS:
 		if d.has(k):
 			set(k, float(d[k]))
