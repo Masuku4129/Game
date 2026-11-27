@@ -1010,7 +1010,7 @@ class FellTree extends Node3D:
 			main._add_solid(_solid)
 		# Пень остаётся отдельной опорой после падения ствола.
 		if stump.visible:
-			_stump_solid = [2, xf.origin, r0 * s * 0.92, 0.0, notch * s]
+			_stump_solid = [2, xf.origin, Vector3.ZERO, r0 * s * 0.92, notch * s]
 			main._add_solid(_stump_solid)
 
 	func _remove_solid() -> void:
