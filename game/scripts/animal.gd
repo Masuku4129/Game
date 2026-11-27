@@ -167,6 +167,7 @@ func _new_wander() -> void:
 			var zc := _river_zc(target.x)
 			target.z = zc + (zc - target.z)
 	state = "wander"
+	attack_lane_locked = false
 	state_t = rng.randf_range(8.0, 20.0)
 
 static func _river_zc(x: float) -> float:
@@ -436,6 +437,7 @@ func _update_hunt(dh: float, hero_alive: bool) -> void:
 			food = prey
 			prey = null
 			state = "feed"
+			attack_lane_locked = false
 			state_t = rng.randf_range(40.0, 80.0)
 			return
 	if prey == null or (prey != main.hero and (prey.dead or prey.state == "inlodge" or prey.climb_h > 1.0)) or (prey == main.hero and not hero_alive):
@@ -449,6 +451,7 @@ func _update_hunt(dh: float, hero_alive: bool) -> void:
 		prey = null
 		if was_hero:
 			state = "retreat"
+			attack_lane_locked = false
 			state_t = 6.0
 		else:
 			_new_wander()
@@ -957,6 +960,7 @@ func _strike(tg: Node3D) -> void:
 		if (kind == "wolf" and bites >= 2) or kind in ["boar", "moose", "wolverine"]:
 			bites = 0
 			state = "retreat"
+			attack_lane_locked = false
 			state_t = rng.randf_range(5.0, 10.0)
 	else:
 		tg.bitten(self)
