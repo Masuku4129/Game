@@ -4,7 +4,7 @@ func _initialize() -> void:
 	call_deferred("_capture")
 
 func _capture() -> void:
-	var scene := load("res://scenes/main.tscn").instantiate()
+	var scene: Node = load("res://scenes/main.tscn").instantiate()
 	root.add_child(scene)
 	for i in 180:
 		await process_frame
