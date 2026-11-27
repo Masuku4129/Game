@@ -16,9 +16,11 @@ varying vec3 opos;
 void vertex() {
 	vec3 w = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;
 	float t = TIME * (1.0 + wind * 0.6) + w.x * 0.21 + w.z * 0.17;
-	float k = sway * (0.4 + wind * 1.2) * max(VERTEX.y, 0.0);
-	VERTEX.x += sin(t) * k + wind * k * 0.6;
-	VERTEX.z += cos(t * 0.83) * k;
+	// Broad gusts travel through the canopy; local phase keeps nearby leaves unsynchronized.
+	float gust = 0.72 + 0.28 * sin(TIME * 0.38 + w.x * 0.035 + w.z * 0.029);
+	float k = sway * (0.4 + wind * 1.2) * gust * max(VERTEX.y, 0.0);
+	VERTEX.x += sin(t) * k + wind * k * 0.45;
+	VERTEX.z += cos(t * 0.83 + sin(t * 0.23) * 0.18) * k;
 	VERTEX += inverse(mat3(MODEL_MATRIX)) * hero_push(w, clamp(VERTEX.y, 0.0, 1.5), TIME);
 	wpf = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;
 	upn = normalize((MODEL_MATRIX * vec4(NORMAL, 0.0)).xyz).y;
