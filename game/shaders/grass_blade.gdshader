@@ -13,8 +13,10 @@ void vertex() {
 	VERTEX.y *= max(0.0, 1.0 - snow * 1.6);
 	float k = sway * (0.5 + wind) * smoothstep(0.0, 0.5, VERTEX.y);
 	float t = TIME * 1.6 + w.x * 0.35 + w.z * 0.27;
-	VERTEX.x += sin(t) * k + sin(t * 2.3 + 1.7) * k * 0.3;
-	VERTEX.z += cos(t * 0.9) * k * 0.7;
+	float gust = 0.68 + 0.32 * sin(TIME * 0.34 + w.x * 0.04 + w.z * 0.033);
+	k *= gust;
+	VERTEX.x += sin(t) * k + sin(t * 2.3 + 1.7) * k * 0.24;
+	VERTEX.z += cos(t * 0.9 + sin(t * 0.2) * 0.16) * k * 0.7;
 	// трава приминается под ногами
 	vec2 dv = w.xz - hero_pos.xz;
 	float d = length(dv);
