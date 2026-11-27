@@ -826,7 +826,7 @@ func _can_step(p: Vector3, flying: bool = false) -> bool:
 
 ## Зверь оказался внутри ствола или камня (родился, построили рядом) — вытолкнуть к ближайшему свободному месту.
 func _push_out() -> void:
-	if not main.blocked(position.x, position.z, 0.0) and main.solid_top(position.x, position.z) - main.grid_height(position.x, position.z) <= 0.45:
+	if not main.blocked(position.x, position.z, _obstacle_radius()) and main.solid_top(position.x, position.z) - main.grid_height(position.x, position.z) <= 0.45
 		return
 	# Search wider and more densely so animals can escape tree/rock gaps.
 	for r in [0.5, 0.9, 1.3, 1.8, 2.4, 3.2, 4.2, 5.4]:
