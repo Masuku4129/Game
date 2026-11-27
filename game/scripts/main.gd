@@ -1420,7 +1420,10 @@ func _update_near(force: bool = false) -> void:
 				if not by_key.has(key):
 					by_key[key] = []
 				by_key[key].append(t)
-	for m in veg.fade_list + pv.fade_list:
+	for m in veg.fade_list:
+		m.set_shader_parameter("near_c", c)
+		m.set_shader_parameter("near_r", NEAR_R)
+	for m in pv.fade_list:
 		m.set_shader_parameter("near_c", c)
 		m.set_shader_parameter("near_r", NEAR_R)
 	for key in near_mmi.keys():
