@@ -1149,6 +1149,7 @@ func _update_stats(dt: float) -> void:
 		msg_t -= dt
 		return
 	# --- /colony ---
+	var soak: float = maxf(float(weather.wet) * 0.6, float(hero.soaked))
 	var cold_stress := clampf((0.42 - warmth) / 0.42, 0.0, 1.0)
 	var wet_stress := clampf((soak - 0.22) / 0.78, 0.0, 1.0)
 	var exposure_load := cold_stress * (0.35 + wet_stress * 0.65)
@@ -1174,7 +1175,6 @@ func _update_stats(dt: float) -> void:
 			_die("")
 	msg_t -= dt
 	var tc: float = weather.temp
-	var soak: float = maxf(float(weather.wet) * 0.6, float(hero.soaked))
 	var clothing_warmth := 0.0
 	for slot: String in worn:
 		var clothing_id := String(worn[slot])
