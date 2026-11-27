@@ -745,14 +745,24 @@ func shrub(seed_v: int, kind: String) -> Array:
 	var dots := _st()
 	cards = null if lod else _st()
 	var tall := 1.8 if kind == "alder" else 1.0
-	for i in rng.randi_range(3, 5):
+	# Shrubs now grow as overlapping, attached branch fans with lower side
+	# foliage and irregular upper crowns instead of isolated round blobs.
+	var count := rng.randi_range(5, 7) if kind == "alder" else rng.randi_range(4, 6)
+	for i in count:
 		var a := R(0, TAU)
-		var d := R(0.1, 0.6)
-		var c := Vector3(cos(a) * d, R(0.4, 0.8) * tall, sin(a) * d)
-		trunk(bk, Vector3(cos(a) * 0.08, 0, sin(a) * 0.08), c * 0.5, c, 0.04, 0.02, 1, 4)
-		leafblob(fl, cards, c, Vector3(R(0.4, 0.6), R(0.35, 0.55) * tall, R(0.4, 0.6)), R(0.3, 1.0))
+		var d := R(0.18, 0.72)
+		var base := Vector3(cos(a) * 0.10, 0.02, sin(a) * 0.10)
+		var mid := Vector3(cos(a) * d * 0.52, R(0.32, 0.62) * tall, sin(a) * d * 0.52)
+		var c := Vector3(cos(a) * d, R(0.55, 0.92) * tall, sin(a) * d)
+		trunk(bk, base, mid, c, 0.045, 0.015, 2, 4)
+		for j in 2:
+			var t := 0.42 + j * 0.28
+			var side_a := a + (1.0 if j == 0 else -1.0) * R(0.45, 0.9)
+			var side := mid.lerp(c, t) + Vector3(cos(side_a), R(-0.06, 0.16), sin(side_a)) * R(0.16, 0.30)
+			leafblob(fl, cards, side, Vector3(R(0.24, 0.38), R(0.20, 0.32) * tall, R(0.24, 0.38)), R(0.35, 1.0))
+		leafblob(fl, cards, c, Vector3(R(0.32, 0.48), R(0.28, 0.38) * tall, R(0.32, 0.48)), R(0.3, 1.0))
 	if kind == "rose":
-		for i in 18:
+		for i in 24:
 			var a := R(0, TAU)
 			dot(dots, Vector3(cos(a) * R(0.3, 0.7), R(0.3, 0.9), sin(a) * R(0.3, 0.7)), Vector3(0.04, 0.055, 0.04), R(0.5, 1.0))
 	return [_mesh([[fl, kind], [cards, kind + "_card"], [bk, "bark_dead"], [dots, "berry"]]), tall]
