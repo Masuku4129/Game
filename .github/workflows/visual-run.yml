@@ -22,6 +22,14 @@ jobs:
           echo "/tmp/godot" >> "$GITHUB_PATH"
       - name: Import project resources
         run: cd game && godot --headless --import
+      - name: Verify generated 3D meshes, wildlife rig, collision and animation
+        run: |
+          cd game
+          godot --headless --path . --script res://tests/model_geometry_test.gd
+          godot --headless --path . --script res://tests/animal_collision_test.gd
+          godot --headless --path . --script res://tests/animal_animation_speed_test.gd
+          godot --headless --path . --script res://tests/animal_scheduler_test.gd
+          godot --headless --path . --script res://tests/rock_collision_test.gd
       - name: Capture current game scene
         run: |
           cd game
