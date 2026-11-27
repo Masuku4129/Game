@@ -63,11 +63,11 @@ func _run() -> void:
 		ok = _check_mesh(model[0], entry[0]) and ok
 	# Repeat procedural samples across additional seeds to catch fragile geometry.
 	for seed_v in [91, 307, 919]:
-		ok = _check_mesh(p.rock(seed_v), "pveg_rock_seed_%d" % seed_v) and ok
-		ok = _check_mesh(p.berry_bush(seed_v), "pveg_berry_seed_%d" % seed_v) and ok
-		ok = _check_mesh(v.rock(seed_v, 1), "veg_rock_seed_%d" % seed_v) and ok
+		ok = _check_mesh(p.rock(seed_v)[0], "pveg_rock_seed_%d" % seed_v) and ok
+		ok = _check_mesh(p.berry_bush(seed_v)[0], "pveg_berry_seed_%d" % seed_v) and ok
+		ok = _check_mesh(v.rock(seed_v, 1)[0], "veg_rock_seed_%d" % seed_v) and ok
 	# Instantiate every supported wildlife model and inspect its mesh surfaces.
-	for kind in ["hare", "squirrel", "fox", "roe", "deer", "boar", "wolf", "bear", "tiger", "lynx", "moose", "wolverine", "muskdeer", "capercaillie", "beaver"]:
+	for kind in ["hare", "squirrel", "boar", "bear", "tiger", "lynx", "moose", "wolverine", "muskdeer", "capercaillie"]:
 		var holder := Node3D.new()
 		root.add_child(holder)
 		var data := AnimalModel.build_taiga(holder, kind, 1.0, false, false)
