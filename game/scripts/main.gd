@@ -7,6 +7,7 @@ const SEG := 384
 const WATER_Y := -2.0
 const CELL := 64.0
 const MAP_SEED := 20261127 # fallback для старых сохранений
+const CHUNK_SEED_REVISION := 0x71B3D95D # новая ревизия рисунка растительности
 const PENDING_SEED_PATH := "user://pending_world_seed.txt"
 var map_seed: int = MAP_SEED
 var explored_map: Dictionary = {}
@@ -1734,7 +1735,9 @@ func _chunk_seed(cx: int, cz: int) -> int:
 	# Независимое перемешивание координат: соседние чанки не наследуют простую
 	# линейную последовательность, а новый seed карты меняет весь рисунок леса.
 	const MOD := 2147483647
-	var h := posmod(map_seed, MOD)
+	# Ревизия полностью меняет размещение растительности в каждом чанке,
+	# сохраняя при этом высоту рельефа и общий seed мира.
+	var h := posmod(map_seed ^ CHUNK_SEED_REVISION, MOD)
 	h = posmod(h + posmod(cx, MOD) * 73856093, MOD)
 	h = posmod(h + posmod(cz, MOD) * 19349663, MOD)
 	h = posmod((h ^ (h >> 13)) * 1274126177, MOD)
