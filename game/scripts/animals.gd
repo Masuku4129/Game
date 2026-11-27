@@ -123,7 +123,7 @@ func populate_stream_chunk(coord: Vector2i, chunk_seed: int) -> void:
 	rng.seed = chunk_seed ^ 0x35A91D7
 	var origin := Vector3(float(coord.x) * 64.0, 0.0, float(coord.y) * 64.0)
 	var candidates: Array = []
-	for attempt in range(52):
+	for attempt in range(80):
 		var x := origin.x + rng.randf_range(3.0, 61.0)
 		var z := origin.z + rng.randf_range(3.0, 61.0)
 		var y: float = main.height(x, z)
@@ -155,12 +155,15 @@ func populate_stream_chunk(coord: Vector2i, chunk_seed: int) -> void:
 		_spawn(herd_kind, p, rng.randf_range(0.82, 1.08), group_id, "chunk:%s:herd:%d" % [key, i])
 	# Мелкая живность населяет каждый подходящий лесной чанк; белки появляются
 	# только там, где уже создана древесная опора для карабканья.
-	if rng.randf() < 0.72:
+	if rng.randf() < 0.88:
 		var small_kind := "hare"
 		if main.forest_density(center_pos.x, center_pos.z) > 0.55 and rng.randf() < 0.55:
 			small_kind = "squirrel"
-		var small_pos := candidates[rng.randi_range(0, candidates.size() - 1)]
-		_spawn(small_kind, small_pos, rng.randf_range(0.88, 1.08), -1, "chunk:%s:small:0" % key)
+		var small_center: Vector3 = candidates[rng.randi_range(0, candidates.size() - 1)]
+		var small_group := rng.randi_range(1, 2)
+		for small_i in range(small_group):
+			var small_pos := small_center if small_i == 0 else _near(small_center, 4.0)
+			_spawn(small_kind, small_pos, rng.randf_range(0.88, 1.08), -1, "chunk:%s:small:%d" % [key, small_i])
 	# Лиса или волк появляются редко, чтобы не создавать искусственную плотность хищников.
 	if rng.randf() < 0.16:
 		var predator := "fox" if zone_id != 4 or rng.randf() < 0.5 else "wolf"
