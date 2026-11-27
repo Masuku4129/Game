@@ -80,6 +80,10 @@ jobs:
         run: |
           cd game
           timeout 120 godot --headless --script res://tests/animal_collision_test.gd
+      - name: Animal animation speed regression test
+        run: |
+          cd game
+          timeout 120 godot --headless --script res://tests/animal_animation_speed_test.gd
       - name: Rock footprint collision regression test
         run: |
           cd game
