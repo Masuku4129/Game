@@ -61,6 +61,8 @@ var leader: Node3D = null
 var pack_slot := 0.0
 var bites := 0
 var attack_cd := 0.0
+var attack_lane := 0.0
+var attack_lane_locked := false
 var dead := false
 var respawn_at := 0.0
 var head_pitch := 0.0
@@ -246,6 +248,7 @@ func think() -> void:
 				if state == "stalk" or state == "chase" or state == "ambush":
 					return
 			if CHARGE.has(kind) and hero_alive and dh < float(CHARGE[kind]):
+				_lock_attack_lane(hero)
 				state = "charge"
 				state_t = 6.0
 				return
@@ -278,6 +281,7 @@ func think() -> void:
 			var ap = mgr.nearest_of(self, HUNTS[kind], 13.0)
 			if ap != null:
 				prey = ap
+				_lock_attack_lane(ap)
 				state = "chase"
 				state_t = 6.0
 			elif state_t <= 0.0:
@@ -448,6 +452,7 @@ func _update_hunt(dh: float, hero_alive: bool) -> void:
 			_new_wander()
 		return
 	if state == "stalk" and d < (9.0 if kind in ["tiger", "lynx"] else 14.0):
+		_lock_attack_lane(prey)
 		state = "chase"
 		state_t = 25.0 if kind == "wolf" else 12.0
 		if kind == "wolf":
@@ -601,10 +606,21 @@ func tick(delta: float) -> void:
 		"chase", "charge":
 			var tg: Node3D = prey if state == "chase" else main.hero
 			if tg != null:
-				goal = tg.position
-				var d := Vector2(goal.x - position.x, goal.z - position.z).length()
-				want = run * (0.75 if state == "charge" and d > 10.0 else 1.0)
-				if d < 0.6 + float(parts["L"]) * 0.55:
+				var away := Vector2(position.x - tg.position.x, position.z - tg.position.z)
+				if not attack_lane_locked:
+					_lock_attack_lane(tg)
+				var lane := Vector3(sin(attack_lane), 0.0, cos(attack_lane))
+				var reach := 0.6 + float(parts["L"]) * 0.55
+				var d := Vector2(tg.position.x - position.x, tg.position.z - position.z).length()
+				if d > reach:
+					# Подход к фиксированной точке атаки: зверь не пытается обогнуть
+					# движущуюся цель и не описывает вокруг неё бесконечные круги.
+					goal = tg.position + lane * reach * 0.72
+					want = run * (0.75 if state == "charge" and d > 10.0 else 1.0)
+				else:
+					goal = position
+					want = 0.0
+					face = tg.position
 					_strike(tg)
 		"retreat":
 			var away2: Vector3 = position - main.hero.position
@@ -918,6 +934,15 @@ func _unstick(delta: float) -> void:
 		if not recovered:
 			state_t = 0.0
 			want = 0.0
+
+func _lock_attack_lane(tg: Node3D) -> void:
+	if tg == null:
+		return
+	var away := Vector2(position.x - tg.position.x, position.z - tg.position.z)
+	if away.length_squared() < 0.01:
+		away = Vector2(sin(heading), cos(heading))
+	attack_lane = atan2(away.x, away.y)
+	attack_lane_locked = true
 
 func _strike(tg: Node3D) -> void:
 	if attack_cd > 0.0:
