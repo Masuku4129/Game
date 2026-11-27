@@ -427,7 +427,8 @@ static func _wmix(a: Dictionary, b: Dictionary, k: float) -> Dictionary:
 ## Тело: сечения [z, y, верх, низ, ширина спины, ширина в середине, ширина низа, кость, палитра, челюсть].
 ## Центр сечения — на линии (z, y); сечение перпендикулярно линии, «верх» — к спине.
 static func _loft_body(mb: SMB, st: Array, pal: Dictionary) -> void:
-	var seg := 18
+	# Более округлый контур туловища: плотнее кольца, плавнее переходы окраски.
+	var seg := 24
 	var n := st.size()
 	var bw := []
 	for i in n:
@@ -488,6 +489,8 @@ static func _loft_body(mb: SMB, st: Array, pal: Dictionary) -> void:
 ## Цепь (нога, хвост): точки суставов pts, профиль [звено, доля, полуширина, полутолщина, сдвиг вперёд, палитра];
 ## bones[k] — кость звена k; parent_b — кость, в которую уходит верх цепи.
 static func _loft_chain(mb: SMB, pts: Array, prof: Array, bones: Array, parent_b: int, pal: Dictionary, seg: int, embed: float) -> void:
+	# Увеличиваем поперечную детализацию ног, хвостов и других звеньев модели.
+	seg = clampi(seg + 2, 10, 14)
 	var n := prof.size()
 	var cs := []
 	for e: Array in prof:
@@ -652,7 +655,7 @@ static func _anat(sp: Dictionary) -> Dictionary:
 		for sd: float in sides:
 			var o: Vector3 = _mirror(pe[1], sd)
 			var dr: Vector3 = _mirror(pe[2], sd)
-			_piece(mb, o, _aim(dr), pe[3], pal[pe[4]], {mb.b(pe[0]): 1.0}, 8 if (pe[3] as Array).size() > 3 else 6)
+			_piece(mb, o, _aim(dr), pe[3], pal[pe[4]], {mb.b(pe[0]): 1.0}, 10 if (pe[3] as Array).size() > 3 else 8)
 	for pe: Array in sp.get("custom", []):
 		# готовые детали со своим базисом: [кость, начало, базис, кольца, палитра]
 		_piece(mb, pe[1], pe[2], pe[3], pal[pe[4]], {mb.b(pe[0]): 1.0}, pe[5] if pe.size() > 5 else 8)
