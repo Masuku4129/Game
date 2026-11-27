@@ -531,7 +531,7 @@ func _process_main(delta: float) -> void:
 	var carried_load := 0.0
 	if main.inventory != null:
 		carried_load = clampf(main.inventory.weight() / main.inventory.CAPACITY, 0.0, 1.0)
-	soaked = maxf(0.0, soaked - delta * 0.004 * (1.0 + maxf(float(main.weather.temp), 0.0) * 0.1))
+	soaked = maxf(0.0, soaked - delta * 0.0032 * (1.0 + maxf(float(main.weather.temp), 0.0) * 0.12 + main.weather.wind * 0.08))
 	if state == "dead":
 		pack_abort()
 		_process_dead(delta)
