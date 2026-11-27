@@ -31,7 +31,7 @@ func _init() -> void:
 	var img := Image.create(4, 4, false, Image.FORMAT_RGBA8)
 	img.fill(Color.WHITE)
 	var white := ImageTexture.create_from_image(img)
-	for pair in [["berry", Color(0.62, 0.08, 0.1)], ["cap_red", Color(0.72, 0.12, 0.08)], ["cap_brown", Color(0.42, 0.27, 0.15)], ["stem", Color(0.85, 0.82, 0.74)]]:
+	for pair in [["berry", Color(0.62, 0.08, 0.1)], ["cap_red", Color(0.72, 0.12, 0.08)], ["cap_brown", Color(0.42, 0.27, 0.15)], ["stem", Color(0.85, 0.82, 0.74)], ["cap_spot", Color(0.96, 0.92, 0.82)]]:
 		var sm := ShaderMaterial.new()
 		sm.shader = load("res://shaders/bark.gdshader")
 		sm.set_shader_parameter("tex", white)
@@ -418,7 +418,7 @@ func grass_patch(seed_v: int) -> Array:
 	rng.seed = seed_v
 	var s := Surf.new()
 	var tone := R(0.85, 1.1)
-	for i in 96:
+	for i in 220:
 		var a := R(0, TAU)
 		var r := sqrt(R(0.0, 1.0)) * 0.82
 		var base := Vector3(cos(a) * r, 0, sin(a) * r)
@@ -501,16 +501,48 @@ func berry_bush(seed_v: int) -> Array:
 ## Гриб: ножка и шляпка (мухомор или боровик).
 func mushroom(seed_v: int, red: bool) -> Array:
 	rng.seed = seed_v
-	var st := Surf.new()
-	var cap := Surf.new()
-	for i in rng.randi_range(1, 3):
-		var o := Vector3(R(-0.25, 0.25), 0, R(-0.25, 0.25)) if i > 0 else Vector3.ZERO
-		var h := R(0.1, 0.2)
-		tube(st, o, o + Vector3(R(-0.02, 0.02), h * 0.5, 0), o + Vector3(R(-0.03, 0.03), h, R(-0.03, 0.03)), 0.022, 0.018, 3, 6)
+	var stems := Surf.new()
+	var caps := Surf.new()
+	var gills := Surf.new()
+	var spots := Surf.new()
+	var count := rng.randi_range(2, 4)
+	for i in count:
+		var o := Vector3(R(-0.22, 0.22), 0, R(-0.22, 0.22)) if i > 0 else Vector3.ZERO
+		var h := R(0.12, 0.23)
+		var cr := R(0.075, 0.12)
+		var stem_r := R(0.018, 0.026)
+		tube(stems, o, o + Vector3(R(-0.015, 0.015), h * 0.52, 0), o + Vector3(R(-0.025, 0.025), h, R(-0.02, 0.02)), stem_r, stem_r * 0.72, 4, 8)
 		var top := o + Vector3(0, h, 0)
-		var cr := R(0.06, 0.1)
-		tube(cap, top - Vector3(0, 0.015, 0), top + Vector3(0, cr * 0.35, 0), top + Vector3(0, cr * 0.6, 0), cr, 0.005, 4, 10)
-	return [_commit([st, cap], ["stem", "cap_red" if red else "cap_brown"]), 0.3]
+		# Rounded umbrella cap: wide rim, domed crown and a small flattened top.
+		var profile := [[1.0, 0.0], [0.94, 0.2], [0.78, 0.48], [0.53, 0.76], [0.25, 0.94], [0.0, 1.0]]
+		var base := caps.n
+		var seg := 18
+		for ring in profile.size():
+			var rf: float = profile[ring][0]
+			var yf: float = profile[ring][1]
+			for j in seg:
+				var a := TAU * float(j) / seg
+				var p := top + Vector3(cos(a) * cr * rf, cr * 0.62 * yf, sin(a) * cr * rf)
+				var normal := Vector3(cos(a) * 0.55, 0.7, sin(a) * 0.55).normalized()
+				caps.v(p, normal, Vector2(float(j) / seg, float(ring) / (profile.size() - 1)))
+		for ring in profile.size() - 1:
+			for j in seg:
+				var a := base + ring * seg + j
+				var b := base + ring * seg + (j + 1) % seg
+				var c := base + (ring + 1) * seg + j
+				var d := base + (ring + 1) * seg + (j + 1) % seg
+				caps.tri(a, c, b)
+				caps.tri(b, c, d)
+		# Pale underside gives the cap a visible rim from the isometric camera.
+		disc(gills, top + Vector3(0, 0.006, 0), Vector3.UP, cr * 0.88, 18)
+		if red:
+			for spot_i in rng.randi_range(5, 8):
+				var a := R(0, TAU)
+				var rr := sqrt(R(0.08, 0.72)) * cr
+				var yy := 0.62 * cr * sqrt(maxf(0.0, 1.0 - (rr / cr) * (rr / cr)))
+				var normal := Vector3(cos(a) * 0.5, 0.8, sin(a) * 0.5).normalized()
+				disc(spots, top + Vector3(cos(a) * rr, yy + 0.003, sin(a) * rr), normal, R(0.006, 0.011), 7)
+	return [_commit([stems, gills, caps, spots], ["stem", "stem", "cap_red" if red else "cap_brown", "cap_spot"]), 0.3]
 
 ## Муравейник: конус из хвои у основания ели.
 func anthill(seed_v: int) -> Array:
