@@ -205,7 +205,7 @@ func _rebuild_queue() -> void:
 				forward_bonus = (forward_alignment - 0.30) * 92.0
 			var priority := distance * 10.0 - view_alignment * 14.0 - move_alignment * 18.0 - ring_bonus - forward_bonus
 			candidates.append({"coord": c, "priority": priority})
-	candidates.sort_custom(func(a: Dictionary, b: Dictionary) -> bool: return float(a.priority) < float(b.priority)
+	candidates.sort_custom(func(a: Dictionary, b: Dictionary) -> bool: return float(a.priority) < float(b.priority))
 	for item: Dictionary in candidates:
 		pending.append(item.coord)
 
@@ -400,8 +400,8 @@ func _build_bog_cover(c: Vector2i, parent: Node3D) -> void:
 	for n in attempts:
 		var wx := float(c.x) * CHUNK_SIZE + rng.randf_range(0.5, CHUNK_SIZE - 0.5)
 		var wz := float(c.y) * CHUNK_SIZE + rng.randf_range(0.5, CHUNK_SIZE - 0.5)
-		var wet := main.swamp_depth_at(wx, wz)
-		var zone_id := main.zone(wx, wz)
+		var wet: float = main.swamp_depth_at(wx, wz)
+		var zone_id: int = main.zone(wx, wz)
 		if zone_id != 2 and wet < 0.56:
 			continue
 		# Smooth world-coordinate patch signal produces plant communities rather
@@ -434,7 +434,7 @@ func _build_bog_cover(c: Vector2i, parent: Node3D) -> void:
 		var key := "%s:%d" % [kind, vi]
 		if not groups.has(key):
 			groups[key] = {"kind": kind, "variant": vi, "xf": []}
-		var h := main.height(wx, wz)
+		var h: float = main.height(wx, wz)
 		var scale := rng.randf_range(0.56, 1.48)
 		var xf := Transform3D(Basis(Vector3.UP, rng.randf_range(-PI, PI)).scaled(Vector3.ONE * scale), Vector3(wx, h, wz))
 		groups[key].xf.append({"transform": xf, "wet": wet})
@@ -472,13 +472,13 @@ func _build_bog_water(c: Vector2i, parent: Node3D) -> void:
 		for x in range(cells):
 			var wx := float(c.x) * CHUNK_SIZE + (float(x) + 0.5) * step
 			var wz := float(c.y) * CHUNK_SIZE + (float(z) + 0.5) * step
-			var wet := main.swamp_depth_at(wx, wz)
+			var wet: float = main.swamp_depth_at(wx, wz)
 			if wet < 0.66:
 				continue
 			var base := verts.size()
 			var x0 := float(x) * step
 			var z0 := float(z) * step
-			var y := main.water_level(wx, wz) - 0.035
+			var y: float = main.water_level(wx, wz) - 0.035
 			verts.append_array([Vector3(x0, y, z0), Vector3(x0 + step, y, z0), Vector3(x0, y, z0 + step), Vector3(x0 + step, y, z0 + step)])
 			uvs.append_array([Vector2(wx, wz), Vector2(wx + step, wz), Vector2(wx, wz + step), Vector2(wx + step, wz + step)])
 			normals.append_array([Vector3.UP, Vector3.UP, Vector3.UP, Vector3.UP])
@@ -740,7 +740,7 @@ func _build_tree_cover(c: Vector2i) -> void:
 		if slope < 0.76:
 			continue
 		var zone_id: int = main.zone(wx, wz)
-		var moisture := main.wet_k(wx, wz, h)
+		var moisture: float = main.wet_k(wx, wz, h)
 		# Spatial bins prevent same-chunk canopy trees from overlapping into
 		# unreadable clumps; spacing is relaxed in dense forest and wider in open stands.
 		var spacing := lerpf(4.45, 2.55, clampf(density, 0.0, 1.0))

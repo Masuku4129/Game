@@ -340,7 +340,7 @@ func recipes() -> Array:
 			return int(ra[0]) > int(rb[0])
 		if int(ra[1]) != int(rb[1]):
 			return int(ra[1]) > int(rb[1])
-		return String(ra[2]) < String(rb[2])))
+		return String(ra[2]) < String(rb[2]))
 	return out
 
 ## Чего не хватает: {id: сколько}.

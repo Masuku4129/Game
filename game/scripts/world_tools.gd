@@ -9,6 +9,8 @@ extends Node3D
 
 const IT = preload("res://scripts/items.gd")
 const TM = preload("res://scripts/tool_models.gd")
+var pending_fells: Dictionary = {}   # id дерева -> запись валки, ждущая загрузки чанка
+var pending_gen: Array = []   # отложенные сгенерированные брёвна/пни до готовности чанка
 const SEG := 1.25            # длина бревна, м
 const TRUNK_R0 := {"birch": 0.17, "aspen": 0.17, "rowan": 0.17, "larch": 0.17, "spruce": 0.24, "fir": 0.24, "pine": 0.28, "cedar": 0.28}
 const TRUNK_R1 := {"birch": 0.05, "aspen": 0.05, "rowan": 0.05, "larch": 0.05, "spruce": 0.05, "fir": 0.05, "pine": 0.08, "cedar": 0.08}
@@ -122,7 +124,7 @@ func _hide_tree(rec: Array) -> void:
 	# Запоминаем срубленное дерево по мировым координатам: MultiMesh ID меняется
 	# при потоковой выгрузке, координатный ID остаётся неизменным.
 	if main.chunk_stream != null:
-		var state := main.chunk_stream.read_state(o, "tree_state")
+		var state: Dictionary = main.chunk_stream.read_state(o, "tree_state")
 		var tree_key := "%d:%d" % [roundi(o.x * 10.0), roundi(o.z * 10.0)]
 		state[tree_key] = {"hidden": true}
 		main.chunk_stream.write_state(o, "tree_state", state)
@@ -267,7 +269,7 @@ func _unblock_spot(sp: Dictionary) -> void:
 	var xf: Transform3D = sp["xf"]
 	# Убранный из генерации валежник не должен появиться снова после выгрузки чанка.
 	if main.chunk_stream != null:
-		var state := main.chunk_stream.read_state(xf.origin, "fallen_state")
+		var state: Dictionary = main.chunk_stream.read_state(xf.origin, "fallen_state")
 		state[_key(xf.origin)] = {"done": true}
 		main.chunk_stream.write_state(xf.origin, "fallen_state", state)
 	mm.set_instance_transform(int(sp["i"]), Transform3D(Basis().scaled(Vector3(0.0001, 0.0001, 0.0001)), xf.origin - Vector3(0, 500, 0)))

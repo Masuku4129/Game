@@ -1022,6 +1022,23 @@ func _obstacle_radius() -> float:
 	# squeezing through visually impassable gaps while keeping small animals agile.
 	return clampf(float(parts.get("L", 0.5)) * 0.18, 0.18, 0.75)
 
+## Путь выхода из застревания: пока зверь внутри препятствия, первые отсчёты занятые — это
+## нормально; но как только путь стал свободным, вновь упереться в стену уже нельзя.
+func _can_escape_segment(from: Vector3, to: Vector3) -> bool:
+	var distance := Vector2(to.x - from.x, to.z - from.z).length()
+	var spacing := clampf(_obstacle_radius() * 0.28, 0.06, 0.13)
+	var steps := maxi(1, ceili(distance / spacing))
+	var previous := from
+	var seen_free := false
+	for i in range(1, steps + 1):
+		var sample := from.lerp(to, float(i) / float(steps))
+		if _can_step(sample, false, previous):
+			seen_free = true
+		elif seen_free:
+			return false
+		previous = sample
+	return seen_free
+
 func _can_move_segment(from: Vector3, to: Vector3, flying: bool = false) -> bool:
 	var distance := Vector2(to.x - from.x, to.z - from.z).length()
 	# Adaptive sampling: large-bodied species use tighter collision sweeps;
@@ -1098,7 +1115,7 @@ func _push_out() -> void:
 		for k in 32:
 			var a := TAU * float(k) / 32.0 + float(r) * 0.23
 			var q: Vector3 = origin + Vector3(sin(a), 0.0, cos(a)) * float(r)
-			if _can_step(q) and _can_move_segment(origin, q):
+			if _can_step(q) and _can_escape_segment(origin, q):
 				position.x = q.x
 				position.z = q.z
 				return
