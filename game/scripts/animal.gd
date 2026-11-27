@@ -1012,10 +1012,10 @@ func _animate_model(delta: float) -> void:
 		sc = 0.85 if speed > 0.05 else 0.5
 	elif speed > walk * 1.7:
 		want_a = SK.find_anim(ap, ["Gallop"])
-		sc = clampf(speed / (float(sp["run"]) * 0.75), 0.6, 1.6)
+		sc = clampf(speed / float(sp["run"]), 0.7, 1.35)
 	elif speed > 0.08:
 		want_a = SK.find_anim(ap, ["Walk"])
-		sc = clampf(speed / walk, 0.4, 1.8)
+		sc = clampf(speed / walk, 0.45, 1.4)
 	elif state in ["graze", "feed", "drink", "eat"]:
 		want_a = SK.find_anim(ap, ["Eating"])
 	elif state in ["rest", "sleep", "ambush"]:
