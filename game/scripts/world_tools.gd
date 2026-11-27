@@ -76,10 +76,8 @@ func _give(id: String, n: int) -> int:
 	for i in n:
 		if main.inventory != null and not main.inventory.can_add(id):
 			break
-		if main.inventory != null:
-			main.inventory.add_item(id, 1)
-		else:
-			main.inv[id] = int(main.inv.get(id, 0)) + 1
+		# Единый регистратор обновляет и инвентарь, и счётчик реально полученных ресурсов.
+		main._record_resource(id, 1)
 		got += 1
 	if got > 0:
 		main._say("+%d %s" % [got, IT.name_of(id).to_lower()])
