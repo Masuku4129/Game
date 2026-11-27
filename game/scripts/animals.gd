@@ -177,6 +177,27 @@ func populate_stream_chunk(coord: Vector2i, chunk_seed: int) -> void:
 		if i > 0:
 			p = _near(center_pos, 7.0)
 		_spawn(herd_kind, p, rng.randf_range(0.82, 1.08), group_id, "chunk:%s:herd:%d" % [key, i])
+	# Chunks spanning distinct habitats may support a second, smaller local group.
+	# Its species and center are selected from the secondary habitat pool, so a
+	# single chunk can transition from forest animals to open-ground animals.
+	var secondary_pool: Array = []
+	var secondary_kind := ""
+	if not forest_candidates.is_empty() and not open_candidates.is_empty():
+		if forest_candidates.size() > open_candidates.size() and rng.randf() < 0.42:
+			secondary_pool = open_candidates
+			secondary_kind = "hare" if rng.randf() < 0.62 else "roe"
+		elif open_candidates.size() > forest_candidates.size() and rng.randf() < 0.30:
+			secondary_pool = forest_candidates
+			secondary_kind = "squirrel" if rng.randf() < 0.24 else "deer"
+	elif not waterside_candidates.is_empty() and not forest_candidates.is_empty() and rng.randf() < 0.22:
+		secondary_pool = waterside_candidates
+		secondary_kind = "beaver" if rng.randf() < 0.18 else "boar"
+	if not secondary_pool.is_empty() and secondary_kind != "":
+		var secondary_center: Vector3 = secondary_pool[rng.randi_range(0, secondary_pool.size() - 1)]
+		var secondary_count := rng.randi_range(1, 2)
+		for secondary_i in range(secondary_count):
+			var secondary_pos := secondary_center if secondary_i == 0 else _near(secondary_center, 5.5)
+			_spawn(secondary_kind, secondary_pos, rng.randf_range(0.84, 1.06), group_id + 4, "chunk:%s:secondary:%d" % [key, secondary_i])
 	# Мелкая живность населяет каждый подходящий лесной чанк; белки появляются
 	# только там, где уже создана древесная опора для карабканья.
 	if rng.randf() < 0.96:
