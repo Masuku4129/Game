@@ -871,7 +871,7 @@ func build_confirm() -> bool:
 			main.camp._register(s)
 	nav.invalidate(pos.x, pos.z, 8.0)
 	build_cancel()
-	note("Начато: %s" % String(d["name"]))
+	note("Построено: %s" % String(d["name"]) if bool(main.get("creative_mode")) and site_stage == "done" else "Начато: %s" % String(d["name"]))
 	# ближний свободный — на стройку
 	var site_stage := String(s.get("stage", "done"))
 	if site_stage != "done":
