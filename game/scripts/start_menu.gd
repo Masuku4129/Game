@@ -35,8 +35,10 @@ func _ready() -> void:
 	sh.offset_bottom = 270.0
 	add_child(sh)
 	var y := 120.0
-	if SV.has_save():
-		var c := _btn(sh, "Продолжить", y)
+	var creative_active := main != null and bool(main.creative_mode)
+	var active_save := FileAccess.file_exists("user://creative_save.json") if creative_active else SV.has_save()
+	if active_save:
+		var c := _btn(sh, "Продолжить творческую игру" if creative_active else "Продолжить", y)
 		c.pressed.connect(_continue)
 		y += 130.0
 		var l := Label.new()
@@ -71,7 +73,8 @@ func _btn(sh: Control, t: String, y: float) -> Button:
 	return b
 
 func _save_info() -> String:
-	var f := FileAccess.open(SV.PATH, FileAccess.READ)
+	var path := "user://creative_save.json" if main != null and bool(main.creative_mode) else SV.PATH
+	var f := FileAccess.open(path, FileAccess.READ)
 	if f == null:
 		return ""
 	var d: Variant = JSON.parse_string(f.get_as_text())
