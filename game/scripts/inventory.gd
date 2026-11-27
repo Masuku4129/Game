@@ -245,8 +245,15 @@ func _kinds() -> Array:
 func count(id: String) -> int:
 	return int(main.inv.get(id, 0))
 
-func add_item(id: String, n: int = 1) -> void:
+func add_item(id: String, n: int = 1) -> bool:
+	if n <= 0:
+		return false
+	if main == null:
+		return false
+	if not bool(main.get("creative_mode")) and not can_add(id, n):
+		return false
 	main.inv[id] = count(id) + n
+	return int(main.inv[id]) >= n
 
 func remove_item(id: String, n: int = 1) -> bool:
 	if count(id) < n:
@@ -271,6 +278,8 @@ func weight() -> float:
 
 func can_add(kind: String, amount: int = 1) -> bool:
 	if amount <= 0:
+		return true
+	if main != null and bool(main.get("creative_mode")):
 		return true
 	return weight() + float(ITEMS.get(kind, {}).get("w", 0.3)) * float(amount) <= CAPACITY + 0.001
 
