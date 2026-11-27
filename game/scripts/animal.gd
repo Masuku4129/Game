@@ -802,6 +802,9 @@ func tick(delta: float) -> void:
 		# лося или медведя выбирать узкий проход, в который корпус физически не помещается.
 		var body_len: float = float(parts.get("L", 1.0))
 		var probe_len := maxf(1.25, minf(4.0, maxf(maxf(step_len * 7.0, to.length() * 0.12), body_len * 0.7)))
+		# Nearby animal spacing prevents crowding/overlap during otherwise obstacle-safe
+		# steering, while allowing members of the same herd to stay comparatively close.
+		var neighbors: Array = mgr.near(position, maxf(3.0, body_len * 1.8)) if mgr != null else []
 		for off in offsets:
 			var candidate: float = lerp_angle(heading, desired, 0.35) + float(off)
 			var cd := Vector3(sin(candidate), 0.0, cos(candidate))
@@ -812,6 +815,14 @@ func tick(delta: float) -> void:
 			var align := cd.dot(to.normalized())
 			var turn_cost := absf(wrapf(candidate - heading, -PI, PI)) * 0.10
 			var score := align - turn_cost
+			for other in neighbors:
+				if other == self or other.dead or other.state == "inlodge":
+					continue
+				var sep := Vector2(probe.x - other.position.x, probe.z - other.position.z).length()
+				var min_sep := (body_len + float(other.parts.get("L", 1.0))) * 0.22
+				if sep < min_sep:
+					var same_group := group >= 0 and group == other.group
+					score -= (1.0 if same_group else 1.65) * (1.0 - clampf(sep / maxf(min_sep, 0.01), 0.0, 1.0))
 			if score > best_score:
 				best_score = score
 				chosen = candidate
