@@ -442,9 +442,13 @@ func do_action() -> void:
 		if main.stamina < 0.045:
 			main._say("Не хватает сил упереться жердью")
 			return
-		main.stamina = maxf(0.0, float(main.stamina) - 0.045)
-		swamp_escape_progress = minf(1.0, swamp_escape_progress + 0.24 + swamp_depth * 0.035)
-		swamp_sink = maxf(0.0, swamp_sink - 0.13 - swamp_escape_progress * 0.045)
+		# Тяжёлый рюкзак требует больше сил при упоре жердью, а глубина трясины
+		# снижает эффективность каждого рывка. Нагрузка уже рассчитана в начале кадра.
+		var pole_effort := 0.045 + carried_load * 0.025
+		var escape_gain := (0.24 + swamp_depth * 0.035) * (1.0 - carried_load * 0.38)
+		main.stamina = maxf(0.0, float(main.stamina) - pole_effort)
+		swamp_escape_progress = minf(1.0, swamp_escape_progress + escape_gain)
+		swamp_sink = maxf(0.0, swamp_sink - (0.13 + swamp_escape_progress * 0.045) * (1.0 - carried_load * 0.25))
 		mud_sink = minf(mud_sink, 0.2)
 		vel = Vector3.ZERO
 		land_t = 0.2
