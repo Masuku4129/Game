@@ -4,7 +4,7 @@ extends Node
 
 const CHUNK_SIZE := 64.0
 const ACTIVE_RADIUS := 2
-const PRELOAD_RADIUS := 3
+const PRELOAD_RADIUS := 4
 const LOAD_BUDGET := 2
 const MAX_SAVED_CHUNKS := 4096
 const TERRAIN_SEGMENTS := 64
@@ -71,7 +71,7 @@ func _rebuild_queue() -> void:
 			var direction := offset.normalized() if d > 0.0 else Vector2.ZERO
 			# Подготавливаем чанки прежде всего перед камерой и по ходу движения,
 			# но соседние боковые чанки остаются в очереди для свободного поворота.
-			var priority := float(d) - direction.dot(view_forward) * 2.4 - direction.dot(move_forward) * 1.8
+			var priority := float(d) - direction.dot(view_forward) * 3.6 - direction.dot(move_forward) * 3.0
 			candidates.append({"coord": c, "priority": priority})
 	candidates.sort_custom(func(a: Dictionary, b: Dictionary) -> bool: return float(a.priority) < float(b.priority))
 	for item: Dictionary in candidates:
