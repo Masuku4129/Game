@@ -1406,7 +1406,7 @@ func _restore_fell_record(fe: Dictionary, tree_rec: Array) -> void:
 	if fells.has(tree_id):
 		return
 	var SV = preload("res://scripts/save.gd")
-	var source_mesh: Mesh = (tree_rec[0] as MultiMesh).mesh
+	var source_mesh: Mesh = main.near_mesh.get(String(tree_rec[3]), (tree_rec[0] as MultiMesh).mesh)
 	if source_mesh == null:
 		return
 	var xf: Transform3D = SV.dec(fe["xf"])
