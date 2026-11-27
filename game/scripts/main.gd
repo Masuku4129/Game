@@ -1251,6 +1251,8 @@ func _update_near(force: bool = false) -> void:
 			if not tree_grid.has(gk):
 				continue
 			for rec in tree_grid[gk]:
+				if rec.size() < 4:
+					continue
 				var t: Transform3D = rec[2]
 				if (t.origin.x - c.x) * (t.origin.x - c.x) + (t.origin.z - c.z) * (t.origin.z - c.z) > r2:
 					continue
@@ -1391,6 +1393,8 @@ func nearest_tree(p: Vector3, r: float) -> Vector3:
 			if not tree_grid.has(k):
 				continue
 			for rec in tree_grid[k]:
+				if rec.size() < 4:
+					continue
 				var t: Transform3D = rec[2]
 				var dd := Vector2(t.origin.x - p.x, t.origin.z - p.z).length_squared()
 				if dd < bd:
@@ -1841,7 +1845,7 @@ func _tools_records(mm: MultiMesh, xs: Array, kind: String, v: Array) -> void:
 var occ := {}
 const FOOT_R := {"scree": 1.2, "brushpile": 0.9, "bones": 0.8, "cones": 0.9, "windfall": 1.5, "stump": 0.4, "stump_rot": 0.5, "stump_mush": 0.45, "anthill": 0.6, "hummock": 0.4, "berry": 0.3, "bilberry": 0.6, "ledum": 0.6, "cloudberry": 0.6, "cranberry": 0.6, "lingon": 0.6, "bush": 0.4, "juniper": 0.5, "stlanik": 0.8}
 const HUG := ["scree", "brushpile", "bones", "cones", "chanterelle", "twig", "pebble", "bilberry", "ledum", "cloudberry", "cranberry", "lingon", "hummock", "mushroom"]
-const ROCKISH := ["rock", "slab", "mossrock", "split_rock", "outcrop"]
+const ROCKISH := ["rock", "slab", "mossrock", "split_rock", "outcrop", "scree"]
 var cliff_mmi: Array = []
 
 func _rock_half_extents(v: Array) -> Vector3:
@@ -1906,6 +1910,9 @@ func _occ_add_line(a: Vector3, b: Vector3, r: float) -> void:
 
 ## Скальные стены уступов: высокие глыбы вдоль обрыва и осыпь камней у подножия.
 func _cliff_rocks(vars: Array) -> void:
+	if vars.is_empty():
+		push_warning("Cliff rock variants are empty; skipping cliff scatter")
+		return
 	var rng := RandomNumberGenerator.new()
 	rng.seed = 4711
 	var per_var := []
