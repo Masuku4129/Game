@@ -1042,6 +1042,10 @@ func _can_step(p: Vector3, flying: bool = false, from_pos: Vector3 = Vector3.INF
 	if swimmer() and kind != "beaver" and not flying and swim_k < 0.2 and not cross and not (state in ["flee", "chase", "charge"]):
 		if main.water_level(p.x, p.z) - gy > 0.6:
 			return false
+	if (not flying):
+		var drop_limit := step_limit * (1.35 if kind in ["hare", "squirrel", "fox"] else 1.15)
+		if (g0 - gy) > drop_limit and g0 > main.WATER_Y:
+			return false
 	if (gy - g0) > step_limit and gy > main.WATER_Y and not flying:
 		return false
 	return true
