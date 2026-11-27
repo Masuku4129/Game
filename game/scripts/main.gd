@@ -837,7 +837,7 @@ func _process(delta: float) -> void:
 			_respawn()
 	_near_t -= delta
 	if _near_t <= 0.0:
-		_near_t = 0.25
+		_near_t = 0.12
 		_update_near()
 	if joy != null:
 		hero.move_vec = joy.value if health > 0.0 else Vector2.ZERO
@@ -1222,7 +1222,7 @@ func _variants(kind: String) -> Array:
 	return out
 
 const TREE_KINDS := ["spruce", "pine", "birch", "larch", "aspen", "fir", "cedar", "rowan"]
-const NEAR_R := 36.0
+const NEAR_R := 44.0
 var tree_grid := {}
 var near_mesh := {}
 var near_mmi := {}
@@ -1235,7 +1235,7 @@ var _tree_id := 0
 ## дизерингом (шейдер сравнивает расстояние до near_c), поэтому смены моделей не видно.
 func _update_near(force: bool = false) -> void:
 	var c: Vector3 = rig.position
-	if not force and Vector2(c.x - _near_at.x, c.z - _near_at.z).length() < 2.5:
+	if not force and Vector2(c.x - _near_at.x, c.z - _near_at.z).length() < 1.1:
 		return
 	_near_at = c
 	var by_key := {}
@@ -1731,14 +1731,14 @@ func _scatter_all() -> void:
 					# а при низкой камере там уже дымка; так в кадре вдвое меньше клеток мелочи
 					# всё остальное тает к 95 м — там уже сплошная дымка (fog_depth_end ≤ 100)
 					# кусты и стланик (до 85 м) — к 62 м
-					var far: float = minf(float(r[3]), 95.0) if float(r[3]) > 85.0 else (minf(float(r[3]), 62.0) if float(r[3]) > 66.0 else minf(float(r[3]), 44.0))
+					var far: float = minf(float(r[3]), 125.0) if is_tree else (minf(float(r[3]), 95.0) if float(r[3]) > 85.0 else (minf(float(r[3]), 62.0) if float(r[3]) > 66.0 else minf(float(r[3]), 44.0)))
 					for xs: Array in _split_cell(per_var[vi], x0, z0, fine):
 						var mm := _vis_multimesh(cache_lod[r[0]][vi][0] if is_tree else vars[vi][0], xs, far, is_tree)
 						var mmi := MultiMeshInstance3D.new()
 						mmi.multimesh = mm
 						# клетка видна, пока хоть один её экземпляр может быть виден; каждый экземпляр
 						# растворяется сам по своей дальности (шейдер), поэтому клетки не «щёлкают»
-						mmi.visibility_range_end = far + (23.0 if fine else 46.0)
+						mmi.visibility_range_end = far + (34.0 if is_tree else (23.0 if fine else 46.0))
 						# тени только у крупного (деревья, валуны, стволы); мелочь без теней — вдвое меньше вызовов
 						# у деревьев тень бросает детальная ближняя модель (_update_near), дальняя — нет:
 						# дальше NEAR_R теней всё равно нет (directional_shadow_max_distance)
