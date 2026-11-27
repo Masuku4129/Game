@@ -1633,7 +1633,7 @@ func _scatter_all() -> void:
 							_add_solid([0, o, Vector3.ZERO, hr2, ht2])
 						# высокий камень (выше пояса) — преграда для людей и зверей; низкий можно перешагнуть
 						if ht2 > 0.85:
-							_add_blocker(o.x, o.z, maxf(hr2 * 0.82, 0.4))
+							_add_blocker(o.x, o.z, maxf(hr2 * 0.96 + 0.12, 0.55))
 					elif kind == "stump":
 						_add_solid([2, o, Vector3.ZERO, 0.45 * s, 0.75 * s])
 						_add_seat(Vector3(x, height(x, z) + 0.7 * s, z), rng.randf() * TAU)
