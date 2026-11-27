@@ -729,8 +729,8 @@ func harvest(r: Dictionary, knife: bool) -> void:
 			var q: Vector3 = it[0]
 			var k := Vector2i(floori(q.x / 8.0), floori(q.z / 8.0))
 			if main.pickables.has(k) and (main.pickables[k] as Array).has(it):
-				main.take_pick(it)
-				if knife:
+				var taken: bool = main.take_pick(it)
+				if taken and knife:
 					_give("berry", 1)
 		"berry":
 			_spend(r["key"], 3)
