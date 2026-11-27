@@ -1,7 +1,7 @@
 name: Woodland UI Motion Tests
 on:
   push:
-    branches: [ui-motion]
+    branches: [ui-motion-rebased]
 concurrency:
   group: taiga-ui-motion-${{ github.ref }}
   cancel-in-progress: true
