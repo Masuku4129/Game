@@ -31,6 +31,10 @@ var _vol: HSlider
 var _vol_lbl: Label
 var _info: Label
 var _was_paused := false
+var adaptive_scale := 1.0
+var _adaptive_low_t := 0.0
+var _adaptive_high_t := 0.0
+var _adaptive_frame_ms := 16.7
 var _hero_btn: Button      # colony: режим героя (отладка)
 var hero_mode := false     # colony: читается при запуске (main._colony_pick_mode)
 
@@ -120,7 +124,7 @@ func apply() -> void:
 	# FSR в Godot 4.3 есть только в Forward+; у мобильного рендера — билинейное масштабирование
 	var method := String(ProjectSettings.get_setting("rendering/renderer/rendering_method", "mobile"))
 	vp.scaling_3d_mode = Viewport.SCALING_3D_MODE_FSR if method == "forward_plus" else Viewport.SCALING_3D_MODE_BILINEAR
-	vp.scaling_3d_scale = float(p["scale"])
+	vp.scaling_3d_scale = maxf(0.5, float(p["scale"]) * adaptive_scale)
 	vp.msaa_3d = Viewport.MSAA_DISABLED
 	RenderingServer.directional_shadow_atlas_set_size(int(p["shadow"]), true)
 	if main != null:
@@ -289,9 +293,39 @@ func close() -> void:
 	sheet.visible = false
 	get_tree().paused = _was_paused
 
-func _process(_d: float) -> void:
+func _process(delta: float) -> void:
 	if main == null or main.hero == null:
 		return
+	_adaptive_tick(delta)
 	var inv_open: bool = main.inventory != null and (main.inventory.is_open() or main.hero.pack_stage != "")
 	# colony: в режиме острога шестерёнка всегда на месте
 	gear.visible = main.colony != null or (not inv_open and main.hero.state != "dead")
+
+func _adaptive_tick(delta: float) -> void:
+	# Адаптация только по фактическому frame time: это не датчик температуры и
+	# не заменяет длительный тепловой тест на физическом Samsung.
+	if OS.get_environment("PERF") != "" or get_tree().paused:
+		return
+	var target_ms := 1000.0 / float(maxi(fps, 30))
+	var frame_ms := delta * 1000.0
+	_adaptive_frame_ms = lerpf(_adaptive_frame_ms, frame_ms, minf(1.0, delta * 2.5))
+	if _adaptive_frame_ms > target_ms * 1.22:
+		_adaptive_low_t += delta
+		_adaptive_high_t = 0.0
+	elif _adaptive_frame_ms < target_ms * 0.82:
+		_adaptive_high_t += delta
+		_adaptive_low_t = 0.0
+	else:
+		_adaptive_low_t = maxf(0.0, _adaptive_low_t - delta * 0.5)
+		_adaptive_high_t = maxf(0.0, _adaptive_high_t - delta * 0.5)
+	var changed := false
+	if _adaptive_low_t >= 2.5 and adaptive_scale > 0.62:
+		adaptive_scale = maxf(0.62, adaptive_scale - 0.06)
+		_adaptive_low_t = 0.0
+		changed = true
+	elif _adaptive_high_t >= 9.0 and adaptive_scale < 1.0:
+		adaptive_scale = minf(1.0, adaptive_scale + 0.025)
+		_adaptive_high_t = 0.0
+		changed = true
+	if changed:
+		get_viewport().scaling_3d_scale = maxf(0.5, float(PRESETS[preset]["scale"]) * adaptive_scale)
