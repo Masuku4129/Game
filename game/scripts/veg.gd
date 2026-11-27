@@ -389,8 +389,8 @@ func stump(seed_v: int) -> Array:
 	rng.seed = seed_v
 	var bark := Surf.new()
 	tube(bark, Vector3.ZERO, Vector3(0, 0.35, 0), Vector3(0, 0.75, 0), 0.55, 0.45, 3, 12)
-	for i in 5:
-		var a := TAU * i / 5 + R(-0.3, 0.3)
+	for i in 8:
+		var a := TAU * i / 8 + R(-0.3, 0.3)
 		var d := Vector3(cos(a), 0, sin(a))
 		tube(bark, d * 0.35 + Vector3(0, 0.3, 0), d * 0.8 + Vector3(0, 0.08, 0), d * R(1.2, 1.6) + Vector3(0, -0.1, 0), 0.16, 0.04, 5, 6)
 	var top := Surf.new()
@@ -402,8 +402,10 @@ func log_fallen(seed_v: int) -> Array:
 	rng.seed = seed_v
 	var bark := Surf.new()
 	var L := R(4.0, 6.0)
-	tube(bark, Vector3(-L * 0.5, 0.3, 0), Vector3(0, 0.38, R(-0.2, 0.2)), Vector3(L * 0.5, 0.28, 0), 0.34, 0.26, 10, 10)
-	for i in 3:
+	var segments := rng.randi_range(10, 13)
+	var mid_hump := Vector3(0, R(0.18, 0.32), R(-0.2, 0.2))
+	tube(bark, Vector3(-L * 0.5, 0.3, 0), mid_hump, Vector3(L * 0.5, 0.28, 0), 0.38, 0.24, segments, 12)
+	for i in 5:
 		var x := R(-L * 0.4, L * 0.4)
 		tube(bark, Vector3(x, 0.4, 0), Vector3(x + R(-0.3, 0.3), 0.8, R(0.2, 0.4)), Vector3(x + R(-0.5, 0.5), 1.1, R(0.5, 0.9)), 0.06, 0.015, 4, 5)
 	var ends := Surf.new()
@@ -416,7 +418,7 @@ func grass_patch(seed_v: int) -> Array:
 	rng.seed = seed_v
 	var s := Surf.new()
 	var tone := R(0.85, 1.1)
-	for i in 68:
+	for i in 96:
 		var a := R(0, TAU)
 		var r := sqrt(R(0.0, 1.0)) * 0.82
 		var base := Vector3(cos(a) * r, 0, sin(a) * r)
@@ -447,15 +449,18 @@ func grass_patch(seed_v: int) -> Array:
 func reeds(seed_v: int) -> Array:
 	rng.seed = seed_v
 	var lf := Surf.new()
-	# Five overlapping fans at varied lean angles make a natural reed cluster
-	# with layered silhouettes instead of three identical flat planes.
+	 # Dense reed cluster with distinct stalk heights and crossing directions.
 	var a := R(0, PI)
-	for k in 5:
+	for k in 8:
 		var yaw := a + k * PI / 5.0 + R(-0.12, 0.12)
 		var lean := Vector3(cos(yaw), R(-0.12, 0.08), sin(yaw))
 		var basis := _basis_along(lean, R(-0.22, 0.22))
-		var h := R(1.25, 1.75)
-		card(lf, Vector3(0, R(-0.03, 0.04), 0), basis, R(0.88, 1.18), h, R(0.82, 1.08))
+		var h := R(1.0, 1.8)
+		var offset := Vector3(cos(yaw), 0, sin(yaw)) * R(0.04, 0.18)
+		card(lf, offset + Vector3(0, R(-0.03, 0.04), 0), basis, R(0.55, 0.9), h, R(0.78, 1.1))
+		if k % 2 == 0:
+			var secondary := _basis_along(_rand_dir(lean, R(0.15, 0.35)), R(-0.25, 0.25))
+			card(lf, offset * 0.65, secondary, R(0.45, 0.75), h * 0.78, R(0.75, 1.05))
 	return [_commit([lf], ["reed"]), 1.7]
 
 ## Сухая ветка на земле.
@@ -479,12 +484,12 @@ func berry_bush(seed_v: int) -> Array:
 	var br := Surf.new()
 	for i in 4:
 		tube(bark, Vector3.ZERO, Vector3(R(-0.15, 0.15), 0.25, R(-0.15, 0.15)), Vector3(R(-0.35, 0.35), R(0.4, 0.6), R(-0.35, 0.35)), 0.02, 0.008, 3, 4)
-	for i in 18:
+	for i in 30:
 		var d := Vector3(R(-1, 1), R(0.0, 1), R(-1, 1)).normalized()
 		var p := Vector3(0, 0.3, 0) + d * R(0.15, 0.45)
 		var b := Basis.from_euler(Vector3(R(0, 6), R(0, 6), R(0, 6)))
 		card(lf, p - b.y * 0.25, b, 0.5, 0.5, R(0.75, 1.0))
-	for i in 26:
+	for i in 38:
 		var d := Vector3(R(-1, 1), R(0.1, 1), R(-1, 1)).normalized()
 		var p := Vector3(0, 0.3, 0) + d * R(0.3, 0.5)
 		tube(br, p - Vector3(0, 0.025, 0), p, p + Vector3(0, 0.025, 0), 0.028, 0.02, 2, 5)
