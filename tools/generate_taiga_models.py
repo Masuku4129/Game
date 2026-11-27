@@ -60,6 +60,77 @@ def export(name, b):
     print(f"{name:24s} meshes={'/'.join(b.d)} tris={tris:5d} {len(data)/1024:6.1f} KB")
 
 
+
+# --------------------------------------------------------- ground cover GLBs ---
+def fern():
+    rng = np.random.default_rng(21); b = Builder()
+    # A distinct crown of arching rachises with many paired leaflets.
+    for frond in range(9):
+        a = math.tau * frond / 9 + rng.uniform(-.16, .16)
+        reach = rng.uniform(.72, 1.12); rise = rng.uniform(.42, .72)
+        end = np.array([math.cos(a) * reach, math.sin(a) * reach, rise])
+        tube(b, (0, 0, .04), end, .025, .009, 5, 5, key="bark", rng=rng)
+        axis = end / max(np.linalg.norm(end), 1e-6)
+        side = np.array([-math.sin(a), math.cos(a), 0.0])
+        for j in range(1, 8):
+            t = j / 8
+            p = end * t
+            size = (.22 * (1.0 - t * .55)) * rng.uniform(.8, 1.15)
+            for sign in (-1, 1):
+                q = p + side * sign * size * .72 + np.array([0, 0, size * .12])
+                blob(b, q, (size * .72, size * .22, size * .09), rng, np.array([0,0,.4]), 1, .1, .62, "foliage")
+    export("taiga_fern.glb", b)
+
+
+def reed():
+    rng = np.random.default_rng(22); b = Builder()
+    for i in range(13):
+        a = rng.uniform(0, math.tau); rad = rng.uniform(.08, .42)
+        base = np.array([math.cos(a)*rad, math.sin(a)*rad, 0.0])
+        h = rng.uniform(1.0, 1.9)
+        tip = base + np.array([math.cos(a)*rng.uniform(.08,.22), math.sin(a)*rng.uniform(.08,.22), h])
+        tube(b, base, tip, .018, .008, 5, 4, key="bark", rng=rng)
+        for t in (.28, .48, .67):
+            p = base*(1-t) + tip*t
+            side = np.array([-math.sin(a), math.cos(a), .15])
+            leaf_tip = p + side*rng.uniform(.22,.42) + np.array([0,0,.12])
+            tube(b, p, leaf_tip, .018, .003, 3, 3, key="foliage", rng=rng)
+        if i % 3 == 0:
+            blob(b, tip + np.array([0,0,.10]), (.055,.055,.20), rng, tip, 1, .08, .6, "foliage")
+    export("taiga_reed.glb", b)
+
+
+def moss():
+    rng = np.random.default_rng(23); b = Builder()
+    for i in range(18):
+        a = math.tau*i/18 + rng.uniform(-.2,.2); r = rng.uniform(.08,.52)
+        c = np.array([math.cos(a)*r, math.sin(a)*r, rng.uniform(.02,.10)])
+        blob(b, c, (rng.uniform(.14,.28), rng.uniform(.12,.25), rng.uniform(.07,.14)), rng, np.array([0,0,.0]), 1, .12, .62, "foliage")
+    export("taiga_moss.glb", b)
+
+
+def mushroom():
+    rng = np.random.default_rng(24); b = Builder()
+    for i in range(3):
+        x,y = rng.uniform(-.28,.28,2); h = rng.uniform(.22,.42); rad = rng.uniform(.12,.22)
+        tube(b, (x,y,0), (x,y,h), .055, .035, 5, 7, key="bark", rng=rng)
+        blob(b, (x,y,h+.035), (rad,rad,.09), rng, np.array([x,y,h]), 2, .08, .62, "foliage")
+    export("taiga_mushroom.glb", b)
+
+
+def flower():
+    rng = np.random.default_rng(25); b = Builder()
+    for i in range(5):
+        a = math.tau*i/5; x,y = math.cos(a)*.12, math.sin(a)*.12
+        h = rng.uniform(.35,.68)
+        tube(b, (x,y,0), (x*.7,y*.7,h), .018, .009, 4, 4, key="bark", rng=rng)
+        for j in range(4):
+            q = np.array([x*.7,y*.7,h*.55]) + np.array([math.cos(a+j*math.pi/2)*.12, math.sin(a+j*math.pi/2)*.12,.03])
+            blob(b, q, (.10,.055,.035), rng, np.array([x,y,h*.55]), 1, .05, .6, "foliage")
+        blob(b, (x*.7,y*.7,h+.035), (.07,.07,.07), rng, np.array([x,y,h]), 1, .04, .6, "foliage")
+    export("taiga_flower.glb", b)
+
+
 # ---------------------------------------------------------------- primitives ---
 def tube(b, a, c, r0, r1, sections=6, sides=6, bend=(0, 0, 0), flare=0.0, key="bark", rng=None, wobble=0.0):
     a, c = np.asarray(a, float), np.asarray(c, float)
@@ -318,7 +389,7 @@ def rock():
     export("taiga_rock.glb", b)
 
 
-ALL = [spruce, pine, larch, cedar, birch, aspen, alder, bush, stump, fallen_log, rock]
+ALL = [spruce, pine, larch, cedar, birch, aspen, alder, bush, stump, fallen_log, rock, fern, reed, moss, mushroom, flower]
 
 if __name__ == "__main__":
     for fn in ALL:
