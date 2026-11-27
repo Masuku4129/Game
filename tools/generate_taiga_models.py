@@ -86,13 +86,23 @@ def tube(b, a, c, r0, r1, sections=6, sides=6, bend=(0, 0, 0), flare=0.0, key="b
     b.add(key, verts, faces, uvs, nrm)
 
 
-def blob(b, center, radii, rng, cc, sub=1, jit=.2, soft=.55, key="foliage"):
-    """Soft painted cloud: jittered icosphere, normals blended toward the crown centre."""
+def blob(b, center, radii, rng, cc, sub=2, jit=.16, soft=.58, key="foliage"):
+    """Cartoon foliage mass: scalloped, slightly flattened cloud with soft painted normals."""
     m = trimesh.creation.icosphere(subdivisions=sub, radius=1.0)
-    v = np.asarray(m.vertices)
-    v = v * np.asarray(radii) * (1 + jit * rng.uniform(-1, 1, (len(v), 1)))
+    base = np.asarray(m.vertices)
+    # Deliberate broad lobes break the repeated ball silhouette without noisy micro-detail.
+    az = np.arctan2(base[:, 1], base[:, 0])
+    lat = base[:, 2]
+    scallop = (0.075 * np.sin(az * 5.0 + lat * 2.2)
+               + 0.045 * np.sin(az * 9.0 - lat * 3.1)
+               + 0.035 * np.cos(lat * 7.0 + az * 2.0))
+    variation = 1.0 + scallop + jit * rng.uniform(-1, 1, (len(base),))
+    v = base * np.asarray(radii) * variation[:, None]
+    # Lift the upper silhouette and tuck the underside into the branch structure.
+    v[:, 2] *= np.where(base[:, 2] > 0.0, 1.08, 0.88)
     v = v + np.asarray(center)
-    n = unit(unit(v - np.asarray(center)) * (1 - soft) + unit(v - np.asarray(cc)) * soft)
+    radial = unit(v - np.asarray(center))
+    n = unit(radial * (1 - soft) + unit(v - np.asarray(cc)) * soft)
     b.add(key, v, m.faces, np.zeros((len(v), 2)), n)
 
 
