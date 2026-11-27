@@ -109,78 +109,41 @@ func _spawn_rare_swamp_traveler() -> void:
 		return
 
 func _create_traveler_body(parent: Node3D) -> void:
-	var coat := StandardMaterial3D.new()
-	coat.albedo_color = Color(0.24, 0.19, 0.13)
-	coat.roughness = 0.96
-	var trousers := StandardMaterial3D.new()
-	trousers.albedo_color = Color(0.19, 0.2, 0.17)
-	trousers.roughness = 1.0
-	var skin := StandardMaterial3D.new()
-	skin.albedo_color = Color(0.48, 0.34, 0.25)
-	skin.roughness = 1.0
-	var leather := StandardMaterial3D.new()
-	leather.albedo_color = Color(0.22, 0.13, 0.08)
-	leather.roughness = 1.0
-	# Фигура лежит на боку; силуэт читается как человек в дорожной одежде.
-	var torso := MeshInstance3D.new()
-	var tm := CapsuleMesh.new()
-	tm.radius = 0.19
-	tm.height = 0.72
-	torso.mesh = tm
-	torso.material_override = coat
-	torso.rotation.x = PI * 0.5
-	torso.position = Vector3(0, 0.22, 0.02)
-	parent.add_child(torso)
-	var head := MeshInstance3D.new()
-	var hm := SphereMesh.new()
-	hm.radius = 0.125
-	hm.height = 0.25
-	head.mesh = hm
-	head.material_override = skin
-	head.position = Vector3(0, 0.25, -0.48)
-	parent.add_child(head)
-	for side in [-1.0, 1.0]:
-		var leg := MeshInstance3D.new()
-		var lm := CapsuleMesh.new()
-		lm.radius = 0.075
-		lm.height = 0.58
-		leg.mesh = lm
-		leg.material_override = trousers
-		leg.rotation.x = PI * 0.5
-		leg.position = Vector3(side * 0.105, 0.13, 0.48 + side * 0.04)
-		parent.add_child(leg)
-		var arm := MeshInstance3D.new()
-		var am := CapsuleMesh.new()
-		am.radius = 0.055
-		am.height = 0.48
-		arm.mesh = am
-		arm.material_override = coat
-		arm.rotation = Vector3(PI * 0.5, 0, side * 0.42)
-		arm.position = Vector3(side * 0.22, 0.19, -0.02)
-		parent.add_child(arm)
-		var boot := MeshInstance3D.new()
-		var bm := BoxMesh.new()
-		bm.size = Vector3(0.13, 0.09, 0.22)
-		boot.mesh = bm
-		boot.material_override = leather
-		boot.position = Vector3(side * 0.105, 0.1, 0.77 + side * 0.04)
-		parent.add_child(boot)
-	# Полевой вещмешок и ремень поверх куртки.
+	# Используем полноценную скелетную GLTF-модель человека и штатную систему одежды,
+	# а не собираем силуэт путника из примитивных капсул.
+	var palette := {
+		"jacket": Color(0.25, 0.19, 0.12),
+		"pants": Color(0.18, 0.19, 0.16),
+		"boots": Color(0.16, 0.11, 0.07),
+		"fur": Color(0.42, 0.34, 0.23),
+		"hair": Color(0.25, 0.17, 0.11)
+	}
+	var built: Dictionary = preload("res://scripts/hero_skin.gd").build(parent, palette)
+	var model: Node3D = built["model"]
+	model.scale = Vector3(0.9, 0.9, 0.9)
+	# Положение на боку, лицом вверх; голова направлена к северному краю тела.
+	model.rotation.x = -PI * 0.5
+	model.position = Vector3(0.0, 0.08, 0.82)
+	# Потёртый дорожный вещмешок остаётся на спине путника.
+	var pack_mat := StandardMaterial3D.new()
+	pack_mat.albedo_color = Color(0.19, 0.12, 0.07)
+	pack_mat.roughness = 1.0
 	var pack := MeshInstance3D.new()
 	var pm := BoxMesh.new()
-	pm.size = Vector3(0.28, 0.28, 0.16)
+	pm.size = Vector3(0.34, 0.42, 0.19)
 	pack.mesh = pm
-	pack.material_override = leather
-	pack.position = Vector3(0, 0.37, 0.14)
-	parent.add_child(pack)
+	pack.material_override = pack_mat
+	pack.position = Vector3(0.0, 1.12, -0.17)
+	model.add_child(pack)
 	var strap := MeshInstance3D.new()
 	var sm := BoxMesh.new()
-	sm.size = Vector3(0.035, 0.42, 0.025)
+	sm.size = Vector3(0.035, 0.55, 0.025)
 	strap.mesh = sm
-	strap.material_override = leather
-	strap.rotation.z = -0.35
-	strap.position = Vector3(0.17, 0.3, -0.02)
-	parent.add_child(strap)
+	strap.material_override = pack_mat
+	strap.rotation.z = -0.28
+	strap.position = Vector3(0.18, 0.94, 0.0)
+	model.add_child(strap)
+
 
 func _create_traveler_pile(pos: Vector3, yaw: float, rounds: int, has_rifle: bool = true) -> void:
 	var pl := _new_pile(pos, yaw)
