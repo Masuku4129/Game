@@ -323,6 +323,79 @@ def alder():
     broadleaf("taiga_alder.glb", 7, 6.0, .20, 4.1, 1.6, 1.2, 10, .95, lean=(-.2, .1), second=(.6, .3, 5.2))
 
 
+def fir():
+    """Narrow, dense fir silhouette with short, irregular tiers and a visible leader."""
+    rng = np.random.default_rng(26)
+    b = Builder()
+    H = 9.2
+    tube(b, (0, 0, 0), (.02, -.03, H), .31, .025, 10, 7, (.05, 0, 0), flare=.9, rng=rng, wobble=.035)
+    for i in range(15):
+        t = i / 14
+        z = 1.0 + t * 7.3
+        radius = 2.0 * (1.0 - t) ** .82 + .16
+        phase = rng.uniform(-.18, .18)
+        for k in range(5):
+            a = math.tau * k / 5 + phase + i * .29
+            reach = radius * rng.uniform(.72, 1.05)
+            end = np.array([math.cos(a) * reach, math.sin(a) * reach, z + rng.uniform(-.12, .12)])
+            tube(b, (0, 0, z - .12), end, .095 * (1.0 - t * .55), .025, 4, 5, rng=rng, wobble=.04)
+            blob(b, end + np.array([0, 0, -.10]), (reach * .43, reach * .43, .22 + reach * .12), rng,
+                 np.array([0, 0, z]), 1, .14, .6, "foliage")
+    export("taiga_fir.glb", b)
+
+
+def willow():
+    """Broad river willow with curved limbs and distinct hanging foliage curtains."""
+    rng = np.random.default_rng(27)
+    b = Builder()
+    tube(b, (0, 0, 0), (-.12, .04, 6.8), .34, .075, 12, 8, (.18, 0, 0), flare=1.0, rng=rng, wobble=.04)
+    for i in range(9):
+        a = math.tau * i / 9 + rng.uniform(-.15, .15)
+        reach = rng.uniform(2.0, 3.0)
+        z = rng.uniform(4.0, 5.8)
+        shoulder = np.array([math.cos(a) * reach * .52, math.sin(a) * reach * .52, z + .55])
+        tip = np.array([math.cos(a) * reach, math.sin(a) * reach, z - rng.uniform(.45, .9)])
+        tube(b, (0, 0, z - .6), shoulder, .12, .055, 5, 6, rng=rng, wobble=.04)
+        tube(b, shoulder, tip, .06, .018, 6, 5, bend=(math.cos(a) * .18, math.sin(a) * .18, -.35), rng=rng)
+        for j in range(4):
+            t = .25 + j * .18
+            center = shoulder * (1 - t) + tip * t
+            center[2] -= .16
+            blob(b, center, (.32, .30, .46), rng, np.array([0, 0, 4.7]), 1, .18, .62, "foliage")
+        for j in range(3):
+            t = .48 + j * .16
+            q = shoulder * (1 - t) + tip * t
+            q[2] -= .55
+            tube(b, q, q + np.array([math.cos(a) * .08, math.sin(a) * .08, -.55]), .022, .008, 3, 4, key="foliage", rng=rng)
+    blob(b, (-.1, 0, 6.2), (1.15, 1.1, .8), rng, np.array([0, 0, 5.4]), 1, .16, .6, "foliage")
+    export("taiga_willow.glb", b)
+
+
+def rowan():
+    """Airy rowan crown: slim trunk, open branching and separated foliage clusters."""
+    broadleaf("taiga_rowan.glb", 28, 7.2, .19, 5.4, 1.75, 1.35, 9, .56, lean=(.08, -.04),
+              second=(.38, -.12, 6.0))
+
+
+def juniper():
+    """Low, wide juniper shrub with spreading woody arms and dense rounded tips."""
+    rng = np.random.default_rng(29)
+    b = Builder()
+    center = np.array([0.0, 0.0, .48])
+    for i in range(11):
+        a = math.tau * i / 11 + rng.uniform(-.2, .2)
+        reach = rng.uniform(.75, 1.5)
+        rise = rng.uniform(.35, .9)
+        end = np.array([math.cos(a) * reach, math.sin(a) * reach, rise])
+        tube(b, (0, 0, .12), end, .10, .025, 5, 5, bend=(0, 0, .12), rng=rng, wobble=.05)
+        for t in (.55, .82, 1.0):
+            q = end * t
+            blob(b, q, (rng.uniform(.32, .48), rng.uniform(.28, .42), rng.uniform(.24, .38)),
+                 rng, center, 1, .16, .62, "foliage")
+    blob(b, (0, 0, .55), (.58, .54, .42), rng, center, 1, .13, .62, "foliage")
+    export("taiga_juniper.glb", b)
+
+
 # --------------------------------------------------------------- small things ---
 def bush():
     """Layered, asymmetrical berry shrub with visible woody stems and broad leaf clusters."""
@@ -406,7 +479,7 @@ def rock():
     export("taiga_rock.glb", b)
 
 
-ALL = [spruce, pine, larch, cedar, birch, aspen, alder, bush, stump, fallen_log, rock, fern, reed, moss, mushroom, flower]
+ALL = [spruce, pine, larch, cedar, fir, birch, aspen, alder, willow, rowan, juniper, bush, stump, fallen_log, rock, fern, reed, moss, mushroom, flower]
 
 if __name__ == "__main__":
     for fn in ALL:
