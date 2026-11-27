@@ -716,6 +716,7 @@ func _make_water() -> void:
 	var mat := ShaderMaterial.new()
 	mat.shader = preload("res://shaders/paint/water.gdshader")
 	mat.set_shader_parameter("hmap", hmap_tex)
+	mat.set_shader_parameter("zone_tex", terrain_mat.get_shader_parameter("zone_tex"))
 	mat.set_shader_parameter("hsize", SIZE)
 	plane.material = mat
 	water_mat = mat
