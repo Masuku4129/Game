@@ -231,6 +231,10 @@ func think() -> void:
 	var dh := hero_dist()
 	var w = main.weather
 	var sense: float = _sense() * (1.0 + float(hero.run_mag) * 0.6) * (0.6 + 0.4 * float(main.day_factor)) * (1.0 - float(w.precip) * 0.3)
+	# Wind disperses scent and slightly reduces long-range predator detection;
+	# close visual detection is still governed by the normal sight/stealth checks.
+	if kind in ["wolf", "fox", "lynx", "bear", "tiger", "wolverine"]:
+		sense *= clampf(1.0 - float(w.wind) * 0.09, 0.62, 1.0)
 	if hero.state == "sit":
 		sense *= 0.5
 	# --- combat: присевшего замечают позже ---
