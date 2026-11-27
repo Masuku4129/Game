@@ -8,6 +8,7 @@ extends Control
 ## Предел кадров (30/60) — отдельно; на экране 120 Гц без предела телефон греется вдвое.
 
 const CFG := "user://settings.cfg"
+const UI = preload("res://scripts/ui_palette.gd")
 const SHEET = preload("res://scripts/camp_ui.gd").Sheet
 const INV = preload("res://scripts/inventory.gd")
 const PRESETS := [
@@ -42,15 +43,15 @@ class GearBtn extends Button:
 		var c := size * 0.5
 		var r := minf(size.x, size.y) * 0.5 - 4.0
 		draw_circle(c + Vector2(3, 4), r, Color(0, 0, 0, 0.3))
-		draw_circle(c, r, Color(0.3, 0.21, 0.13, 0.82) if not is_pressed() else Color(0.45, 0.31, 0.18, 0.9))
-		draw_arc(c, r - 3.0, 0.0, TAU, 40, Color(0.86, 0.76, 0.56, 0.9), 3.0, true)
+		draw_circle(c, r, UI.PANEL_SOFT if not is_pressed() else UI.PANEL_HOVER)
+		draw_arc(c, r - 3.0, 0.0, TAU, 40, UI.ACCENT, 3.0, true)
 		var lc := Color(0.95, 0.88, 0.7)
 		if kind == "gear":
 			for k in 8:
 				var a := TAU * k / 8.0
 				draw_line(c + Vector2(cos(a), sin(a)) * r * 0.3, c + Vector2(cos(a), sin(a)) * r * 0.62, lc, r * 0.2)
 			draw_circle(c, r * 0.42, lc)
-			draw_circle(c, r * 0.18, Color(0.3, 0.21, 0.13))
+			draw_circle(c, r * 0.18, UI.PANEL)
 		else:
 			# раскрытая книга
 			var w := r * 0.62
@@ -59,7 +60,7 @@ class GearBtn extends Button:
 			draw_colored_polygon(PackedVector2Array([c + Vector2(w, -h * 0.8), c + Vector2(0, -h * 0.55), c + Vector2(0, h), c + Vector2(w, h * 0.75)]), lc.darkened(0.08))
 			for k in 3:
 				var y := -h * 0.35 + k * h * 0.38
-				draw_line(c + Vector2(-w * 0.8, y), c + Vector2(-w * 0.15, y + h * 0.12), Color(0.4, 0.28, 0.16), 2.0)
+				draw_line(c + Vector2(-w * 0.8, y), c + Vector2(-w * 0.15, y + h * 0.12), UI.TEXT_MUTED, 2.0)
 				draw_line(c + Vector2(w * 0.15, y + h * 0.12), c + Vector2(w * 0.8, y), Color(0.4, 0.28, 0.16), 2.0)
 			draw_line(c + Vector2(0, -h * 0.55), c + Vector2(0, h), Color(0.3, 0.2, 0.1), 2.5)
 
