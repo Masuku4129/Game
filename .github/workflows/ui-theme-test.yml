@@ -41,7 +41,7 @@ jobs:
         run: |
           mkdir -p /tmp/ui
           cd game
-          UI_SHOTS=/tmp/ui timeout 600 xvfb-run -a -s "-screen 0 1920x864x24" godot --rendering-driver vulkan --resolution 1920x864 > /tmp/ui.log 2>&1
+          UI_SHOTS=/tmp/ui timeout 600 xvfb-run -a -s "-screen 0 1920x864x24" godot --rendering-driver vulkan --resolution 1920x864 --quit-after 180 > /tmp/ui.log 2>&1
           grep -E "SCRIPT ERROR|Parse Error|ui shot" /tmp/ui.log
           test -s /tmp/ui/guide_res_clay.png
           test -s /tmp/ui/settings.png
