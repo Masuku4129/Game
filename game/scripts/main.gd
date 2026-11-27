@@ -196,6 +196,7 @@ func _ready() -> void:
 	fps_lbl.add_theme_constant_override("outline_size", 6)
 	fps_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	ui.add_child(fps_lbl)
+	fps_lbl.visible = OS.get_environment("PERF") != ""
 	flash = ColorRect.new()
 	flash.anchor_right = 1.0
 	flash.anchor_bottom = 1.0
@@ -717,7 +718,7 @@ func _make_water() -> void:
 	mat.shader = preload("res://shaders/paint/water.gdshader")
 	mat.set_shader_parameter("hmap", hmap_tex)
 	mat.set_shader_parameter("zone_tex", terrain_mat.get_shader_parameter("zone_tex"))
-	mat.set_shader_parameter("hsize", SIZE)
+	mat.set_shader_parameter("hsize", SIZE
 	plane.material = mat
 	water_mat = mat
 	var mi := MeshInstance3D.new()
