@@ -248,6 +248,11 @@ func chop_trunk(tr: Dictionary, hits: int) -> bool:
 func _unblock_spot(sp: Dictionary) -> void:
 	var mm: MultiMesh = sp["mm"]
 	var xf: Transform3D = sp["xf"]
+	# Убранный из генерации валежник не должен появиться снова после выгрузки чанка.
+	if main.chunk_stream != null:
+		var state := main.chunk_stream.read_state(xf.origin, "fallen_state")
+		state[_key(xf.origin)] = {"done": true}
+		main.chunk_stream.write_state(xf.origin, "fallen_state", state)
 	mm.set_instance_transform(int(sp["i"]), Transform3D(Basis().scaled(Vector3(0.0001, 0.0001, 0.0001)), xf.origin - Vector3(0, 500, 0)))
 	var a: Vector3 = sp["a"]
 	var b: Vector3 = sp["b"]
