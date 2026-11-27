@@ -5,7 +5,7 @@ var main: Node3D
 var move_vec := Vector2.ZERO
 var cam_yaw := 0.0
 var speed := 1.7
-var run_speed := 3.6
+var run_speed := 5.0
 var running := false
 var climbing := 0.0
 var moving := false
@@ -1053,7 +1053,7 @@ func _animate_model(delta: float) -> void:
 			return
 	# --- /combat ---
 	if _hspeed > 2.4:
-		_play("Jog_Fwd", clampf(_hspeed / 3.6, 0.75, 1.15))
+		_play("Jog_Fwd", clampf(_hspeed / 3.6, 0.85, 1.4))
 	elif _hspeed > 0.2:
 		_play("Walk", clampf(_hspeed / 1.6, 0.6, 1.25))
 	else:
