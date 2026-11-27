@@ -56,7 +56,15 @@ func _run() -> void:
 		["pveg_rock", p.rock(711)], ["pveg_mushroom", p.mushroom(712, true)],
 		["veg_fern", v.fern(713)], ["veg_reeds", v.reeds(714)],
 		["veg_grass_patch", v.grass_patch(715)], ["veg_berry_bush", v.berry_bush(716)],
-		["veg_rock", v.rock(717, 1)], ["veg_mushroom", v.mushroom(718, false)]
+		["veg_rock", v.rock(717, 1)], ["veg_mushroom", v.mushroom(718, false)],
+		["pveg_twig", p.twig(719)], ["pveg_stump", p.stump(720)], ["pveg_fallen_log", p.log_fallen(721)],
+		["pveg_anthill", p.anthill(722)], ["pveg_dead_tree", p.dead_tree(723)], ["pveg_fallen", p.fallen(724, 0)],
+		["pveg_snag", p.snag(725, false)], ["pveg_cherry", p.cherry(726)], ["pveg_bilberry", p.bilberry(727)],
+		["pveg_mossrock", p.mossrock(728)], ["pveg_split_rock", p.split_rock(729)], ["pveg_scree", p.scree(730)],
+		["pveg_outcrop", p.outcrop(731)], ["pveg_stump2", p.stump2(732, false)],
+		["pveg_fungus_snag", p.fungus_snag(733, false)], ["pveg_mosslog", p.mosslog(734)],
+		["pveg_cotton", p.cotton(735)], ["pveg_angelica", p.angelica(736)], ["pveg_brushpile", p.brushpile(737)],
+		["pveg_chanterelles", p.chanterelles(738)], ["pveg_cones", p.cones(739)], ["pveg_bones", p.bones(740)]
 	]
 	for entry in samples:
 		var model: Array = entry[1]
