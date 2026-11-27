@@ -89,11 +89,37 @@ func _record_exploration(player_pos: Vector3) -> void:
 			var river := float(main.river_dist(wx, wz)) if main.has_method("river_dist") else 999.0
 			var forest := float(main.forest_density(wx, wz)) if main.has_method("forest_density") else 0.0
 			var terrain_type := "water" if elevation < water else "shore" if elevation < water + 1.5 else "land"
+			var slope_dx := absf(float(main.height(wx + 4.0, wz) - main.height(wx - 4.0, wz))) / 8.0
+			var slope_dz := absf(float(main.height(wx, wz + 4.0) - main.height(wx, wz - 4.0))) / 8.0
+			var slope := sqrt(slope_dx * slope_dx + slope_dz * slope_dz)
+			var zone_name := "forest"
+			match biome:
+				1:
+					zone_name = "burned_forest"
+				2:
+					zone_name = "bog"
+				4:
+					zone_name = "windfall"
+			var forest_name := "dense_taiga" if forest > 0.72 else "woodland" if forest > 0.38 else "sparse_trees" if forest > 0.12 else "clearing"
+			var surface_name := "steep_slope" if slope > 0.42 else "rolling" if slope > 0.16 else "flat"
+			var landmarks: Array[String] = []
+			if river < 12.0:
+				landmarks.append("river_corridor")
+			if elevation < water + 1.0:
+				landmarks.append("water_edge")
+			if wet > 0.68:
+				landmarks.append("wet_ground")
+			if slope > 0.5:
+				landmarks.append("steep_terrain")
+			if forest < 0.15:
+				landmarks.append("open_area")
 			var record := {
 				"grid": [x, z], "position": [wx, wz], "discovered_at": stamp,
 				"elevation": elevation, "water_level": water, "biome": biome,
+				"zone_name": zone_name, "forest_class": forest_name, "surface_class": surface_name,
 				"wetness": wet, "river_distance": river, "forest_density": forest,
-				"terrain_type": terrain_type, "season": int(main.weather.season_index()) if main.weather != null else 0
+				"terrain_type": terrain_type, "landmarks": landmarks,
+				"season": int(main.weather.season_index()) if main.weather != null else 0
 			}
 			if not staged.has(chunk_key):
 				staged[chunk_key] = {"coord": coord, "cells": {}}
