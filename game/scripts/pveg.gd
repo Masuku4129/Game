@@ -557,14 +557,25 @@ func twig(seed_v: int) -> Array:
 func berry_bush(seed_v: int) -> Array:
 	rng.seed = seed_v
 	var fl := _st()
+	var bk := _st()
 	cards = null if lod else _st()
 	var bs := _st()
-	leafblob(fl, cards, Vector3(0, 0.3, 0), Vector3(0.4, 0.3, 0.4), R(0.4, 0.9))
-	for i in 14:
+	# Multiple connected twig forks carry separate foliage masses; berries sit
+	# inside and around the leaf canopy rather than floating in a sparse cloud.
+	for branch_i in rng.randi_range(5, 7):
 		var a := R(0, TAU)
-		var p := Vector3(cos(a) * R(0.2, 0.42), R(0.15, 0.55), sin(a) * R(0.2, 0.42))
-		dot(bs, p, Vector3.ONE * 0.045, R(0.5, 1.0))
-	return [_mesh([[fl, "bush"], [cards, "bush_card"], [bs, "berry"]]), 0.6]
+		var d := R(0.18, 0.42)
+		var base := Vector3(cos(a) * d * 0.25, 0.05, sin(a) * d * 0.25)
+		var mid := base + Vector3(cos(a) * d * 0.55, R(0.18, 0.32), sin(a) * d * 0.55)
+		var tip := base + Vector3(cos(a) * d, R(0.32, 0.58), sin(a) * d)
+		trunk(bk, base, mid, tip, 0.018, 0.006, 2, 4)
+		leafblob(fl, cards, mid, Vector3(R(0.18, 0.25), R(0.16, 0.22), R(0.18, 0.25)), R(0.45, 0.9))
+		leafblob(fl, cards, tip, Vector3(R(0.18, 0.26), R(0.15, 0.22), R(0.18, 0.26)), R(0.4, 0.95))
+	for i in 24:
+		var a := R(0, TAU)
+		var p := Vector3(cos(a) * R(0.16, 0.5), R(0.16, 0.6), sin(a) * R(0.16, 0.5))
+		dot(bs, p, Vector3(R(0.035, 0.05), R(0.035, 0.05), R(0.035, 0.05)), R(0.5, 1.0))
+	return [_mesh([[bk, "bark_dead"], [fl, "bush"], [cards, "bush_card"], [bs, "berry"]]), 0.7]
 
 ## Гриб: ножка и шляпка (красная — мухомор).
 func mushroom(seed_v: int, red: bool) -> Array:
