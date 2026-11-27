@@ -1149,8 +1149,11 @@ func _update_stats(dt: float) -> void:
 		msg_t -= dt
 		return
 	# --- /colony ---
-	hunger = maxf(0.0, hunger - 0.0004 * dt)
-	thirst = maxf(0.0, thirst - 0.0007 * dt * (1.5 if hero.running else 1.0))
+	var cold_stress := clampf((0.42 - warmth) / 0.42, 0.0, 1.0)
+	var wet_stress := clampf((soak - 0.22) / 0.78, 0.0, 1.0)
+	var exposure_load := cold_stress * (0.35 + wet_stress * 0.65)
+	hunger = maxf(0.0, hunger - 0.0004 * dt * (1.0 + exposure_load * 0.55))
+	thirst = maxf(0.0, thirst - 0.0007 * dt * (1.5 if hero.running else 1.0) * (1.0 + cold_stress * 0.18))
 	var gh := dt / 75.0
 	if health > 0.0:
 		# кровотечение, голод, жажда, холод — урон; сытый и в тепле — заживает
@@ -1201,9 +1204,12 @@ func _update_stats(dt: float) -> void:
 		# по колено в снегу или грязи — тяжело, по пояс — очень тяжело
 		var sk: float = hero.sink + hero.mud_sink * 1.5
 		drain = drain * (1.0 + sk * 3.0) + sk * 0.01
+		# Cold and soaked clothes make exertion less efficient and raise recovery debt.
+		drain *= 1.0 + exposure_load * 0.45
 		stamina = maxf(0.0, stamina - drain * dt)
 	else:
-		stamina = minf(1.0, stamina + (0.14 if hero.state == "sit" else 0.07) * dt)
+		var recovery := (0.14 if hero.state == "sit" else 0.07) * (1.0 - exposure_load * 0.5)
+		stamina = minf(1.0, stamina + recovery * dt)
 	if creative_mode:
 		health = 1.0
 		hunger = 1.0
