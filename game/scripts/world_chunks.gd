@@ -97,7 +97,7 @@ func _rebuild_queue() -> void:
 			var direction := offset.normalized() if d > 0.0 else Vector2.ZERO
 			# Подготавливаем чанки прежде всего перед камерой и по ходу движения,
 			# но соседние боковые чанки остаются в очереди для свободного поворота.
-			var priority := float(d) - direction.dot(view_forward) * 3.6 - direction.dot(move_forward) * 3.0
+			var priority := float(d) - direction.dot(view_forward) * 5.0 - direction.dot(move_forward) * 4.2
 			candidates.append({"coord": c, "priority": priority})
 	candidates.sort_custom(func(a: Dictionary, b: Dictionary) -> bool: return float(a.priority) < float(b.priority))
 	for item: Dictionary in candidates:
@@ -643,7 +643,7 @@ func _build_tree_cover(c: Vector2i) -> void:
 		var bucket_key := "%s:%d" % [kind, variant_index]
 		if not groups.has(bucket_key):
 			groups[bucket_key] = {"kind": kind, "variant": variant_index, "transforms": []}
-		var scale := rng.randf_range(0.72, 1.42)
+		var scale := rng.randf_range(0.62, 1.52)
 		var yaw := rng.randf_range(-PI, PI)
 		var xf := Transform3D(Basis(Vector3.UP, yaw).scaled(Vector3.ONE * scale), Vector3(wx, h, wz))
 		groups[bucket_key].transforms.append(xf)
@@ -773,7 +773,7 @@ func _build_understory(c: Vector2i) -> void:
 		var bucket := "%s:%d" % [kind, vi]
 		if not groups.has(bucket):
 			groups[bucket] = {"kind": kind, "variant": vi, "transforms": []}
-		var scale := rng.randf_range(0.62, 1.42)
+		var scale := rng.randf_range(0.56, 1.48)
 		if kind in ["rock", "stump"]:
 			scale = rng.randf_range(0.65, 1.45)
 		var yaw := rng.randf_range(-PI, PI)
