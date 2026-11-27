@@ -95,6 +95,8 @@ func _process_queue() -> void:
 			_build_terrain_chunk(c)
 			_build_tree_cover(c)
 			_build_understory(c)
+			if main.animals != null:
+				main.animals.populate_stream_chunk(c, _seed(c))
 		budget -= 1
 
 func _create_record(c: Vector2i) -> Dictionary:
