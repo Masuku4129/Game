@@ -917,7 +917,12 @@ func _shots() -> void:
 		get_tree().quit()
 
 var _dbgf := 0
-var _visual_uniform_t := 0.0 # perf: обновляем пакет uniforms 10 раз/с
+var _visual_uniform_t := 0.0 # perf: ограничиваем частоту динамических uniforms
+var _last_veg_hero_pos := Vector3(INF, INF, INF)
+var _last_veg_cam_pos := Vector3(INF, INF, INF)
+var _last_water_hero_pos := Vector3(INF, INF, INF)
+var _last_water_swim := -1.0
+var _last_water_move := -1.0
 func _process(delta: float) -> void:
 	_dbgf += 1
 	if hero == null or (joy == null and colony == null):
@@ -932,23 +937,36 @@ func _process(delta: float) -> void:
 		hp = Vector3(0, -1000.0, 0)
 		cp = colony.veg_focus()
 	# --- /colony ---
-	# Обновление uniforms на каждом кадре обходило весь список растительности и
-	# создавало лишнюю CPU-нагрузку. 20 Гц достаточно для плавного fade и реакции воды.
+	# Не обходим сотни материалов и не отправляем одинаковые uniforms повторно,
+	# если персонаж/камера стоят. Это сокращает CPU→RenderingServer вызовы без
+	# изменения LOD, дальности, плотности или визуального качества.
 	_visual_uniform_t -= delta
 	if _visual_uniform_t <= 0.0:
 		_visual_uniform_t = 0.1
-		for m in veg.fade_list:
-			m.set_shader_parameter("hero_pos", hp)
-			m.set_shader_parameter("cam_pos", cp)
-		for m in pv.fade_list:
-			m.set_shader_parameter("hero_pos", hp)
-			m.set_shader_parameter("cam_pos", cp)
-		pv.mats["tuft"].set_shader_parameter("hero_pos", hp)
-		pv.mats["tuft"].set_shader_parameter("cam_pos", cp)
+		var vegetation_moved := hp.distance_squared_to(_last_veg_hero_pos) > 0.0225 or cp.distance_squared_to(_last_veg_cam_pos) > 0.0225
+		if vegetation_moved:
+			_last_veg_hero_pos = hp
+			_last_veg_cam_pos = cp
+			for m in veg.fade_list:
+				m.set_shader_parameter("hero_pos", hp)
+				m.set_shader_parameter("cam_pos", cp)
+			for m in pv.fade_list:
+				m.set_shader_parameter("hero_pos", hp)
+				m.set_shader_parameter("cam_pos", cp)
+			pv.mats["tuft"].set_shader_parameter("hero_pos", hp)
+			pv.mats["tuft"].set_shader_parameter("cam_pos", cp)
 		pv.mats["tuft"].set_shader_parameter("grass_now", Time.get_ticks_msec() * 0.001)
-		water_mat.set_shader_parameter("hero_pos", hero.position)
-		water_mat.set_shader_parameter("swim", hero.swimb if colony == null else 0.0)
-		water_mat.set_shader_parameter("swim_move", clampf(hero.run_mag, 0.0, 1.0))
+		var swim_now := hero.swimb if colony == null else 0.0
+		var move_now := clampf(hero.run_mag, 0.0, 1.0)
+		if hero.position.distance_squared_to(_last_water_hero_pos) > 0.0025:
+			_last_water_hero_pos = hero.position
+			water_mat.set_shader_parameter("hero_pos", hero.position)
+		if absf(swim_now - _last_water_swim) > 0.001:
+			_last_water_swim = swim_now
+			water_mat.set_shader_parameter("swim", swim_now)
+		if absf(move_now - _last_water_move) > 0.01:
+			_last_water_move = move_now
+			water_mat.set_shader_parameter("swim_move", move_now)
 	_fps_t -= delta
 	if _fps_t <= 0.0:
 		_fps_t = 0.5
