@@ -114,7 +114,7 @@ func mark_explored(world_position: Vector3) -> void:
 	persistent[k] = rec
 
 func write_state(world_position: Vector3, section: String, state: Dictionary) -> void:
-	if section not in ["resource_state", "terrain_delta", "structures", "animals"]:
+	if section not in ["resource_state", "tree_state", "terrain_delta", "structures", "animals"]:
 		return
 	var c := Vector2i(floori(world_position.x / CHUNK_SIZE), floori(world_position.z / CHUNK_SIZE))
 	var k := _key(c)
@@ -266,6 +266,9 @@ func _build_terrain_chunk(c: Vector2i) -> void:
 	add_child(root)
 	terrain_nodes[k] = root
 
+func _tree_state_key(p: Vector3) -> String:
+	return "%d:%d" % [roundi(p.x * 10.0), roundi(p.z * 10.0)]
+
 func _model_variants(kind: String) -> Array:
 	if not _model_variant_cache.has(kind):
 		_model_variant_cache[kind] = main._variants(kind)
@@ -350,6 +353,20 @@ func _build_tree_cover(c: Vector2i) -> void:
 		created.append(mm)
 		# Подключаем деревья к общей системе рубки/поиска ближайшего дерева.
 		main._place_cell_records(mm, transforms, [kind], vi, variants, true, "")
+		# Срубленные деревья имеют стабильный ID от координат, а не от порядка
+		# загрузки чанков. Состояние переживает выгрузку и повторную генерацию.
+		for i in transforms.size():
+			var tree_pos: Vector3 = transforms[i].origin
+			var tree_state := read_state(tree_pos, "tree_state")
+			var tree_id := _tree_state_key(tree_pos)
+			var saved_tree: Variant = tree_state.get(tree_id, {})
+			if saved_tree is Dictionary and bool(saved_tree.get("hidden", false)):
+				var hidden_xf := Transform3D(Basis().scaled(Vector3(0.0001, 0.0001, 0.0001)), Vector3(tree_pos.x, -500.0, tree_pos.z))
+				mm.set_instance_transform(i, hidden_xf)
+				for cell_key in main.tree_grid:
+					for tree_rec: Array in main.tree_grid[cell_key]:
+						if tree_rec[0] == mm and int(tree_rec[1]) == i:
+							tree_rec[2] = hidden_xf
 		for xf: Transform3D in transforms:
 			var p := xf.origin
 			var radius := 0.38 * xf.basis.x.length()
