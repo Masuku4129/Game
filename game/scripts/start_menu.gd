@@ -94,6 +94,15 @@ func _new() -> void:
 		_new_btn.text = "Точно? Сохранение сотрётся"
 		return
 	SV.delete_save()
+	# Новая игра должна получить другой seed ещё до генерации рельефа и растительности.
+	var rng := RandomNumberGenerator.new()
+	rng.randomize()
+	var seed_value := int(rng.randi() & 0x7fffffff)
+	if seed_value == 0:
+		seed_value = int(Time.get_unix_time_from_system())
+	var seed_file := FileAccess.open("user://pending_world_seed.txt", FileAccess.WRITE)
+	if seed_file != null:
+		seed_file.store_string(str(seed_value))
+		seed_file.close()
 	get_tree().paused = false
-	main.saver.enabled = true
-	queue_free()
+	get_tree().reload_current_scene()
