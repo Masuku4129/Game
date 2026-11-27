@@ -46,7 +46,7 @@ func _run() -> void:
 			var holder := Node3D.new()
 			var result: Dictionary = builder.build(holder, species, 1.0, true, winter)
 			if result.is_empty() or not result.has("model"):
-				push_error("Build failed for " + species + " winter=" + str(winter)
+				push_error("Build failed for " + species + " winter=" + str(winter))
 				ok = false
 			else:
 				var root: Node = result["model"]
