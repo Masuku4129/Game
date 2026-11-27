@@ -830,6 +830,8 @@ func _build_understory(c: Vector2i) -> void:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = _seed(c) ^ 0x6C8E9CF5
 	var groups: Dictionary = {}
+	var meadow_groups: Dictionary = {}
+	var wet_groups: Dictionary = {}
 	# Низкорослые GLB-модели заполняют просветы между деревьями.
 	# Плотность привязана к лесу и болотному микрорельефу, а не к квадратному биому.
 	for attempt in range(2900):
@@ -891,80 +893,94 @@ func _build_understory(c: Vector2i) -> void:
 			continue
 		var vi := rng.randi_range(0, variants.size() - 1)
 		var bucket := "%s:%d" % [kind, vi]
-		if not groups.has(bucket):
-			groups[bucket] = {"kind": kind, "variant": vi, "transforms": []}
+		var patch_kind := "forest"
+		if zone_id == 2 or moisture > 0.68:
+			patch_kind = "wet"
+		elif density < 0.18:
+			patch_kind = "meadow"
+		var target_groups: Dictionary = wet_groups if patch_kind == "wet" else meadow_groups if patch_kind == "meadow" else groups
+		if not target_groups.has(bucket):
+			target_groups[bucket] = {"kind": kind, "variant": vi, "transforms": []}
 		var scale := rng.randf_range(0.48, 1.62)
 		if kind in ["rock", "stump"]:
 			scale = rng.randf_range(0.58, 1.58)
+		elif kind in ["fern", "sedge", "reeds"] and patch_kind == "wet":
+			scale = rng.randf_range(0.72, 1.82)
 		var yaw := rng.randf_range(-PI, PI)
 		var xf := Transform3D(Basis(Vector3.UP, yaw).scaled(Vector3.ONE * scale), Vector3(wx, h, wz))
-		groups[bucket].transforms.append(xf)
+		target_groups[bucket].transforms.append(xf)
 	var created: Array = []
 	var chunk_blockers: Array = []
 	var chunk_solids: Array = []
-	for bucket: String in groups:
-		var group: Dictionary = groups[bucket]
-		var kind := String(group.kind)
-		var vi := int(group.variant)
-		var variants: Array = _model_variants(kind)
-		var transforms: Array = group.transforms
-		if transforms.is_empty():
-			continue
-		var mm := MultiMesh.new()
-		mm.transform_format = MultiMesh.TRANSFORM_3D
-		mm.use_custom_data = true
-		mm.mesh = variants[vi][0]
-		mm.instance_count = transforms.size()
-		for i in transforms.size():
-			mm.set_instance_transform(i, transforms[i])
-			mm.set_instance_custom_data(i, Color(90.0, 0.0, 0.0, 0.0))
-		var mmi := MultiMeshInstance3D.new()
-		mmi.name = "StreamUnderstory_%s_%d" % [kind, vi]
-		mmi.multimesh = mm
-		mmi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-		add_child(mmi)
-		created.append(mm)
-		# Подключаем ягоды/грибы/валежник к штатным системам сбора и инструментов.
-		main._place_cell_records(mm, transforms, [kind], vi, variants, false, "mushroom" if kind == "mushroom" else "")
-		if kind in ["fallen0", "fallen1"]:
-			var fallen_state := read_state(Vector3(float(c.x) * CHUNK_SIZE, 0.0, float(c.y) * CHUNK_SIZE), "fallen_state")
+	for patch_groups in [groups, meadow_groups, wet_groups]:
+		for bucket: String in patch_groups:
+			var group: Dictionary = patch_groups[bucket]
+			var kind := String(group.kind)
+			var vi := int(group.variant)
+			var variants: Array = _model_variants(kind)
+			var transforms: Array = group.transforms
+			if transforms.is_empty():
+				continue
+			var mm := MultiMesh.new()
+			mm.transform_format = MultiMesh.TRANSFORM_3D
+			mm.use_custom_data = true
+			mm.mesh = variants[vi][0]
+			mm.instance_count = transforms.size()
 			for i in transforms.size():
-				var origin: Vector3 = transforms[i].origin
-				var fallen_id := "%d_%d" % [int(round(origin.x * 4.0)), int(round(origin.z * 4.0))]
-				var saved_fallen: Variant = fallen_state.get(fallen_id, {})
-				if saved_fallen is Dictionary and bool(saved_fallen.get("done", false)):
-					mm.set_instance_transform(i, Transform3D(Basis().scaled(Vector3(0.0001, 0.0001, 0.0001)), origin - Vector3(0, 500, 0)))
-					for cell_key in main.fallen_spots:
-						for fallen_rec: Dictionary in main.fallen_spots[cell_key]:
-							if fallen_rec.get("mm") == mm and int(fallen_rec.get("i", -1)) == i:
-								fallen_rec["done"] = true
-								break
-		if kind == "rock":
-			var bounds: AABB = (variants[vi][0] as Mesh).get_aabb()
-			for xf: Transform3D in transforms:
-				var p := xf.origin
-				var radius := maxf(0.35, (bounds.size.x + bounds.size.z) * 0.25 * xf.basis.x.length())
-				var obstacle := Vector3(p.x, p.z, radius)
-				main._add_blocker(p.x, p.z, radius)
-				chunk_blockers.append([Vector2i(floori(p.x / 8.0), floori(p.z / 8.0)), obstacle])
-				var solid := [0, p, Vector3.ZERO, radius, maxf(0.25, bounds.size.y * xf.basis.y.length() * 0.72)]
-				main._add_solid(solid)
-				chunk_solids.append(solid)
-		elif kind in ["fallen0", "fallen1"]:
-			var spec: Array = variants[vi]
-			for xf: Transform3D in transforms:
-				var radius := maxf(0.12, float(spec[2]) * xf.basis.x.length())
-				var a: Vector3 = xf * Vector3(float(spec[4]), float(spec[3]), 0.0)
-				var b: Vector3 = xf * Vector3(float(spec[4]) + float(spec[1]) * 0.85, 0.12, 0.0)
-				var solid := [1, a, b, radius, 0.0]
-				main._add_solid(solid)
-				chunk_solids.append(solid)
-				var steps := maxi(1, ceili(a.distance_to(b) / 1.4))
-				for s in range(steps + 1):
-					var p := a.lerp(b, float(s) / float(steps))
-					var obstacle := Vector3(p.x, p.z, radius + 0.08)
-					main._add_blocker(p.x, p.z, radius + 0.08)
+				mm.set_instance_transform(i, transforms[i])
+				mm.set_instance_custom_data(i, Color(90.0, 0.0, 0.0, 0.0))
+			var mmi := MultiMeshInstance3D.new()
+			var patch_label := "Forest"
+			if patch_groups == meadow_groups:
+				patch_label = "Meadow"
+			elif patch_groups == wet_groups:
+				patch_label = "Wet"
+			mmi.name = "StreamUnderstory%s_%s_%d" % [patch_label, kind, vi]
+			mmi.multimesh = mm
+			mmi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+			add_child(mmi)
+			created.append(mm)
+		# Подключаем ягоды/грибы/валежник к штатным системам сбора и инструментов.
+			main._place_cell_records(mm, transforms, [kind], vi, variants, false, "mushroom" if kind == "mushroom" else "")
+			if kind in ["fallen0", "fallen1"]:
+				var fallen_state := read_state(Vector3(float(c.x) * CHUNK_SIZE, 0.0, float(c.y) * CHUNK_SIZE), "fallen_state")
+				for i in transforms.size():
+					var origin: Vector3 = transforms[i].origin
+					var fallen_id := "%d_%d" % [int(round(origin.x * 4.0)), int(round(origin.z * 4.0))]
+					var saved_fallen: Variant = fallen_state.get(fallen_id, {})
+					if saved_fallen is Dictionary and bool(saved_fallen.get("done", false)):
+						mm.set_instance_transform(i, Transform3D(Basis().scaled(Vector3(0.0001, 0.0001, 0.0001)), origin - Vector3(0, 500, 0)))
+						for cell_key in main.fallen_spots:
+							for fallen_rec: Dictionary in main.fallen_spots[cell_key]:
+								if fallen_rec.get("mm") == mm and int(fallen_rec.get("i", -1)) == i:
+									fallen_rec["done"] = true
+									break
+			if kind == "rock":
+				var bounds: AABB = (variants[vi][0] as Mesh).get_aabb()
+				for xf: Transform3D in transforms:
+					var p := xf.origin
+					var radius := maxf(0.35, (bounds.size.x + bounds.size.z) * 0.25 * xf.basis.x.length())
+					var obstacle := Vector3(p.x, p.z, radius)
+					main._add_blocker(p.x, p.z, radius)
 					chunk_blockers.append([Vector2i(floori(p.x / 8.0), floori(p.z / 8.0)), obstacle])
+					var solid := [0, p, Vector3.ZERO, radius, maxf(0.25, bounds.size.y * xf.basis.y.length() * 0.72)]
+					main._add_solid(solid)
+					chunk_solids.append(solid)
+			elif kind in ["fallen0", "fallen1"]:
+				var spec: Array = variants[vi]
+				for xf: Transform3D in transforms:
+					var radius := maxf(0.12, float(spec[2]) * xf.basis.x.length())
+					var a: Vector3 = xf * Vector3(float(spec[4]), float(spec[3]), 0.0)
+					var b: Vector3 = xf * Vector3(float(spec[4]) + float(spec[1]) * 0.85, 0.12, 0.0)
+					var solid := [1, a, b, radius, 0.0]
+					main._add_solid(solid)
+					chunk_solids.append(solid)
+					var steps := maxi(1, ceili(a.distance_to(b) / 1.4))
+					for s in range(steps + 1):
+						var p := a.lerp(b, float(s) / float(steps))
+						var obstacle := Vector3(p.x, p.z, radius + 0.08)
+						main._add_blocker(p.x, p.z, radius + 0.08)
+						chunk_blockers.append([Vector2i(floori(p.x / 8.0), floori(p.z / 8.0)), obstacle])
 	prop_mmis[k] = created
 	prop_blocker_records[k] = chunk_blockers
 	prop_solid_records[k] = chunk_solids
