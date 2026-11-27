@@ -67,6 +67,7 @@ var build
 var cabin_ctl
 var _clear: Array = []       # [x, z, r] — где трава больше не растёт
 var _t := 0.0
+var _roof_snow_material: StandardMaterial3D
 
 func _ready() -> void:
 	geo = GEO.new(main.pv)
@@ -240,7 +241,7 @@ func overlaps(x: float, z: float, r: float, skip: Dictionary = {}) -> bool:
 func place(type: String, pos: Vector3, yaw: float, extra: Dictionary = {}) -> Dictionary:
 	var d: Dictionary = DEFS[type]
 	var s := {"type": type, "pos": pos, "yaw": yaw, "store": {}, "cap": float(d.get("cap", 0.0)), "dur": 1.0,
-		"fuel": 0.0, "lit": false, "cook": {}, "blockers": [], "solids": [], "seats": []}
+		"fuel": 0.0, "lit": false, "cook": {}, "blockers": [], "solids": [], "seats": [], "roof_snow": 0.0, "snow_piles": [0.0, 0.0]}
 	s.merge(extra)
 	if type == "cabin":
 		s["stage"] = "site"
@@ -301,6 +302,7 @@ func _rebuild(s: Dictionary) -> void:
 				cb.name = "cabin"
 				n.add_child(cb)
 				if stage == "done":
+					_make_cabin_roof_snow(cb, s)
 					var st: Node3D = geo.stove()
 					st.name = "stove"
 					n.add_child(st)
@@ -606,6 +608,8 @@ func _animate(s: Dictionary, _dt: float) -> void:
 		if lt != null:
 			lt.light_energy = pw * (1.4 + 0.35 * sin(t * 13.0) + 0.25 * sin(t * 7.3)) * night
 	elif String(s.get("stage", "")) == "done":
+		if s["type"] == "cabin":
+			_update_cabin_roof_snow(s, _dt)
 		var st: Node3D = n.get_node_or_null("stove")
 		if st != null:
 			var lt2: OmniLight3D = st.get_node_or_null("light")
@@ -643,6 +647,216 @@ func _refresh(s: Dictionary) -> void:
 			st.get_node("mouth_fire").visible = lit2
 			st.get_node("light").visible = lit2
 			(n.get_node("chimney") as GPUParticles3D).emitting = lit2
+
+# Snow on the cabin roof: accumulation, melt, slide-off and eave drifts.
+const ROOF_SNOW_MAX := 0.24
+const ROOF_SNOW_TICK := 0.45
+
+func _snow_material() -> StandardMaterial3D:
+	if _roof_snow_material != null:
+		return _roof_snow_material
+	var m := StandardMaterial3D.new()
+	m.albedo_color = Color(0.82, 0.88, 0.96)
+	m.roughness = 0.96
+	m.cull_mode = BaseMaterial3D.CULL_DISABLED
+	m.vertex_color_use_as_albedo = true
+	_roof_snow_material = m
+	return m
+
+func _make_cabin_roof_snow(cabin_node: Node3D, s: Dictionary) -> void:
+	if cabin_node == null or cabin_node.get_node_or_null("roof_snow") != null:
+		return
+	var holder := Node3D.new()
+	holder.name = "roof_snow"
+	cabin_node.add_child(holder)
+	var sheet := MeshInstance3D.new()
+	sheet.name = "snow_sheet"
+	sheet.mesh = _roof_snow_mesh(float(s.get("roof_snow", 0.0)))
+	sheet.material_override = _snow_material()
+	sheet.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
+	sheet.set_meta("cut", true)
+	holder.add_child(sheet)
+	var piles: Array[MeshInstance3D] = []
+	var emitters: Array[GPUParticles3D] = []
+	var hx := GEO.CW * 0.5
+	var eave_x := hx + GEO.EAVE
+	var eave_y := GEO.top_y() + GEO.LR + 0.12
+	for side in [-1.0, 1.0]:
+		var pile := MeshInstance3D.new()
+		pile.name = "eave_drift_left" if side < 0.0 else "eave_drift_right"
+		var sphere := SphereMesh.new()
+		sphere.radius = 1.0
+		sphere.height = 2.0
+		sphere.radial_segments = 12
+		sphere.rings = 6
+		pile.mesh = sphere
+		pile.material_override = _snow_material()
+		pile.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		pile.visible = false
+		pile.set_meta("cut", true)
+		holder.add_child(pile)
+		piles.append(pile)
+		var burst := GPUParticles3D.new()
+		burst.name = "roof_slide_snow_left" if side < 0.0 else "roof_slide_snow_right"
+		burst.amount = 140
+		burst.lifetime = 1.35
+		burst.one_shot = true
+		burst.emitting = false
+		burst.local_coords = true
+		burst.explosiveness = 0.92
+		burst.position = Vector3(side * eave_x, eave_y, 0.0)
+		burst.visibility_aabb = AABB(Vector3(-3.0, -3.0, -5.0), Vector3(6.0, 6.0, 10.0))
+		var pm := ParticleProcessMaterial.new()
+		pm.emission_shape = ParticleProcessMaterial.EMISSION_SHAPE_BOX
+		pm.emission_box_extents = Vector3(0.16, 0.08, 2.0)
+		pm.direction = Vector3(side * 0.65, -1.0, 0.0)
+		pm.spread = 42.0
+		pm.initial_velocity_min = 1.4
+		pm.initial_velocity_max = 3.8
+		pm.gravity = Vector3(0.0, -5.8, 0.0)
+		pm.scale_min = 0.55
+		pm.scale_max = 1.5
+		pm.damping_min = 0.25
+		pm.damping_max = 0.7
+		burst.process_material = pm
+		var chunk_mesh := SphereMesh.new()
+		chunk_mesh.radius = 0.07
+		chunk_mesh.height = 0.12
+		chunk_mesh.radial_segments = 6
+		chunk_mesh.rings = 3
+		burst.draw_pass_1 = chunk_mesh
+		var chunk_mat := StandardMaterial3D.new()
+		chunk_mat.albedo_color = Color(0.9, 0.94, 1.0)
+		chunk_mat.roughness = 1.0
+		chunk_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		burst.material_override = chunk_mat
+		burst.set_meta("cut", true)
+		holder.add_child(burst)
+		emitters.append(burst)
+	s["_roof_snow_nodes"] = {"sheet": sheet, "piles": piles, "emitters": emitters}
+	s["_roof_snow_tick"] = 0.0
+	s["_roof_snow_mesh_depth"] = -1.0
+	s["_roof_snow_rng"] = RandomNumberGenerator.new()
+	s["_roof_snow_rng"].seed = int(s["pos"].x * 173 + s["pos"].z * 311 + int(s["yaw"] * 1000.0)) + int(main.map_seed)
+	_update_roof_snow_mesh(s)
+
+func _roof_snow_mesh(depth: float) -> ArrayMesh:
+	var mesh := ArrayMesh.new()
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	var hx := GEO.CW * 0.5
+	var hz := GEO.CD * 0.5 + 0.55
+	var edge := hx + GEO.EAVE
+	var pitch := GEO.ROOF_H / edge
+	var ridge_y := GEO.top_y() + GEO.LR + GEO.ROOF_H
+	var nx := 14
+	var nz := 24
+	var lift := 0.025 + clampf(depth, 0.0, ROOF_SNOW_MAX) * 0.72
+	for side in [-1.0, 1.0]:
+		var normal := Vector3(side * pitch, 1.0, 0.0).normalized()
+		for ix in nx:
+			for iz in nz:
+				var u0 := float(ix) / nx
+				var u1 := float(ix + 1) / nx
+				var v0 := float(iz) / nz
+				var v1 := float(iz + 1) / nz
+				var x0 := side * edge * u0
+				var x1 := side * edge * u1
+				var y0 := ridge_y - edge * u0 * pitch
+				var y1 := ridge_y - edge * u1 * pitch
+				var z0 := -hz + hz * 2.0 * v0
+				var z1 := -hz + hz * 2.0 * v1
+				var wobble := 0.008 * sin(float(ix) * 1.7 + float(iz) * 0.61 + side) + 0.005 * cos(float(iz) * 0.37)
+				var d := maxf(0.0, lift + wobble)
+				var a := Vector3(x0, y0, z0) + normal * d
+				var b := Vector3(x1, y1, z0) + normal * d
+				var c := Vector3(x1, y1, z1) + normal * d
+				var q := Vector3(x0, y0, z1) + normal * d
+				var tint := 0.94 + 0.06 * sin(float(ix * 3 + iz) * 0.45)
+				var snow_color := Color(tint * 0.91, tint * 0.96, tint, 1.0)
+				for vtx in [a, c, b, a, q, c]:
+					st.set_normal(normal)
+					st.set_color(snow_color)
+					st.add_vertex(vtx)
+	st.commit(mesh)
+	if mesh.get_surface_count() > 0:
+		mesh.surface_set_material(0, _snow_material())
+	return mesh
+
+func _update_roof_snow_mesh(s: Dictionary) -> void:
+	var nodes: Dictionary = s.get("_roof_snow_nodes", {})
+	var sheet: MeshInstance3D = nodes.get("sheet")
+	if sheet == null or not is_instance_valid(sheet):
+		return
+	var amount := float(s.get("roof_snow", 0.0))
+	if absf(amount - float(s.get("_roof_snow_mesh_depth", -1.0))) < 0.003 and sheet.mesh != null:
+		return
+	sheet.mesh = _roof_snow_mesh(amount)
+	sheet.visible = amount > 0.018
+	s["_roof_snow_mesh_depth"] = amount
+
+func _update_cabin_roof_snow(s: Dictionary, dt: float) -> void:
+	if dt <= 0.0:
+		return
+	s["_roof_snow_tick"] = float(s.get("_roof_snow_tick", 0.0)) + dt
+	if float(s["_roof_snow_tick"]) < ROOF_SNOW_TICK:
+		return
+	var step_dt := minf(float(s["_roof_snow_tick"]), 2.0)
+	s["_roof_snow_tick"] = 0.0
+	var w = main.weather
+	var depth := clampf(float(s.get("roof_snow", 0.0)), 0.0, ROOF_SNOW_MAX)
+	var piles: Array = s.get("snow_piles", [0.0, 0.0])
+	if piles.size() < 2:
+		piles = [0.0, 0.0]
+	var snowfall := float(w.precip) if float(w.temp) <= 0.5 else 0.0
+	var rain := float(w.precip) if float(w.temp) > 0.5 else 0.0
+	var game_hours := step_dt / 75.0
+	depth += snowfall * game_hours * 0.22 * (1.0 - clampf(float(w.wind) * 0.12, 0.0, 0.45))
+	depth -= rain * game_hours * 0.16
+	depth -= maxf(float(w.temp), 0.0) * game_hours * 0.012
+	depth -= float(w.wind) * game_hours * 0.008
+	if bool(s.get("stove_lit", false)):
+		depth -= 0.018 * game_hours
+	depth = clampf(depth, 0.0, ROOF_SNOW_MAX)
+	var rng: RandomNumberGenerator = s.get("_roof_snow_rng")
+	if rng == null:
+		rng = RandomNumberGenerator.new()
+		rng.seed = int(main.map_seed) + int(s["pos"].x * 137 + s["pos"].z * 271)
+		s["_roof_snow_rng"] = rng
+	var slide_chance := clampf((float(w.wind) * 0.15 + maxf(float(w.temp) + 2.0, 0.0) * 0.04) * game_hours, 0.0, 0.4)
+	if depth > 0.105 and rng.randf() < slide_chance:
+		var shed := depth * rng.randf_range(0.38, 0.68)
+		depth -= shed
+		var drift_gain := shed * 0.65
+		piles[0] = minf(1.2, float(piles[0]) + drift_gain)
+		piles[1] = minf(1.2, float(piles[1]) + drift_gain)
+		var nodes: Dictionary = s.get("_roof_snow_nodes", {})
+		var emitters: Array = nodes.get("emitters", [])
+		for emitter in emitters:
+			if emitter is GPUParticles3D and is_instance_valid(emitter):
+				emitter.restart()
+				emitter.emitting = true
+		var distance := Vector2(main.rig.position.x - float(s["pos"].x), main.rig.position.z - float(s["pos"].z)).length() if main.rig != null else 999.0
+		if distance < 45.0:
+			main._say("Снег соскользнул с крыши избы")
+	var pile_melt := (rain * 0.09 + maxf(float(w.temp), 0.0) * 0.006) * game_hours
+	piles[0] = maxf(0.0, float(piles[0]) - pile_melt)
+	piles[1] = maxf(0.0, float(piles[1]) - pile_melt)
+	s["roof_snow"] = depth
+	s["snow_piles"] = piles
+	var nodes2: Dictionary = s.get("_roof_snow_nodes", {})
+	var pile_nodes: Array = nodes2.get("piles", [])
+	var edge := GEO.CW * 0.5 + GEO.EAVE + 0.35
+	for idx in mini(pile_nodes.size(), 2):
+		var side := -1.0 if idx == 0 else 1.0
+		var local_eave := Vector3(side * edge, 0.0, 0.0)
+		var world_eave: Vector3 = _xf(s) * local_eave
+		var pile: MeshInstance3D = pile_nodes[idx]
+		pile.position = Vector3(local_eave.x, main.height(world_eave.x, world_eave.z) - float(s["pos"].y) + 0.03, local_eave.z)
+		var mound := float(piles[idx])
+		pile.visible = mound > 0.02
+		pile.scale = Vector3(0.24 + mound * 0.22, 0.025 + mound * 0.23, 0.38 + mound * 0.4)
+	_update_roof_snow_mesh(s)
 
 # ---------- огонь и готовка ----------
 
@@ -1398,7 +1612,7 @@ func _run_test() -> void:
 # ======================================================================
 # --- core: сохранение (save.gd, раздел «camp»): постройки, хранилища, огонь и готовка,
 # стройка и изба (стадия, внесённое, мебель, печь, сушило), прочность ---
-const _SKEEP := ["store", "dur", "fuel", "lit", "cook", "stage", "have", "prog", "furn", "stove_fuel", "stove_lit", "rack"]
+const _SKEEP := ["store", "dur", "fuel", "lit", "cook", "stage", "have", "prog", "furn", "stove_fuel", "stove_lit", "rack", "roof_snow", "snow_piles"]
 
 func to_save() -> Dictionary:
 	var SV = preload("res://scripts/save.gd")
