@@ -1612,6 +1612,8 @@ func nearest_tree(p: Vector3, r: float) -> Vector3:
 				if rec.size() < 4:
 					continue
 				var t: Transform3D = rec[2]
+				if t.origin.y < -100.0:
+					continue
 				var dd := Vector2(t.origin.x - p.x, t.origin.z - p.z).length_squared()
 				if dd < bd:
 					bd = dd
@@ -1630,6 +1632,8 @@ func tree_height_at(p: Vector3) -> float:
 				continue
 			for rec in tree_grid[k]:
 				var t: Transform3D = rec[2]
+				if t.origin.y < -100.0:
+					continue
 				var d := Vector2(t.origin.x - p.x, t.origin.z - p.z).length_squared()
 				if d < best:
 					best = d
@@ -1642,7 +1646,8 @@ func tree_height_at(p: Vector3) -> float:
 func tree_radius_at(p: Vector3) -> float:
 	# Крона намного шире ствола; для лазания используем оценку диаметра коры
 	# по высоте конкретного экземпляра, а не AABB всей кроны.
-	return clampf(0.22 + tree_height_at(p) * 0.026, 0.26, 0.46)
+	var h := tree_height_at(p)
+	return clampf(0.22 + h * 0.026, 0.26, 0.46) if h > 0.5 else 0.0
 
 ## Удар зверя: часть тела, кровотечение, переломы, отбрасывание.
 func hurt(amount: float, from: Vector3, kind: String) -> void:
