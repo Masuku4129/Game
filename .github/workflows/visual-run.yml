@@ -19,21 +19,22 @@ jobs:
           wget -q https://github.com/godotengine/godot/releases/download/4.3-stable/Godot_v4.3-stable_linux.x86_64.zip -O /tmp/godot.zip
           unzip -q /tmp/godot.zip -d /tmp/godot
           chmod +x /tmp/godot/Godot_v4.3-stable_linux.x86_64
-          echo "/tmp/godot" >> "$GITHUB_PATH"
+          ls -l /tmp/godot
+          test -x /tmp/godot/Godot_v4.3-stable_linux.x86_64
       - name: Import project resources
-        run: cd game && godot --headless --import
+        run: cd game && /tmp/godot/Godot_v4.3-stable_linux.x86_64 --headless --import
       - name: Verify generated 3D meshes, wildlife rig, collision and animation
         run: |
           cd game
-          godot --headless --path . --script res://tests/model_geometry_test.gd
-          godot --headless --path . --script res://tests/animal_collision_test.gd
-          godot --headless --path . --script res://tests/animal_animation_speed_test.gd
-          godot --headless --path . --script res://tests/animal_scheduler_test.gd
-          godot --headless --path . --script res://tests/rock_collision_test.gd
+          /tmp/godot/Godot_v4.3-stable_linux.x86_64 --headless --path . --script res://tests/model_geometry_test.gd
+          /tmp/godot/Godot_v4.3-stable_linux.x86_64 --headless --path . --script res://tests/animal_collision_test.gd
+          /tmp/godot/Godot_v4.3-stable_linux.x86_64 --headless --path . --script res://tests/animal_animation_speed_test.gd
+          /tmp/godot/Godot_v4.3-stable_linux.x86_64 --headless --path . --script res://tests/animal_scheduler_test.gd
+          /tmp/godot/Godot_v4.3-stable_linux.x86_64 --headless --path . --script res://tests/rock_collision_test.gd
       - name: Capture current game scene
         run: |
           cd game
-          xvfb-run -a godot --path . --rendering-method gl_compatibility --script res://tests/visual_capture.gd
+          xvfb-run -a /tmp/godot/Godot_v4.3-stable_linux.x86_64 --path . --rendering-method gl_compatibility --script res://tests/visual_capture.gd
           test -s /tmp/taiga_visual.png
       - uses: actions/upload-artifact@v4
         with:
