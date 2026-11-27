@@ -199,8 +199,10 @@ func _rebuild_queue() -> void:
 			var forward_bonus := 0.0
 			# Reserve a wider ahead-of-camera corridor: terrain and foliage begin
 			# preparing before the player reaches the edge of the current preload ring.
-			if distance > 2.5 and forward_alignment > 0.62:
-				forward_bonus = (forward_alignment - 0.62) * 55.0
+			if distance > 2.0 and forward_alignment > 0.30:
+				# Start preparing the visible/moving corridor earlier so dense
+				# tree cover does not reveal itself at the camera's edge.
+				forward_bonus = (forward_alignment - 0.30) * 92.0
 			var priority := distance * 10.0 - view_alignment * 14.0 - move_alignment * 18.0 - ring_bonus - forward_bonus
 			candidates.append({"coord": c, "priority": priority})
 	candidates.sort_custom(func(a: Dictionary, b: Dictionary) -> bool: return float(a.priority) < float(b.priority)
