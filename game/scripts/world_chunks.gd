@@ -726,12 +726,12 @@ func _build_tree_cover(c: Vector2i) -> void:
 	var groups: Dictionary = {}
 	var canopy_spacing: Dictionary = {}
 	var spacing_cell := 4.0
-	var count := 2450
+	var count := 2850
 	for attempt in range(count):
 		var wx := float(c.x) * CHUNK_SIZE + rng.randf_range(2.0, CHUNK_SIZE - 2.0)
 		var wz := float(c.y) * CHUNK_SIZE + rng.randf_range(2.0, CHUNK_SIZE - 2.0)
 		var density: float = main.forest_density(wx, wz)
-		if rng.randf() > clampf(density * 1.22, 0.08, 0.995):
+		if rng.randf() > clampf(density * 1.28, 0.08, 0.995):
 			continue
 		var h: float = main.height(wx, wz)
 		if h < main.WATER_Y + 1.0 or main.river_dist(wx, wz) < 6.5 or main.lake_k(wx, wz) > 0.45:
@@ -743,7 +743,7 @@ func _build_tree_cover(c: Vector2i) -> void:
 		var moisture := main.wet_k(wx, wz, h)
 		# Spatial bins prevent same-chunk canopy trees from overlapping into
 		# unreadable clumps; spacing is relaxed in dense forest and wider in open stands.
-		var spacing := lerpf(4.8, 2.8, clampf(density, 0.0, 1.0))
+		var spacing := lerpf(4.45, 2.55, clampf(density, 0.0, 1.0))
 		var bx := floori(wx / spacing_cell)
 		var bz := floori(wz / spacing_cell)
 		var crowded := false
