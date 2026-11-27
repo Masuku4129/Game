@@ -298,11 +298,13 @@ func think() -> void:
 			if _danger(dh, sense, hero_alive, false):
 				return
 			if CHARGE.has(kind) and hero_alive and dh < float(CHARGE[kind]):
+				_lock_attack_lane(hero)
 				state = "charge"
 				state_t = 6.0
 		"to_fish", "fish", "fish_bank", "eat":
 			if hero_alive and dh < float(CHARGE.get(kind, 0.0)):
 				_drop_fish()
+				_lock_attack_lane(hero)
 				state = "charge"
 				state_t = 6.0
 		"attack":
@@ -606,7 +608,6 @@ func tick(delta: float) -> void:
 		"chase", "charge":
 			var tg: Node3D = prey if state == "chase" else main.hero
 			if tg != null:
-				var away := Vector2(position.x - tg.position.x, position.z - tg.position.z)
 				if not attack_lane_locked:
 					_lock_attack_lane(tg)
 				var lane := Vector3(sin(attack_lane), 0.0, cos(attack_lane))
