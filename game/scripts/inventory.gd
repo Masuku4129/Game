@@ -504,9 +504,11 @@ func _sheet_input(e: InputEvent) -> void:
 	if not (e is InputEventMouseButton and e.pressed and e.button_index == MOUSE_BUTTON_LEFT):
 		return
 	var pos: Vector2 = e.position
-	if pos.y < 100.0 and pos.x > 300.0 and pos.x < 760.0:
-		tab = 0 if pos.x < 530.0 else 1
+	if pos.y < 100.0 and pos.x > 210.0 and pos.x < 800.0:
+		tab = 0 if pos.x < 410.0 else (1 if pos.x < 600.0 else 2)
 		sheet.queue_redraw()
+		return
+	if tab == 2:
 		return
 	if tab == 1:
 		if pos.x < 610.0 and pos.y >= GRID.y and pos.y <= 640.0:
@@ -558,12 +560,12 @@ func _draw_sheet() -> void:
 		ci.draw_line(Vector2(x, y), Vector2(x + rng.randf_range(14, 50), y + rng.randf_range(-1, 1)), Color(0.06, 0.09, 0.07, rng.randf_range(0.25, 0.55)), rng.randf_range(1.5, 3.5))
 	ci.draw_rect(Rect2(14, 14, sz.x - 28, 84), UI.BORDER, false, 2.0)
 	# вкладки
-	for t in 2:
-		var r := Rect2(310 + t * 225, 22, 215, 68)
+	for t in 3:
+		var r := Rect2(230 + t * 195, 22, 185, 68)
 		var on := tab == t
 		ci.draw_rect(r, UI.PANEL_HOVER if on else UI.PANEL_SOFT)
 		ci.draw_rect(r, UI.BORDER, false, 2.0)
-		var lbl: String = ["Короб", "Ремесло"][t]
+		var lbl: String = ["Короб", "Ремесло", "Карта"][t]
 		ci.draw_string(f, Vector2(r.position.x, r.position.y + 48), lbl, HORIZONTAL_ALIGNMENT_CENTER, r.size.x, 36, INK if on else Color(INK, 0.6))
 	var w := weight()
 	ci.draw_string_outline(f, Vector2(sz.x - 220, 66), "%.1f/%d кг" % [w, int(CAPACITY)], HORIZONTAL_ALIGNMENT_RIGHT, 190, 28, 6, Color(0.93, 0.9, 0.82))
@@ -571,14 +573,58 @@ func _draw_sheet() -> void:
 	ci.draw_string(f, Vector2(36, 70), "Тайга", HORIZONTAL_ALIGNMENT_LEFT, -1, 40, Color(INK, 0.85))
 	if tab == 0:
 		_draw_pack(ci, f, w)
-	else:
+	elif tab == 1:
 		_draw_craft(ci, f)
+	else:
+		_draw_map(ci, f)
 
 func _cell_bg(ci: CanvasItem, r: Rect2) -> void:
 	ci.draw_rect(r, UI.PANEL_SOFT)
 	ci.draw_rect(Rect2(r.position + Vector2(4, 4), r.size - Vector2(8, 8)), UI.PANEL)
 	ci.draw_line(r.position, Vector2(r.end.x, r.position.y), UI.BORDER, 2.0)
 	ci.draw_line(r.position, Vector2(r.position.x, r.end.y), UI.BORDER, 2.0)
+
+func _draw_map(ci: CanvasItem, f: Font) -> void:
+	var cells: Dictionary = main.explored_map if main != null else {}
+	var center_x := floori(main.hero.position.x / 16.0)
+	var center_z := floori(main.hero.position.z / 16.0)
+	var cell_size := 18.0
+	var origin := Vector2(76.0, 142.0)
+	var cols := 29
+	var rows := 25
+	var map_rect := Rect2(origin, Vector2(cols * cell_size, rows * cell_size))
+	ci.draw_rect(map_rect, Color(0.28, 0.31, 0.25, 0.22))
+	for rz in rows:
+		for rx in cols:
+			var gx := center_x + rx - cols / 2
+			var gz := center_z + rz - rows / 2
+			var key := "%d,%d" % [gx, gz]
+			var r := Rect2(origin + Vector2(rx, rz) * cell_size, Vector2(cell_size - 1.0, cell_size - 1.0))
+			if not cells.has(key):
+				continue
+			var data: Dictionary = cells[key]
+			var col := Color(0.28, 0.43, 0.24)
+			match int(data.get("zone", 0)):
+				1: col = Color(0.28, 0.25, 0.2)
+				2: col = Color(0.38, 0.43, 0.29)
+				4: col = Color(0.43, 0.39, 0.31)
+			if bool(data.get("water", false)) or bool(data.get("lake", false)) or bool(data.get("river", false)):
+				col = Color(0.25, 0.46, 0.55) if bool(data.get("water", false)) or bool(data.get("lake", false)) else Color(0.34, 0.56, 0.62)
+			ci.draw_rect(r, col)
+		ci.draw_rect(map_rect, Color(0.28, 0.2, 0.13), false, 3.0)
+	var marker := origin + Vector2(cols / 2.0, rows / 2.0) * cell_size + Vector2(cell_size * 0.5, cell_size * 0.5)
+	ci.draw_colored_polygon(PackedVector2Array([marker + Vector2(0, -8), marker + Vector2(6, 6), marker + Vector2(-6, 6)]), Color(0.82, 0.22, 0.12))
+	var info := Rect2(620, 142, 324, 482)
+	ci.draw_rect(info, Color(0.8, 0.7, 0.5, 0.55))
+	ci.draw_rect(info, Color(0.45, 0.33, 0.2), false, 3.0)
+	ci.draw_string(f, Vector2(640, 184), "Исследованная местность", HORIZONTAL_ALIGNMENT_LEFT, 285, 26, INK)
+	ci.draw_string(f, Vector2(640, 222), "Открыто участков: %d" % cells.size(), HORIZONTAL_ALIGNMENT_LEFT, 285, 22, INK)
+	var legends := [[Color(0.28, 0.43, 0.24), "Лес"], [Color(0.38, 0.43, 0.29), "Болото"], [Color(0.25, 0.46, 0.55), "Вода / озеро"], [Color(0.34, 0.56, 0.62), "Река"], [Color(0.28, 0.25, 0.2), "Гарь"]]
+	for i in legends.size():
+		var yy := 280.0 + i * 48.0
+		ci.draw_rect(Rect2(644, yy - 18, 28, 24), legends[i][0])
+		ci.draw_string(f, Vector2(688, yy), legends[i][1], HORIZONTAL_ALIGNMENT_LEFT, 230, 22, INK)
+	ci.draw_multiline_string(f, Vector2(644, 550), "Карта открывается по мере исследования. Неизведанные участки не показываются.", HORIZONTAL_ALIGNMENT_LEFT, 275, 24, 3, Color(INK, 0.75))
 
 func _draw_pack(ci: CanvasItem, f: Font, w: float) -> void:
 	var tools: Node = main.hero.tools
