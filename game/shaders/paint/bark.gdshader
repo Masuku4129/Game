@@ -31,10 +31,10 @@ void fragment() {
 	}
 	float s = vnoise(vec2(UV.x * 6.0, UV.y * 1.2)) * 0.6 + vnoise(vec2(UV.x * 14.0, UV.y * 3.0)) * 0.4;
 	vec3 c = mix(lin(col2), lin(col), s);
-	float vertical_grain = vnoise(vec2(UV.x * 23.0, UV.y * 2.8));
-	float fine_grain = vnoise(vec2(UV.x * 68.0, UV.y * 8.0));
-	float fissure = smoothstep(0.72, 0.88, vnoise(vec2(UV.x * 31.0, UV.y * 1.7))) * (1.0 - smoothstep(0.88, 0.97, fine_grain));
-	float bark_ridge = sin(UV.x * 92.0 + vertical_grain * 5.0) * 0.5 + 0.5;
+	float vertical_grain = vnoise(vec2(UV.x * 13.0, UV.y * 1.7));
+	float fine_grain = vnoise(vec2(UV.x * 34.0, UV.y * 4.0));
+	float fissure = smoothstep(0.72, 0.88, vnoise(vec2(UV.x * 19.0, UV.y * 1.3))) * (1.0 - smoothstep(0.88, 0.97, fine_grain));
+	float bark_ridge = sin(UV.x * 58.0 + vertical_grain * 4.0) * 0.5 + 0.5;
 	c *= mix(0.76, 1.13, vertical_grain);
 	c *= mix(0.88, 1.08, bark_ridge);
 	c = mix(c, c * 0.48, fissure * 0.35);
