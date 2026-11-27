@@ -23,6 +23,7 @@ uniform sampler2D hmap_tex : filter_nearest;
 uniform sampler2D zone_tex : filter_nearest;
 uniform float tsize = 512.0;
 uniform float tseg = 384.0;
+uniform vec2 field_origin = vec2(0.0);
 uniform float snow_m = 0.0;   // глубина снега (м) при множителе 1
 uniform float mud_m = 0.0;    // глубина грязи (м) при грязевитости 1
 // следы: r — глубина (×1.25 м), g — отметка «часов засыпания» (0..255)
@@ -49,7 +50,7 @@ varying float v_wear;  // build: тропа/расчистка (1 - field.a)
 
 // Значение в точке по треугольникам той же разбивки, что у сетки земли.
 vec4 tri4(sampler2D t, vec2 xz) {
-	vec2 g = (xz + tsize * 0.5) / (tsize / tseg);
+	vec2 g = (xz - field_origin + tsize * 0.5) / (tsize / tseg);
 	g = clamp(g, vec2(0.0), vec2(tseg - 0.0001));
 	ivec2 i = ivec2(floor(g));
 	vec2 f = g - vec2(i);
@@ -110,7 +111,7 @@ void vertex() {
 		wn = normalize((MODEL_MATRIX * vec4(NORMAL, 0.0)).xyz);
 		// вершина крупной сетки стоит ровно в узле карты поля
 		float step_m = tsize / tseg;
-		ivec2 g0 = clamp(ivec2(round((wp.xz + tsize * 0.5) / step_m)), ivec2(0), ivec2(int(tseg)));
+		ivec2 g0 = clamp(ivec2(round((wp.xz - field_origin + tsize * 0.5) / step_m)), ivec2(0), ivec2(int(tseg)));
 		ivec2 gi = clamp(g0, ivec2(1), ivec2(int(tseg) - 1));
 		vec4 f = texelFetch(field_tex, g0, 0);
 		zw = texelFetch(zone_tex, g0, 0);
