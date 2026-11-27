@@ -161,6 +161,8 @@ func _new_wander() -> void:
 			continue
 		if main.blocked(candidate.x, candidate.z, maxf(0.35, _obstacle_radius() * 0.6)):
 			continue
+		if not _can_move_segment(position, candidate):
+			continue
 		chosen = candidate
 		break
 	if chosen == Vector3.INF:
@@ -177,6 +179,8 @@ func _new_wander() -> void:
 			if main.normal_at(fallback.x, fallback.z).y < 0.68:
 				continue
 			if main.blocked(fallback.x, fallback.z, maxf(0.35, _obstacle_radius() * 0.6)):
+				continue
+			if not _can_move_segment(position, fallback):
 				continue
 			chosen = fallback
 			break
