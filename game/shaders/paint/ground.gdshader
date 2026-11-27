@@ -142,7 +142,8 @@ void vertex() {
 void fragment() {
 	float big = vnoise(wp.xz * 0.07);
 	float s = vnoise(wp.xz * 0.5) * 0.65 + vnoise(wp.xz * 1.7 + 3.0) * 0.35;
-	float fine = vnoise(wp.xz * 5.0);
+	float fine = vnoise(wp.xz * 2.2);
+	float paint_detail = vnoise(wp.xz * 0.9) * 0.75 + fine * 0.25;
 	vec3 c = mix(lin(meadow), lin(meadow2), smoothstep(0.35, 0.75, big + (s - 0.5) * 0.5));
 	float fd = v_fd;  // густота леса
 	vec3 fl = mix(lin(forest), lin(litter), smoothstep(0.4, 0.7, s + big * 0.3 - 0.2));
@@ -185,7 +186,8 @@ void fragment() {
 		vec3 bc = mix(lin(bed), lin(mix(vec3(0.42, 0.42, 0.38), vec3(0.62, 0.58, 0.48), pr)), peb);
 		c = mix(c, bc * (0.9 + fine * 0.2), sh);
 	}
-	c *= 0.92 + fine * 0.16;
+	// Reduce micro-noise: broad painterly color breakup reads better on mobile screens.
+	c *= 0.96 + paint_detail * 0.08;
 	// build: натоптанная тропа и расчищенная площадка — вытертая трава, утоптанная земля
 	float worn = smoothstep(0.25, 0.65, v_wear + (s - 0.5) * 0.25);
 	c = mix(c, lin(vec3(0.36, 0.29, 0.2)) * (0.85 + fine * 0.3), worn * 0.8);
