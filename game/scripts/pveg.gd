@@ -351,6 +351,12 @@ func spruce(seed_v: int, kind: String = "spruce") -> Array:
 		var y := lerpf(H * 0.14, H * 0.86, t)
 		var r := R0 * (1.0 - t * 0.85) * R(0.9, 1.1)
 		skirt(fl, y, r, r * 0.7 + 0.4, rng.randi_range(9, 13), lerpf(0.5, 1.0, t))
+		# Подушки хвои поверх ярусов размывают ступенчатый конус в цельную
+		# органичную крону; размеры и смещение меняются от яруса к ярусу.
+		for crown_i in 3:
+			var crown_a := TAU * float(crown_i) / 3.0 + t * 0.63 + R(-0.2, 0.2)
+			var crown_p := Vector3(cos(crown_a) * r * 0.42, y + R(-0.04, 0.06), sin(crown_a) * r * 0.42)
+			leafblob(fl, cards, crown_p, Vector3(r * R(0.42, 0.58), r * R(0.24, 0.36), r * R(0.42, 0.58)), R(0.55, 0.95))
 		# Неровные живые ветви выходят за ярус, опускаются под весом хвои,
 		# с вторичными веточками и отдельными объемными игольчатыми кистями.
 		var branch_count := rng.randi_range(6, 9)
