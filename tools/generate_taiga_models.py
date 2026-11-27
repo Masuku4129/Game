@@ -479,7 +479,76 @@ def rock():
     export("taiga_rock.glb", b)
 
 
-ALL = [spruce, pine, larch, cedar, fir, birch, aspen, alder, willow, rowan, juniper, bush, stump, fallen_log, rock, fern, reed, moss, mushroom, flower]
+
+def hazel():
+    """Multi-stem hazel shrub with layered leaf clusters and visible woody forks."""
+    rng = np.random.default_rng(31)
+    b = Builder()
+    cc = np.array([0.0, 0.0, 1.15])
+    for i in range(7):
+        a = math.tau * i / 7 + rng.uniform(-.18, .18)
+        reach = rng.uniform(.45, .9)
+        h = rng.uniform(1.35, 2.15)
+        end = np.array([math.cos(a) * reach, math.sin(a) * reach, h])
+        tube(b, (0, 0, .04), end, .075, .022, 5, 5, bend=(.04, -.03, .06), rng=rng, wobble=.04)
+        for t in (.58, .86, 1.0):
+            q = end * t
+            blob(b, q, (rng.uniform(.30,.42), rng.uniform(.28,.39), rng.uniform(.28,.38)), rng, cc, 2, .14, .6)
+    export("taiga_hazel.glb", b)
+
+
+def dogrose():
+    """Open thorny dog-rose shrub with arching stems and pink flower clusters."""
+    rng = np.random.default_rng(32)
+    b = Builder()
+    cc = np.array([0.0, 0.0, .95])
+    for i in range(8):
+        a = math.tau * i / 8 + rng.uniform(-.2,.2)
+        reach = rng.uniform(.55, 1.05)
+        end = np.array([math.cos(a)*reach, math.sin(a)*reach, rng.uniform(.9,1.65)])
+        tube(b, (0,0,.04), end, .045, .012, 4, 5, bend=(.05*math.cos(a),.05*math.sin(a),.08), rng=rng, wobble=.06)
+        for t in (.62,.92):
+            q=end*t
+            blob(b,q,(.24,.22,.20),rng,cc,2,.12,.58,"foliage")
+        if i % 2 == 0:
+            blob(b,end+np.array([0,0,.10]),(.13,.13,.12),rng,cc,2,.08,.65,"flower")
+    export("taiga_dogrose.glb", b)
+
+
+def dead_birch():
+    """Weathered dead birch snag with broken crown, exposed branches and pale bark."""
+    rng = np.random.default_rng(33)
+    b = Builder()
+    h = 7.1
+    tube(b,(0,0,0),(.12,-.04,h),.24,.055,9,7,(.08,0,0),flare=1.0,rng=rng,wobble=.07)
+    for i in range(6):
+        a=math.tau*i/6+rng.uniform(-.2,.2)
+        z=rng.uniform(3.0,6.1)
+        reach=rng.uniform(.65,1.35)
+        end=np.array([math.cos(a)*reach,math.sin(a)*reach,z+rng.uniform(-.2,.35)])
+        tube(b,(0,0,z),end,.075,.018,4,5,rng=rng,wobble=.08)
+    tip=np.array([.12,-.04,h])
+    tube(b,tip,tip+np.array([.35,.08,-.55]),.055,.012,3,5,rng=rng)
+    export("taiga_dead_birch.glb",b)
+
+
+def sedge_clump():
+    """Dense tuft of curved sedge blades for wet banks and bog hummocks."""
+    rng=np.random.default_rng(34)
+    b=Builder()
+    for i in range(27):
+        a=rng.uniform(0,math.tau)
+        reach=rng.uniform(.12,.48)
+        h=rng.uniform(.38,.95)
+        base=np.array([math.cos(a)*rng.uniform(0,.18),math.sin(a)*rng.uniform(0,.18),.02])
+        mid=base+np.array([math.cos(a)*reach*.45,math.sin(a)*reach*.45,h*.55])
+        tip=base+np.array([math.cos(a)*reach,math.sin(a)*reach,h])
+        tube(b,base,mid,.025,.014,3,4,key="foliage",rng=rng)
+        tube(b,mid,tip,.014,.003,3,4,key="foliage",rng=rng)
+    export("taiga_sedge.glb",b)
+
+
+ALL = [spruce, pine, larch, cedar, fir, birch, aspen, alder, willow, rowan, juniper, bush, hazel, dogrose, dead_birch, sedge_clump, stump, fallen_log, rock, fern, reed, moss, mushroom, flower]
 
 if __name__ == "__main__":
     for fn in ALL:
