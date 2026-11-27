@@ -709,6 +709,8 @@ func _build_tree_cover(c: Vector2i) -> void:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = _seed(c) ^ 0x4A17B39
 	var groups: Dictionary = {}
+	var canopy_spacing: Dictionary = {}
+	var spacing_cell := 4.0
 	var count := 2450
 	for attempt in range(count):
 		var wx := float(c.x) * CHUNK_SIZE + rng.randf_range(2.0, CHUNK_SIZE - 2.0)
@@ -724,6 +726,29 @@ func _build_tree_cover(c: Vector2i) -> void:
 			continue
 		var zone_id: int = main.zone(wx, wz)
 		var moisture := main.wet_k(wx, wz, h)
+		# Spatial bins prevent same-chunk canopy trees from overlapping into
+		# unreadable clumps; spacing is relaxed in dense forest and wider in open stands.
+		var spacing := lerpf(4.8, 2.8, clampf(density, 0.0, 1.0))
+		var bx := floori(wx / spacing_cell)
+		var bz := floori(wz / spacing_cell)
+		var crowded := false
+		for nz in range(bz - 1, bz + 2):
+			for nx in range(bx - 1, bx + 2):
+				var bin_key := Vector2i(nx, nz)
+				if not canopy_spacing.has(bin_key):
+					continue
+				for existing: Vector2 in canopy_spacing[bin_key]:
+					if Vector2(wx - existing.x, wz - existing.y).length() < spacing:
+						crowded = true
+						break
+				if crowded:
+					break
+		if crowded:
+			continue
+		var bin_key := Vector2i(bx, bz)
+		if not canopy_spacing.has(bin_key):
+			canopy_spacing[bin_key] = []
+		canopy_spacing[bin_key].append(Vector2(wx, wz))
 		var kind := "spruce"
 		if zone_id == 2:
 			kind = ["alder", "willow", "birch"][rng.randi_range(0, 2)]
