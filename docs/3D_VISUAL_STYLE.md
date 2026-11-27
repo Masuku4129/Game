@@ -70,3 +70,15 @@ Before claiming visual completion, capture real gameplay views at close, mid and
 - [ ] Seasonal model variants reviewed, not just color parameters.
 - [ ] Weather overlays (snow/wetness) on 3D models visually reviewed.
 - [ ] Mobile performance and density reviewed on a device or a representative profile.
+
+
+## Cartoon model pass — 2026-11-27 (graphics-first)
+
+- The spruce and larch crown tiers are broad, rounded bough skirts with a soft scalloped outline; sharp alternating cone spikes are no longer the target silhouette.
+- The generated shrub now has nine uneven branch arms, paired leaf masses per arm and a central crown cap, creating a connected asymmetric bush rather than a small set of round blobs.
+- The stump has an irregular broken rim, a separate cut surface and six flared root buttresses.
+- The generated boulder uses broad silhouette variation and a flattened grounded foot; fine noisy displacement is deliberately restrained.
+- Procedural mushrooms now use domed umbrella caps, pale undersides and (for red caps) separate pale spots. Ground grass clumps are denser (220 blades per patch instead of 96).
+- Generator output is an 11-file GLB pack. The 2026-11-27 generation run completed successfully after correcting the stump tube arguments; its artifacts were committed to `visual-run`.
+
+These are geometry/content changes, not a claim that the finished scene has passed visual review. The next acceptance step remains a real landscape gameplay capture at close, medium and far distances.
