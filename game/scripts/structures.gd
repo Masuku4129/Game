@@ -761,8 +761,8 @@ func _roof_snow_mesh(depth: float) -> ArrayMesh:
 				var u1 := float(ix + 1) / nx
 				var v0 := float(iz) / nz
 				var v1 := float(iz + 1) / nz
-				var x0 := side * edge * u0
-				var x1 := side * edge * u1
+				var x0: float = side * edge * u0
+				var x1: float = side * edge * u1
 				var y0 := ridge_y - edge * u0 * pitch
 				var y1 := ridge_y - edge * u1 * pitch
 				var z0 := -hz + hz * 2.0 * v0

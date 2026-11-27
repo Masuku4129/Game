@@ -1387,7 +1387,7 @@ func _animate(delta: float) -> void:
 	# Белка синхронизирует перебор лап с фактической скоростью подъёма;
 	# при остановке хват остаётся, лапы не продолжают быстро «бежать».
 	if kind == "squirrel" and climb_h > 0.0:
-		var climb_rate := clampf(absf(climb_speed) / maxf(float(sp.get("climb", 2.2)), 0.1), 0.0, 1.0)
+		var climb_rate: float = clampf((1.45 if state == "tree" else 1.25) / maxf(float(sp.get("climb", 2.2)), 0.1), 0.0, 1.0)
 		var climb_phase_rate := lerpf(1.4, 8.0, climb_rate)
 		phase += delta * climb_phase_rate
 		for i in 4:
