@@ -725,7 +725,7 @@ func tick(delta: float) -> void:
 		want = minf(want, lerpf(want, sv, clampf(swim_k * 1.5, 0.0, 1.0)))
 	# Топкая почва замедляет зверей по-разному: мелкие виды почти не заходят
 	# в глубокую трясину, крупные копытные и медведи проходят, но тяжело.
-	var bog_depth := main.swamp_depth_at(position.x, position.z) if main.has_method("swamp_depth_at") else 0.0
+	var bog_depth: float = float(main.swamp_depth_at(position.x, position.z)) if main.has_method("swamp_depth_at") else 0.0
 	if bog_depth > 0.08:
 		var bog_resistance := float({"squirrel": 3.2, "hare": 2.8, "capercaillie": 2.4, "fox": 1.9, "lynx": 1.8, "muskdeer": 1.5, "roe": 1.35, "deer": 1.15, "moose": 0.72, "bear": 0.85, "boar": 1.1, "wolf": 1.2, "wolverine": 1.0, "beaver": 0.45}.get(kind, 1.2))
 		want *= 1.0 / (1.0 + bog_depth * bog_resistance)
