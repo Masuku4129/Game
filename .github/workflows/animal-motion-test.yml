@@ -1,0 +1,56 @@
+name: Animal Motion Tests
+on:
+  push:
+    branches: [animal-motion]
+concurrency:
+  group: taiga-animal-motion-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    container:
+      image: barichello/godot-ci:4.3
+    steps:
+      - uses: actions/checkout@v4
+      - name: Import project
+        run: |
+          cd game
+          timeout 300 godot --headless --import 2>&1 | tee /tmp/import.log
+          ! grep -E "Parse Error|Failed loading resource" /tmp/import.log
+      - name: Animal obstacle-clearance regression
+        run: |
+          cd game
+          timeout 120 godot --headless --script res://tests/animal_collision_test.gd
+      - name: Animal animation speed regression
+        run: |
+          cd game
+          timeout 120 godot --headless --script res://tests/animal_animation_speed_test.gd
+      - name: Strict script parse
+        run: |
+          cd game
+          for f in scripts/*.gd tests/*.gd; do
+            godot --headless --check-only --script "$f"
+          done
+      - name: Smoke scene
+        run: |
+          cd game
+          timeout 120 godot --headless --quit-after 120 res://scenes/main.tscn > /tmp/smoke.log 2>&1
+          ! grep -E "SCRIPT ERROR|Parse Error" /tmp/smoke.log
+      - name: Render gameplay
+        run: |
+          mkdir -p /tmp/motion
+          cd game
+          SHOTS=/tmp/motion timeout 600 xvfb-run -a -s "-screen 0 1920x864x24" godot --rendering-driver vulkan --resolution 1920x864 > /tmp/motion/gameplay.log 2>&1
+          grep -E "SCRIPT ERROR|Parse Error|shot game" /tmp/motion/gameplay.log
+          test -s /tmp/motion/game_20.png
+          test -s /tmp/motion/game_80.png
+      - name: Upload verification
+        uses: actions/upload-artifact@v4
+        with:
+          name: animal-motion-review
+          path: |
+            /tmp/motion/*.png
+            /tmp/motion/*.log
+          if-no-files-found: error
+          retention-days: 30
