@@ -16,6 +16,9 @@ var persistent: Dictionary = {}
 var pending: Array[Vector2i] = []
 var center := Vector2i(1 << 20, 1 << 20)
 var _refresh := 0.0
+var _explore_clock := 0.0
+const MAP_SAMPLE_STEP := 16.0
+const MAP_DISCOVERY_RADIUS := 25.0
 var _sequence := 0
 var terrain_nodes: Dictionary = {}
 var terrain_materials: Dictionary = {}
@@ -49,6 +52,47 @@ func _process(delta: float) -> void:
 		_unload_distant()
 	# Drain chunk-generation work every frame, not only on refresh ticks.
 	_process_queue()
+	_explore_clock -= delta
+	if _explore_clock <= 0.0:
+		_explore_clock = 1.25
+		_record_exploration(p)
+
+func _record_exploration(player_pos: Vector3) -> void:
+	if main == null:
+		return
+	# Only the area physically visited by the player is revealed; chunk preloading
+	# and camera look-ahead never expose the map.
+	var step := MAP_SAMPLE_STEP
+	var gx := floori(player_pos.x / step)
+	var gz := floori(player_pos.z / step)
+	var radius_cells := ceili(MAP_DISCOVERY_RADIUS / step)
+	var stamp := int(main.day_count) * 24 + int(main.t_hours)
+	for z in range(gz - radius_cells, gz + radius_cells + 1):
+		for x in range(gx - radius_cells, gx + radius_cells + 1):
+			var wx := (float(x) + 0.5) * step
+			var wz := (float(z) + 0.5) * step
+			if Vector2(wx - player_pos.x, wz - player_pos.z).length() > MAP_DISCOVERY_RADIUS:
+				continue
+			var key := "%d:%d" % [x, z]
+			var coord := Vector2i(floori(wx / CHUNK_SIZE), floori(wz / CHUNK_SIZE))
+			var existing := read_map_cells(coord)
+			if existing.has(key):
+				continue
+			var elevation := float(main.height(wx, wz))
+			var water := float(main.water_level(wx, wz))
+			var biome := int(main.zone(wx, wz)) if main.has_method("zone") else 0
+			var wet := float(main.wet_k(wx, wz, elevation)) if main.has_method("wet_k") else 0.0
+			var river := float(main.river_dist(wx, wz)) if main.has_method("river_dist") else 999.0
+			var forest := float(main.forest_density(wx, wz)) if main.has_method("forest_density") else 0.0
+			var terrain_type := "water" if elevation < water else "shore" if elevation < water + 1.5 else "land"
+			var record := {
+				"grid": [x, z], "position": [wx, wz], "discovered_at": stamp,
+				"elevation": elevation, "water_level": water, "biome": biome,
+				"wetness": wet, "river_distance": river, "forest_density": forest,
+				"terrain_type": terrain_type, "season": int(main.weather.season_index()) if main.weather != null else 0
+			}
+			if main.chunk_stream != null:
+				main.chunk_stream.save_map_cell(wx, wz, key, record)
 
 func _sync_chunk_weather() -> void:
 	if main == null or main.weather == null:
