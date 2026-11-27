@@ -510,7 +510,7 @@ func zone(x: float, z: float) -> int:
 	var y := height(x, z)
 	if v < -0.86:
 		return 1
-	if (v < -0.7 and y < WATER_Y + 4.0) or (y > WATER_Y + 0.1 and y < WATER_Y + 3.0 and wet_k(x, z, y) > 0.3):
+	if (v < -0.64 and y < WATER_Y + 4.0) or (y > WATER_Y + 0.1 and y < WATER_Y + 3.0 and wet_k(x, z, y) > 0.3):
 		return 2
 	if v > 0.2 and v < 0.3:
 		return 4
@@ -558,7 +558,7 @@ func height(x: float, z: float) -> float:
 	var wk := wet_k(x, z, h)
 	if wk > 0.0:
 		h = lerpf(h, WATER_Y + 0.5 + n_detail.get_noise_2d(x * 0.8, z * 0.8) * 0.12, wk * 0.85)
-		h = lerpf(h, WATER_Y - 0.9, smoothstep(0.5, 0.62, n_detail.get_noise_2d(x * 0.25 + 90.0, z * 0.25)) * wk)
+		h = lerpf(h, WATER_Y - 0.9, smoothstep(-0.18, 0.08, n_detail.get_noise_2d(x * 0.25 + 90.0, z * 0.25)) * wk)
 	h = lerpf(h, WATER_Y - 2.2, lake_k(x, z))
 	var r := 1.0 - smoothstep(7.0, 26.0, river_dist(x, z))
 	return lerpf(h, WATER_Y - 2.5, r)
