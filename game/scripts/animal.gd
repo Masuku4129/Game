@@ -791,10 +791,19 @@ func tick(delta: float) -> void:
 			heading = lerp_angle(heading, chosen, minf(1.0, delta * 7.0))
 			var move_dir := Vector3(sin(heading), 0.0, cos(heading))
 			var np2 := position + move_dir * step_len
+			# Плавный поворот мог оставить зверя на заблокированной промежуточной траектории.
+			# В таком случае используем уже проверенный свободный курс, иначе считаем столкновение.
+			if not _can_move_segment(position, np2, flying):
+				heading = chosen
+				move_dir = Vector3(sin(heading), 0.0, cos(heading))
+				np2 = position + move_dir * step_len
 			if _can_move_segment(position, np2, flying):
 				position.x = np2.x
 				position.z = np2.z
 				_bump = maxi(0, _bump - 1)
+			else:
+				speed *= 0.35
+				_bump += 1
 		else:
 			speed *= 0.35
 			_bump += 1
