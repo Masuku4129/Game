@@ -8,6 +8,7 @@ uniform vec3 col2 = vec3(0.22, 0.16, 0.12);
 uniform float birch = 0.0;
 uniform bool no_fade = false;
 uniform float snow = 0.0;
+uniform float wet = 0.0;
 // подгрызенное дерево: ниже clip_y (по модели) коры нет
 uniform float clip_y = -10000.0;
 varying vec3 wp;
@@ -46,7 +47,8 @@ void fragment() {
 		c = mix(c, vec3(0.32, 0.30, 0.26), stripe * 0.28);
 	}
 	c = mix(c, vec3(0.9, 0.93, 0.97), smoothstep(0.6, 0.9, wn.y) * snow);
+	c *= 1.0 - wet * 0.18;
 	ALBEDO = cartoon(c);
-	ROUGHNESS = 1.0;
-	SPECULAR = 0.0;
+	ROUGHNESS = mix(1.0, 0.68, wet);
+	SPECULAR = wet * 0.08;
 }
