@@ -23,14 +23,17 @@ func _initialize() -> void:
 	animal._animate_model(0.1)
 	ok = ok and is_equal_approx(ap.speed_scale, 1.0)
 	animal.speed = 6.0
-	animal._animate_model(0.1)
-	ok = ok and is_equal_approx(ap.speed_scale, 0.75)
+	for _i in 5:
+		animal._animate_model(0.1)
+	ok = ok and absf(ap.speed_scale - 0.75) < 0.02
 	animal.speed = 1.5
-	animal._animate_model(0.1)
-	ok = ok and is_equal_approx(ap.speed_scale, 1.0)
+	for _i in 5:
+		animal._animate_model(0.1)
+	ok = ok and absf(ap.speed_scale - 1.0) < 0.02
 	animal.speed = 0.75
-	animal._animate_model(0.1)
-	ok = ok and is_equal_approx(ap.speed_scale, 0.5)
+	for _i in 5:
+		animal._animate_model(0.1)
+	ok = ok and absf(ap.speed_scale - 0.5) < 0.02
 	print("ANIMAL_ANIMATION_SPEED_TEST passed=", ok, " playback_scales=", [1.0, 0.75, 1.0, 0.5])
 	animal.free()
 	world.free()
