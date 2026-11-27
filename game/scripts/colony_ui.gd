@@ -10,12 +10,13 @@ extends Control
 ##   «Метить» — помечать деревья в рубку, кусты в сбор, зверя в охоту.
 ##   «Рамка» — выбрать несколько человек протяжкой.
 
+const UI = preload("res://scripts/ui_palette.gd")
 const INV = preload("res://scripts/inventory.gd")
 const PLAN = preload("res://scripts/planner.gd")
 const SHEET = preload("res://scripts/camp_ui.gd").Sheet
-const INK := Color(0.24, 0.15, 0.08)
-const PAPER := Color(0.88, 0.8, 0.62)
-const BAR_COLS := [Color(0.7, 0.22, 0.18), Color(0.74, 0.6, 0.27), Color(0.8, 0.45, 0.25), Color(0.45, 0.62, 0.36)]
+const INK := UI.TEXT
+const PAPER := UI.PANEL
+const BAR_COLS := [Color(0.82, 0.32, 0.28), Color(0.78, 0.59, 0.28), Color(0.82, 0.48, 0.25), UI.GOOD]
 
 var colony
 var main: Node3D
@@ -49,6 +50,7 @@ var _t := 0.0
 
 ## Личина землепроходца: круг с цветом куртки, имя, дело и полоски нужд.
 class Portrait extends Button:
+	const UI = preload("res://scripts/ui_palette.gd")
 	var unit
 	var ui
 	func _ready() -> void:
@@ -63,8 +65,8 @@ class Portrait extends Button:
 		var sel: bool = unit.selected
 		var dead: bool = unit.state == "dead"
 		draw_rect(Rect2(Vector2(4, 6), size - Vector2(4, 8)), Color(0, 0, 0, 0.28))
-		draw_rect(Rect2(Vector2.ZERO, size - Vector2(6, 12)), Color(0.86, 0.78, 0.6, 0.93) if not dead else Color(0.6, 0.56, 0.5, 0.8))
-		draw_rect(Rect2(Vector2.ZERO, size - Vector2(6, 12)), Color(0.95, 0.72, 0.3) if sel else Color(0.42, 0.3, 0.18), false, 5.0 if sel else 3.0)
+		draw_rect(Rect2(Vector2.ZERO, size - Vector2(6, 12)), UI.PANEL_SOFT if not dead else UI.PANEL)
+		draw_rect(Rect2(Vector2.ZERO, size - Vector2(6, 12)), UI.ACCENT_HI if sel else UI.BORDER, false, 5.0 if sel else 3.0)
 		var c := Vector2(44, 44)
 		var jk: Color = unit.pal.get("jacket", Color(0.5, 0.41, 0.31))
 		draw_circle(c, 30.0, jk)
@@ -75,11 +77,11 @@ class Portrait extends Button:
 		if dead:
 			draw_line(c + Vector2(-24, -24), c + Vector2(24, 24), Color(0.5, 0.1, 0.08), 5.0)
 		draw_string(f, Vector2(84, 32), String(unit.unit_name), HORIZONTAL_ALIGNMENT_LEFT, 170, 26, INK)
-		draw_string(f, Vector2(84, 58), unit.status(), HORIZONTAL_ALIGNMENT_LEFT, 180, 19, Color(0.36, 0.26, 0.16))
+		draw_string(f, Vector2(84, 58), unit.status(), HORIZONTAL_ALIGNMENT_LEFT, 180, 19, UI.TEXT_MUTED)
 		var vals: Array = [unit.health, unit.hunger, unit.warmth, 1.0 - clampf(unit.fatigue, 0.0, 1.0)]
 		for i in 4:
 			var y := 72.0 + float(i) * 11.0
-			draw_rect(Rect2(Vector2(84, y), Vector2(170, 8)), Color(0.42, 0.32, 0.2, 0.5))
+			draw_rect(Rect2(Vector2(84, y), Vector2(170, 8)), UI.BAR_BG)
 			draw_rect(Rect2(Vector2(84, y), Vector2(170.0 * clampf(float(vals[i]), 0.0, 1.0), 8)), BAR_COLS[i])
 	func _pressed_now() -> void:
 		ui.pick_unit(unit)
@@ -392,7 +394,7 @@ func _open_zone() -> void:
 	bar.offset_bottom = 150.0 + 196.0
 	bar.mouse_filter = Control.MOUSE_FILTER_PASS
 	var bg := ColorRect.new()
-	bg.color = Color(0.88, 0.8, 0.62, 0.93)
+	bg.color = UI.PANEL
 	bg.anchor_right = 1.0
 	bg.anchor_bottom = 1.0
 	bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -604,14 +606,14 @@ func _process(delta: float) -> void:
 func _panel(r: Rect2, title: String, lines: Array) -> void:
 	var f := ThemeDB.fallback_font
 	draw_rect(Rect2(r.position + Vector2(5, 6), r.size), Color(0, 0, 0, 0.25))
-	draw_rect(r, Color(0.88, 0.8, 0.62, 0.9))
-	draw_rect(r, Color(0.45, 0.32, 0.18), false, 3.0)
+	draw_rect(r, UI.PANEL)
+	draw_rect(r, UI.BORDER, false, 2.0)
 	var y := r.position.y + 34.0
 	if title != "":
 		draw_string(f, Vector2(r.position.x + 16, y), title, HORIZONTAL_ALIGNMENT_LEFT, r.size.x - 24, 26, INK)
 		y += 32.0
 	for t: String in lines:
-		draw_string(f, Vector2(r.position.x + 16, y), t, HORIZONTAL_ALIGNMENT_LEFT, r.size.x - 24, 22, Color(0.33, 0.23, 0.13))
+		draw_string(f, Vector2(r.position.x + 16, y), t, HORIZONTAL_ALIGNMENT_LEFT, r.size.x - 24, 22, UI.TEXT_MUTED)
 		y += 28.0
 
 func _draw() -> void:
@@ -635,8 +637,8 @@ func _draw() -> void:
 	# припасы
 	var res: Array = [["meat_cooked", colony.food_count()], ["firewood", colony.count("firewood")], ["fur", colony.furs()], ["log", colony.count("log")]]
 	var x := 580.0
-	draw_rect(Rect2(x - 12, 24, 420, 80), Color(0.88, 0.8, 0.62, 0.86))
-	draw_rect(Rect2(x - 12, 24, 420, 80), Color(0.45, 0.32, 0.18), false, 3.0)
+	draw_rect(Rect2(x - 12, 24, 420, 80), UI.PANEL_SOFT)
+	draw_rect(Rect2(x - 12, 24, 420, 80), UI.BORDER, false, 2.0)
 	for e: Array in res:
 		var cc := Vector2(x + 26, 64)
 		INV.icon(self, String(e[0]), cc, 24.0)

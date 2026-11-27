@@ -4,11 +4,12 @@ extends Control
 ## постройки, полоса построек с ценой, кнопки поворота и постановки, листы: хранилище,
 ## готовка, стройка избы, печь, обстановка, верстак, стол, сушило.
 
+const UI = preload("res://scripts/ui_palette.gd")
 const IT = preload("res://scripts/items.gd")
-const INK := Color(0.24, 0.15, 0.08)
-const PAPER := Color(0.88, 0.8, 0.62)
-const OK_C := Color(0.2, 0.42, 0.12)
-const BAD_C := Color(0.62, 0.16, 0.08)
+const INK := UI.TEXT
+const PAPER := UI.PANEL
+const OK_C := UI.GOOD
+const BAD_C := UI.DANGER
 
 var camp
 var main: Node3D
@@ -37,12 +38,14 @@ var _sig := ""
 var _t := 0.0
 var _store: Dictionary = {}
 var _move_all := false
+var _panel_tween: Tween
 
 ## Лист-пергамент: рваный край, пятна краски, берестяная шапка с заголовком.
 class Sheet extends Control:
+	const UI = preload("res://scripts/ui_palette.gd")
 	var title := ""
 	var info := ""
-	var info_col := Color(0.24, 0.15, 0.08)
+	var info_col := UI.TEXT_MUTED
 	var head := 70.0
 	func _draw() -> void:
 		var sz := size
@@ -61,27 +64,28 @@ class Sheet extends Control:
 		for p in pts:
 			sh.append(p + Vector2(8, 10))
 		draw_colored_polygon(sh, Color(0, 0, 0, 0.3))
-		draw_colored_polygon(pts, Color(0.88, 0.8, 0.62))
+		draw_colored_polygon(pts, UI.PANEL)
 		for i in int(sz.x * sz.y / 9000.0):
 			var d := rng.randf_range(-0.07, 0.07)
-			draw_circle(Vector2(rng.randf_range(20, sz.x - 20), rng.randf_range(20, sz.y - 20)), rng.randf_range(18, 70), Color(0.5 + d, 0.36 + d, 0.18, 0.06))
+			draw_circle(Vector2(rng.randf_range(20, sz.x - 20), rng.randf_range(20, sz.y - 20)), rng.randf_range(18, 70), Color(0.45 + d * 0.2, 0.62 + d * 0.2, 0.38 + d * 0.2, 0.045))
 		var ring := pts.duplicate()
 		ring.append(pts[0])
-		draw_polyline(ring, Color(0.45, 0.32, 0.18), 5.0, true)
+		draw_polyline(ring, UI.BORDER, 3.0, true)
 		if head > 0.0:
-			draw_rect(Rect2(12, 12, sz.x - 24, head), Color(0.93, 0.9, 0.82))
+			draw_rect(Rect2(12, 12, sz.x - 24, head), UI.PANEL_SOFT)
 			for i in int(sz.x / 22.0):
 				var x := rng.randf_range(20, sz.x - 60)
 				var y := rng.randf_range(18, head + 6)
-				draw_line(Vector2(x, y), Vector2(x + rng.randf_range(14, 50), y + rng.randf_range(-1, 1)), Color(0.15, 0.12, 0.1, rng.randf_range(0.35, 0.8)), rng.randf_range(1.5, 3.5))
-			draw_rect(Rect2(12, 12, sz.x - 24, head), Color(0.4, 0.3, 0.2), false, 3.0)
+				draw_line(Vector2(x, y), Vector2(x + rng.randf_range(14, 50), y + rng.randf_range(-1, 1)), Color(0.06, 0.09, 0.07, rng.randf_range(0.25, 0.55)), rng.randf_range(1.5, 3.5))
+			draw_rect(Rect2(12, 12, sz.x - 24, head), UI.BORDER, false, 2.0)
 			var f := ThemeDB.fallback_font
-			draw_string(f, Vector2(32, 12 + head * 0.72), title, HORIZONTAL_ALIGNMENT_LEFT, sz.x * 0.55, 40, Color(0.24, 0.15, 0.08))
+			draw_string(f, Vector2(32, 12 + head * 0.72), title, HORIZONTAL_ALIGNMENT_LEFT, sz.x * 0.55, 40, UI.TEXT)
 			if info != "":
 				draw_string(f, Vector2(sz.x * 0.45, 12 + head * 0.68), info, HORIZONTAL_ALIGNMENT_RIGHT, sz.x * 0.55 - 40, 26, info_col)
 
 ## Круглая кнопка лагеря: костерок в шалашике и подпись.
 class RoundButton extends Button:
+	const UI = preload("res://scripts/ui_palette.gd")
 	var label := ""
 	func _ready() -> void:
 		flat = true
@@ -93,8 +97,8 @@ class RoundButton extends Button:
 		var r := minf(size.x, size.y) * 0.5 - 4.0
 		var dn := is_pressed() and is_hovered()
 		draw_circle(c + Vector2(3, 4), r, Color(0, 0, 0, 0.3))
-		draw_circle(c, r, Color(0.3, 0.21, 0.13, 0.82) if not dn else Color(0.45, 0.31, 0.18, 0.9))
-		draw_arc(c, r - 3.0, 0.0, TAU, 48, Color(0.86, 0.76, 0.56, 0.9), 4.0, true)
+		draw_circle(c, r, UI.PANEL_SOFT if not dn else UI.PANEL_HOVER)
+		draw_arc(c, r - 3.0, 0.0, TAU, 48, UI.ACCENT, 4.0, true)
 		# шалашик из жердей и огонёк
 		var o := c + Vector2(0, -r * 0.12)
 		var w := r * 0.55
@@ -110,6 +114,7 @@ class RoundButton extends Button:
 
 ## Карточка постройки или мебели: название и цена (зелёным — что есть, красным — чего нет).
 class Card extends Button:
+	const UI = preload("res://scripts/ui_palette.gd")
 	var title := ""
 	var lines: Array = []   # [текст, хватает]
 	var picked := false
@@ -119,16 +124,16 @@ class Card extends Button:
 			add_theme_stylebox_override(st, StyleBoxEmpty.new())
 	func _draw() -> void:
 		var r := Rect2(Vector2(4, 4), size - Vector2(8, 8))
-		draw_rect(r, Color(0.74, 0.63, 0.44, 0.75))
-		draw_rect(Rect2(r.position + Vector2(4, 4), r.size - Vector2(8, 8)), Color(0.8, 0.7, 0.5, 0.8))
-		draw_rect(r, Color(0.45, 0.33, 0.2, 0.9), false, 3.0)
+		draw_rect(r, UI.PANEL_SOFT)
+		draw_rect(Rect2(r.position + Vector2(4, 4), r.size - Vector2(8, 8)), UI.PANEL)
+		draw_rect(r, UI.BORDER, false, 2.0)
 		if picked:
 			draw_rect(Rect2(r.position - Vector2(2, 2), r.size + Vector2(4, 4)), Color(0.72, 0.3, 0.12), false, 6.0)
 		var f := ThemeDB.fallback_font
-		draw_string(f, Vector2(14, 40), title, HORIZONTAL_ALIGNMENT_LEFT, size.x - 24, 22, Color(0.24, 0.15, 0.08))
+		draw_string(f, Vector2(14, 40), title, HORIZONTAL_ALIGNMENT_LEFT, size.x - 24, 22, UI.TEXT)
 		var y := 78.0
 		for l: Array in lines:
-			draw_string(f, Vector2(16, y), String(l[0]), HORIZONTAL_ALIGNMENT_LEFT, size.x - 26, 21, Color(0.2, 0.42, 0.12) if bool(l[1]) else Color(0.62, 0.16, 0.08))
+			draw_string(f, Vector2(16, y), String(l[0]), HORIZONTAL_ALIGNMENT_LEFT, size.x - 26, 21, UI.GOOD if bool(l[1]) else UI.DANGER)
 			y += 26.0
 
 ## Кнопка поворота: дуга со стрелкой.
@@ -269,20 +274,20 @@ func _button(t: String, sz: Vector2, fs: int) -> Button:
 	b.focus_mode = Control.FOCUS_NONE
 	b.clip_text = true
 	b.add_theme_font_size_override("font_size", fs)
-	b.add_theme_color_override("font_color", Color(0.98, 0.93, 0.8))
-	b.add_theme_color_override("font_pressed_color", Color(1, 1, 0.9))
-	b.add_theme_color_override("font_hover_color", Color(1, 0.97, 0.88))
-	b.add_theme_color_override("font_disabled_color", Color(0.75, 0.68, 0.56, 0.7))
-	var cs := {"normal": Color(0.46, 0.31, 0.18), "hover": Color(0.52, 0.35, 0.2), "pressed": Color(0.34, 0.22, 0.12), "disabled": Color(0.55, 0.47, 0.36)}
+	b.add_theme_color_override("font_color", UI.TEXT)
+	b.add_theme_color_override("font_pressed_color", UI.TEXT)
+	b.add_theme_color_override("font_hover_color", UI.ACCENT_HI)
+	b.add_theme_color_override("font_disabled_color", UI.TEXT_MUTED)
+	var cs := {"normal": UI.PANEL_SOFT, "hover": UI.PANEL_HOVER, "pressed": UI.PANEL_PRESSED, "disabled": UI.PANEL}
 	for k: String in cs:
 		var sb := StyleBoxFlat.new()
 		sb.bg_color = cs[k]
-		sb.set_corner_radius_all(18)
-		sb.set_border_width_all(3)
-		sb.border_color = Color(0.25, 0.15, 0.08)
+		sb.set_corner_radius_all(14)
+		sb.set_border_width_all(2)
+		sb.border_color = UI.BORDER
 		sb.shadow_color = Color(0, 0, 0, 0.25)
-		sb.shadow_size = 4
-		sb.shadow_offset = Vector2(2, 3)
+		sb.shadow_size = 3
+		sb.shadow_offset = Vector2(1, 2)
 		b.add_theme_stylebox_override(k, sb)
 	b.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
 	return b
@@ -298,15 +303,15 @@ func _row(t: String, enabled: bool, fs: int = 28) -> Button:
 	b.clip_text = true
 	b.add_theme_font_size_override("font_size", fs)
 	for k: String in ["font_color", "font_hover_color", "font_pressed_color"]:
-		b.add_theme_color_override(k, INK)
-	b.add_theme_color_override("font_disabled_color", Color(INK, 0.45))
-	var cs := {"normal": Color(0.8, 0.7, 0.5, 0.85), "hover": Color(0.84, 0.74, 0.54, 0.9), "pressed": Color(0.7, 0.58, 0.38, 0.95), "disabled": Color(0.78, 0.7, 0.55, 0.45)}
+		b.add_theme_color_override(k, UI.TEXT)
+	b.add_theme_color_override("font_disabled_color", UI.TEXT_MUTED)
+	var cs := {"normal": UI.PANEL_SOFT, "hover": UI.PANEL_HOVER, "pressed": UI.PANEL_PRESSED, "disabled": UI.PANEL}
 	for k: String in cs:
 		var sb := StyleBoxFlat.new()
 		sb.bg_color = cs[k]
 		sb.set_corner_radius_all(10)
 		sb.set_border_width_all(2)
-		sb.border_color = Color(0.45, 0.33, 0.2, 0.8)
+		sb.border_color = UI.BORDER
 		sb.content_margin_left = 22
 		b.add_theme_stylebox_override(k, sb)
 	b.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
@@ -461,16 +466,41 @@ func fade_night() -> void:
 func _open(fn: Callable, two_cols: bool = false) -> void:
 	_fn = fn
 	_sig = ""
-	panel.visible = true
+	_transition_panel(true)
 	scroll.visible = not two_cols
 	cols.visible = two_cols
 	mode_btn.visible = two_cols
 	_refresh_panel()
 
 func close_panel() -> void:
-	panel.visible = false
+	_transition_panel(false)
 	_fn = Callable()
 	_store = {}
+
+func _transition_panel(opening: bool) -> void:
+	if _panel_tween != null and _panel_tween.is_running():
+		_panel_tween.kill()
+	if opening:
+		panel.visible = true
+		panel.pivot_offset = panel.size * 0.5
+		panel.modulate = Color(1.0, 1.0, 1.0, 0.0)
+		panel.scale = Vector2(0.98, 0.98)
+		_panel_tween = panel.create_tween()
+		_panel_tween.set_parallel(true)
+		_panel_tween.tween_property(panel, "modulate", Color.WHITE, 0.18)
+		_panel_tween.tween_property(panel, "scale", Vector2.ONE, 0.18).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	else:
+		if not panel.visible:
+			return
+		_panel_tween = panel.create_tween()
+		_panel_tween.set_parallel(true)
+		_panel_tween.tween_property(panel, "modulate", Color(1.0, 1.0, 1.0, 0.0), 0.12)
+		_panel_tween.tween_property(panel, "scale", Vector2(0.98, 0.98), 0.12)
+		_panel_tween.chain().tween_callback(func() -> void:
+			panel.visible = false
+			panel.modulate = Color.WHITE
+			panel.scale = Vector2.ONE
+		)
 
 func _refresh_panel() -> void:
 	var d: Dictionary = _fn.call()

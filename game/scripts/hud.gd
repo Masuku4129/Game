@@ -7,9 +7,10 @@ extends Control
 ## Кнопки показывают только hero.tools.place_of(id): рука / пояс / спина / короб.
 ## Свои действия другие команды добавляют через hero.tools / world_tools (use_label/use).
 
+const UI = preload("res://scripts/ui_palette.gd")
 const INV = preload("res://scripts/inventory.gd")
-const INK := Color(0.24, 0.15, 0.08)
-const PAPER := Color(0.88, 0.8, 0.62)
+const INK := UI.TEXT
+const PAPER := UI.PANEL
 
 var vals := [1.0, 0.85, 0.9, 0.8, 1.0]
 var names := ["Здоровье", "Сытость", "Жажда", "Тепло", "Силы"]
@@ -29,6 +30,7 @@ var crouch_btn: RoundBtn
 
 ## Кнопка короба: нарисованный берестяной короб с лямками и подписью.
 class BagButton extends Button:
+	const UI = preload("res://scripts/ui_palette.gd")
 	func _ready() -> void:
 		flat = true
 		focus_mode = Control.FOCUS_NONE
@@ -39,8 +41,8 @@ class BagButton extends Button:
 		var r := minf(size.x, size.y) * 0.5 - 4.0
 		var dn := is_pressed() and is_hovered()
 		draw_circle(c + Vector2(3, 4), r, Color(0, 0, 0, 0.3))
-		draw_circle(c, r, Color(0.3, 0.21, 0.13, 0.82) if not dn else Color(0.45, 0.31, 0.18, 0.9))
-		draw_arc(c, r - 3.0, 0.0, TAU, 48, Color(0.86, 0.76, 0.56, 0.9), 4.0, true)
+		draw_circle(c, r, UI.PANEL_SOFT if not dn else UI.PANEL_HOVER)
+		draw_arc(c, r - 3.0, 0.0, TAU, 48, UI.ACCENT, 4.0, true)
 		# короб: корпус, крышка со скаткой, лямки
 		var w := r * 0.82
 		var h := r * 0.86
@@ -65,6 +67,7 @@ class BagButton extends Button:
 
 ## Круглая кнопка с нарисованным значком вещи и подписью под ней.
 class RoundBtn extends Button:
+	const UI = preload("res://scripts/ui_palette.gd")
 	var icon_id := ""
 	var caption := ""
 	var hot := false        # выделена (вещь в руке)
@@ -79,9 +82,9 @@ class RoundBtn extends Button:
 		var r := size.x * 0.5 - 4.0
 		var dn := is_pressed() and is_hovered()
 		draw_circle(c + Vector2(3, 4), r, Color(0, 0, 0, 0.3))
-		draw_circle(c, r, Color(0.3, 0.21, 0.13, 0.82) if not dn else Color(0.45, 0.31, 0.18, 0.9))
-		draw_circle(c, r - 7.0, (Color(0.88, 0.8, 0.62, 0.92) if not dim else Color(0.7, 0.64, 0.52, 0.8)) if not hot else Color(0.95, 0.82, 0.55, 0.97))
-		draw_arc(c, r - 3.0, 0.0, TAU, 48, Color(0.86, 0.76, 0.56, 0.9) if not hot else Color(0.95, 0.6, 0.25), 4.0 if not hot else 6.0, true)
+		draw_circle(c, r, UI.PANEL_SOFT if not dn else UI.PANEL_HOVER)
+		draw_circle(c, r - 7.0, UI.ACCENT_HI if hot else UI.PANEL_SOFT if dim else UI.PANEL)
+		draw_arc(c, r - 3.0, 0.0, TAU, 48, UI.ACCENT if not hot else UI.ACCENT_HI, 4.0 if not hot else 6.0, true)
 		if icon_id != "":
 			INV.icon(self, icon_id, c, r * 0.55)
 		if caption != "":
@@ -226,9 +229,9 @@ func set_state(v: Array, text: String, inf: String) -> void:
 ## Берестяная табличка: светлая подложка, неровная тёмная рамка.
 func _plate(r: Rect2) -> void:
 	draw_rect(Rect2(r.position + Vector2(4, 5), r.size), Color(0, 0, 0, 0.25))
-	draw_rect(r, Color(PAPER, 0.86))
-	draw_rect(Rect2(r.position + Vector2(5, 5), r.size - Vector2(10, 10)), Color(0.93, 0.87, 0.72, 0.5))
-	draw_rect(r, Color(0.4, 0.28, 0.16, 0.95), false, 3.0)
+	draw_rect(r, UI.PANEL_SOFT)
+	draw_rect(Rect2(r.position + Vector2(5, 5), r.size - Vector2(10, 10)), UI.PANEL)
+	draw_rect(r, UI.BORDER, false, 2.0)
 
 func _draw() -> void:
 	var f := ThemeDB.fallback_font
@@ -238,13 +241,13 @@ func _draw() -> void:
 		var y := pr.position.y + 22.0 + i * 34.0
 		draw_string(f, Vector2(32, y + 7), names[i], HORIZONTAL_ALIGNMENT_LEFT, 120, 20, INK)
 		var br := Rect2(150, y - 6, 180, 14)
-		draw_rect(br, Color(0.55, 0.45, 0.3, 0.6))
+		draw_rect(br, UI.BAR_BG)
 		var v := clampf(vals[i], 0.0, 1.0)
 		var c: Color = cols[i]
 		if v < 0.25:
-			c = c.lerp(Color(0.8, 0.15, 0.1), 0.5 + 0.5 * sin(Time.get_ticks_msec() * 0.008))
+			c = c.lerp(UI.DANGER, 0.5 + 0.5 * sin(Time.get_ticks_msec() * 0.008))
 		draw_rect(Rect2(br.position, Vector2(br.size.x * v, br.size.y)), c)
-		draw_rect(br, Color(INK, 0.85), false, 2.0)
+		draw_rect(br, UI.BORDER, false, 1.5)
 	if info != "":
 		var w := minf(f.get_string_size(info, HORIZONTAL_ALIGNMENT_LEFT, -1, 22).x + 36.0, 900.0)
 		var ir := Rect2(18, pr.end.y + 10, w, 40)
