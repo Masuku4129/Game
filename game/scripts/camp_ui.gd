@@ -38,6 +38,7 @@ var _sig := ""
 var _t := 0.0
 var _store: Dictionary = {}
 var _move_all := false
+var _panel_tween: Tween
 
 ## Лист-пергамент: рваный край, пятна краски, берестяная шапка с заголовком.
 class Sheet extends Control:
