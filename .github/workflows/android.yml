@@ -43,7 +43,7 @@ jobs:
           cd game
           ASSET_GALLERY_SHOTS=/tmp/pv/taiga_asset_gallery.png timeout 180 xvfb-run -a -s "-screen 0 1920x864x24" godot --rendering-driver vulkan --resolution 1920x864 res://scenes/asset_gallery.tscn 2>&1 | tee /tmp/pv/asset_gallery.log
           test -s /tmp/pv/taiga_asset_gallery.png
-          grep "TAIGA_ASSET_GALLERY loaded=11" /tmp/pv/asset_gallery.log
+          grep "TAIGA_ASSET_GALLERY loaded=24" /tmp/pv/asset_gallery.log
       - name: Upload visual verification frames
         uses: actions/upload-artifact@v4
         with:
