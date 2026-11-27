@@ -218,7 +218,7 @@ func _update_stream_water(delta: float) -> void:
 	if main.weather == null:
 		return
 	var temperature: float = main.weather.temp
-	var ice_now := clampf((-temperature - 0.5) / 5.0, 0.0, 1.0)
+	var ice_now := clampf(main.weather.ice, 0.0, 1.0)
 	var rain_now := clampf(main.weather.precip, 0.0, 1.0)
 	var wind_now := clampf(main.weather.wind, 0.0, 1.0)
 	stream_water_material.set_shader_parameter("ice", ice_now)
