@@ -1424,24 +1424,9 @@ func tree_height_at(p: Vector3) -> float:
 
 ## Радиус ствола по реальному GLB-габариту и масштабу экземпляра.
 func tree_radius_at(p: Vector3) -> float:
-	var c := Vector2i(floori(p.x / 16.0), floori(p.z / 16.0))
-	var best := 1e9
-	var result := 0.32
-	for dz in range(-1, 2):
-		for dx in range(-1, 2):
-			var k := Vector2i(c.x + dx, c.y + dz)
-			if not tree_grid.has(k):
-				continue
-			for rec in tree_grid[k]:
-				var t: Transform3D = rec[2]
-				var d := Vector2(t.origin.x - p.x, t.origin.z - p.z).length_squared()
-				if d < best:
-					best = d
-					var key: String = rec[3]
-					if near_mesh.has(key):
-						var aabb: AABB = (near_mesh[key] as Mesh).get_aabb()
-						result = maxf(aabb.size.x, aabb.size.z) * 0.5 * maxf(t.basis.get_scale().x, t.basis.get_scale().z)
-	return result
+	# Крона намного шире ствола; для лазания используем оценку диаметра коры
+	# по высоте конкретного экземпляра, а не AABB всей кроны.
+	return clampf(0.22 + tree_height_at(p) * 0.026, 0.26, 0.46)
 
 ## Удар зверя: часть тела, кровотечение, переломы, отбрасывание.
 func hurt(amount: float, from: Vector3, kind: String) -> void:
@@ -1521,8 +1506,7 @@ func _chunk_seed(cx: int, cz: int) -> int:
 	# Stable coordinate hash; the starting chunk has its own deliberately refreshed seed.
 	if Vector2i(cx, cz) == START_CHUNK_COORD:
 		return START_CHUNK_SEED
-	var h := int(cx * 73856093) ^ int(cz * 19349663) ^ 0x5F3759DF
-	return abs(h)
+	return cz * 1000 + cx
 
 func _scatter_all() -> void:
 	# вид, попыток на клетку 32 м, масштаб, дальность видимости, тень, правило
