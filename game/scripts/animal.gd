@@ -794,6 +794,19 @@ func tick(delta: float) -> void:
 	if bog_depth > 0.08:
 		var bog_resistance := float({"squirrel": 3.2, "hare": 2.8, "capercaillie": 2.4, "fox": 1.9, "lynx": 1.8, "muskdeer": 1.5, "roe": 1.35, "deer": 1.15, "moose": 0.72, "bear": 0.85, "boar": 1.1, "wolf": 1.2, "wolverine": 1.0, "beaver": 0.45}.get(kind, 1.2))
 		want *= 1.0 / (1.0 + bog_depth * bog_resistance)
+	# Snow depth creates species-specific movement resistance: small animals sink
+	# deeply, while broad-footed moose and hares retain better mobility.
+	if main.weather != null:
+		var snow_depth: float = float(main.weather.snow)
+		if snow_depth > 0.05 and swim_k < 0.5:
+			var snow_resistance := float({"squirrel": 2.8, "hare": 0.65, "capercaillie": 1.5, "fox": 1.65, "lynx": 1.45, "muskdeer": 1.3, "roe": 1.7, "deer": 1.35, "moose": 0.42, "bear": 0.95, "boar": 1.55, "wolf": 1.25, "wolverine": 0.85, "beaver": 1.3}.get(kind, 1.2))
+			want *= 1.0 / (1.0 + snow_depth * snow_resistance * 0.55)
+		# Wet ground increases traction cost on slopes; a dry rocky slope is not
+		# penalized by this term, and swimming remains handled above.
+		var ground_wet: float = float(main.weather.wet)
+		var slope_k: float = 1.0 - main.normal_at(position.x, position.z).y
+		if ground_wet > 0.25 and slope_k > 0.12 and swim_k < 0.5:
+			want *= 1.0 - clampf(ground_wet * slope_k * 0.38, 0.0, 0.22)
 	# поворот к цели и разгон
 	var to := goal - position
 	to.y = 0
