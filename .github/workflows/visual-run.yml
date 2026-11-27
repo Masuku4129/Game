@@ -1,0 +1,27 @@
+name: Visual Run Capture
+on:
+  push:
+    branches: [visual-run]
+  workflow_dispatch:
+jobs:
+  capture:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    container:
+      image: barichello/godot-ci:4.3
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install virtual display
+        run: apt-get update && apt-get install -y xvfb
+      - name: Import
+        run: cd game && godot --headless --import
+      - name: Capture current game scene
+        run: |
+          cd game
+          xvfb-run -a godot --path . --rendering-method gl_compatibility --script res://tests/visual_capture.gd
+          test -s /tmp/taiga_visual.png
+      - uses: actions/upload-artifact@v4
+        with:
+          name: taiga-visual-capture
+          path: /tmp/taiga_visual.png
+          if-no-files-found: error
