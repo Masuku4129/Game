@@ -1176,7 +1176,12 @@ func _update_stats(dt: float) -> void:
 	for slot: String in worn:
 		var clothing_id := String(worn[slot])
 		clothing_warmth += float(preload("res://scripts/items.gd").DEF.get(clothing_id, {}).get("warm", 0.0))
-	var target_w := clampf(0.55 + tc * 0.025 - soak * 0.35 - weather.wind * 0.05 - (0.25 if hero.swimb > 0.5 else 0.0) + clothing_warmth, 0.02, 0.95)
+	# Wet clothing loses insulating value in wind; the wind penalty rises with
+	# exposure and soaked gear, while dry layered clothing remains effective.
+	var exposure := clampf(weather.wind / 2.8, 0.0, 1.0)
+	var wind_cooling := weather.wind * 0.05 + exposure * soak * 0.12
+	var insulation_loss := clothing_warmth * exposure * soak * 0.35
+	var target_w := clampf(0.55 + tc * 0.025 - soak * 0.35 - wind_cooling - insulation_loss - (0.25 if hero.swimb > 0.5 else 0.0) + clothing_warmth, 0.02, 0.95)
 	# --- build: костёр, шалаш, изба с печью греют; укрытие ослабляет ветер ---
 	if camp != null:
 		target_w = clampf(target_w + camp.warm_bonus() + weather.wind * 0.05 * (1.0 - camp.wind_k()), 0.02, 0.98)
