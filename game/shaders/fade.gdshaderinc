@@ -32,14 +32,14 @@ vec3 hero_push(vec3 w, float h, float tm) {
 // INSTANCE_CUSTOM.y = 1 — детальная ближняя модель дерева, -1 — лёгкая дальняя: на краю
 // круга near_r вокруг near_c они перетекают друг в друга дизерингом.
 uniform vec3 near_c = vec3(0.0, -100000.0, 0.0);
-uniform float near_r = 36.0;
+uniform float near_r = 44.0;
 float dist_vis(vec4 ic, vec3 org) {
 	float v = 1.0;
 	if (ic.x > 0.0) {
 		v = 1.0 - smoothstep(ic.x - 12.0, ic.x, distance(org, cam_pos));
 	}
 	if (ic.y > 0.5) {
-		v *= 1.0 - smoothstep(near_r - 6.0, near_r, distance(org.xz, near_c.xz));
+		v *= 1.0 - smoothstep(near_r - 10.0, near_r, distance(org.xz, near_c.xz));
 	} else if (ic.y < -0.5) {
 		// дальняя версия берёт дополнение того же дизеринга: со стороны -v
 		v = -v * smoothstep(near_r - 6.0, near_r, distance(org.xz, near_c.xz));
