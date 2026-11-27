@@ -982,11 +982,12 @@ func _unstick(delta: float) -> void:
 		var recovered := false
 		# Recovery targets must be reachable, not merely free at their endpoint.
 		# Use a wider search around dense rocks/structures without teleporting wildlife.
-		for radius in [3.0, 5.0, 8.0, 12.0, 17.0, 23.0]:
-			for turn in range(12):
-				var ang := escape + TAU * float(turn) / 12.0
+		for radius in [2.5, 4.0, 6.0, 9.0, 13.0, 18.0, 24.0, 30.0]:
+			for turn in range(24):
+				var ang := escape + TAU * float(turn) / 24.0
 				var probe: Vector3 = position + Vector3(sin(ang), 0.0, cos(ang)) * float(radius)
-				# Reject blocked endpoints cheaply before sampling the whole route.
+				# Dense angular probes let animals escape narrow gaps, rocks and log ends;
+				# the full route is sampled before accepting the destination.
 				if _can_step(probe) and _can_move_segment(position, probe):
 					target = probe
 					recovered = true
