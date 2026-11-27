@@ -258,7 +258,7 @@ func _build_bog_cover(c: Vector2i, parent: Node3D) -> void:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = _seed(c) ^ 0x3D6E8A21
 	var groups: Dictionary = {}
-	var attempts := 620
+	var attempts := 1550
 	for n in attempts:
 		var wx := float(c.x) * CHUNK_SIZE + rng.randf_range(0.5, CHUNK_SIZE - 0.5)
 		var wz := float(c.y) * CHUNK_SIZE + rng.randf_range(0.5, CHUNK_SIZE - 0.5)
@@ -577,7 +577,7 @@ func _build_tree_cover(c: Vector2i) -> void:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = _seed(c) ^ 0x4A17B39
 	var groups: Dictionary = {}
-	var count := 980
+	var count := 2450
 	for attempt in range(count):
 		var wx := float(c.x) * CHUNK_SIZE + rng.randf_range(2.0, CHUNK_SIZE - 2.0)
 		var wz := float(c.y) * CHUNK_SIZE + rng.randf_range(2.0, CHUNK_SIZE - 2.0)
@@ -692,7 +692,7 @@ func _build_understory(c: Vector2i) -> void:
 	var groups: Dictionary = {}
 	# Низкорослые GLB-модели заполняют просветы между деревьями.
 	# Плотность привязана к лесу и болотному микрорельефу, а не к квадратному биому.
-	for attempt in range(880):
+	for attempt in range(2200):
 		var wx := float(c.x) * CHUNK_SIZE + rng.randf_range(1.0, CHUNK_SIZE - 1.0)
 		var wz := float(c.y) * CHUNK_SIZE + rng.randf_range(1.0, CHUNK_SIZE - 1.0)
 		var density: float = main.forest_density(wx, wz)
