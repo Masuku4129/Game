@@ -260,7 +260,7 @@ func _grow(bark: Surf, lf: Surf, P: Dictionary, st: Vector3, d: Vector3, L: floa
 			card(lf, p - b.y * sz * 0.5, b, sz, sz * (1.6 if kind == "birch" else 1.0), R(0.8, 1.05))
 	if lv >= maxlv:
 		return
-	var n: int = P["n"] + (1 if lv == 0 else 0)
+	var n: int = P["n"] + (2 if lv == 0 else 1)
 	for i in n:
 		var t := R(P["start"], 1.0) if lv == 0 else R(0.4, 1.0)
 		var p := _bez(st, mid, en, t)
