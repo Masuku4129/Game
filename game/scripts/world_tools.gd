@@ -938,12 +938,34 @@ class FellTree extends Node3D:
 		phase = "fall"
 		th = 0.025
 		w = 0.03
-		var L := H * s
-		var d := L * 0.55
-		var q := pivot.position + dir * d
-		var gy: float = main.ground_at(q.x, q.z) if main != null else 0.0
-		var drop := pivot.position.y - gy - r0 * s * 0.5
-		th_g = clampf(PI * 0.5 + atan2(drop, d), 1.2, 1.9)
+		th_g = _find_ground_contact_angle()
+
+	## Ищем первый угол реального контакта ствола с рельефом.
+	## Проверяем не условную точку на расстоянии 55% длины, а несколько
+	## точек вдоль всей исходной модели: на склоне ствол не должен уйти
+	## под землю серединой или зависнуть над ней одним концом.
+	func _find_ground_contact_angle() -> float:
+		if main == null:
+			return 1.5
+		var previous := 0.05
+		var chosen := 1.5
+		for sample_angle in range(4, 101):
+			var angle := float(sample_angle) * 0.025
+			pivot.basis = Basis(axis, angle)
+			var clearance := INF
+			for i in range(1, 17):
+				var y := lerpf(notch + 0.15 / s, H, float(i) / 16.0)
+				var p: Vector3 = top.global_transform * Vector3(0, y, 0)
+				var radius := _r_at(y) * s * 0.88
+				var floor_y: float = main.ground_at(p.x, p.z)
+				clearance = minf(clearance, p.y - radius - floor_y)
+			if clearance <= 0.025:
+				chosen = previous
+				break
+			previous = angle
+			chosen = angle
+		pivot.basis = Basis.IDENTITY
+		return clampf(chosen, 0.15, 2.5)
 
 	## Падение: стержень на шарнире (ускорение растёт с наклоном), удар и затухающие отскоки.
 	func step(delta: float) -> void:
