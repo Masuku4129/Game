@@ -3,37 +3,32 @@ extends Node3D
 ## Не меняет основную игровую сцену и не подменяет штатный генератор леса.
 
 const ASSETS := [
-	{"file": "taiga_spruce.glb", "label": "ЕЛЬ", "x": -18.0, "z": -5.0, "scale": 0.8},
-	{"file": "taiga_pine.glb", "label": "СОСНА", "x": -12.0, "z": -5.0, "scale": 0.7},
-	{"file": "taiga_larch.glb", "label": "ЛИСТВЕННИЦА", "x": -6.0, "z": -5.0, "scale": 0.75},
-	{"file": "taiga_cedar.glb", "label": "КЕДР", "x": 0.0, "z": -5.0, "scale": 0.8},
-	{"file": "taiga_birch.glb", "label": "БЕРЁЗА", "x": 6.0, "z": -5.0, "scale": 0.9},
-	{"file": "taiga_aspen.glb", "label": "ОСИНА", "x": 12.0, "z": -5.0, "scale": 0.8},
-	{"file": "taiga_alder.glb", "label": "ОЛЬХА", "x": 18.0, "z": -5.0, "scale": 0.9},
-	{"file": "taiga_bush.glb", "label": "КУСТ", "x": -18.0, "z": 5.0, "scale": 1.5},
-	{"file": "taiga_fern.glb", "label": "ПАПОРОТНИК", "x": -12.0, "z": 5.0, "scale": 2.0},
-	{"file": "taiga_grass.glb", "label": "ТРАВА", "x": -6.0, "z": 5.0, "scale": 2.0},
-	{"file": "taiga_moss.glb", "label": "МОХ", "x": 0.0, "z": 5.0, "scale": 1.6},
-	{"file": "taiga_rock.glb", "label": "КАМЕНЬ", "x": 6.0, "z": 5.0, "scale": 1.25},
-	{"file": "taiga_stump.glb", "label": "ПЕНЬ", "x": 12.0, "z": 5.0, "scale": 1.4},
-	{"file": "taiga_fallen_log.glb", "label": "ВАЛЕЖНИК", "x": 18.0, "z": 5.0, "scale": 1.2},
+	{"kind": "spruce", "label": "ЕЛЬ", "x": -15.0, "z": -5.0, "scale": 0.85},
+	{"kind": "pine", "label": "СОСНА", "x": -9.0, "z": -5.0, "scale": 0.7},
+	{"kind": "larch", "label": "ЛИСТВЕННИЦА", "x": -3.0, "z": -5.0, "scale": 0.75},
+	{"kind": "cedar", "label": "КЕДР", "x": 3.0, "z": -5.0, "scale": 0.8},
+	{"kind": "birch", "label": "БЕРЁЗА", "x": 9.0, "z": -5.0, "scale": 0.9},
+	{"kind": "aspen", "label": "ОСИНА", "x": 15.0, "z": -5.0, "scale": 0.8},
+	{"kind": "alder", "label": "ОЛЬХА", "x": -15.0, "z": 5.0, "scale": 1.0},
+	{"kind": "bush", "label": "КУСТ", "x": -9.0, "z": 5.0, "scale": 1.5},
+	{"kind": "stump", "label": "ПЕНЬ", "x": -3.0, "z": 5.0, "scale": 1.4},
 ]
 
 func _ready() -> void:
 	_make_stage()
+	var pv = preload("res://scripts/pveg.gd").new()
+	var loaded := 0
 	for spec in ASSETS:
-		var path := "res://models/environment/%s" % spec.file
-		var packed := load(path) as PackedScene
-		if packed == null:
-			push_error("GLB import failed: " + path)
+		var built: Array = pv.model_mesh(str(spec.kind))
+		if built.is_empty():
+			push_error("GLB model failed: " + str(spec.kind))
 			continue
-		var model := packed.instantiate() as Node3D
-		if model == null:
-			push_error("GLB root is not Node3D: " + path)
-			continue
+		var model := MeshInstance3D.new()
+		model.mesh = built[0]
 		model.position = Vector3(float(spec.x), 0.0, float(spec.z))
 		model.scale = Vector3.ONE * float(spec.scale)
 		add_child(model)
+		loaded += 1
 		var label := Label3D.new()
 		label.text = str(spec.label)
 		label.position = Vector3(float(spec.x), 0.12, float(spec.z) + 3.0)
@@ -43,7 +38,7 @@ func _ready() -> void:
 		label.outline_size = 8
 		label.no_depth_test = true
 		add_child(label)
-	print("TAIGA_ASSET_GALLERY loaded=", ASSETS.size())
+	print("TAIGA_ASSET_GALLERY loaded=", loaded)
 	if OS.get_environment("ASSET_GALLERY_SHOTS") != "":
 		await get_tree().process_frame
 		await get_tree().process_frame

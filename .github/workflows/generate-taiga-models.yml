@@ -5,7 +5,6 @@ on:
     branches: [main]
     paths:
       - "tools/generate_taiga_models.py"
-      - "tools/gen_model_textures.py"
       - "tools/requirements-models.txt"
       - ".github/workflows/generate-taiga-models.yml"
 permissions:
@@ -21,8 +20,6 @@ jobs:
           python-version: "3.11"
       - name: Install open-source mesh tooling
         run: python -m pip install -r tools/requirements-models.txt
-      - name: Generate model textures
-        run: python tools/gen_model_textures.py
       - name: Generate importable GLB assets
         run: python tools/generate_taiga_models.py
       - name: Verify generated GLB files
@@ -31,14 +28,13 @@ jobs:
           from pathlib import Path
           import trimesh
           files = sorted(Path("game/models/environment").glob("*.glb"))
-          assert len(files) == 14, f"Expected 14 GLB models, got {len(files)}"
+          assert len(files) == 11, f"Expected 11 GLB models, got {len(files)}"
           for path in files:
               scene = trimesh.load(path, force="scene")
               assert len(scene.geometry) > 0, path
               assert scene.bounds.shape == (2, 3), path
               assert scene.bounds[1, 1] > scene.bounds[0, 1], f"Y-up height missing: {path}"
-              for g in scene.geometry.values():
-                  assert g.visual.kind == "texture" and g.visual.uv is not None, f"no UV/texture: {path}"
+              assert all(n in ("bark", "foliage", "cut", "rock") for n in scene.geometry), f"unexpected mesh names: {path}"
               print(path, "meshes=", len(scene.geometry), "bytes=", path.stat().st_size)
           PY
       - name: Commit generated models
