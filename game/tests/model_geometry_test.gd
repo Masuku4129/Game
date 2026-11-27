@@ -30,7 +30,7 @@ func _check_mesh(mesh: Mesh, label: String) -> bool:
 	if bounds.size.length() < 0.001:
 		push_error("%s bounds are degenerate" % label)
 		return false
-	print("MODEL_MESH_OK ", label, " surfaces=", mesh.get_surface_count(), " vertices=", verts.size(), " bounds=", bounds.size())
+	print("MODEL_MESH_OK ", label, " surfaces=", mesh.get_surface_count(), " vertices=", verts.size(), " bounds=", bounds.size.length())
 	return true
 
 func _run() -> void:
