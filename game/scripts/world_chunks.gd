@@ -788,8 +788,15 @@ func _build_tree_cover(c: Vector2i) -> void:
 		var bucket_key := "%s:%d" % [kind, variant_index]
 		if not groups.has(bucket_key):
 			groups[bucket_key] = {"kind": kind, "variant": variant_index, "transforms": []}
-		# Broad age/size spread: saplings and mature canopy trees share the forest.
+		# Age structure responds to stand density and moisture. Crowded stands
+		# contain more slender young trees; wet, established patches can carry
+		# broader mature crowns, with rare emergent trees breaking the canopy.
+		var juvenile_bias := clampf(0.28 + (1.0 - density) * 0.34 - moisture * 0.12, 0.08, 0.62)
 		var scale := rng.randf_range(0.54, 1.66)
+		if rng.randf() < juvenile_bias:
+			scale = rng.randf_range(0.48, 0.92)
+		elif moisture > 0.58 and rng.randf() < 0.22:
+			scale = rng.randf_range(1.32, 1.78)
 		if rng.randf() < 0.035:
 			scale = rng.randf_range(1.68, 1.92)
 		var yaw := rng.randf_range(-PI, PI)
