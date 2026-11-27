@@ -69,6 +69,7 @@ var head_pitch := 0.0
 var rest_k := 0.0
 var tree := Vector3.ZERO
 var tree_top := 0.0
+var tree_orbit_angle := 0.0 # устойчивый угол спирального подъёма белки вокруг ствола
 var climb_h := 0.0
 var far := false
 var group := -1
@@ -346,6 +347,7 @@ func _flee_from(t: Node3D, tm: float) -> void:
 		var tp: Vector3 = main.nearest_tree(position, 15.0)
 		if tp != Vector3.INF:
 			tree = tp
+			tree_orbit_angle = atan2(position.x - tp.x, position.z - tp.z)
 			tree_top = clampf(main.tree_height_at(tp) * 0.82, 2.8, 10.0)
 			state = "to_tree"
 
@@ -705,6 +707,7 @@ func tick(delta: float) -> void:
 				position.x = tree.x - away.x * trunk_clearance
 				position.z = tree.z - away.y * trunk_clearance
 				heading = atan2(tree.x - position.x, tree.z - position.z)
+				tree_orbit_angle = atan2(position.x - tree.x, position.z - tree.z)
 				tree_top = clampf(main.tree_height_at(tree) * 0.82, 2.8, 10.0)
 				state = "tree"
 				state_t = rng.randf_range(15.0, 30.0)
@@ -722,10 +725,11 @@ func tick(delta: float) -> void:
 				_new_wander()
 		# Держим белку у поверхности ствола и слегка обводим вокруг коры по мере подъёма.
 		if climb_h > 0.0 and tree != Vector3.ZERO:
-			var radial := Vector2(position.x - tree.x, position.z - tree.z).normalized()
-			if radial.length_squared() < 0.01:
-				radial = Vector2(cos(heading), sin(heading))
-			var bark_offset: float = main.tree_radius_at(tree) + maxf(0.10, _obstacle_radius() * 0.35) + sin(climb_h * 1.7) * 0.025
+			# Подъём идёт плавной спиралью: угол накапливается от высоты,
+			# а не пересчитывается из дрожащей позиции модели каждый кадр.
+			var climb_angle: float = tree_orbit_angle + climb_h * 0.24 + sin(climb_h * 1.1) * 0.035
+			var radial := Vector2(sin(climb_angle), cos(climb_angle))
+			var bark_offset: float = main.tree_radius_at(tree) + maxf(0.10, _obstacle_radius() * 0.35)
 			position.x = tree.x + radial.x * bark_offset
 			position.z = tree.z + radial.y * bark_offset
 			heading = atan2(tree.x - position.x, tree.z - position.z)
