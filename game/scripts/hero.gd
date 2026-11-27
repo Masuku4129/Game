@@ -639,7 +639,10 @@ func _process_main(delta: float) -> void:
 	position.z = p.z
 	# На крутом склоне сила тяжести постепенно тянет вниз; не телепортируем героя через препятствия.
 	if sliding > 0.05 and depth < 0.5 and not airborne:
-		vel += down * (3.0 + 8.0 * sliding) * delta
+		vel += down * (2.6 + 9.2 * sliding) * delta
+		# Wet/icy slopes retain momentum downhill; soft ground damps the skid.
+		var skid_surface := clampf((main.weather.ice * 0.7 + main.weather.wet * 0.3) - swamp_depth * 0.45, 0.0, 1.0)
+		vel *= 1.0 - skid_surface * sliding * delta * 0.65
 	var sp := vel.length()
 	moving = sp > 0.25
 	if moving and (mag > 0.12 or sliding > 0.2):
