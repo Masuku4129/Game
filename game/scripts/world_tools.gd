@@ -119,6 +119,13 @@ func tree_pos(rec: Array) -> Vector3:
 
 func _hide_tree(rec: Array) -> void:
 	var o: Vector3 = (rec[2] as Transform3D).origin
+	# Запоминаем срубленное дерево по мировым координатам: MultiMesh ID меняется
+	# при потоковой выгрузке, координатный ID остаётся неизменным.
+	if main.chunk_stream != null:
+		var state := main.chunk_stream.read_state(o, "tree_state")
+		var tree_key := "%d:%d" % [roundi(o.x * 10.0), roundi(o.z * 10.0)]
+		state[tree_key] = {"hidden": true}
+		main.chunk_stream.write_state(o, "tree_state", state)
 	rec[2] = Transform3D(Basis().scaled(Vector3(0.0001, 0.0001, 0.0001)), Vector3(o.x, -500.0, o.z))
 	(rec[0] as MultiMesh).set_instance_transform(rec[1], rec[2])
 	main._update_near(true)
