@@ -5,7 +5,7 @@ var main: Node3D
 var move_vec := Vector2.ZERO
 var cam_yaw := 0.0
 var speed := 1.7
-var run_speed := 5.0
+var run_speed := 6.5 # ускоренный бег: +30% к прежней максимальной скорости
 var running := false
 var climbing := 0.0
 var moving := false
@@ -1053,7 +1053,8 @@ func _animate_model(delta: float) -> void:
 			return
 	# --- /combat ---
 	if _hspeed > 2.4:
-		_play("Jog_Fwd", clampf(_hspeed / 3.6, 0.85, 1.4))
+		# Поддерживаем темп цикла бега при повышенной скорости перемещения.
+		_play("Jog_Fwd", clampf(_hspeed / 3.8, 0.85, 1.8))
 	elif _hspeed > 0.2:
 		_play("Walk", clampf(_hspeed / 1.6, 0.6, 1.25))
 	else:
