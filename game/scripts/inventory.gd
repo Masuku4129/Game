@@ -256,7 +256,11 @@ func add_item(id: String, n: int = 1) -> bool:
 	return int(main.inv[id]) >= n
 
 func remove_item(id: String, n: int = 1) -> bool:
-	if count(id) < n:
+	var worn_count := 0
+	for slot: String in main.worn:
+		if String(main.worn[slot]) == id:
+			worn_count += 1
+	if count(id) - worn_count < n:
 		return false
 	main.inv[id] = count(id) - n
 	if int(main.inv[id]) <= 0:
@@ -452,6 +456,18 @@ func _sheet_input(e: InputEvent) -> void:
 	if e is InputEventScreenTouch and e.pressed and e.position.y < 100.0 and e.position.x > 210.0 and e.position.x < 800.0:
 		tab = clampi(int((e.position.x - 210.0) / 175.0), 0, 3)
 		sheet.queue_redraw()
+		return
+	if tab == 2 and e is InputEventScreenTouch:
+		var clothing_touch := e as InputEventScreenTouch
+		if clothing_touch.pressed:
+			if clothing_touch.position.x < 610.0 and clothing_touch.position.y >= GRID.y and clothing_touch.position.y <= 640.0:
+				var clothing_list := _wearables()
+				var clothing_index := int((clothing_touch.position.y - GRID.y) / ROW_H)
+				if clothing_index >= 0 and clothing_index < clothing_list.size():
+					sel = clothing_list[clothing_index]
+			elif clothing_touch.position.x >= 640.0 and clothing_touch.position.y >= 500.0 and sel != "":
+				_wear_toggle(sel)
+			sheet.queue_redraw()
 		return
 	if tab == 1:
 		if e is InputEventMouseButton:
