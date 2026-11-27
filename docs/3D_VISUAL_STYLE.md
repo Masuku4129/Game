@@ -47,3 +47,26 @@ Season changes must alter object models and palettes, not just ground tint: foli
 
 ## Quality gate
 Before claiming visual completion, capture real gameplay views at close, mid and far distance, and inspect seasonal/weather examples. Verify collisions and animation tests by fresh CI logs. Generated concept art is not a substitute for in-engine screenshots.
+
+## Current implementation pass — 2026-11-27
+
+### Model generator changes
+- `pveg.gd`: shrub crowns are rebuilt around visible branch forks with intermediate side foliage and irregular crown lobes. Berry bushes use multiple connected branch forks and more distributed berry clusters.
+- `veg.gd`: fern model uses a denser layered fan with secondary leaflet cards; reed clusters use five overlapping fans with varied lean and height.
+- `model_geometry_test.gd`: structural gate for mesh surfaces, non-empty vertices, finite positions, and non-degenerate bounds for a sample set of trees, shrubs, marsh plants, mushrooms, rocks, berries, and representative animal rigs.
+
+### Validation limits
+- The structural test verifies generated mesh data only; it cannot judge art quality, shading, silhouette at mobile camera distance, or in-world spawn density.
+- Animal collision, gait scaling, scheduler, and rock collision tests are run in CI after the mesh test.
+- Player model and player animations remain deferred by the project's current scope decision.
+- Real scene screenshots are required before final acceptance; automated screenshot capture is wired into the CI workflow.
+
+### Acceptance checklist
+- [ ] Every object family has the cohesive cartoon/painterly shape language.
+- [ ] Close/mid/far screenshots reviewed in landscape.
+- [ ] Meshes checked for disconnected, malformed, missing, or floating parts.
+- [ ] Animal gait loops visually reviewed and motion-grounding checked.
+- [ ] Solid object collision shapes reviewed in actual play.
+- [ ] Seasonal model variants reviewed, not just color parameters.
+- [ ] Weather overlays (snow/wetness) on 3D models visually reviewed.
+- [ ] Mobile performance and density reviewed on a device or a representative profile.
