@@ -49,15 +49,26 @@ func _seed(c: Vector2i) -> int:
 func _rebuild_queue() -> void:
 	pending.clear()
 	var candidates: Array = []
+	var view_forward := Vector2(-sin(main.rig.rotation.y), -cos(main.rig.rotation.y))
+	var move_forward := Vector2(main.hero.vel.x, main.hero.vel.z)
+	if move_forward.length_squared() > 0.25:
+		move_forward = move_forward.normalized()
+	else:
+		move_forward = Vector2.ZERO
 	for z in range(-PRELOAD_RADIUS, PRELOAD_RADIUS + 1):
 		for x in range(-PRELOAD_RADIUS, PRELOAD_RADIUS + 1):
 			var c := center + Vector2i(x, z)
-			var d := Vector2(x, z).length_squared()
+			var offset := Vector2(x, z)
+			var d := offset.length_squared()
 			if d > float(PRELOAD_RADIUS * PRELOAD_RADIUS) + 0.5:
 				continue
 			if active.has(_key(c)):
 				continue
-			candidates.append({"coord": c, "priority": d})
+			var direction := offset.normalized() if d > 0.0 else Vector2.ZERO
+			# Подготавливаем чанки прежде всего перед камерой и по ходу движения,
+			# но соседние боковые чанки остаются в очереди для свободного поворота.
+			var priority := float(d) - direction.dot(view_forward) * 2.4 - direction.dot(move_forward) * 1.8
+			candidates.append({"coord": c, "priority": priority})
 	candidates.sort_custom(func(a: Dictionary, b: Dictionary) -> bool: return float(a.priority) < float(b.priority))
 	for item: Dictionary in candidates:
 		pending.append(item.coord)
