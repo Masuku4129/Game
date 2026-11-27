@@ -884,8 +884,6 @@ func _can_move_segment(from: Vector3, to: Vector3, flying: bool = false) -> bool
 
 func _can_step(p: Vector3, flying: bool = false, from_pos: Vector3 = Vector3.INF) -> bool:
 	var reference := position if from_pos == Vector3.INF else from_pos
-	if absf(p.x) > main.SIZE * 0.5 - 10.0 or absf(p.z) > main.SIZE * 0.5 - 10.0:
-		return false
 	if main.blocked(p.x, p.z, _obstacle_radius()):
 		return false
 	var base_y: float = main.grid_height(p.x, p.z)
