@@ -505,11 +505,19 @@ func _rebuild_grid() -> void:
 ## Звери в ячейках, перекрывающих круг радиуса r (без точной проверки расстояния).
 func near(p: Vector3, r: float) -> Array:
 	var out: Array = []
+	var r2 := r * r
 	for gz in range(floori((p.z - r) / GC), floori((p.z + r) / GC) + 1):
 		for gx in range(floori((p.x - r) / GC), floori((p.x + r) / GC) + 1):
 			var k := Vector2i(gx, gz)
-			if grid.has(k):
-				out.append_array(grid[k])
+			if not grid.has(k):
+				continue
+			for a in grid[k]:
+				if a == null or not is_instance_valid(a):
+					continue
+				var dx := a.position.x - p.x
+				var dz := a.position.z - p.z
+				if dx * dx + dz * dz <= r2:
+					out.append(a)
 	return out
 
 ## Тревога в стаде: все бегут вместе.
