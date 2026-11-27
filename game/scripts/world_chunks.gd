@@ -396,7 +396,7 @@ func _build_bog_cover(c: Vector2i, parent: Node3D) -> void:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = _seed(c) ^ 0x3D6E8A21
 	var groups: Dictionary = {}
-	var attempts := 1550
+	var attempts := 1950
 	for n in attempts:
 		var wx := float(c.x) * CHUNK_SIZE + rng.randf_range(0.5, CHUNK_SIZE - 0.5)
 		var wz := float(c.y) * CHUNK_SIZE + rng.randf_range(0.5, CHUNK_SIZE - 0.5)
@@ -407,7 +407,7 @@ func _build_bog_cover(c: Vector2i, parent: Node3D) -> void:
 		# Smooth world-coordinate patch signal produces plant communities rather
 		# instead of a uniform dice mix: hummocks, reed beds and mossy pools.
 		var patch_signal := sin(wx * 0.041 + wz * 0.023) * cos(wz * 0.037 - wx * 0.019)
-		var roll := clampf(rng.randf() + patch_signal * 0.22 + wet * 0.12, 0.0, 1.0)
+		var roll := clampf(rng.randf() + patch_signal * 0.25 + wet * 0.16, 0.0, 1.0)
 		var kind := "sedge"
 		if wet > 0.78 and roll < 0.32:
 			kind = "moss"
@@ -435,7 +435,7 @@ func _build_bog_cover(c: Vector2i, parent: Node3D) -> void:
 		if not groups.has(key):
 			groups[key] = {"kind": kind, "variant": vi, "xf": []}
 		var h := main.height(wx, wz)
-		var scale := rng.randf_range(0.62, 1.36)
+		var scale := rng.randf_range(0.56, 1.48)
 		var xf := Transform3D(Basis(Vector3.UP, rng.randf_range(-PI, PI)).scaled(Vector3.ONE * scale), Vector3(wx, h, wz))
 		groups[key].xf.append({"transform": xf, "wet": wet})
 	for key: String in groups:
