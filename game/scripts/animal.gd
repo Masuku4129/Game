@@ -74,6 +74,7 @@ var climb_h := 0.0
 var far := false
 var group := -1
 var _acc := randf() * 0.05  # perf: сдвиг шага между зверями
+var _sim_tick_interval := 0.08
 var trk := 0.0       # путь с последнего следа
 var trk_side := 1.0
 var rng := RandomNumberGenerator.new()
