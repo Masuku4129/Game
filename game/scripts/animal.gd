@@ -843,13 +843,16 @@ func _obstacle_radius() -> float:
 func _can_move_segment(from: Vector3, to: Vector3, flying: bool = false) -> bool:
 	var distance := Vector2(to.x - from.x, to.z - from.z).length()
 	var steps := maxi(1, ceili(distance / 0.6))
+	var previous := from
 	for i in range(1, steps + 1):
 		var sample := from.lerp(to, float(i) / float(steps))
-		if not _can_step(sample, flying):
+		if not _can_step(sample, flying, previous):
 			return false
+		previous = sample
 	return true
 
-func _can_step(p: Vector3, flying: bool = false) -> bool:
+func _can_step(p: Vector3, flying: bool = false, from_pos: Vector3 = Vector3.INF) -> bool:
+	var reference := position if from_pos == Vector3.INF else from_pos
 	if absf(p.x) > main.SIZE * 0.5 - 10.0 or absf(p.z) > main.SIZE * 0.5 - 10.0:
 		return false
 	if main.blocked(p.x, p.z, _obstacle_radius()):
@@ -859,9 +862,11 @@ func _can_step(p: Vector3, flying: bool = false) -> bool:
 	# Если уже оказался внутри — разрешаем шаги наружу, чтобы не создать soft-lock.
 	if main.has_method("swamp_depth_at"):
 		var bog_here: float = main.swamp_depth_at(p.x, p.z)
-		var bog_current: float = main.swamp_depth_at(position.x, position.z)
+		var bog_current: float = main.swamp_depth_at(reference.x, reference.z)
 		var bog_limit := float({"squirrel": 0.18, "hare": 0.22, "capercaillie": 0.2, "fox": 0.38, "lynx": 0.42, "muskdeer": 0.62, "roe": 0.68, "deer": 0.78, "moose": 1.05, "bear": 0.95, "boar": 0.72, "wolf": 0.7, "wolverine": 0.65, "beaver": 1.4}.get(kind, 0.65))
-		if bog_here > bog_limit and bog_current <= bog_limit:
+		# Не позволяем войти в непроходимую трясину или углубиться в неё;
+		# уже увязшее животное может двигаться только к более мелкому месту.
+		if bog_here > bog_limit and bog_here > bog_current + 0.02:
 			return false
 	var solid_y: float = main.solid_top(p.x, p.z)
 	var obstacle_h: float = solid_y - base_y
@@ -870,7 +875,9 @@ func _can_step(p: Vector3, flying: bool = false) -> bool:
 	if not flying and obstacle_h > step_limit:
 		return false
 	var gy: float = maxf(base_y, solid_y)
-	var g0: float = maxf(main.grid_height(position.x, position.z), main.solid_top(position.x, position.z))
+	# Сравниваем высоту с предыдущей точкой маршрута, а не с исходной
+	# позицией зверя: длинный probe должен проходить по плавному склону.
+	var g0: float = maxf(main.grid_height(reference.x, reference.z), main.solid_top(reference.x, reference.z))
 	if gy < main.WATER_Y - 0.3 and not swimmer() and not flying:
 		return false
 	if swimmer() and kind != "beaver" and not flying and swim_k < 0.2 and not cross and not (state in ["flee", "chase", "charge"]):
