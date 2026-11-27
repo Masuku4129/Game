@@ -102,6 +102,12 @@ func _record_exploration(player_pos: Vector3) -> void:
 					zone_name = "windfall"
 			var forest_name := "dense_taiga" if forest > 0.72 else "woodland" if forest > 0.38 else "sparse_trees" if forest > 0.12 else "clearing"
 			var surface_name := "steep_slope" if slope > 0.42 else "rolling" if slope > 0.16 else "flat"
+			var north_h := float(main.height(wx, wz - 12.0))
+			var south_h := float(main.height(wx, wz + 12.0))
+			var east_h := float(main.height(wx + 12.0, wz))
+			var west_h := float(main.height(wx - 12.0, wz))
+			var local_high := elevation - maxf(maxf(north_h, south_h), maxf(east_h, west_h))
+			var local_low := minf(minf(north_h, south_h), minf(east_h, west_h)) - elevation
 			var landmarks: Array[String] = []
 			if river < 12.0:
 				landmarks.append("river_corridor")
@@ -111,6 +117,12 @@ func _record_exploration(player_pos: Vector3) -> void:
 				landmarks.append("wet_ground")
 			if slope > 0.5:
 				landmarks.append("steep_terrain")
+			if local_high > 1.8:
+				landmarks.append("local_ridge")
+			if local_low > 1.8:
+				landmarks.append("terrain_hollow")
+			if elevation > main.WATER_Y + 12.0:
+				landmarks.append("elevated_ground")
 			if forest < 0.15:
 				landmarks.append("open_area")
 			var record := {
