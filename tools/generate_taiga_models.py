@@ -51,13 +51,30 @@ def export(name, b):
         v = np.vstack(e["v"]) @ rot.T
         n = unit(np.vstack(e["n"]) @ rot.T)
         f = np.vstack(e["f"])
+        # Reject collapsed/non-finite triangles before Godot LOD generation.
+        finite_vertices = np.isfinite(v).all(axis=1)
+        valid_indices = (f >= 0).all(axis=1) & (f < len(v)).all(axis=1)
+        safe_faces = f[valid_indices]
+        tri = v[safe_faces]
+        area2 = np.linalg.norm(np.cross(tri[:, 1] - tri[:, 0], tri[:, 2] - tri[:, 0]), axis=1)
+        valid_faces = np.isfinite(tri).all(axis=(1, 2)) & np.isfinite(area2) & (area2 > 1e-10)
+        valid_faces &= finite_vertices[safe_faces].all(axis=1)
+        removed_faces = len(f) - int(valid_faces.sum())
+        f = safe_faces[valid_faces]
+        if len(f) == 0:
+            raise RuntimeError(f"{name}/{key}: no valid triangles remain")
+        n = np.nan_to_num(n, nan=0.0, posinf=0.0, neginf=0.0)
+        nlen = np.linalg.norm(n, axis=1)
+        fallback = unit(v - np.mean(v[finite_vertices], axis=0))
+        n[nlen < 1e-8] = fallback[nlen < 1e-8]
+        n = unit(n)
         mesh = trimesh.Trimesh(vertices=v, faces=f, vertex_normals=n, process=False)
         mesh.visual = TextureVisuals(uv=np.vstack(e["uv"]))
         scene.add_geometry(mesh, geom_name=key, node_name=key)
         tris += len(f)
     data = scene.export(file_type="glb")
     (OUT / name).write_bytes(data)
-    print(f"{name:24s} meshes={'/'.join(b.d)} tris={tris:5d} {len(data)/1024:6.1f} KB")
+    print(f"{name:24s} meshes={'/'.join(b.d)} tris={tris:5d} dropped={removed_faces:4d} {len(data)/1024:6.1f} KB")
 
 
 
