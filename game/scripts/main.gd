@@ -1816,7 +1816,14 @@ func move_factor() -> float:
 		f = 0.5
 	elif injuries.has("рана: нога"):
 		f = 0.78
-	return f * (0.6 + 0.4 * clampf(health * 2.0, 0.0, 1.0))
+	# Heavier carried loads gradually affect walking and running without
+	# punishing the player at the start of the box capacity.
+	var carried_weight := 0.0
+	if inventory != null and inventory.has_method("weight"):
+		carried_weight = float(inventory.weight())
+	var load_ratio := clampf(carried_weight / 15.0, 0.0, 1.0)
+	var load_factor := 1.0 - smoothstep(0.58, 1.0, load_ratio) * 0.18
+	return f * load_factor * (0.6 + 0.4 * clampf(health * 2.0, 0.0, 1.0))
 
 const BLOCK_R := {"fungus_snag": 0.22, "birch_dead": 0.2, "snag": 0.25, "snag_b": 0.25, "cherry": 0.15, "fir": 0.36, "cedar": 0.38, "rowan": 0.2, "spruce": 0.4, "pine": 0.32, "birch": 0.28, "bare": 0.3, "spruce_dead": 0.3, "stump": 0.45, "rock": 0.5, "boulder": 0.6, "larch": 0.32, "aspen": 0.26}
 
