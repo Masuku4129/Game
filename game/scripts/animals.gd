@@ -15,6 +15,7 @@ var groups := {}
 var rng := RandomNumberGenerator.new()
 var _far_acc := 0.0
 var _bird_acc := 0.0
+var _classify_acc := 0.0
 var _far_i := 0
 var bird_mesh := {}
 # сетка зверей (ячейка GC м), перестраивается раз в 0,5 с: соседей ищем только в ближних ячейках
@@ -377,32 +378,34 @@ func _process(delta: float) -> void:
 	if _grid_t <= 0.0:
 		_grid_t = 0.5
 		_rebuild_grid()
-		for c in carcasses.duplicate():
-			if c.meat <= 0.0:
-				carcasses.erase(c)
-	# ближние — каждый кадр, дальние — по кругу, несколько за кадр
+		for i in range(carcasses.size() - 1, -1, -1):
+			if carcasses[i].meat <= 0.0:
+				carcasses.remove_at(i)
+	# Классификацию дальности и видимости достаточно обновлять 10 Гц:
+	# это убирает повторные distance/visibility обращения на каждом кадре.
+	_classify_acc += delta
+	var classify_now := _classify_acc >= 0.1
+	if classify_now:
+		_classify_acc = fmod(_classify_acc, 0.1)
 	_far_acc += delta
 	var n := list.size()
 	for a in list:
-		var d2 := Vector2(a.position.x - hp.x, a.position.z - hp.z).length_squared()
-		var was_far: bool = a.far
-		a.far = d2 > NEAR_R * NEAR_R
-		# perf: вблизи (до MID_R) — каждый кадр; дальше в пределах NEAR_R — ~20 раз в секунду
-		# со сдвигом по зверям (накопленным шагом), чтобы не грелся телефон
-		if not a.far:
-			a._acc += delta
-			var tick_interval: float = NEAR_DT if d2 < MID_R * MID_R else MID_DT
-			if a._acc >= tick_interval:
-				a.tick(a._acc)
+		a._acc += delta
+		if classify_now:
+			var d2 := Vector2(a.position.x - hp.x, a.position.z - hp.z).length_squared()
+			var was_far: bool = a.far
+			a.far = d2 > NEAR_R * NEAR_R
+			a._sim_tick_interval = NEAR_DT if d2 < MID_R * MID_R else MID_DT
+			if was_far and not a.far:
 				a._acc = 0.0
-		else:
-			a._acc += delta
-		if was_far and not a.far:
+			var show_r: float = 40.0 if a.kind in ["hare", "squirrel", "beaver"] else SHOW_R
+			a.visible = d2 < show_r * show_r and (not a.dead or a.meat > 0.0) and a.state != "sleep" and a.state != "inlodge"
+			if a.parts.has("ap"):
+				a.parts["ap"].active = a.visible and not a.dead and not a.far
+		# Ближняя симуляция сохраняет прежние интервалы 30/12.5 Гц.
+		if not a.far and a._acc >= a._sim_tick_interval:
+			a.tick(a._acc)
 			a._acc = 0.0
-		var show_r: float = 40.0 if a.kind in ["hare", "squirrel", "beaver"] else SHOW_R
-		a.visible = d2 < show_r * show_r and (not a.dead or a.meat > 0.0) and a.state != "sleep" and a.state != "inlodge"
-		if a.parts.has("ap"):
-			a.parts["ap"].active = a.visible and not a.dead and not a.far
 	# perf: дальние (за NEAR_R) — по кругу, каждый примерно раз в секунду
 	var per := maxi(1, n / 60)
 	for k in per:
