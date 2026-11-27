@@ -12,6 +12,8 @@ const ASSETS := [
 	{"kind": "alder", "label": "ОЛЬХА", "x": -15.0, "z": 5.0, "scale": 1.0},
 	{"kind": "bush", "label": "КУСТ", "x": -9.0, "z": 5.0, "scale": 1.5},
 	{"kind": "stump", "label": "ПЕНЬ", "x": -3.0, "z": 5.0, "scale": 1.4},
+	{"kind": "rock", "label": "ВАЛУН", "x": 3.0, "z": 5.0, "scale": 1.2},
+	{"kind": "fallen0", "label": "ВАЛЕЖНИК", "x": 9.0, "z": 5.0, "scale": 1.0},
 ]
 
 func _ready() -> void:
