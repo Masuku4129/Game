@@ -85,6 +85,8 @@ func _rebuild_queue() -> void:
 		move_forward = move_forward.normalized()
 	else:
 		move_forward = Vector2.ZERO
+	# Queue two rings: near-player chunks first, then directional prefetch.
+	# Priority smoothly favors view/movement direction while keeping the rear ring loaded.
 	for z in range(-PRELOAD_RADIUS, PRELOAD_RADIUS + 1):
 		for x in range(-PRELOAD_RADIUS, PRELOAD_RADIUS + 1):
 			var c := center + Vector2i(x, z)
@@ -94,12 +96,18 @@ func _rebuild_queue() -> void:
 				continue
 			if active.has(_key(c)):
 				continue
+			var distance := sqrt(d)
 			var direction := offset.normalized() if d > 0.0 else Vector2.ZERO
-			# Подготавливаем чанки прежде всего перед камерой и по ходу движения,
-			# но соседние боковые чанки остаются в очереди для свободного поворота.
-			var priority := float(d) - direction.dot(view_forward) * 5.0 - direction.dot(move_forward) * 4.2
+			var view_alignment := direction.dot(view_forward)
+			var move_alignment := direction.dot(move_forward)
+			var ring_bonus := 0.0
+			if distance <= 1.5:
+				ring_bonus = 100.0
+			elif distance <= 2.5:
+				ring_bonus = 25.0
+			var priority := distance * 10.0 - view_alignment * 14.0 - move_alignment * 18.0 - ring_bonus
 			candidates.append({"coord": c, "priority": priority})
-	candidates.sort_custom(func(a: Dictionary, b: Dictionary) -> bool: return float(a.priority) < float(b.priority))
+	candidates.sort_custom(func(a: Dictionary, b: Dictionary) -> bool: return float(a.priority) < float(b.priority)
 	for item: Dictionary in candidates:
 		pending.append(item.coord)
 
