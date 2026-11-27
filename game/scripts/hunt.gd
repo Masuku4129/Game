@@ -78,6 +78,116 @@ func setup() -> void:
 	debug = OS.get_environment("HUNT_DEBUG") != ""
 	if main.hero != null and main.hero.get("m_sk") != null:
 		_build_overlays(main.hero.m_sk)
+	_spawn_rare_swamp_traveler()
+
+## Редкая находка на болоте: один путник на карту, если сработал шанс генерации.
+## Позиция детерминирована seed карты; при загрузке сохранения находка восстанавливается из loot pile.
+func _spawn_rare_swamp_traveler() -> void:
+	var map_seed := int(main.get("map_seed"))
+	var srng := RandomNumberGenerator.new()
+	srng.seed = map_seed ^ 0x4A71B
+	if srng.randf() > 0.32:
+		return
+	var half := float(main.SIZE) * 0.5
+	for attempt in 700:
+		var x := srng.randf_range(-half + 8.0, half - 8.0)
+		var z := srng.randf_range(-half + 8.0, half - 8.0)
+		if int(main.zone(x, z)) != 2:
+			continue
+		var depth := float(main.swamp_depth_at(x, z))
+		if depth < 0.12 or depth > 0.82:
+			continue
+		if main.normal_at(x, z).y < 0.97 or main.height(x, z) < main.WATER_Y - 0.2:
+			continue
+		var p := Vector3(x, surface_y(x, z), z)
+		_create_traveler_pile(p, srng.randf() * TAU, srng.randi_range(3, 8))
+		return
+
+func _create_traveler_body(parent: Node3D) -> void:
+	var coat := StandardMaterial3D.new()
+	coat.albedo_color = Color(0.24, 0.19, 0.13)
+	coat.roughness = 0.96
+	var trousers := StandardMaterial3D.new()
+	trousers.albedo_color = Color(0.19, 0.2, 0.17)
+	trousers.roughness = 1.0
+	var skin := StandardMaterial3D.new()
+	skin.albedo_color = Color(0.48, 0.34, 0.25)
+	skin.roughness = 1.0
+	var leather := StandardMaterial3D.new()
+	leather.albedo_color = Color(0.22, 0.13, 0.08)
+	leather.roughness = 1.0
+	# Фигура лежит на боку; силуэт читается как человек в дорожной одежде.
+	var torso := MeshInstance3D.new()
+	var tm := CapsuleMesh.new()
+	tm.radius = 0.19
+	tm.height = 0.72
+	torso.mesh = tm
+	torso.material_override = coat
+	torso.rotation.x = PI * 0.5
+	torso.position = Vector3(0, 0.22, 0.02)
+	parent.add_child(torso)
+	var head := MeshInstance3D.new()
+	var hm := SphereMesh.new()
+	hm.radius = 0.125
+	hm.height = 0.25
+	head.mesh = hm
+	head.material_override = skin
+	head.position = Vector3(0, 0.25, -0.48)
+	parent.add_child(head)
+	for side in [-1.0, 1.0]:
+		var leg := MeshInstance3D.new()
+		var lm := CapsuleMesh.new()
+		lm.radius = 0.075
+		lm.height = 0.58
+		leg.mesh = lm
+		leg.material_override = trousers
+		leg.rotation.x = PI * 0.5
+		leg.position = Vector3(side * 0.105, 0.13, 0.48 + side * 0.04)
+		parent.add_child(leg)
+		var arm := MeshInstance3D.new()
+		var am := CapsuleMesh.new()
+		am.radius = 0.055
+		am.height = 0.48
+		arm.mesh = am
+		arm.material_override = coat
+		arm.rotation = Vector3(PI * 0.5, 0, side * 0.42)
+		arm.position = Vector3(side * 0.22, 0.19, -0.02)
+		parent.add_child(arm)
+		var boot := MeshInstance3D.new()
+		var bm := BoxMesh.new()
+		bm.size = Vector3(0.13, 0.09, 0.22)
+		boot.mesh = bm
+		boot.material_override = leather
+		boot.position = Vector3(side * 0.105, 0.1, 0.77 + side * 0.04)
+		parent.add_child(boot)
+	# Полевой вещмешок и ремень поверх куртки.
+	var pack := MeshInstance3D.new()
+	var pm := BoxMesh.new()
+	pm.size = Vector3(0.28, 0.28, 0.16)
+	pack.mesh = pm
+	pack.material_override = leather
+	pack.position = Vector3(0, 0.37, 0.14)
+	parent.add_child(pack)
+	var strap := MeshInstance3D.new()
+	var sm := BoxMesh.new()
+	sm.size = Vector3(0.035, 0.42, 0.025)
+	strap.mesh = sm
+	strap.material_override = leather
+	strap.rotation.z = -0.35
+	strap.position = Vector3(0.17, 0.3, -0.02)
+	parent.add_child(strap)
+
+func _create_traveler_pile(pos: Vector3, yaw: float, rounds: int) -> void:
+	var pl := _new_pile(pos, yaw)
+	pl["corpse"] = true
+	pl["r"] = 1.25
+	var body := Node3D.new()
+	body.position.y = 0.015
+	(pl["node"] as Node3D).add_child(body)
+	_create_traveler_body(body)
+	_drop_generic("rifle", pos + Vector3(0.55, 0.0, 0.15))
+	for i in rounds:
+		_drop_generic("rifle_round", pos + Vector3(0.55, 0.0, 0.15))
 
 func now_h() -> float:
 	return float(main.t_hours) + float(main.day_count) * 24.0
@@ -561,7 +671,7 @@ func _new_pile(pos: Vector3, yaw: float) -> Dictionary:
 	add_child(node)
 	node.position = pos
 	node.rotation.y = yaw
-	var pl := {"pos": pos, "items": {}, "node": node, "hide": null, "meats": [], "r": 0.5, "cut": 0, "L": 0.0}
+	var pl := {"pos": pos, "items": {}, "node": node, "hide": null, "meats": [], "r": 0.5, "cut": 0, "L": 0.0, "corpse": false}
 	piles.append(pl)
 	return pl
 
@@ -1171,7 +1281,7 @@ func to_save() -> Dictionary:
 	var ps: Array = []
 	for pl: Dictionary in piles:
 		if not (pl["items"] as Dictionary).is_empty():
-			ps.append({"pos": SV.enc(pl["pos"]), "items": (pl["items"] as Dictionary).duplicate()})
+			ps.append({"pos": SV.enc(pl["pos"]), "items": (pl["items"] as Dictionary).duplicate(), "corpse": bool(pl.get("corpse", false)), "yaw": float((pl["node"] as Node3D).rotation.y)})
 	var cs: Array = []
 	if main.animals != null:
 		for a in carc.keys():
@@ -1189,6 +1299,11 @@ func from_save(d: Dictionary) -> void:
 	for e: Dictionary in d.get("piles", []):
 		var pos: Vector3 = SV.dec(e["pos"])
 		var it := SV.int_dict(e.get("items", {}))
+		if bool(e.get("corpse", false)):
+			var rounds := int(it.get("rifle_round", 0))
+			_create_traveler_pile(pos, float(e.get("yaw", 0.0)), rounds)
+			it.erase("rifle_round")
+			it.erase("rifle")
 		for id: String in it:
 			for k in mini(int(it[id]), 40):
 				drop_item(id, pos)
