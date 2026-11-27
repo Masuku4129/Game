@@ -43,6 +43,7 @@ var depth := 0.0
 var sink := 0.0      # погружение в снег, м
 var mud_sink := 0.0  # погружение в грязь, м (модель опускается)
 var swamp_sink := 0.0 # провал в трясину, м; требуется жердь для выхода
+var swamp_escape_progress := 0.0
 var swamp_depth := 0.0
 var vy := 0.0
 var airborne := false
@@ -404,7 +405,7 @@ func action_label() -> String:
 	if swimb > 0.3:
 		return ""
 	if swamp_sink > 0.72:
-		return "Упереться жердью" if int(main.inv.get("branch", 0)) > 0 else ("Нужна жердь!" if swamp_sink >= 1.12 else "")
+		return "Упереться жердью" if int(main.inv.get("bog_pole", 0)) > 0 else ("Нужна жердь!" if swamp_sink >= 1.12 else "")
 	if state == "butcher":
 		return "Прервать"
 	if tools != null:
@@ -435,16 +436,24 @@ func do_action() -> void:
 		_stand_up()
 		return
 	if swamp_sink > 0.72:
-		if int(main.inv.get("branch", 0)) <= 0:
-			main._say("Трясина удерживает. Нужна длинная жердь, чтобы выбраться.")
+		if int(main.inv.get("bog_pole", 0)) <= 0:
+			main._say("Трясина удерживает. Нужна изготовленная жердь.")
 			return
-		main.stamina = maxf(0.0, float(main.stamina) - 0.12)
-		swamp_sink = 0.28
+		if main.stamina < 0.045:
+			main._say("Не хватает сил упереться жердью")
+			return
+		main.stamina = maxf(0.0, float(main.stamina) - 0.045)
+		swamp_escape_progress = minf(1.0, swamp_escape_progress + 0.24 + swamp_depth * 0.035)
+		swamp_sink = maxf(0.0, swamp_sink - 0.13 - swamp_escape_progress * 0.045)
 		mud_sink = minf(mud_sink, 0.2)
 		vel = Vector3.ZERO
-		land_t = 0.45
-		land_k = 0.35
-		main._say("Уперлись жердью и выбрались из трясины")
+		land_t = 0.2
+		land_k = 0.2
+		if swamp_sink <= 0.72:
+			swamp_escape_progress = 0.0
+			main._say("Вы выбрались из трясины, опираясь на жердь")
+		else:
+			main._say("Жердь держит вес. Нужно ещё несколько усилий")
 		return
 	if tools != null and tools.action_label() != "" and main.bleed <= 0.02:
 		tools.do_action()
@@ -552,6 +561,8 @@ func _process_main(delta: float) -> void:
 		swamp_sink = minf(1.3, swamp_sink + delta * swamp_depth * exertion)
 	else:
 		swamp_sink = maxf(0.0, swamp_sink - delta * 0.045)
+		if swamp_sink < 0.35:
+			swamp_escape_progress = 0.0
 	var n: Vector3 = main.ground_normal(position.x, position.z)
 	var down := Vector3(n.x, 0, n.z)
 	var slope := down.length() / maxf(n.y, 0.01)
@@ -573,7 +584,7 @@ func _process_main(delta: float) -> void:
 		# путник не должны двигаться с одинаковой скоростью и инерцией.
 		var sp_base := (run_speed if running else speed) * (1.0 - carried_load * 0.16)
 		var wf := 1.0 / (1.0 + swamp_depth * 1.15)
-		if swamp_sink > 0.72 and int(main.inv.get("branch", 0)) <= 0:
+		if swamp_sink > 0.72 and int(main.inv.get("bog_pole", 0)) <= 0:
 			wf *= lerpf(0.22, 0.035, clampf((swamp_sink - 0.72) / 0.58, 0.0, 1.0))
 			running = false
 		if depth > 1.25:
@@ -585,7 +596,7 @@ func _process_main(delta: float) -> void:
 	else:
 		running = false
 	# Без жерди глубокая трясина полностью лишает возможности выбраться движением.
-	if swamp_sink >= 1.12 and int(main.inv.get("branch", 0)) <= 0:
+	if swamp_sink >= 1.12 and int(main.inv.get("bog_pole", 0)) <= 0:
 		target = Vector3.ZERO
 		vel = Vector3.ZERO
 		running = false
