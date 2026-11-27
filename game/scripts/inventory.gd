@@ -660,9 +660,13 @@ func _wear_toggle(id: String) -> void:
 		return
 	if String(main.worn.get(slot, "")) == id:
 		main.worn.erase(slot)
+		if main.hero != null:
+			main.hero.refresh_clothing()
 		main._say("Снято: " + _name(id).to_lower())
 		return
 	main.worn[slot] = id
+	if main.hero != null:
+		main.hero.refresh_clothing()
 	main._say("Надето: " + _name(id).to_lower())
 
 func _draw_clothes(ci: CanvasItem, f: Font) -> void:
