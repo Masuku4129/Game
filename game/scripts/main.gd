@@ -1461,6 +1461,11 @@ const PICK := ["berry", "mushroom", "twig", "pebble"]
 const PICK_NAME := {"berry": "ягоды", "mushroom": "гриб", "amanita": "мухомор", "twig": "хворост", "pebble": "камень", "flint": "кремень"}
 
 func _add_pick(p: Vector3, kind: String, mm: MultiMesh, i: int) -> void:
+	# Persistent collection state is checked before registering a generated
+	# instance, so rebuilding a chunk cannot make a consumed pickup reappear.
+	if chunk_stream != null and chunk_stream.is_resource_collected(p, kind):
+		mm.set_instance_transform(i, Transform3D(Basis().scaled(Vector3(0.001, 0.001, 0.001)), p - Vector3(0, 5, 0)))
+		return
 	var k := Vector2i(floori(p.x / 8.0), floori(p.z / 8.0))
 	if not pickables.has(k):
 		pickables[k] = []
