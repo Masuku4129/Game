@@ -779,7 +779,10 @@ func tick(delta: float) -> void:
 		var offsets := [0.0, 0.32, -0.32, 0.65, -0.65, 1.0, -1.0, 1.4, -1.4, 1.9, -1.9, 2.45, -2.45, PI]
 		var found := false
 		# Look beyond the animal's immediate step: a 10 cm probe cannot see a way around a boulder.
-		var probe_len := maxf(1.25, minf(2.8, maxf(step_len * 7.0, to.length() * 0.12)))
+		# Крупным животным нужен более дальний обзор: короткая проверка заставляет
+		# лося или медведя выбирать узкий проход, в который корпус физически не помещается.
+		var body_len: float = float(parts.get("L", 1.0))
+		var probe_len := maxf(1.25, minf(4.0, maxf(maxf(step_len * 7.0, to.length() * 0.12), body_len * 0.7)))
 		for off in offsets:
 			var candidate: float = lerp_angle(heading, desired, 0.35) + float(off)
 			var cd := Vector3(sin(candidate), 0.0, cos(candidate))
