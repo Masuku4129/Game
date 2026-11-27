@@ -258,7 +258,7 @@ func _build_bog_cover(c: Vector2i, parent: Node3D) -> void:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = _seed(c) ^ 0x3D6E8A21
 	var groups: Dictionary = {}
-	var attempts := 460
+	var attempts := 620
 	for n in attempts:
 		var wx := float(c.x) * CHUNK_SIZE + rng.randf_range(0.5, CHUNK_SIZE - 0.5)
 		var wz := float(c.y) * CHUNK_SIZE + rng.randf_range(0.5, CHUNK_SIZE - 0.5)
@@ -577,7 +577,7 @@ func _build_tree_cover(c: Vector2i) -> void:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = _seed(c) ^ 0x4A17B39
 	var groups: Dictionary = {}
-	var count := 760
+	var count := 980
 	for attempt in range(count):
 		var wx := float(c.x) * CHUNK_SIZE + rng.randf_range(2.0, CHUNK_SIZE - 2.0)
 		var wz := float(c.y) * CHUNK_SIZE + rng.randf_range(2.0, CHUNK_SIZE - 2.0)
@@ -617,7 +617,7 @@ func _build_tree_cover(c: Vector2i) -> void:
 		var bucket_key := "%s:%d" % [kind, variant_index]
 		if not groups.has(bucket_key):
 			groups[bucket_key] = {"kind": kind, "variant": variant_index, "transforms": []}
-		var scale := rng.randf_range(0.82, 1.28)
+		var scale := rng.randf_range(0.72, 1.42)
 		var yaw := rng.randf_range(-PI, PI)
 		var xf := Transform3D(Basis(Vector3.UP, yaw).scaled(Vector3.ONE * scale), Vector3(wx, h, wz))
 		groups[bucket_key].transforms.append(xf)
@@ -692,7 +692,7 @@ func _build_understory(c: Vector2i) -> void:
 	var groups: Dictionary = {}
 	# Низкорослые GLB-модели заполняют просветы между деревьями.
 	# Плотность привязана к лесу и болотному микрорельефу, а не к квадратному биому.
-	for attempt in range(650):
+	for attempt in range(880):
 		var wx := float(c.x) * CHUNK_SIZE + rng.randf_range(1.0, CHUNK_SIZE - 1.0)
 		var wz := float(c.y) * CHUNK_SIZE + rng.randf_range(1.0, CHUNK_SIZE - 1.0)
 		var density: float = main.forest_density(wx, wz)
@@ -747,7 +747,7 @@ func _build_understory(c: Vector2i) -> void:
 		var bucket := "%s:%d" % [kind, vi]
 		if not groups.has(bucket):
 			groups[bucket] = {"kind": kind, "variant": vi, "transforms": []}
-		var scale := rng.randf_range(0.72, 1.28)
+		var scale := rng.randf_range(0.62, 1.42)
 		if kind in ["rock", "stump"]:
 			scale = rng.randf_range(0.65, 1.45)
 		var yaw := rng.randf_range(-PI, PI)
