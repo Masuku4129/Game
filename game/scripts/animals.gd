@@ -123,7 +123,7 @@ func populate_stream_chunk(coord: Vector2i, chunk_seed: int) -> void:
 	rng.seed = chunk_seed ^ 0x35A91D7
 	var origin := Vector3(float(coord.x) * 64.0, 0.0, float(coord.y) * 64.0)
 	var candidates: Array = []
-	for attempt in range(80):
+	for attempt in range(112):
 		var x := origin.x + rng.randf_range(3.0, 61.0)
 		var z := origin.z + rng.randf_range(3.0, 61.0)
 		var y: float = main.height(x, z)
