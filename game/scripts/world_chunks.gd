@@ -18,6 +18,10 @@ var center := Vector2i(1 << 20, 1 << 20)
 var _refresh := 0.0
 var _sequence := 0
 var terrain_nodes: Dictionary = {}
+var tree_mmis: Dictionary = {}
+var blocker_records: Dictionary = {}
+var _tree_variant_cache: Dictionary = {}
+const STREAM_TREE_KINDS := ["spruce", "pine", "birch", "larch", "aspen", "fir", "cedar", "alder", "willow", "rowan"]
 
 func _process(delta: float) -> void:
 	if main == null or main.hero == null or main.rig == null:
@@ -74,6 +78,7 @@ func _process_queue() -> void:
 		# За его границей создаём продолжение теми же функциями рельефа и материалом.
 		if not _inside_base_world(c):
 			_build_terrain_chunk(c)
+			_build_tree_cover(c)
 		budget -= 1
 
 func _create_record(c: Vector2i) -> Dictionary:
@@ -259,6 +264,133 @@ func _build_terrain_chunk(c: Vector2i) -> void:
 	add_child(root)
 	terrain_nodes[k] = root
 
+func _tree_variants(kind: String) -> Array:
+	if not _tree_variant_cache.has(kind):
+		_tree_variant_cache[kind] = main._variants(kind)
+	return _tree_variant_cache[kind]
+
+func _build_tree_cover(c: Vector2i) -> void:
+	var k := _key(c)
+	if tree_mmis.has(k) or main == null:
+		return
+	var rng := RandomNumberGenerator.new()
+	rng.seed = _seed(c) ^ 0x4A17B39
+	var groups: Dictionary = {}
+	var count := 76
+	for attempt in range(count):
+		var wx := float(c.x) * CHUNK_SIZE + rng.randf_range(2.0, CHUNK_SIZE - 2.0)
+		var wz := float(c.y) * CHUNK_SIZE + rng.randf_range(2.0, CHUNK_SIZE - 2.0)
+		var density: float = main.forest_density(wx, wz)
+		if rng.randf() > density * 0.92:
+			continue
+		var h: float = main.height(wx, wz)
+		if h < main.WATER_Y + 1.0 or main.river_dist(wx, wz) < 6.5 or main.lake_k(wx, wz) > 0.45:
+			continue
+		var slope: float = main.normal_at(wx, wz).y
+		if slope < 0.76:
+			continue
+		var zone_id: int = main.zone(wx, wz)
+		var kind := "spruce"
+		if zone_id == 2:
+			kind = ["alder", "willow", "birch"][rng.randi_range(0, 2)]
+		elif zone_id == 4 or main.biome(wx, wz) > 0.55:
+			kind = ["cedar", "fir", "larch"][rng.randi_range(0, 2)]
+		else:
+			var pick := rng.randf()
+			if pick < 0.24:
+				kind = "pine"
+			elif pick < 0.43:
+				kind = "birch"
+			elif pick < 0.58:
+				kind = "larch"
+			elif pick < 0.69:
+				kind = "aspen"
+			elif pick < 0.78:
+				kind = "cedar"
+			elif pick < 0.87:
+				kind = "fir"
+		var variants: Array = _tree_variants(kind)
+		if variants.is_empty():
+			continue
+		var variant_index := rng.randi_range(0, variants.size() - 1)
+		var bucket_key := "%s:%d" % [kind, variant_index]
+		if not groups.has(bucket_key):
+			groups[bucket_key] = {"kind": kind, "variant": variant_index, "transforms": []}
+		var scale := rng.randf_range(0.82, 1.28)
+		var yaw := rng.randf_range(-PI, PI)
+		var xf := Transform3D(Basis(Vector3.UP, yaw).scaled(Vector3.ONE * scale), Vector3(wx, h, wz))
+		groups[bucket_key].transforms.append(xf)
+	var created: Array = []
+	var blockers_for_chunk: Array = []
+	for bucket_key: String in groups:
+		var group: Dictionary = groups[bucket_key]
+		var kind := String(group.kind)
+		var vi := int(group.variant)
+		var variants: Array = _tree_variants(kind)
+		var mesh: Mesh = variants[vi][0]
+		var transforms: Array = group.transforms
+		if transforms.is_empty():
+			continue
+		var mm := MultiMesh.new()
+		mm.transform_format = MultiMesh.TRANSFORM_3D
+		mm.use_custom_data = true
+		mm.mesh = mesh
+		mm.instance_count = transforms.size()
+		for i in transforms.size():
+			mm.set_instance_transform(i, transforms[i])
+			mm.set_instance_custom_data(i, Color(115.0, -1.0, 0.0, 0.0))
+		var mmi := MultiMeshInstance3D.new()
+		mmi.name = "StreamTrees_%s_%d" % [kind, vi]
+		mmi.multimesh = mm
+		mmi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
+		mmi.extra_cull_margin = 8.0
+		add_child(mmi)
+		created.append(mm)
+		# Подключаем деревья к общей системе рубки/поиска ближайшего дерева.
+		main._place_cell_records(mm, transforms, [kind], vi, variants, true, "")
+		for xf: Transform3D in transforms:
+			var p := xf.origin
+			var radius := 0.38 * xf.basis.x.length()
+			main._add_blocker(p.x, p.z, radius)
+			blockers_for_chunk.append([Vector2i(floori(p.x / 8.0), floori(p.z / 8.0)), Vector3(p.x, p.z, radius)])
+	tree_mmis[k] = created
+	blocker_records[k] = blockers_for_chunk
+
+func _remove_tree_cover(k: String) -> void:
+	var meshes: Array = tree_mmis.get(k, [])
+	if meshes.is_empty():
+		return
+	for mm: MultiMesh in meshes:
+		for grid_key in main.tree_grid.keys():
+			var entries: Array = main.tree_grid[grid_key]
+			for i in range(entries.size() - 1, -1, -1):
+				if entries[i][0] == mm:
+					entries.remove_at(i)
+			if entries.is_empty():
+				main.tree_grid.erase(grid_key)
+		for node in get_children():
+			if node is MultiMeshInstance3D and node.multimesh == mm:
+				node.queue_free()
+	# Удаляем только блокираторы, поставленные этим чанком.
+	for item: Array in blocker_records.get(k, []):
+		var grid_key: Vector2i = item[0]
+		var obstacle: Vector3 = item[1]
+		if not main.blockers.has(grid_key):
+			continue
+		var entries: Array = main.blockers[grid_key]
+		for i in range(entries.size() - 1, -1, -1):
+			if entries[i] == obstacle:
+				entries.remove_at(i)
+		if entries.is_empty():
+			main.blockers.erase(grid_key)
+	tree_mmis.erase(k)
+	blocker_records.erase(k)
+	# Не удаляем mesh варианта, пока на него ссылается хотя бы один оставшийся чанк.
+	for grid_key in main.tree_grid:
+		for entry: Array in main.tree_grid[grid_key]:
+			if String(entry[3]).begins_with(""):
+				continue
+
 func _remove_terrain_chunk(k: String) -> void:
 	if not terrain_nodes.has(k):
 		return
@@ -276,6 +408,7 @@ func _unload_distant() -> void:
 			continue
 		rec["loaded"] = false
 		persistent[k] = rec
+		_remove_tree_cover(k)
 		_remove_terrain_chunk(k)
 		active.erase(k)
 	_prune()
