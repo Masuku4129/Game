@@ -360,8 +360,8 @@ func action_label() -> String:
 		return "Встать"
 	if swimb > 0.3:
 		return ""
-	if swamp_sink > 0.72 and int(main.inv.get("branch", 0)) > 0:
-		return "Упереться жердью"
+	if swamp_sink > 0.72:
+		return "Упереться жердью" if int(main.inv.get("branch", 0)) > 0 else ("Нужна жердь!" if swamp_sink >= 1.12 else "")
 	if state == "butcher":
 		return "Прервать"
 	if tools != null:
@@ -391,13 +391,17 @@ func do_action() -> void:
 	if state == "sit":
 		_stand_up()
 		return
-	if swamp_sink > 0.72 and int(main.inv.get("branch", 0)) > 0:
+	if swamp_sink > 0.72:
+		if int(main.inv.get("branch", 0)) <= 0:
+			main._say("Трясина удерживает. Нужна длинная жердь, чтобы выбраться.")
+			return
 		main.stamina = maxf(0.0, float(main.stamina) - 0.12)
 		swamp_sink = 0.28
 		mud_sink = minf(mud_sink, 0.2)
 		vel = Vector3.ZERO
 		land_t = 0.45
 		land_k = 0.35
+		main._say("Уперлись жердью и выбрались из трясины")
 		return
 	if tools != null and tools.action_label() != "" and main.bleed <= 0.02:
 		tools.do_action()
@@ -529,6 +533,11 @@ func _process_main(delta: float) -> void:
 			wf = 1.0 - (depth - 0.3) * 0.55
 		target = d * sp_base * mag * f * wf * _sink_slow() * main.move_factor() * (tools.speed_factor() if tools != null else 1.0) * (0.5 if crouch else 1.0)
 	else:
+		running = false
+	# Без жерди глубокая трясина полностью лишает возможности выбраться движением.
+	if swamp_sink >= 1.12 and int(main.inv.get("branch", 0)) <= 0:
+		target = Vector3.ZERO
+		vel = Vector3.ZERO
 		running = false
 	# крутой склон: человека тянет вниз, он теряет управление и катится
 	var s := 0.0
