@@ -1392,6 +1392,74 @@ func to_save() -> Dictionary:
 func _spot_of(g: GenTrunk) -> Dictionary:
 	return g.get_meta("spot", {})
 
+func _find_tree_record(tree_id: int) -> Array:
+	for cell in main.tree_grid.values():
+		for candidate: Array in cell:
+			if int(candidate[4]) == tree_id:
+				return candidate
+	return []
+
+func _restore_fell_record(fe: Dictionary, tree_rec: Array) -> void:
+	var tree_id := int(fe.get("id", -1))
+	if fells.has(tree_id):
+		return
+	var SV = preload("res://scripts/save.gd")
+	var source_mesh: Mesh = (tree_rec[0] as MultiMesh).mesh
+	if source_mesh == null:
+		return
+	var xf: Transform3D = SV.dec(fe["xf"])
+	var f := FellTree.new()
+	add_child(f)
+	f.setup(source_mesh, xf, String(fe.get("kind", kind_of(tree_rec))), main, main.hero.position)
+	f.hits = int(fe.get("hits", 0))
+	f.k = float(fe.get("k", float(f.hits) / float(maxi(f.need, 1))))
+	f.face_a = float(fe.get("face_a", f.face_a))
+	f.dir = SV.dec(fe.get("dir", SV.enc(f.dir)))
+	f.axis = SV.dec(fe.get("axis", SV.enc(f.axis)))
+	f.th = float(fe.get("th", 0.0))
+	f.w = float(fe.get("w", 0.0))
+	f.th_g = float(fe.get("th_g", 1.5))
+	f.bounce = int(fe.get("bounce", 0))
+	f.clip = float(fe.get("clip", f.clip))
+	f.logs_cut = int(fe.get("logs_cut", 0))
+	f.bm.set_shader_parameter("clip_y", f.clip)
+	fells[tree_id] = f
+	match String(fe.get("phase", "stand")):
+		"fall":
+			f.phase = "fall"
+			f.top.visible = true
+			f.upper.visible = true
+			f.stump.visible = false
+			f.pivot.basis = Basis(f.axis, f.th)
+		"down":
+			f.phase = "down"
+			f.top.visible = true
+			f.upper.visible = false
+			f.stump.visible = true
+			f.th = f.th_g
+			f.pivot.basis = Basis(f.axis, f.th)
+			f._lay()
+			f.cap.visible = f.logs_cut > 0
+			if f.cap.visible:
+				var rr := f._r_at(f.clip)
+				f.cap.transform = Transform3D(Basis().scaled(Vector3(rr, 1.0, rr)), Vector3(0, f.clip + 0.002, 0))
+			trunks.append(f)
+		_:
+			f.phase = "stand"
+			f.top.visible = false
+			f.upper.visible = false
+			f.stump.visible = false
+
+func restore_pending_tree_fells() -> void:
+	if pending_fells.is_empty():
+		return
+	for tree_id: Variant in pending_fells.keys():
+		var tree_rec := _find_tree_record(int(tree_id))
+		if tree_rec.is_empty():
+			continue
+		_restore_fell_record(pending_fells[tree_id], tree_rec)
+		pending_fells.erase(tree_id)
+
 func from_save(d: Dictionary) -> void:
 	var SV = preload("res://scripts/save.gd")
 	var hid := {}
@@ -1404,66 +1472,15 @@ func from_save(d: Dictionary) -> void:
 				rec[2] = Transform3D(Basis().scaled(Vector3(0.0001, 0.0001, 0.0001)), Vector3(o.x, -500.0, o.z))
 				(rec[0] as MultiMesh).set_instance_transform(rec[1], rec[2])
 	main._update_near(true)
-	# Восстанавливаем незавершённую/завершённую валку с исходным мешем дерева.
-	# Старые сохранения без массива fell продолжают загружаться через прежний logs.
+	# Восстанавливаем валку сразу для загруженных деревьев, остальные ждут свой чанк.
+	pending_fells.clear()
 	for fe: Dictionary in d.get("fell", []):
 		var tree_id := int(fe.get("id", -1))
-		var tree_rec: Array = []
-		for cell in main.tree_grid.values():
-			for candidate: Array in cell:
-				if int(candidate[4]) == tree_id:
-					tree_rec = candidate
-					break
-			if not tree_rec.is_empty():
-				break
+		var tree_rec := _find_tree_record(tree_id)
 		if tree_rec.is_empty():
-			continue
-		var source_mesh: Mesh = (tree_rec[0] as MultiMesh).mesh
-		if source_mesh == null:
-			continue
-		var xf: Transform3D = SV.dec(fe["xf"])
-		var f := FellTree.new()
-		add_child(f)
-		f.setup(source_mesh, xf, String(fe.get("kind", kind_of(tree_rec))), main, main.hero.position)
-		f.hits = int(fe.get("hits", 0))
-		f.k = float(fe.get("k", float(f.hits) / float(maxi(f.need, 1))))
-		f.face_a = float(fe.get("face_a", f.face_a))
-		f.dir = SV.dec(fe.get("dir", SV.enc(f.dir)))
-		f.axis = SV.dec(fe.get("axis", SV.enc(f.axis)))
-		f.th = float(fe.get("th", 0.0))
-		f.w = float(fe.get("w", 0.0))
-		f.th_g = float(fe.get("th_g", 1.5))
-		f.bounce = int(fe.get("bounce", 0))
-		f.clip = float(fe.get("clip", f.clip))
-		f.logs_cut = int(fe.get("logs_cut", 0))
-		f.bm.set_shader_parameter("clip_y", f.clip)
-		fells[tree_id] = f
-		match String(fe.get("phase", "stand")):
-			"fall":
-				f.phase = "fall"
-				f.top.visible = true
-				f.upper.visible = true
-				f.stump.visible = false
-				f.pivot.basis = Basis(f.axis, f.th)
-			"down":
-				f.phase = "down"
-				f.top.visible = true
-				f.upper.visible = false
-				f.stump.visible = true
-				f.th = f.th_g
-				f.pivot.basis = Basis(f.axis, f.th)
-				f._lay()
-				f.cap.visible = f.logs_cut > 0
-				if f.cap.visible:
-					var rr := f._r_at(f.clip)
-					f.cap.transform = Transform3D(Basis().scaled(Vector3(rr, 1.0, rr)), Vector3(0, f.clip + 0.002, 0))
-				trunks.append(f)
-			_:
-				f.phase = "stand"
-				f.top.visible = false
-				f.upper.visible = false
-				f.stump.visible = false
-	pending_gen.clear()
+			pending_fells[tree_id] = fe
+		else:
+			_restore_fell_record(fe, tree_rec)
 	for e: Dictionary in d.get("gen", []):
 		if e.has("pos"):
 			pending_gen.append({"pos": SV.dec(e["pos"]), "kind": String(e.get("kind", "fallen0")), "cur": float(e.get("cur", 0.0))})
