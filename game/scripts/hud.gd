@@ -83,7 +83,7 @@ class RoundBtn extends Button:
 		var dn := is_pressed() and is_hovered()
 		draw_circle(c + Vector2(3, 4), r, Color(0, 0, 0, 0.3))
 		draw_circle(c, r, UI.PANEL_SOFT if not dn else UI.PANEL_HOVER)
-		draw_circle(c, r - 7.0, UI.ACCENT_HI if hot else UI.PANEL_SOFT if dim else UI.PANEL))
+		draw_circle(c, r - 7.0, UI.ACCENT_HI if hot else UI.PANEL_SOFT if dim else UI.PANEL)
 		draw_arc(c, r - 3.0, 0.0, TAU, 48, UI.ACCENT if not hot else UI.ACCENT_HI, 4.0 if not hot else 6.0, true)
 		if icon_id != "":
 			INV.icon(self, icon_id, c, r * 0.55)
