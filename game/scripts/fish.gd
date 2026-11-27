@@ -110,8 +110,8 @@ func _make_mesh() -> void:
 	mat = ShaderMaterial.new()
 	mat.shader = sh
 
-static func _zc(x: float) -> float:
-	return RP.zc(x, main.map_seed)
+func _zc(x: float) -> float:
+	return RP.zc(x, int(main.get("map_seed")))
 
 ## Отдельная рыбина (в пасти медведя, на берегу).
 func make_fish() -> MeshInstance3D:
