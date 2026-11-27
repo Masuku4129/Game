@@ -203,13 +203,18 @@ def broadleaf(name, seed, H, r0, ccz, crx, crz, nblobs, brad, lean=(0, 0), secon
     for i in range(nblobs):
         while True:
             o = rng.uniform(-1, 1, 3)
-            if .2 < np.dot(o, o) <= 1:
+            if .16 < np.dot(o, o) <= 1:
                 break
         c = cc + o * np.array([crx, crx, crz])
         z0 = max(ccz - crz * .9, c[2] - 1.4)
-        tube(b, (lean[0] * z0 / H, lean[1] * z0 / H, min(z0, H - .3)), c * .85 + cc * .15, .05, .012, 3, 5)
-        blob(b, c, (brad * rng.uniform(.8, 1.2), brad * rng.uniform(.8, 1.2), brad * rng.uniform(.7, 1.0)), rng, cc, 1, .24, .55)
-    blob(b, cc + UP * crz * .85, (brad, brad, brad * .8), rng, cc, 1, .2, .55)
+        # Branches remain visible as tapered supports beneath the painted canopy lobes.
+        tube(b, (lean[0] * z0 / H, lean[1] * z0 / H, min(z0, H - .3)), c * .85 + cc * .15, .055, .012, 3, 5)
+        rx = brad * rng.uniform(.78, 1.18)
+        ry = brad * rng.uniform(.78, 1.18)
+        rz = brad * rng.uniform(.72, 1.08)
+        blob(b, c, (rx, ry, rz), rng, cc, 2, .16, .58)
+    # A slightly taller crown cap ties the separate lobes into one readable silhouette.
+    blob(b, cc + UP * crz * .82, (brad * .96, brad * .92, brad * .88), rng, cc, 2, .15, .62)
     export(name, b)
 
 
