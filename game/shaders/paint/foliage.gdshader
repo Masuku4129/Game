@@ -42,21 +42,21 @@ void fragment() {
 	if (vis_discard(vis, FRAGCOORD.xy) || fade_discard(wp, FRAGCOORD.xy) || leaf_drop * autumn_k > 0.6) {
 		discard;
 	}
-	float s = strokes(wp.xz * 1.7 + wp.y * 0.9);
+	float s = strokes(wp.xz * 0.9 + wp.y * 0.55);
 	float up = wn.y * 0.5 + 0.5;
 	float g_raw = clamp(up * 0.82 + (s - 0.5) * 0.32 + COLOR.r * 0.22 - 0.12, 0.0, 1.0);
 	// Stylized foliage: five broad color bands keep silhouettes readable on mobile.
 	float g = floor(g_raw * 4.0 + 0.5) / 4.0;
 	vec3 c = g < 0.5 ? mix(lin(col_dark), lin(col_mid), g * 2.0) : mix(lin(col_mid), lin(col_light), g * 2.0 - 1.0);
-	float canopy_noise = vnoise(wp.xz * 2.2 + wp.y * 0.8) * 0.8 + vnoise(wp.xz * 5.2) * 0.2;
+	float canopy_noise = vnoise(wp.xz * 1.15 + wp.y * 0.55) * 0.88 + vnoise(wp.xz * 3.1) * 0.12;
 	// Large painted patches instead of noisy, muddy surface breakup.
-	c *= mix(0.92, 1.06, canopy_noise);
+	c *= mix(0.88, 1.10, canopy_noise);
 	c = mix(c, autumn_col(col_autumn, g, tree_r), clamp(autumn * autumn_k * (0.8 + tree_r * 0.45), 0.0, 1.0) * COLOR.g);
 	c = mix(c, lin(col_bloom) * (0.75 + g * 0.3), bloom_k * blossom * smoothstep(0.35, 0.6, s + tree_r * 0.3));
 	c *= 1.0 - wet * 0.15;
 	c = mix(c, vec3(0.9, 0.93, 0.97), smoothstep(0.55, 0.8, wn.y + s * 0.2) * snow);
 	ALBEDO = c;
-	ROUGHNESS = 1.0;
+	ROUGHNESS = 0.92;
 	SPECULAR = 0.0;
 	BACKLIGHT = c * 0.35;
 }
