@@ -26,7 +26,7 @@ var carcasses: Array = []
 var fish: Node3D
 
 func populate() -> void:
-	rng.seed = main.MAP_SEED + 7741
+	rng.seed = int(main.get("map_seed")) + 7741
 	var start: Vector3 = main.hero.position
 	# заяц: опушки и поляны
 	for i in 50:

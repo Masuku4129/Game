@@ -94,7 +94,7 @@ var _shot_f := 0
 var _shot_done := {}
 
 func setup(start: Vector3) -> void:
-	rng.seed = main.MAP_SEED + 3131
+	rng.seed = int(main.get("map_seed")) + 3131
 	mud_mat = AM.material({})
 	stick_mesh = CylinderMesh.new()
 	stick_mesh.top_radius = 0.045

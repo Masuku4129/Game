@@ -40,7 +40,7 @@ void fragment() {
 """
 
 func setup() -> void:
-	rng.seed = main.MAP_SEED + 5150
+	rng.seed = int(main.get("map_seed")) + 5150
 	_make_mesh()
 	mm = MultiMesh.new()
 	mm.transform_format = MultiMesh.TRANSFORM_3D
