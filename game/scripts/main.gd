@@ -6,6 +6,8 @@ const SIZE := 512.0
 const SEG := 384
 const WATER_Y := -2.0
 const CELL := 64.0
+const START_CHUNK_COORD := Vector2i(4, 4) # чанк начальной позиции около мирового нуля
+const START_CHUNK_SEED := 20261127
 const FOREST_DENSITY_MULTIPLIER := 1.7
 const FOREST_DENSITY_SPECIES := ["spruce", "pine", "birch", "larch", "aspen", "bare", "spruce_dead", "bush", "fern", "reeds", "twig", "berry", "bilberry", "mushroom", "fir", "cedar", "willow", "alder", "cherry", "rose", "horsetail", "hummock", "sedge", "juniper", "stlanik", "rowan", "anthill", "mossrock", "stump_rot", "stump_mush", "fungus_snag", "birch_dead", "mosslog", "ledum", "cloudberry", "cranberry", "cotton", "lingon", "ernik", "raspberry", "currant", "bells", "daisy", "angelica", "brushpile", "chanterelle", "cones"]
 
@@ -998,7 +1000,12 @@ func _grass_prebuild(c: Vector3) -> void:
 
 func _grass_begin(k: Vector2i) -> void:
 	var rng := RandomNumberGenerator.new()
-	rng.seed = k.y * 7919 + k.x * 104729 + 13
+	var world_cx := floori(float(k.x * GCELL) / CELL)
+	var world_cz := floori(float(k.y * GCELL) / CELL)
+	if Vector2i(world_cx, world_cz) == START_CHUNK_COORD:
+		rng.seed = START_CHUNK_SEED + k.y * 7919 + k.x * 104729 + 13
+	else:
+		rng.seed = k.y * 7919 + k.x * 104729 + 13
 	var per_var := []
 	for v in grass_mesh_vars:
 		per_var.append([])
@@ -1371,21 +1378,42 @@ func _say(t: String) -> void:
 
 ## Ближайший ствол (по сетке препятствий) или INF.
 func nearest_tree(p: Vector3, r: float) -> Vector3:
-	var c := Vector2i(floori(p.x / 8.0), floori(p.z / 8.0))
+	var c := Vector2i(floori(p.x / 16.0), floori(p.z / 16.0))
 	var best := Vector3.INF
 	var bd := r * r
-	var n := int(ceil(r / 8.0))
+	var n := int(ceil(r / 16.0))
 	for dz in range(-n, n + 1):
 		for dx in range(-n, n + 1):
 			var k := Vector2i(c.x + dx, c.y + dz)
-			if not blockers.has(k):
+			if not tree_grid.has(k):
 				continue
-			for b in blockers[k]:
-				var dd: float = (b.x - p.x) * (b.x - p.x) + (b.y - p.z) * (b.y - p.z)
+			for rec in tree_grid[k]:
+				var t: Transform3D = rec[2]
+				var dd := Vector2(t.origin.x - p.x, t.origin.z - p.z).length_squared()
 				if dd < bd:
 					bd = dd
-					best = Vector3(b.x, 0, b.y)
+					best = Vector3(t.origin.x, t.origin.y, t.origin.z)
 	return best
+
+## Высота ближайшей GLB-модели дерева; белки не принимают валуны и кусты за стволы.
+func tree_height_at(p: Vector3) -> float:
+	var c := Vector2i(floori(p.x / 16.0), floori(p.z / 16.0))
+	var best := 1e9
+	var result := 0.0
+	for dz in range(-1, 2):
+		for dx in range(-1, 2):
+			var k := Vector2i(c.x + dx, c.y + dz)
+			if not tree_grid.has(k):
+				continue
+			for rec in tree_grid[k]:
+				var t: Transform3D = rec[2]
+				var d := Vector2(t.origin.x - p.x, t.origin.z - p.z).length_squared()
+				if d < best:
+					best = d
+					var key: String = rec[3]
+					if near_mesh.has(key):
+						result = (near_mesh[key] as Mesh).get_aabb().size.y
+	return result
 
 ## Удар зверя: часть тела, кровотечение, переломы, отбрасывание.
 func hurt(amount: float, from: Vector3, kind: String) -> void:
@@ -1460,6 +1488,12 @@ func move_factor() -> float:
 	return f * (0.6 + 0.4 * clampf(health * 2.0, 0.0, 1.0))
 
 const BLOCK_R := {"fungus_snag": 0.22, "birch_dead": 0.2, "snag": 0.25, "snag_b": 0.25, "cherry": 0.15, "fir": 0.36, "cedar": 0.38, "rowan": 0.2, "spruce": 0.4, "pine": 0.32, "birch": 0.28, "bare": 0.3, "spruce_dead": 0.3, "stump": 0.45, "rock": 0.5, "boulder": 0.6, "larch": 0.32, "aspen": 0.26}
+
+func _chunk_seed(cx: int, cz: int) -> int:
+	# Перегенерируем только стартовый чанк; остальные клетки сохраняют прежнюю раскладку.
+	if Vector2i(cx, cz) == START_CHUNK_COORD:
+		return START_CHUNK_SEED
+	return cz * 1000 + cx
 
 func _scatter_all() -> void:
 	# вид, попыток на клетку 32 м, масштаб, дальность видимости, тень, правило
@@ -1556,7 +1590,7 @@ func _scatter_all() -> void:
 	for cz in cells:
 		for cx in cells:
 			var rng := RandomNumberGenerator.new()
-			rng.seed = cz * 1000 + cx
+			rng.seed = _chunk_seed(cx, cz)
 			var x0 := cx * CELL - SIZE * 0.5
 			var z0 := cz * CELL - SIZE * 0.5
 			for r in rules:
@@ -1917,7 +1951,7 @@ func _cliff_rocks(vars: Array) -> void:
 		for gk in groups:
 			var mmi := MultiMeshInstance3D.new()
 			mmi.multimesh = _vis_multimesh(vars[vi][0], groups[gk], 95.0, false)
-			mmi.visibility_range_end = 141.0
+			mmi.visibility_range_end = 0.0 # дальность контролирует per-instance fade, без резкого появления чанка
 			mmi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 			add_child(mmi)
 			cliff_mmi.append(mmi)
