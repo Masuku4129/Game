@@ -246,7 +246,7 @@ func _grow(bark: Surf, lf: Surf, P: Dictionary, st: Vector3, d: Vector3, L: floa
 		tube(bark, st, mid, en, r, r * 0.62, 3 if lv == 0 else 2, 5 if lv == 0 else 3)
 	var maxlv: int = P["lv"]
 	if P["leaf"] != "" and (lv >= maxlv - 1 or (lv >= 1 and rng.randf() < 0.25)):
-		var k := 7 if kind == "birch" else 5
+		var k := 11 if kind == "birch" else 9
 		var cs: float = P["cs"]
 		if lod:
 			k = 2
@@ -256,7 +256,7 @@ func _grow(bark: Surf, lf: Surf, P: Dictionary, st: Vector3, d: Vector3, L: floa
 			var b := Basis.from_euler(Vector3(R(-1.2, 1.2), R(0, TAU), R(-1.2, 1.2)))
 			if kind == "birch":
 				b = Basis.from_euler(Vector3(R(-0.3, 0.3), R(0, TAU), R(-0.3, 0.3)))
-			var sz := cs * R(0.8, 1.2)
+			var sz := cs * R(0.68, 1.05)
 			card(lf, p - b.y * sz * 0.5, b, sz, sz * (1.6 if kind == "birch" else 1.0), R(0.8, 1.05))
 	if lv >= maxlv:
 		return
@@ -275,9 +275,9 @@ func bush(seed_v: int) -> Array:
 	rng.seed = seed_v
 	var lf := Surf.new()
 	var bark := Surf.new()
-	for i in 5:
-		tube(bark, Vector3.ZERO, Vector3(R(-0.2, 0.2), 0.4, R(-0.2, 0.2)), Vector3(R(-0.5, 0.5), R(0.7, 1.0), R(-0.5, 0.5)), 0.03, 0.01, 3, 4)
-	for i in 34:
+	for i in 7:
+		tube(bark, Vector3.ZERO, Vector3(R(-0.2, 0.2), 0.4, R(-0.2, 0.2)), Vector3(R(-0.5, 0.5), R(0.7, 1.0), R(-0.5, 0.5)), 0.035, 0.008, 4, 5)
+	for i in 56:
 		var d := Vector3(R(-1, 1), R(-0.2, 1), R(-1, 1)).normalized()
 		var p := Vector3(0, 0.55, 0) + d * R(0.3, 0.75)
 		var b := Basis.from_euler(Vector3(R(0, 6), R(0, 6), R(0, 6)))
@@ -290,7 +290,7 @@ func fern(seed_v: int) -> Array:
 	var lf := Surf.new()
 	# Layered fronds form a fuller fan; smaller leaflet strokes break the
 	# flat-card silhouette while keeping a lightweight mesh for mobile.
-	var n := rng.randi_range(9, 13)
+	var n := rng.randi_range(12, 16)
 	for i in n:
 		var a := TAU * i / n + R(-0.2, 0.2)
 		var radial := Vector3(cos(a), 0, sin(a))
@@ -298,28 +298,35 @@ func fern(seed_v: int) -> Array:
 		var L := R(1.0, 1.45)
 		var basis := _basis_along(d, R(-0.35, 0.35))
 		card(lf, Vector3(0, R(0.02, 0.06), 0), basis, L * 0.34, L, R(0.82, 1.08))
-		for leaf_i in 4:
-			var t := 0.28 + leaf_i * 0.15
+		for leaf_i in 6:
+			var t := 0.22 + leaf_i * 0.12
 			var center := radial * L * t + Vector3(0, 0.45 * sin(t * PI * 0.8), 0)
 			var side := _basis_along(Vector3.UP * 0.7 + radial * 0.2, a + PI * 0.5)
-			card(lf, center - radial * 0.03, side, L * 0.22, L * 0.22, R(0.72, 1.04))
+			card(lf, center - radial * 0.03, side, L * 0.18, L * 0.2, R(0.72, 1.04))
 	return [_commit([lf], ["fern"]), 1.0]
 
 ## Пучок травы: две скрещённые карточки.
 func grass(seed_v: int) -> Array:
 	rng.seed = seed_v
 	var lf := Surf.new()
-	var a := R(0, PI)
-	for k in 2:
-		card(lf, Vector3.ZERO, Basis(Vector3.UP, a + k * PI * 0.5), 1.0, 0.8, R(0.85, 1.05))
+	# Веер отдельных травинок с вариативной высотой, наклоном и шириной.
+	var blades := rng.randi_range(7, 10)
+	for k in blades:
+		var a := TAU * float(k) / blades + R(-0.24, 0.24)
+		var lean := Vector3(cos(a), 0, sin(a)) * R(0.12, 0.42)
+		var h := R(0.58, 1.05)
+		var w := R(0.18, 0.34)
+		var dir := Vector3(cos(a) * R(0.28, 0.62), 1.0, sin(a) * R(0.28, 0.62)).normalized()
+		var basis := _basis_along(dir, R(-0.35, 0.35))
+		card(lf, lean * 0.3, basis, w, h, R(0.72, 1.08))
 	return [_commit([lf], ["grass"]), 0.8]
 
 ## Камень: угловатая глыба (ячеистый шум + хребтовый шум), мох сверху, трипланарная текстура скалы.
 func rock(seed_v: int, detail: int = 2) -> Array:
 	rng.seed = seed_v
 	var sph := SphereMesh.new()
-	sph.radial_segments = [10, 22, 32][detail]
-	sph.rings = [6, 12, 18][detail]
+	sph.radial_segments = [16, 28, 40][detail]
+	sph.rings = [9, 16, 24][detail]
 	var arr := sph.get_mesh_arrays()
 	var verts: PackedVector3Array = arr[Mesh.ARRAY_VERTEX]
 	var idx: PackedInt32Array = arr[Mesh.ARRAY_INDEX]
