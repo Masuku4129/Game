@@ -732,7 +732,7 @@ func _build_understory(c: Vector2i) -> void:
 	var groups: Dictionary = {}
 	# Низкорослые GLB-модели заполняют просветы между деревьями.
 	# Плотность привязана к лесу и болотному микрорельефу, а не к квадратному биому.
-	for attempt in range(2200):
+	for attempt in range(2900):
 		var wx := float(c.x) * CHUNK_SIZE + rng.randf_range(1.0, CHUNK_SIZE - 1.0)
 		var wz := float(c.y) * CHUNK_SIZE + rng.randf_range(1.0, CHUNK_SIZE - 1.0)
 		var density: float = main.forest_density(wx, wz)
@@ -787,9 +787,9 @@ func _build_understory(c: Vector2i) -> void:
 		var bucket := "%s:%d" % [kind, vi]
 		if not groups.has(bucket):
 			groups[bucket] = {"kind": kind, "variant": vi, "transforms": []}
-		var scale := rng.randf_range(0.56, 1.48)
+		var scale := rng.randf_range(0.48, 1.62)
 		if kind in ["rock", "stump"]:
-			scale = rng.randf_range(0.65, 1.45)
+			scale = rng.randf_range(0.58, 1.58)
 		var yaw := rng.randf_range(-PI, PI)
 		var xf := Transform3D(Basis(Vector3.UP, yaw).scaled(Vector3.ONE * scale), Vector3(wx, h, wz))
 		groups[bucket].transforms.append(xf)
