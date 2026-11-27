@@ -518,8 +518,8 @@ func _make_environment() -> void:
 	env.fog_sky_affect = 0.55
 	env.fog_sun_scatter = 0.25
 	# лёгкое свечение светлых мест (солнце в каплях, снег, закат)
-	env.glow_enabled = true
-	env.glow_intensity = 0.35
+	env.glow_enabled = false
+	env.glow_intensity = 0.0
 	env.glow_strength = 0.9
 	env.glow_bloom = 0.02
 	env.glow_hdr_threshold = 1.05
@@ -535,7 +535,7 @@ func _make_environment() -> void:
 	add_child(we)
 	sun = DirectionalLight3D.new()
 	sun.shadow_enabled = true
-	sun.directional_shadow_max_distance = 26.0
+	sun.directional_shadow_max_distance = 24.0
 	sun.directional_shadow_mode = DirectionalLight3D.SHADOW_ORTHOGONAL
 	sun.shadow_blur = 1.2
 	add_child(sun)
@@ -564,7 +564,7 @@ func _update_sky() -> void:
 	var max_elev := lerpf(34.0, 64.0, summer)
 	var elev := clampf(e, 0.0, 1.0) * max_elev + 5.0
 	sun.rotation_degrees = Vector3(-elev, 40.0 + (t_hours - 12.0) * 15.0, 0)
-	sun.light_energy = 1.55 * smoothstep(-0.03, 0.2, e) * (1.0 - cl * 0.7) * (1.0 - fogv * 0.3)
+	sun.light_energy = 1.4 * smoothstep(-0.03, 0.2, e) * (1.0 - cl * 0.7) * (1.0 - fogv * 0.3)
 	var noon := Color(1.0, 0.95, 0.86).lerp(Color(0.95, 0.96, 1.0), winter * 0.6)
 	sun.light_color = Color(1.0, 0.52, 0.27).lerp(Color(1.0, 0.76, 0.52), smoothstep(0.0, 0.2, e)).lerp(noon, smoothstep(0.18, 0.5, e))
 	sun.visible = e > -0.02
@@ -595,12 +595,12 @@ func _update_sky() -> void:
 	var amb_day := top.lerp(hor, 0.45).lerp(Color(0.5, 0.58, 0.42), 0.18)
 	var amb_night := Color(0.16, 0.2, 0.34)
 	env.ambient_light_color = amb_night.lerp(amb_day, d)
-	env.ambient_light_energy = lerpf(0.7, 1.6, d) * (1.0 + cl * 0.2)
+	env.ambient_light_energy = lerpf(0.78, 1.7, d) * (1.0 + cl * 0.2)
 	# цветокоррекция: осень теплее и насыщеннее, зима и дождь — приглушённее, ночь — бледнее
 	env.adjustment_saturation = clampf(0.96 + autumn * 0.02 + summer * 0.03 - winter * 0.12 - wet_air * 0.14 - fogv * 0.1 - (1.0 - d) * 0.2, 0.6, 1.2)
 	env.adjustment_contrast = 1.04 + lowsun * d * 0.04 - fogv * 0.05
 	env.adjustment_brightness = 1.0 + (1.0 - d) * 0.06
-	env.glow_intensity = 0.25 + dusk * 0.25 + winter * 0.1
+	env.glow_intensity = 0.0
 	if weather != null:
 		# глубинная дымка: в тумане и дождь начинается ближе и гуще
 		# камера ниже — видно дальше: дымка ближе, чтобы дальний край мира не появлялся на глазах
