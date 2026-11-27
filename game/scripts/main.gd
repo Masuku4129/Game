@@ -447,7 +447,14 @@ func swamp_depth_at(x: float, z: float) -> float:
 	var wet := smoothstep(-0.25, 0.42, n_wet.get_noise_2d(x * 0.72 + 137.0, z * 0.72 - 91.0))
 	var pockets := smoothstep(-0.18, 0.5, n_detail.get_noise_2d(x * 0.42 - 53.0, z * 0.42 + 211.0))
 	var low := clampf((WATER_Y + 3.8 - height(x, z)) / 3.2, 0.0, 1.0)
-	return clampf((0.18 + wet * 0.72 + pockets * 0.38) * low, 0.0, 1.45)
+	var depth := (0.18 + wet * 0.72 + pockets * 0.38) * low
+	# Дождь насыщает торф водой и усиливает провал; в устойчивый мороз
+	# промёрзшая корка частично держит вес, но не превращает болото в сухую землю.
+	if weather != null:
+		depth *= 1.0 + clampf(weather.wet, 0.0, 1.0) * 0.18
+		if weather.temp < -2.0:
+			depth *= 1.0 - smoothstep(-2.0, -12.0, weather.temp) * clampf(weather.snow, 0.0, 1.0) * 0.32
+	return clampf(depth, 0.0, 1.45)
 
 func biome(x: float, z: float) -> float:
 	return clampf(n_biome.get_noise_2d(x, z) * 2.2, -1.0, 1.0)
