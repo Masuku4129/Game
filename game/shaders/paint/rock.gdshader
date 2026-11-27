@@ -30,7 +30,9 @@ void fragment() {
 	float s = strokes(wp.xz * 1.15 + wp.y * 0.8);
 	vec3 c = mix(lin(col_dark), lin(col), clamp(s * 0.7 + COLOR.r * 0.5, 0.0, 1.0));
 	float m = smoothstep(0.6, 0.9, wn.y + (s - 0.5) * 0.4) * moss_k;
-	c = mix(c, lin(moss), m);\n\t// Gentle broad color planes; avoid noisy speckle at mobile viewing distance.\n\tc *= mix(0.94, 1.06, vnoise(wp.xz * 0.75));
+	c = mix(c, lin(moss), m);
+	// Gentle broad color planes; avoid noisy speckle at mobile viewing distance.
+	c *= mix(0.94, 1.06, vnoise(wp.xz * 0.75));
 	c = mix(c, vec3(0.9, 0.93, 0.97), smoothstep(0.5, 0.75, wn.y + s * 0.2) * snow);
 	c *= 1.0 - wet * 0.3;
 	ALBEDO = c;
