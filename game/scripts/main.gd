@@ -353,6 +353,8 @@ func _reveal_map_area() -> void:
 				"forest": clampf((n_forest.get_noise_2d(wx, wz) + 1.0) * 0.5, 0.0, 1.0),
 				"elevation": int(round(h / 4.0))
 			}
+			if chunk_stream != null:
+				chunk_stream.save_map_cell(wx, wz, key, explored_map[key])
 
 func _colony_pick_mode() -> void:
 	colony_mode = true
