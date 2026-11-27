@@ -203,16 +203,18 @@ func step(dh: float) -> void:
 	# в зимний мороз покров держится и понемногу растёт (позёмка, иней)
 	if season_index() == 1 and temp < -2.0:
 		snow = minf(maxf(snow, 0.35), snow + dh * 0.015) if snow < 0.95 else snow
-	# мокрость: дождь мочит, солнце и ветер сушат
-	if not cold and precip > 0.1:
-		wet = minf(1.0, wet + precip * dh * 0.8)
-	else:
-		wet = maxf(0.0, wet - dh * (0.08 + main.day_factor * 0.12) * clampf(temp / 10.0, 0.1, 1.0))
-	# река замерзает после нескольких дней мороза
+	# Поверхностная влага: дождь насыщает почву, солнце и ветер испаряют воду,
+	# а влажная земля при отрицательной температуре постепенно покрывается коркой.
+	var liquid_precip := precip if temp >= 0.5 else precip * 0.18
+	var evaporation := (0.025 + main.day_factor * 0.045 + wind * 0.035) * clampf((temp + 5.0) / 18.0, 0.05, 1.0)
+	wet = clampf(wet + liquid_precip * dh * (0.72 + (1.0 - wet) * 0.28) - evaporation * dh, 0.0, 1.0)
 	if temp < -1.5:
-		ice = minf(1.0, ice + dh * 0.006 * clampf(-temp / 3.0, 0.5, 4.0))
+		ice = minf(1.0, ice + dh * (0.004 + wet * 0.012) * clampf(-temp / 4.0, 0.35, 3.5))
 	elif temp > 0.0:
-		ice = maxf(0.0, ice - dh * 0.01 * (1.0 + temp * 0.2))
+		ice = maxf(0.0, ice - dh * (0.008 + temp * 0.006) * (1.0 + wind * 0.15))
+	if temp > 0.5 and precip > 0.15:
+		snow = maxf(0.0, snow - precip * dh * 0.025)
+
 	# листва: желтеет в первой половине осени, опадает во второй, распускается в конце весны
 	var s := y * 4.0
 	if s < 1.0:
