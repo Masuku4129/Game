@@ -668,6 +668,7 @@ func _make_cabin_roof_snow(cabin_node: Node3D, s: Dictionary) -> void:
 		return
 	var holder := Node3D.new()
 	holder.name = "roof_snow"
+	holder.set_meta("cut", true)
 	cabin_node.add_child(holder)
 	var sheet := MeshInstance3D.new()
 	sheet.name = "snow_sheet"
