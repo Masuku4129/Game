@@ -332,11 +332,19 @@ func _reveal_map_area() -> void:
 				continue
 			var wx := (float(gx) + 0.5) * 16.0
 			var wz := (float(gz) + 0.5) * 16.0
+			var h := height(wx, wz)
+			var wl := water_level(wx, wz)
+			var zkind := zone(wx, wz)
+			var rd := river_dist(wx, wz)
+			var lk := lake_k(wx, wz)
 			explored_map[key] = {
-				"zone": zone(wx, wz),
-				"river": river_dist(wx, wz) < 9.0,
-				"lake": lake_k(wx, wz) > 0.28,
-				"water": height(wx, wz) < water_level(wx, wz) + 0.25
+				"zone": zkind,
+				"river": rd < 9.0,
+				"lake": lk > 0.28,
+				"water": h < wl + 0.25,
+				"bog": zkind == 2 and swamp_depth_at(wx, wz) > 0.3,
+				"forest": clampf((n_forest.get_noise_2d(wx, wz) + 1.0) * 0.5, 0.0, 1.0),
+				"elevation": int(round(h / 4.0))
 			}
 
 func _colony_pick_mode() -> void:
