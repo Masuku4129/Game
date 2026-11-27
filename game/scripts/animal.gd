@@ -695,17 +695,20 @@ func tick(delta: float) -> void:
 				else:
 					_new_wander()
 		"to_tree":
-			goal = tree
+			# Наводимся не в центр ствола (он заблокирован коллизией), а на
+			# доступную точку у коры. Иначе белка упирается в trunk clearance
+			# и никогда не достигает порога перехода в состояние лазания.
+			var dt2 := Vector2(position.x - tree.x, position.z - tree.z)
+			if dt2.length_squared() < 0.001:
+				dt2 = Vector2(sin(heading), cos(heading))
+			var radial_to_bark := dt2.normalized()
+			var trunk_clearance: float = main.tree_radius_at(tree) + _obstacle_radius() + 0.16
+			goal = Vector3(tree.x + radial_to_bark.x * trunk_clearance, main.grid_height(position.x, position.z), tree.z + radial_to_bark.y * trunk_clearance)
 			want = run
-			var dt2 := Vector2(tree.x - position.x, tree.z - position.z)
-			if dt2.length() < 1.3:
-				# Остановиться у коры, а не внутри ствола; повернуться к дереву.
-				var away := dt2.normalized()
-				if away.length_squared() < 0.01:
-					away = Vector2(cos(heading), sin(heading))
-				var trunk_clearance: float = main.tree_radius_at(tree) + _obstacle_radius() + 0.12
-				position.x = tree.x - away.x * trunk_clearance
-				position.z = tree.z - away.y * trunk_clearance
+			if dt2.length() <= trunk_clearance + 0.28:
+				# Фиксируем белку снаружи коры, не проталкивая её сквозь коллизию.
+				position.x = tree.x + radial_to_bark.x * trunk_clearance
+				position.z = tree.z + radial_to_bark.y * trunk_clearance
 				heading = atan2(tree.x - position.x, tree.z - position.z)
 				tree_orbit_angle = atan2(position.x - tree.x, position.z - tree.z)
 				tree_top = clampf(main.tree_height_at(tree) * 0.82, 2.8, 10.0)
