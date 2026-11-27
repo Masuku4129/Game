@@ -54,6 +54,7 @@ var bleed := 0.0
 var injuries := {}
 var inv := {}
 var resource_gained := {}
+var worn: Dictionary = {}
 var creative_mode := false
 var pickables := {}
 var animals
@@ -1017,7 +1018,11 @@ func _update_stats(dt: float) -> void:
 	msg_t -= dt
 	var tc: float = weather.temp
 	var soak: float = maxf(float(weather.wet) * 0.6, float(hero.soaked))
-	var target_w := clampf(0.55 + tc * 0.025 - soak * 0.35 - weather.wind * 0.05 - (0.25 if hero.swimb > 0.5 else 0.0), 0.02, 0.95)
+	var clothing_warmth := 0.0
+	for slot: String in worn:
+		var clothing_id := String(worn[slot])
+		clothing_warmth += float(IT.DEF.get(clothing_id, {}).get("warm", 0.0))
+	var target_w := clampf(0.55 + tc * 0.025 - soak * 0.35 - weather.wind * 0.05 - (0.25 if hero.swimb > 0.5 else 0.0) + clothing_warmth, 0.02, 0.95)
 	# --- build: костёр, шалаш, изба с печью греют; укрытие ослабляет ветер ---
 	if camp != null:
 		target_w = clampf(target_w + camp.warm_bonus() + weather.wind * 0.05 * (1.0 - camp.wind_k()), 0.02, 0.98)
@@ -2258,7 +2263,7 @@ func to_save() -> Dictionary:
 	var t: Node = hero.tools
 	return {"t_hours": t_hours, "day": day_count, "map_seed": map_seed, "explored_map": explored_map.duplicate(true), "hunger": hunger, "thirst": thirst, "warmth": warmth,
 		"stamina": stamina, "health": health, "bleed": bleed, "injuries": injuries.duplicate(),
-		"inv": inv.duplicate(), "pos": SV.enc(hero.position), "yaw": float(hero.body.rotation.y),
+		"inv": inv.duplicate(), "worn": worn.duplicate(true), "pos": SV.enc(hero.position), "yaw": float(hero.body.rotation.y),
 		"cam_yaw": float(rig.rotation.y), "held": String(t.held) if t != null else "",
 		"belt": (t.belt as Array).duplicate() if t != null else [], "lamp_h": _lamp_h,
 		"back": String(t.get("back")) if t != null and t.get("back") != null else "",
@@ -2293,6 +2298,7 @@ func from_save(d: Dictionary) -> void:
 	for k: String in inj:
 		injuries[k] = float(inj[k])
 	inv = SV.int_dict(d.get("inv", {}))
+	worn = d.get("worn", {}).duplicate(true)
 	var p: Vector3 = SV.dec(d.get("pos", SV.enc(hero.position)))
 	hero.position = p
 	hero.vel = Vector3.ZERO
