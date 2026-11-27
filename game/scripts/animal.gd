@@ -997,6 +997,7 @@ var r_s := 0.0
 var _breath := 0.0
 
 var _attack_t := 0.0
+var _gallop_mode := false
 
 ## Готовая модель: выбор анимации по состоянию и скорости, темп шага по реальной скорости.
 func _animate_model(delta: float) -> void:
@@ -1011,10 +1012,12 @@ func _animate_model(delta: float) -> void:
 		# вплавь: ноги гребут под водой в спокойном темпе
 		want_a = SK.find_anim(ap, ["Walk"])
 		sc = 0.85 if speed > 0.05 else 0.5
-	elif speed > walk * 1.7:
+	elif speed > walk * (1.7 if not _gallop_mode else 1.52):
+		_gallop_mode = true
 		want_a = SK.find_anim(ap, ["Gallop"])
 		sc = clampf(speed / float(sp["run"]), 0.7, 1.35)
 	elif speed > 0.08:
+		_gallop_mode = false
 		want_a = SK.find_anim(ap, ["Walk"])
 		sc = clampf(speed / walk, 0.45, 1.4)
 	elif state in ["graze", "feed", "drink", "eat"]:
@@ -1024,9 +1027,12 @@ func _animate_model(delta: float) -> void:
 	elif state in ["alert", "watch"]:
 		want_a = SK.find_anim(ap, ["Idle_2", "Idle"])
 	else:
+		_gallop_mode = false
 		want_a = SK.find_anim(ap, ["Idle"])
 	if want_a != "" and want_a != parts["cur"]:
-		ap.play(want_a, 0.35)
+		# Плавное переключение циклов, без резкого среза позы при смене аллюра.
+		var blend := clampf(0.22 + absf(speed - walk) * 0.035, 0.22, 0.42)
+		ap.play(want_a, blend)
 		parts["cur"] = want_a
 	ap.speed_scale = lerpf(ap.speed_scale, sc, clampf(delta * 6.0, 0.0, 1.0))
 	# наклон по склону
