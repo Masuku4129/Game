@@ -385,11 +385,7 @@ func _remove_tree_cover(k: String) -> void:
 			main.blockers.erase(grid_key)
 	tree_mmis.erase(k)
 	blocker_records.erase(k)
-	# Не удаляем mesh варианта, пока на него ссылается хотя бы один оставшийся чанк.
-	for grid_key in main.tree_grid:
-		for entry: Array in main.tree_grid[grid_key]:
-			if String(entry[3]).begins_with(""):
-				continue
+	# Кэш near_mesh оставляем: другие чанки могут использовать те же варианты GLB.
 
 func _remove_terrain_chunk(k: String) -> void:
 	if not terrain_nodes.has(k):
