@@ -13,6 +13,10 @@ jobs:
       image: barichello/godot-ci:4.3
     steps:
       - uses: actions/checkout@v4
+      - name: Install software GPU
+        run: |
+          apt-get update -qq
+          DEBIAN_FRONTEND=noninteractive apt-get install -y -qq xvfb mesa-vulkan-drivers libvulkan1 libgl1-mesa-dri >/dev/null
       - name: Import project
         run: |
           cd game
