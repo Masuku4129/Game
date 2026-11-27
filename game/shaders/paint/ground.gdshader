@@ -167,9 +167,18 @@ void fragment() {
 	vec3 ash = mix(lin(vec3(0.13, 0.11, 0.1)), lin(vec3(0.42, 0.4, 0.36)), smoothstep(0.4, 0.8, fine + s * 0.4 - 0.2));
 	ash = mix(ash, lin(vec3(0.36, 0.42, 0.16)), smoothstep(0.55, 0.8, big) * 0.6);
 	c = mix(c, ash, kb);
-	vec3 bog = mix(lin(vec3(0.5, 0.5, 0.18)), lin(vec3(0.3, 0.36, 0.12)), smoothstep(0.3, 0.7, s));
-	bog = mix(bog, lin(vec3(0.62, 0.36, 0.22)), smoothstep(0.7, 0.85, fine) * 0.5);
-	bog = mix(bog, lin(vec3(0.08, 0.1, 0.07)), smoothstep(0.62, 0.7, big + s * 0.3) * 0.8);
+	// Болото: не одно зелёное пятно, а торф, моховые островки и мокрые окна.
+	float bog_macro = vnoise(wp.xz * 0.11 + vec2(17.0, -9.0));
+	float bog_moss = smoothstep(0.42, 0.72, vnoise(wp.xz * 0.22 + vec2(-4.0, 13.0)));
+	float bog_peat = smoothstep(0.36, 0.68, vnoise(wp.xz * 0.19 + vec2(8.0, 21.0)));
+	vec3 bog = mix(lin(vec3(0.34, 0.39, 0.17)), lin(vec3(0.20, 0.27, 0.12)), smoothstep(0.3, 0.7, s));
+	bog = mix(bog, lin(vec3(0.43, 0.34, 0.20)), bog_peat * 0.62);
+	bog = mix(bog, lin(vec3(0.48, 0.53, 0.25)), bog_moss * 0.72);
+	bog = mix(bog, lin(vec3(0.08, 0.13, 0.10)), smoothstep(0.64, 0.78, big + bog_macro * 0.25) * 0.7);
+	// irregular, shallow standing-water pockets, edged by dark saturated peat
+	float bog_water_mask = smoothstep(0.66, 0.82, vnoise(wp.xz * 0.16 + vec2(29.0, 4.0))) * (1.0 - bog_moss * 0.7);
+	float bog_water = bog_water_mask * kg * (0.25 + wet * 0.75);
+	bog = mix(bog, lin(vec3(0.10, 0.19, 0.20)), bog_water * 0.9);
 	c = mix(c, bog, kg);
 	vec3 kur = lin(vec3(0.45, 0.44, 0.4)) * (0.7 + fine * 0.4);
 	kur = mix(kur, lin(vec3(0.68, 0.7, 0.56)), smoothstep(0.6, 0.85, s) * 0.6);
@@ -231,7 +240,8 @@ void fragment() {
 	c *= 1.0 - wet * 0.25 * (1.0 - cover);
 	ALBEDO = c;
 	float gloss = max(wet, mudv * 0.8) * (1.0 - cover);
-	ROUGHNESS = mix(mix(1.0, 0.6, wet), 0.85, cover) - gloss * 0.2 * mudv - puddle * 0.2;
-	SPECULAR = (mudv * 0.2 + puddle * 0.15) * (1.0 - cover);
+	float bog_gloss = bog_water * (1.0 - cover);
+	ROUGHNESS = mix(mix(1.0, 0.6, wet), 0.85, cover) - gloss * 0.2 * mudv - puddle * 0.2 - bog_gloss * 0.22;
+	SPECULAR = (mudv * 0.2 + puddle * 0.15 + bog_gloss * 0.12) * (1.0 - cover);
 	NORMAL = normalize((VIEW_MATRIX * vec4(nw, 0.0)).xyz);
 }
