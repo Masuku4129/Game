@@ -4,7 +4,7 @@ func _initialize() -> void:
 	call_deferred("run_test")
 
 func run_test() -> void:
-	var world = load("res://scenes/main.tscn").instantiate()
+	var world: Node = load("res://scenes/main.tscn").instantiate()
 	root.add_child(world)
 	await process_frame
 	await process_frame
