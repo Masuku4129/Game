@@ -191,7 +191,31 @@ func _new_wander() -> void:
 				chosen = fallback
 				fallback_score = score
 		if chosen == Vector3.INF:
-			chosen = position + Vector3(rng.randf_range(-1.0, 1.0), 0.0, rng.randf_range(-1.0, 1.0))
+			# Final recovery is a validated probe, never a random point inside
+			# a trunk, rock, steep slope or deep bog. If no exit is reachable,
+			# keep the current position and let the next stuck-recovery tick retry.
+			var recovery_score := -INF
+			var recovery_point := position
+			for radius in [0.7, 1.2, 1.8, 2.6, 3.6, 4.8, 6.2]:
+				for probe_i in range(36):
+					var probe_angle := TAU * float(probe_i) / 36.0
+					var probe := position + Vector3(cos(probe_angle), 0.0, sin(probe_angle)) * radius
+					var probe_y: float = main.height(probe.x, probe.z)
+					if probe_y < main.water_level(probe.x, probe.z) - 0.2 and not swimmer():
+						continue
+					if main.normal_at(probe.x, probe.z).y < 0.68:
+						continue
+					if main.blocked(probe.x, probe.z, maxf(0.35, _obstacle_radius() * 0.6)):
+						continue
+					if not _can_move_segment(position, probe):
+						continue
+					var score := _habitat_score(probe) - radius * 0.035
+					if score > recovery_score:
+						recovery_score = score
+						recovery_point = probe
+				if recovery_point != position and radius >= 3.6:
+					break
+			chosen = recovery_point
 	target = chosen
 	# цель на другом ярусе уступа или в реке (для тех, кто не плавает) — ближе к дому
 	# стадо держится вместе: не вожак — пасётся рядом с вожаком
@@ -250,6 +274,14 @@ func _habitat_score(p: Vector3) -> float:
 		score += slope * 0.12
 	elif kind in ["hare", "roe", "deer", "moose", "beaver"]:
 		score -= slope * 0.16
+	# During gusts, shelter-seeking is stronger: dense forest scores better
+	# for small species and exposed ridges become less attractive to grazers.
+	if main.weather != null and float(main.weather.wind) > 1.0:
+		var exposure := clampf((main.height(p.x, p.z) - main.WATER_Y - 5.0) / 18.0, 0.0, 1.0)
+		var wind_strength := clampf((float(main.weather.wind) - 1.0) / 1.2, 0.0, 1.0)
+		var shelter_need := 0.35 if kind in ["squirrel", "hare", "roe", "deer", "muskdeer"] else 0.18
+		score += forest * shelter_need * wind_strength
+		score -= exposure * shelter_need * wind_strength
 	return score
 
 static func _river_zc(x: float) -> float:
