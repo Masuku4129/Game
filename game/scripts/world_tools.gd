@@ -126,6 +126,21 @@ func _hide_tree(rec: Array) -> void:
 		var tree_key := "%d:%d" % [roundi(o.x * 10.0), roundi(o.z * 10.0)]
 		state[tree_key] = {"hidden": true}
 		main.chunk_stream.write_state(o, "tree_state", state)
+	# Убираем коллизию стоящего ствола; упавший ствол получает собственную
+	# протяжённую коллизию в FellTree и не оставляет невидимый цилиндр на пне.
+	var tree_kind := kind_of(rec)
+	var tree_scale: float = (rec[2] as Transform3D).basis.x.length()
+	var blocker_radius: float = float(main.BLOCK_R.get(tree_kind, 0.0)) * tree_scale
+	if blocker_radius > 0.0:
+		var grid_key := Vector2i(floori(o.x / 8.0), floori(o.z / 8.0))
+		if main.blockers.has(grid_key):
+			var obstacles: Array = main.blockers[grid_key]
+			var expected := Vector3(o.x, o.z, blocker_radius)
+			for i in range(obstacles.size() - 1, -1, -1):
+				if obstacles[i].distance_to(expected) < 0.03:
+					obstacles.remove_at(i)
+			if obstacles.is_empty():
+				main.blockers.erase(grid_key)
 	rec[2] = Transform3D(Basis().scaled(Vector3(0.0001, 0.0001, 0.0001)), Vector3(o.x, -500.0, o.z))
 	(rec[0] as MultiMesh).set_instance_transform(rec[1], rec[2])
 	main._update_near(true)
