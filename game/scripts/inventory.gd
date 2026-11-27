@@ -41,6 +41,10 @@ var _base_pitch := 45.0
 var _base_yaw := 0.0
 var _view_yaw := 0.0
 var _active := false
+var craft_scroll := 0.0
+var _craft_dragging := false
+var _craft_drag_y := 0.0
+var _craft_scroll_start := 0.0
 var _edge := PackedVector2Array()
 var _blots: Array = []
 
@@ -287,6 +291,8 @@ func _station(id: String) -> String:
 	return String(ITEMS.get(id, {}).get("station", "")) if not EXTRA.has(id) else ""
 
 func station_ok(st: String) -> bool:
+	if main != null and bool(main.get("creative_mode")):
+		return true
 	if st == "":
 		return true
 	if main != null and main.has_method("station_near"):
@@ -299,7 +305,7 @@ func recipes() -> Array:
 	for id: String in EXTRA:
 		out.append(id)
 	for id: String in ITEMS:
-		if ITEMS[id].has("craft") and (_station(id) == "" or station_ok(_station(id))):
+		if ITEMS[id].has("craft"):
 			out.append(id)
 	var ok := func(id: String) -> int: return 1 if missing(id).is_empty() else 0
 	out.sort_custom(func(a: String, b: String) -> bool: return ok.call(a) > ok.call(b))
@@ -307,6 +313,8 @@ func recipes() -> Array:
 
 ## Чего не хватает: {id: сколько}.
 func missing(id: String) -> Dictionary:
+	if main != null and bool(main.get("creative_mode")):
+		return {}
 	var out := {}
 	var rc := recipe(id)
 	for k: String in rc:
@@ -316,6 +324,8 @@ func missing(id: String) -> Dictionary:
 	return out
 
 func _tool_ok(id: String) -> bool:
+	if main != null and bool(main.get("creative_mode")):
+		return true
 	# --- core: need [id] из items.gd — нужно иметь (нож, горшок, кружка), не тратится ---
 	for t: String in ITEMS.get(id, {}).get("need", []):
 		if count(t) <= 0:
@@ -327,8 +337,9 @@ func craft(id: String) -> bool:
 	if not missing(id).is_empty() or not station_ok(_station(id)) or not _tool_ok(id):
 		return false
 	var rc := recipe(id)
-	for k: String in rc:
-		remove_item(k, int(rc[k]))
+	if main == null or not bool(main.get("creative_mode")):
+		for k: String in rc:
+			remove_item(k, int(rc[k]))
 	add_item(id, int(EXTRA_OUT.get(id, ITEMS.get(id, {}).get("out", 1))))  # core: out из items.gd
 	main._say("Сделано: " + _name(id).to_lower())
 	if main.sfx != null:
@@ -403,19 +414,53 @@ func _take(kind: String) -> void:
 	_pick_default()
 
 func _sheet_input(e: InputEvent) -> void:
+	var rs := recipes() if tab == 1 else []
+	var max_scroll := maxf(0.0, float(rs.size()) * ROW_H - (640.0 - GRID.y))
+	if tab == 1:
+		if e is InputEventMouseButton:
+			var mb := e as InputEventMouseButton
+			if mb.button_index == MOUSE_BUTTON_WHEEL_UP and mb.pressed:
+				craft_scroll = maxf(0.0, craft_scroll - ROW_H * 2.0)
+				sheet.queue_redraw()
+				return
+			if mb.button_index == MOUSE_BUTTON_WHEEL_DOWN and mb.pressed:
+				craft_scroll = minf(max_scroll, craft_scroll + ROW_H * 2.0)
+				sheet.queue_redraw()
+				return
+			if mb.button_index == MOUSE_BUTTON_LEFT:
+				if mb.pressed and mb.position.x < 620.0 and mb.position.y >= GRID.y and mb.position.y <= 640.0:
+					_craft_dragging = true
+					_craft_drag_y = mb.position.y
+					_craft_scroll_start = craft_scroll
+					var row_i := int((mb.position.y - GRID.y + craft_scroll) / ROW_H)
+					if row_i >= 0 and row_i < rs.size():
+						rsel = rs[row_i]
+					sheet.queue_redraw()
+					return
+				elif not mb.pressed:
+					_craft_dragging = false
+		if e is InputEventScreenDrag and _craft_dragging:
+			var drag := e as InputEventScreenDrag
+			craft_scroll = clampf(_craft_scroll_start - (drag.position.y - _craft_drag_y), 0.0, max_scroll)
+			sheet.queue_redraw()
+			return
+		if e is InputEventMouseMotion and _craft_dragging:
+			var motion := e as InputEventMouseMotion
+			craft_scroll = clampf(_craft_scroll_start - (motion.position.y - _craft_drag_y), 0.0, max_scroll)
+			sheet.queue_redraw()
+			return
 	if not (e is InputEventMouseButton and e.pressed and e.button_index == MOUSE_BUTTON_LEFT):
 		return
 	var pos: Vector2 = e.position
-	# вкладки в шапке
 	if pos.y < 100.0 and pos.x > 300.0 and pos.x < 760.0:
 		tab = 0 if pos.x < 530.0 else 1
 		sheet.queue_redraw()
 		return
 	if tab == 1:
-		var rs := recipes()
-		var i := int((pos.y - GRID.y) / ROW_H)
-		if pos.x < 610.0 and pos.y >= GRID.y and i >= 0 and i < rs.size():
-			rsel = rs[i]
+		if pos.x < 610.0 and pos.y >= GRID.y and pos.y <= 640.0:
+			var i := int((pos.y - GRID.y + craft_scroll) / ROW_H)
+			if i >= 0 and i < rs.size():
+				rsel = rs[i]
 		sheet.queue_redraw()
 		return
 	var p: Vector2 = pos - GRID
@@ -558,11 +603,13 @@ func _draw_craft(ci: CanvasItem, f: Font) -> void:
 	var rs := recipes()
 	if rsel == "" or not rs.has(rsel):
 		rsel = rs[0] if not rs.is_empty() else ""
+	var max_scroll := maxf(0.0, float(rs.size()) * ROW_H - (640.0 - GRID.y))
+	craft_scroll = clampf(craft_scroll, 0.0, max_scroll)
 	for i in rs.size():
 		var id: String = rs[i]
-		var y := GRID.y + i * ROW_H
-		if y + ROW_H > 640.0:
-			break
+		var y := GRID.y + i * ROW_H - craft_scroll
+		if y < GRID.y or y + ROW_H > 640.0:
+			continue
 		var r := Rect2(GRID.x, y, 574, ROW_H - 6)
 		var ok := missing(id).is_empty() and station_ok(_station(id)) and _tool_ok(id)
 		ci.draw_rect(r, Color(0.8, 0.7, 0.5, 0.75 if ok else 0.35))
@@ -579,6 +626,12 @@ func _draw_craft(ci: CanvasItem, f: Font) -> void:
 			icon(ci, k, Vector2(x + 14, y + 22), 13.0)
 			ci.draw_string(f, Vector2(x + 30, y + 32), "%d" % int(rc[k]), HORIZONTAL_ALIGNMENT_LEFT, -1, 22, BAD_C if miss.has(k) else OK_C)
 			x += 66
+	var track := Rect2(616, GRID.y, 10, 516)
+	ci.draw_rect(track, Color(0.22, 0.19, 0.14, 0.22))
+	if max_scroll > 0.0:
+		var thumb_h := maxf(36.0, track.size.y * track.size.y / (float(rs.size()) * ROW_H))
+		var thumb_y := track.position.y + (track.size.y - thumb_h) * craft_scroll / max_scroll
+		ci.draw_rect(Rect2(track.position.x, thumb_y, track.size.x, thumb_h), UI.ACCENT)
 	if rs.is_empty():
 		ci.draw_string(f, GRID + Vector2(0, 40), "Нечего мастерить", HORIZONTAL_ALIGNMENT_LEFT, -1, 26, Color(INK, 0.6))
 	var dr := Rect2(640, 124, 304, 500)

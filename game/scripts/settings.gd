@@ -21,6 +21,8 @@ var main: Node3D
 var preset := 0
 var fps := 30
 var volume := 0.8
+var creative_mode := false
+var creative_btn: Button
 var gear: Button
 var sheet: Control
 var _q_btns: Array = []
@@ -70,6 +72,8 @@ func _ready() -> void:
 	anchor_bottom = 1.0
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_load()
+	if main != null:
+		main.creative_mode = creative_mode
 	gear = GearBtn.new()
 	_corner(gear, -126.0)
 	gear.pressed.connect(toggle)
@@ -93,6 +97,7 @@ func _load() -> void:
 		fps = int(c.get_value("video", "fps", PRESETS[preset]["fps"]))
 		volume = clampf(float(c.get_value("audio", "volume", 0.8)), 0.0, 1.0)
 		hero_mode = bool(c.get_value("game", "hero_mode", false))  # colony
+		creative_mode = bool(c.get_value("game", "creative_mode", false))
 	else:
 		fps = int(PRESETS[preset]["fps"])
 
@@ -102,6 +107,7 @@ func _store() -> void:
 	c.set_value("video", "fps", fps)
 	c.set_value("audio", "volume", volume)
 	c.set_value("game", "hero_mode", hero_mode)  # colony
+	c.set_value("game", "creative_mode", creative_mode)
 	c.save(CFG)
 
 ## Применить всё к движку.
@@ -177,10 +183,12 @@ func _build_sheet() -> void:
 	var cl := _btn("Закрыть", Rect2(480, 540, 420, 84), 28)
 	cl.pressed.connect(close)
 	# --- colony: отладочный переключатель старого режима героя (джойстик, от первого лица) ---
-	_hero_btn = _btn(_hero_text(), Rect2(40, 636, 860, 76), 24)
+	creative_btn = _btn(_creative_text(), Rect2(40, 636, 860, 68), 24)
+	creative_btn.pressed.connect(_toggle_creative_mode)
+	_hero_btn = _btn(_hero_text(), Rect2(40, 718, 860, 68), 22)
 	_hero_btn.pressed.connect(_toggle_hero_mode)
-	sheet.offset_top = -380.0
-	sheet.offset_bottom = 380.0
+	sheet.offset_top = -430.0
+	sheet.offset_bottom = 430.0
 
 func _label(t: String, p: Vector2, fs: int) -> Label:
 	var l := Label.new()
@@ -204,6 +212,8 @@ func _btn(t: String, r: Rect2, fs: int) -> Button:
 func _refresh() -> void:
 	if sheet == null:
 		return
+	if creative_btn != null:
+		creative_btn.text = _creative_text()
 	for i in _q_btns.size():
 		(_q_btns[i] as Button).modulate = Color(1, 1, 1) if i == preset else Color(1, 1, 1, 0.55)
 	for i in _f_btns.size():
@@ -231,6 +241,19 @@ func _set_vol(v: float) -> void:
 # --- colony: старый режим героя — для отладки; меняется при следующем запуске ---
 func _hero_text() -> String:
 	return "Режим героя (отладка): %s · нужен перезапуск" % ("да" if hero_mode else "нет")
+
+func _creative_text() -> String:
+	return "Творческий режим: %s · бесплатно, мгновенная стройка, максимум характеристик" % ("включён" if creative_mode else "выключен")
+
+func _toggle_creative_mode() -> void:
+	creative_mode = not creative_mode
+	if main != null:
+		main.creative_mode = creative_mode
+	_store()
+	if creative_btn != null:
+		creative_btn.text = _creative_text()
+	if main != null:
+		main._say("Творческий режим включён" if creative_mode else "Обычный режим включён")
 
 func _toggle_hero_mode() -> void:
 	hero_mode = not hero_mode

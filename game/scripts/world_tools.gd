@@ -76,7 +76,10 @@ func _give(id: String, n: int) -> int:
 	for i in n:
 		if main.inventory != null and not main.inventory.can_add(id):
 			break
-		main.inv[id] = int(main.inv.get(id, 0)) + 1
+		if main.inventory != null:
+			main.inventory.add_item(id, 1)
+		else:
+			main.inv[id] = int(main.inv.get(id, 0)) + 1
 		got += 1
 	if got > 0:
 		main._say("+%d %s" % [got, IT.name_of(id).to_lower()])
@@ -136,7 +139,6 @@ func chop_tree(rec: Array, hero_p: Vector3, hits: int) -> bool:
 		f.setup(main.near_mesh[rec[3]], rec[2], kind, main, hero_p)
 		main.pv.fade_list.append(f.bm)
 		fells[id] = f
-		_hide_tree(rec)
 	if f.phase != "stand":
 		return true
 	f.hit()
@@ -144,6 +146,8 @@ func chop_tree(rec: Array, hero_p: Vector3, hits: int) -> bool:
 	_chips(np, hero_p + Vector3(0, 1.0, 0))
 	_snd("chop", np, 2.0)
 	if f.phase == "fall":
+		_hide_tree(rec)
+		f.show_fall_visuals()
 		_snd("crack", np + Vector3(0, 2, 0), 6.0, 1.0)
 		main._say("Дерево падает!")
 		return true
@@ -846,7 +850,10 @@ class FellTree extends Node3D:
 		pivot.add_child(upper)
 		stump.material_override = TM.mat()
 		stump.transform = t
+		stump.visible = false
 		add_child(stump)
+		top.visible = false
+		upper.visible = false
 		cap.mesh = _disc_mesh()
 		cap.material_override = TM.mat()
 		cap.visible = false
@@ -908,6 +915,10 @@ class FellTree extends Node3D:
 		var lp := Vector3(cos(face_a), 0, sin(face_a)) * r0 * 0.9 + Vector3(0, notch, 0)
 		return xf * lp
 
+	func show_fall_visuals() -> void:
+		top.visible = true
+		upper.visible = true
+
 	func hit() -> void:
 		hits += 1
 		k = clampf(float(hits) / need, 0.0, 1.0)
@@ -950,6 +961,8 @@ class FellTree extends Node3D:
 	## Лёг: ствол становится твёрдым (по нему можно пройти).
 	var _solid: Array = []
 	func _lay() -> void:
+		stump.visible = true
+		upper.visible = false
 		_update_solid()
 
 	func _update_solid() -> void:

@@ -50,6 +50,8 @@ var thirst := 0.9
 var bleed := 0.0
 var injuries := {}
 var inv := {}
+var resource_gained := {}
+var creative_mode := false
 var pickables := {}
 var animals
 var flash: ColorRect
@@ -959,6 +961,14 @@ func _update_stats(dt: float) -> void:
 		stamina = maxf(0.0, stamina - drain * dt)
 	else:
 		stamina = minf(1.0, stamina + (0.14 if hero.state == "sit" else 0.07) * dt)
+	if creative_mode:
+		health = 1.0
+		hunger = 1.0
+		thirst = 1.0
+		warmth = 1.0
+		stamina = 1.0
+		bleed = 0.0
+		injuries.clear()
 	var hh := int(t_hours)
 	var mm := int((t_hours - hh) * 60.0)
 	var temp := int(round(tc))
@@ -1308,6 +1318,15 @@ func find_pick(p: Vector3) -> Array:
 					best = it
 	return best
 
+func _record_resource(kind: String, amount: int = 1) -> void:
+	if amount <= 0:
+		return
+	if inventory != null:
+		inventory.add_item(kind, amount)
+	else:
+		inv[kind] = int(inv.get(kind, 0)) + amount
+	resource_gained[kind] = int(resource_gained.get(kind, 0)) + amount
+
 func take_pick(it: Array) -> void:
 	if inventory != null and not inventory.can_add(String(it[1])):
 		_say("Короб полон")
@@ -1320,7 +1339,7 @@ func take_pick(it: Array) -> void:
 	var kind: String = it[1]
 	# съедобное теперь кладём в короб (есть — из инвентаря), если хватает места
 	if inventory != null and kind in ["berry", "mushroom", "amanita"]:
-		inv[kind] = int(inv.get(kind, 0)) + 1
+		_record_resource(kind, 1)
 		_say("+1 %s — в короб" % PICK_NAME[kind])
 		return
 	match kind:
@@ -1337,7 +1356,7 @@ func take_pick(it: Array) -> void:
 			flash.color.a = 0.25
 			_say("Мухомор! Отравление")
 		_:
-			inv[kind] = int(inv.get(kind, 0)) + 1
+			_record_resource(kind, 1)
 			_say("+1 %s" % PICK_NAME[kind])
 
 func near_water(p: Vector3) -> bool:

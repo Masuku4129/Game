@@ -153,12 +153,16 @@ func station_near(st: String) -> bool:
 	return false
 
 func can_pay(cost: Dictionary) -> bool:
+	if main != null and bool(main.get("creative_mode")):
+		return true
 	for k: String in cost:
 		if count(k) < int(cost[k]):
 			return false
 	return true
 
 func pay(cost: Dictionary) -> void:
+	if main != null and bool(main.get("creative_mode")):
+		return
 	for k: String in cost:
 		take(k, int(cost[k]))
 
@@ -796,6 +800,8 @@ func deposit(s: Dictionary) -> void:
 		main._say("Нечего вносить")
 
 func site_ready(s: Dictionary) -> bool:
+	if main != null and bool(main.get("creative_mode")):
+		return true
 	var need: Dictionary = need_of(s)
 	for id: String in need:
 		if int((s["have"] as Dictionary).get(id, 0)) < int(need[id]):
@@ -804,6 +810,15 @@ func site_ready(s: Dictionary) -> bool:
 
 func start_building(s: Dictionary) -> void:
 	if not site_ready(s):
+		return
+	if main != null and bool(main.get("creative_mode")):
+		s["stage"] = "done"
+		s["prog"] = 1.0
+		s["have"] = {}
+		s["_shown"] = 40
+		_register(s)
+		_rebuild(s)
+		main._say("Постройка возведена мгновенно")
 		return
 	s["stage"] = "building"
 	s["prog"] = 0.0
