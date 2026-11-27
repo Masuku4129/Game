@@ -7,11 +7,11 @@ render_mode cull_disabled;
 // Рядом с героем лежит мелкая сетка-«заплатка» (COLOR.a = 0): она повторяет землю и снег
 // точно так же, но ещё и продавлена следами из track_tex (вмятины, ямы, траншеи).
 // Крупная земля под заплаткой опущена, чтобы не мешать.
-uniform vec3 meadow = vec3(0.3, 0.4, 0.14);
-uniform vec3 meadow2 = vec3(0.47, 0.5, 0.2);
-uniform vec3 forest = vec3(0.16, 0.22, 0.11);
-uniform vec3 litter = vec3(0.30, 0.23, 0.14);
-uniform vec3 stone = vec3(0.36, 0.34, 0.29);
+uniform vec3 meadow = vec3(0.30, 0.38, 0.20);
+uniform vec3 meadow2 = vec3(0.42, 0.46, 0.24);
+uniform vec3 forest = vec3(0.20, 0.24, 0.16);
+uniform vec3 litter = vec3(0.36, 0.29, 0.20);
+uniform vec3 stone = vec3(0.42, 0.40, 0.36);
 uniform vec3 bed = vec3(0.46, 0.42, 0.3);
 uniform vec3 mud_col = vec3(0.24, 0.16, 0.1);
 uniform float water_y = -2.0;
@@ -140,9 +140,9 @@ void vertex() {
 }
 
 void fragment() {
-	float big = vnoise(wp.xz * 0.035);
-	float s = vnoise(wp.xz * 0.22) * 0.72 + vnoise(wp.xz * 0.75 + 3.0) * 0.28;
-	float fine = vnoise(wp.xz * 1.1);
+	float big = vnoise(wp.xz * 0.055);
+	float s = vnoise(wp.xz * 0.38) * 0.72 + vnoise(wp.xz * 1.2 + 3.0) * 0.28;
+	float fine = vnoise(wp.xz * 3.0);
 	vec3 c = mix(lin(meadow), lin(meadow2), smoothstep(0.35, 0.75, big + (s - 0.5) * 0.5));
 	float fd = v_fd;  // густота леса
 	vec3 fl = mix(lin(forest), lin(litter), smoothstep(0.4, 0.7, s + big * 0.3 - 0.2));
@@ -186,9 +186,9 @@ void fragment() {
 		c = mix(c, bc * (0.9 + fine * 0.2), sh);
 	}
 	// Soft posterization keeps the whole ground in the stylized illustrated palette.
-	vec3 poster = floor(c * 5.0 + 0.5) / 5.0;
-	c = mix(c, poster, 0.55);
-	c *= 0.97 + fine * 0.06;
+	vec3 poster = floor(c * 7.0 + 0.5) / 7.0;
+	c = mix(c, poster, 0.40);
+	c *= 0.84 + fine * 0.28;
 	// build: натоптанная тропа и расчищенная площадка — вытертая трава, утоптанная земля
 	float worn = smoothstep(0.25, 0.65, v_wear + (s - 0.5) * 0.25);
 	c = mix(c, lin(vec3(0.36, 0.29, 0.2)) * (0.85 + fine * 0.3), worn * 0.8);
