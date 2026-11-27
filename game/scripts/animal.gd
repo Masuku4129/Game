@@ -880,8 +880,11 @@ func _obstacle_radius() -> float:
 
 func _can_move_segment(from: Vector3, to: Vector3, flying: bool = false) -> bool:
 	var distance := Vector2(to.x - from.x, to.z - from.z).length()
-	# Fine 20 cm sampling helps detect narrow trunks, rocks and blocker edges on diagonal routes.
-	var steps := maxi(1, ceili(distance / 0.2))
+	# Adaptive sampling: large-bodied species use tighter collision sweeps;
+	# tiny wildlife retains a cheaper pass without skipping narrow obstacles.
+	var radius := _obstacle_radius()
+	var sample_spacing := clampf(radius * 0.35, 0.075, 0.16)
+	var steps := maxi(1, ceili(distance / sample_spacing))
 	var previous := from
 	for i in range(1, steps + 1):
 		var sample := from.lerp(to, float(i) / float(steps))
