@@ -581,8 +581,9 @@ func _process_main(delta: float) -> void:
 		vel = Vector3.ZERO
 		running = false
 	# крутой склон: человека тянет вниз, он теряет управление и катится
-	var s := 0.0
-	sliding = lerpf(sliding, s, minf(1.0, 4.0 * delta))
+	# Скользкая крутая поверхность: интенсивность зависит от уклона, а не обнуляется каждый кадр.
+	var s := 0.0 if airborne or depth > 0.6 else clampf((0.72 - n.y) / 0.42, 0.0, 1.0)
+	sliding = lerpf(sliding, s, minf(1.0, 5.0 * delta))
 	var accel := 11.0 * (1.0 - sliding * 0.75)
 	if airborne:
 		accel = 0.5
@@ -611,10 +612,9 @@ func _process_main(delta: float) -> void:
 			vel = Vector3.ZERO
 	position.x = p.x
 	position.z = p.z
-	# стоим на круче без опоры — съезжаем вниз, набирая скорость
-	if n.y < 0.4 and depth < 0.5 and not airborne:
-		vel += down * 9.0 * (1.0 - n.y) * delta * 3.0
-		position += down * minf(vel.length(), 6.0) * delta
+	# На крутом склоне сила тяжести постепенно тянет вниз; не телепортируем героя через препятствия.
+	if sliding > 0.05 and depth < 0.5 and not airborne:
+		vel += down * (3.0 + 8.0 * sliding) * delta
 	var sp := vel.length()
 	moving = sp > 0.25
 	if moving and (mag > 0.12 or sliding > 0.2):
