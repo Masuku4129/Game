@@ -257,11 +257,17 @@ func _spot(cond: Callable, start: Vector3, min_d: float) -> Vector3:
 	return Vector3(rng.randf_range(-half, half), 0, rng.randf_range(-half, half))
 
 func _near(c: Vector3, r: float) -> Vector3:
-	for t in 20:
+	for t in 32:
 		var a := rng.randf() * TAU
 		var p := c + Vector3(cos(a), 0, sin(a)) * rng.randf_range(0.5, r)
-		if not main.blocked(p.x, p.z, 0.5):
-			return p
+		var ground_y: float = main.height(p.x, p.z)
+		if ground_y < main.water_level(p.x, p.z) + 0.18:
+			continue
+		if main.normal_at(p.x, p.z).y < 0.72:
+			continue
+		if main.blocked(p.x, p.z, 0.5):
+			continue
+		return Vector3(p.x, ground_y, p.z)
 	return c
 
 func _spawn(k: String, p: Vector3, sc: float, grp: int, stable_id: String = "") -> Node3D:
