@@ -6,8 +6,19 @@ func _initialize() -> void:
 func run_test() -> void:
 	var world = load("res://scenes/main.tscn").instantiate()
 	root.add_child(world)
-	await process_frame
-	await process_frame
+	# Мир подгружается потоком: ждём, пока вокруг героя появятся высокие камни (не больше ~900 кадров).
+	var waited := 0
+	while waited < 900:
+		await process_frame
+		waited += 1
+		var uniq := {}
+		for b in world.solids.values():
+			for sd in b:
+				if int(sd[0]) == 0 and float(sd[4]) > 0.85:
+					var c: Vector3 = sd[1]
+					uniq[Vector2i(roundi(c.x * 10.0), roundi(c.z * 10.0))] = true
+		if uniq.size() >= 14:
+			break
 	var seen := {}
 	var tested := 0
 	var edge_hits := 0
@@ -25,7 +36,7 @@ func run_test() -> void:
 			tested += 1
 			if world.blocked(edge_probe.x, edge_probe.y, 0.32):
 				edge_hits += 1
-		print("ROCK_COLLISION_TEST tall_rocks=", tested, " edge_clearance_hits=", edge_hits)
+	print("ROCK_COLLISION_TEST tall_rocks=", tested, " edge_clearance_hits=", edge_hits)
 	world.queue_free()
 	if tested < 10 or edge_hits < 5:
 		quit(1)
