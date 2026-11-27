@@ -1116,6 +1116,17 @@ func _animate(delta: float) -> void:
 		hip.rotation.x = lerpf(sw, (-1.3 if front else 1.1), rest_k)
 		var bend := maxf(0.0, cos(ph)) * amp * 1.3 * mv
 		knee.rotation.x = lerpf((bend if front else -bend * 0.8 - 0.15 * mv), (2.4 if front else -2.2), rest_k)
+	# Белка перебирает лапами независимо от скорости перемещения по стволу.
+	if kind == "squirrel" and climb_h > 0.0:
+		phase += delta * 7.0
+		for i in 4:
+			var lg: Dictionary = legs[i]
+			var front: bool = lg["front"]
+			var ph := phase + float([0.0, PI, PI, 0.0][i])
+			var reach := sin(ph)
+			var tuck := maxf(0.0, cos(ph))
+			(lg["hip"] as Node3D).rotation.x = (0.25 if front else -0.15) + reach * 0.62
+			(lg["knee"] as Node3D).rotation.x = (-tuck * 0.95 if front else tuck * 0.75)
 	# наклон тела по склону, подпрыгивание
 	var fwd := Vector3(sin(heading), 0, cos(heading))
 	var hf: float = main.ground_at(position.x + fwd.x * L * 0.4, position.z + fwd.z * L * 0.4)
@@ -1132,11 +1143,14 @@ func _animate(delta: float) -> void:
 	body.rotation.x = lerpf(body.rotation.x, pitch + (sin(phase) * 0.18 * r if gait == "bound" else 0.0) + sin(_breath) * 0.008 * idle_k, minf(1.0, delta * 8.0))
 	body.scale = Vector3(1.0 + sin(_breath) * 0.004 * idle_k, 1.0 + sin(_breath) * 0.009 * idle_k, 1.0)
 	if kind == "squirrel" and climb_h > 0.0:
-		body.rotation.x = -1.45
+		body.rotation.x = -1.32
+		body.rotation.z = sin(phase) * 0.045
 		body.position.y = H + 0.1
 	# голова: пасётся — вниз, настороже — вверх, на бегу вытянута
 	var hp := 0.0
-	if state == "graze":
+	if kind == "squirrel" and climb_h > 0.0:
+		hp = -0.28 + sin(phase * 0.5) * 0.06
+	elif state == "graze":
 		hp = 0.9 + sin(Time.get_ticks_msec() * 0.002 + float(rng.seed % 7)) * 0.15
 	elif state == "alert":
 		hp = -0.35
