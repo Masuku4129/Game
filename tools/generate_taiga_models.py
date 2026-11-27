@@ -511,7 +511,7 @@ def dogrose():
             q=end*t
             blob(b,q,(.24,.22,.20),rng,cc,2,.12,.58,"foliage")
         if i % 2 == 0:
-            blob(b,end+np.array([0,0,.10]),(.13,.13,.12),rng,cc,2,.08,.65,"flower")
+            blob(b,end+np.array([0,0,.10]),(.13,.13,.12),rng,cc,2,.08,.65,"foliage")
     export("taiga_dogrose.glb", b)
 
 
