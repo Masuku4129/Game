@@ -116,6 +116,7 @@ func populate() -> void:
 func populate_stream_chunk(coord: Vector2i, chunk_seed: int) -> void:
 	var key := "%d,%d" % [coord.x, coord.y]
 	if streamed_chunks.has(key):
+		_restore_pending_chunk_animals(key)
 		return
 	streamed_chunks[key] = true
 	var previous_seed := rng.seed
@@ -166,6 +167,23 @@ func populate_stream_chunk(coord: Vector2i, chunk_seed: int) -> void:
 		var predator_pos := candidates[rng.randi_range(0, candidates.size() - 1)]
 		_spawn(predator, predator_pos, rng.randf_range(0.9, 1.08), group_id + 1, "chunk:%s:predator:0" % key)
 	rng.seed = previous_seed
+
+func _restore_pending_chunk_animals(chunk_key: String) -> void:
+	var prefix := "chunk:%s:" % chunk_key
+	var restore_ids: Array = []
+	for id: String in pending_saved_animals:
+		if id.begins_with(prefix):
+			restore_ids.append(id)
+	for id: String in restore_ids:
+		var saved: Dictionary = pending_saved_animals[id]
+		var kind := String(saved.get("kind", "hare"))
+		var position_data: Variant = saved.get("p", null)
+		if position_data == null:
+			pending_saved_animals.erase(id)
+			continue
+		var SV = preload("res://scripts/save.gd")
+		var p: Vector3 = SV.dec(position_data)
+		_spawn(kind, p, float(saved.get("scale", 1.0)), int(saved.get("group", -1)), id)
 
 func _spot(cond: Callable, start: Vector3, min_d: float) -> Vector3:
 	var half: float = main.SIZE * 0.5 - 20.0
