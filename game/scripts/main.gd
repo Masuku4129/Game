@@ -276,8 +276,13 @@ func _resolve_world_seed() -> void:
 		DirAccess.remove_absolute(ProjectSettings.globalize_path(PENDING_SEED_PATH))
 		if map_seed != 0:
 			return
-	if FileAccess.file_exists("user://save.json"):
-		var sf := FileAccess.open("user://save.json", FileAccess.READ)
+	var creative_selected := false
+	var cfg := ConfigFile.new()
+	if cfg.load("user://settings.cfg") == OK:
+		creative_selected = bool(cfg.get_value("game", "creative_mode", false))
+	var save_path := "user://creative_save.json" if creative_selected else "user://save.json"
+	if FileAccess.file_exists(save_path):
+		var sf := FileAccess.open(save_path, FileAccess.READ)
 		if sf != null:
 			var parsed: Variant = JSON.parse_string(sf.get_as_text())
 			sf.close()
