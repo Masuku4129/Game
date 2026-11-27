@@ -53,7 +53,7 @@ func _run() -> void:
 				var mesh_nodes := root.find_children("*", "MeshInstance3D", true, false)
 				if mesh_nodes.is_empty():
 					push_error("No MeshInstance for " + species)
-				ok = false
+					ok = false
 				for node in mesh_nodes:
 					ok = _check_mesh(node.mesh, species + "_winter_" + str(winter)) and ok
 				var skel := root.find_child("*", "Skeleton3D", true, false)
