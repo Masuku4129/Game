@@ -110,3 +110,11 @@ Integrate one workstream at a time into the main branch to reduce regressions:
 - Device profile: frame-time/FPS, memory, heat; mark unavailable if not measured on phone.
 - Screenshots for unified art style, each biome, lighting presets, HUD screens.
 - APK only after integration build succeeds. Do not report planned or unverified changes as implemented.
+
+
+## UI visual theme implementation (feature branch)
+- Shared `ui_palette.gd`: dark spruce panels, warm brass highlights, pale readable text, status colors.
+- Inventory, camp, colony, HUD, guide and start-menu surfaces are migrating from parchment panels to the same palette.
+- Buttons share rounded panels, subtle borders/shadows and consistent hover/pressed/disabled feedback.
+- Layout is still in place for this first visual pass; touch hierarchy, responsive spacing and panel transition motion remain follow-up work.
+- Character replacement remains deferred; the palette change does not touch character models.

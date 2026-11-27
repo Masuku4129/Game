@@ -14,6 +14,7 @@ const ROWS := 4
 const CELL := 104.0
 const GAP := 8.0
 const GRID := Vector2(36, 124)
+const UI = preload("res://scripts/ui_palette.gd")
 const IT = preload("res://scripts/items.gd")
 const ITEMS = IT.DEF
 const ICONS = preload("res://scripts/icons.gd")  # core: значки из моделей
@@ -100,20 +101,20 @@ func _button(t: String, r: Rect2) -> Button:
 ## Кнопка в стиле листа: тёмное дерево, светлые буквы (общая с HUD).
 static func style_button(b: Button, fs: int) -> void:
 	b.add_theme_font_size_override("font_size", fs)
-	b.add_theme_color_override("font_color", Color(0.98, 0.93, 0.8))
-	b.add_theme_color_override("font_pressed_color", Color(1, 1, 0.9))
-	b.add_theme_color_override("font_hover_color", Color(1, 0.97, 0.88))
-	b.add_theme_color_override("font_disabled_color", Color(0.75, 0.68, 0.56, 0.7))
-	var cols := {"normal": Color(0.46, 0.31, 0.18), "hover": Color(0.52, 0.35, 0.2), "pressed": Color(0.34, 0.22, 0.12), "disabled": Color(0.55, 0.47, 0.36)}
+	b.add_theme_color_override("font_color", UI.TEXT)
+	b.add_theme_color_override("font_pressed_color", UI.TEXT)
+	b.add_theme_color_override("font_hover_color", UI.ACCENT_HI)
+	b.add_theme_color_override("font_disabled_color", UI.TEXT_MUTED)
+	var cols := {"normal": UI.PANEL_SOFT, "hover": UI.PANEL_HOVER, "pressed": UI.PANEL_PRESSED, "disabled": UI.PANEL}
 	for k: String in cols:
 		var sb := StyleBoxFlat.new()
 		sb.bg_color = cols[k]
-		sb.set_corner_radius_all(18)
-		sb.set_border_width_all(3)
-		sb.border_color = Color(0.25, 0.15, 0.08)
-		sb.shadow_color = Color(0, 0, 0, 0.25)
-		sb.shadow_size = 4
-		sb.shadow_offset = Vector2(2, 3)
+		sb.set_corner_radius_all(14)
+		sb.set_border_width_all(2)
+		sb.border_color = UI.BORDER
+		sb.shadow_color = Color(0, 0, 0, 0.24)
+		sb.shadow_size = 3
+		sb.shadow_offset = Vector2(1, 2)
 		b.add_theme_stylebox_override(k, sb)
 	b.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
 
@@ -429,8 +430,8 @@ func _sheet_input(e: InputEvent) -> void:
 
 # ---------- рисование листа ----------
 
-const INK := Color(0.24, 0.15, 0.08)
-const PAPER := Color(0.88, 0.8, 0.62)
+const INK := UI.TEXT
+const PAPER := UI.PANEL
 const OK_C := Color(0.25, 0.42, 0.15)
 const BAD_C := Color(0.62, 0.16, 0.1)
 
@@ -443,28 +444,28 @@ func _draw_sheet() -> void:
 	for p in _edge:
 		sh.append(p + Vector2(8, 10))
 	ci.draw_colored_polygon(sh, Color(0, 0, 0, 0.3))
-	ci.draw_colored_polygon(_edge, PAPER)
+	ci.draw_colored_polygon(_edge, UI.PANEL)
 	for b: Array in _blots:
 		var d: float = b[2]
-		ci.draw_circle(b[0], b[1], Color(0.5 + d, 0.36 + d, 0.18, 0.06))
+		ci.draw_circle(b[0], b[1], Color(0.45 + d * 0.2, 0.62 + d * 0.2, 0.38 + d * 0.2, 0.045))
 	var ring := _edge.duplicate()
 	ring.append(_edge[0])
-	ci.draw_polyline(ring, Color(0.45, 0.32, 0.18), 5.0, true)
+	ci.draw_polyline(ring, UI.BORDER, 3.0, true)
 	# шапка — береста: светлая кора с тёмными чечевичками
-	ci.draw_rect(Rect2(14, 14, sz.x - 28, 84), Color(0.93, 0.9, 0.82))
+	ci.draw_rect(Rect2(14, 14, sz.x - 28, 84), UI.PANEL_SOFT)
 	var rng := RandomNumberGenerator.new()
 	rng.seed = 17
 	for i in 46:
 		var x := rng.randf_range(20, sz.x - 60)
 		var y := rng.randf_range(20, 90)
-		ci.draw_line(Vector2(x, y), Vector2(x + rng.randf_range(14, 50), y + rng.randf_range(-1, 1)), Color(0.15, 0.12, 0.1, rng.randf_range(0.35, 0.8)), rng.randf_range(1.5, 3.5))
-	ci.draw_rect(Rect2(14, 14, sz.x - 28, 84), Color(0.4, 0.3, 0.2), false, 3.0)
+		ci.draw_line(Vector2(x, y), Vector2(x + rng.randf_range(14, 50), y + rng.randf_range(-1, 1)), Color(0.06, 0.09, 0.07, rng.randf_range(0.25, 0.55)), rng.randf_range(1.5, 3.5))
+	ci.draw_rect(Rect2(14, 14, sz.x - 28, 84), UI.BORDER, false, 2.0)
 	# вкладки
 	for t in 2:
 		var r := Rect2(310 + t * 225, 22, 215, 68)
 		var on := tab == t
-		ci.draw_rect(r, Color(0.88, 0.8, 0.62) if on else Color(0.74, 0.63, 0.44, 0.85))
-		ci.draw_rect(r, Color(0.4, 0.3, 0.2), false, 3.0)
+		ci.draw_rect(r, UI.PANEL_HOVER if on else UI.PANEL_SOFT)
+		ci.draw_rect(r, UI.BORDER, false, 2.0)
 		var lbl: String = ["Короб", "Ремесло"][t]
 		ci.draw_string(f, Vector2(r.position.x, r.position.y + 48), lbl, HORIZONTAL_ALIGNMENT_CENTER, r.size.x, 36, INK if on else Color(INK, 0.6))
 	var w := weight()
@@ -477,10 +478,10 @@ func _draw_sheet() -> void:
 		_draw_craft(ci, f)
 
 func _cell_bg(ci: CanvasItem, r: Rect2) -> void:
-	ci.draw_rect(r, Color(0.74, 0.63, 0.44, 0.75))
-	ci.draw_rect(Rect2(r.position + Vector2(4, 4), r.size - Vector2(8, 8)), Color(0.8, 0.7, 0.5, 0.8))
-	ci.draw_line(r.position, Vector2(r.end.x, r.position.y), Color(0.45, 0.33, 0.2, 0.8), 3.0)
-	ci.draw_line(r.position, Vector2(r.position.x, r.end.y), Color(0.45, 0.33, 0.2, 0.8), 3.0)
+	ci.draw_rect(r, UI.PANEL_SOFT)
+	ci.draw_rect(Rect2(r.position + Vector2(4, 4), r.size - Vector2(8, 8)), UI.PANEL)
+	ci.draw_line(r.position, Vector2(r.end.x, r.position.y), UI.BORDER, 2.0)
+	ci.draw_line(r.position, Vector2(r.position.x, r.end.y), UI.BORDER, 2.0)
 
 func _draw_pack(ci: CanvasItem, f: Font, w: float) -> void:
 	var tools: Node = main.hero.tools

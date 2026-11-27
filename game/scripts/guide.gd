@@ -5,6 +5,7 @@ extends Control
 ## Картинки — значки, отрисованные из игровых моделей (res://icons, icons.gd).
 ## Пока справочник открыт — пауза.
 
+const UI = preload("res://scripts/ui_palette.gd")
 const SHEET = preload("res://scripts/camp_ui.gd").Sheet
 const INV = preload("res://scripts/inventory.gd")
 const IT = preload("res://scripts/items.gd")
@@ -13,7 +14,7 @@ const ICONS = preload("res://scripts/icons.gd")
 const ST = preload("res://scripts/structures.gd")
 const CAB = preload("res://scripts/cabin.gd")
 const GEAR = preload("res://scripts/settings.gd").GearBtn
-const INK := Color(0.24, 0.15, 0.08)
+const INK := UI.TEXT
 const TABS := ["Ресурсы", "Ремесло", "Постройки", "Звери", "Как…"]
 
 var main: Node3D
@@ -82,7 +83,7 @@ func _ready() -> void:
 	sub_l.position = Vector2(902, 170)
 	sub_l.size = Vector2(880, 40)
 	sub_l.add_theme_font_size_override("font_size", 24)
-	sub_l.add_theme_color_override("font_color", Color(INK, 0.7))
+	sub_l.add_theme_color_override("font_color", UI.TEXT_MUTED)
 	sheet.add_child(sub_l)
 	body.position = Vector2(900, 220)
 	body.size = Vector2(900, 570)
