@@ -164,9 +164,24 @@ func _new_wander() -> void:
 		chosen = candidate
 		break
 	if chosen == Vector3.INF:
-		# Safe fallback: choose a short local step rather than endlessly pursuing
-		# an invalid destination; the next decision cycle retries path selection.
-		chosen = home + Vector3(rng.randf_range(-4.0, 4.0), 0.0, rng.randf_range(-4.0, 4.0))
+		# Fallback probes stay close to the animal and use the same habitat,
+		# slope and obstacle rules, preventing short random targets from trapping
+		# the animal inside a blocker or on a sharp terrain edge.
+		for fallback_attempt in range(10):
+			var fallback_angle := rng.randf() * TAU
+			var fallback_radius := rng.randf_range(1.5, 5.0)
+			var fallback := position + Vector3(cos(fallback_angle), 0.0, sin(fallback_angle)) * fallback_radius
+			var fallback_y: float = main.height(fallback.x, fallback.z)
+			if fallback_y < main.water_level(fallback.x, fallback.z) - 0.2 and not swimmer():
+				continue
+			if main.normal_at(fallback.x, fallback.z).y < 0.68:
+				continue
+			if main.blocked(fallback.x, fallback.z, maxf(0.35, _obstacle_radius() * 0.6)):
+				continue
+			chosen = fallback
+			break
+		if chosen == Vector3.INF:
+			chosen = position + Vector3(rng.randf_range(-1.0, 1.0), 0.0, rng.randf_range(-1.0, 1.0))
 	target = chosen
 	# цель на другом ярусе уступа или в реке (для тех, кто не плавает) — ближе к дому
 	# стадо держится вместе: не вожак — пасётся рядом с вожаком
