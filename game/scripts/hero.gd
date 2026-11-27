@@ -61,6 +61,7 @@ var torch := OmniLight3D.new()
 ## Инструменты (hero_tools.gd): held — что в руке ("" / knife / axe / spear / shovel / log).
 var tools: Node
 var held := ""
+var _wear_nodes: Array[Node] = []
 
 func has_tool(id: String) -> bool:
 	return tools != null and tools.has_tool(id)
@@ -291,14 +292,7 @@ func _ready() -> void:
 	_lpart(head_n, _loft([[-0.12, 0.04, 0.03, 0.06], [-0.08, 0.08, 0.055, 0.06], [-0.035, 0.1, 0.075, 0.045], [0.0, 0.098, 0.09, 0.02], [0.02, 0.095, 0.085, 0.0]], 16), hair, Vector3(0, -0.04, 0.01))
 	for sd in [-1.0, 1.0]:
 		_lpart(head_n, _sph(), hair, Vector3(sd * 0.022, -0.04, 0.108), Vector3(0, 0, sd * 0.5), Vector3(0.04, 0.014, 0.018))
-	# --- спина: берестяной короб на лямках, скатка сверху, котелок сбоку
-	_lpart(torso, _loft([[0.0, 0.16, 0.085, 0.0], [0.42, 0.165, 0.09, 0.0], [0.45, 0.15, 0.08, 0.0]], 4), wood, Vector3(0, 0.08, -0.25), Vector3(0, PI * 0.25, 0))
-	for sd in [-1.0, 1.0]:
-		_lpart(torso, BoxMesh.new(), belt, Vector3(sd * 0.11, 0.42, 0.0), Vector3.ZERO, Vector3(0.04, 0.4, 0.32))
-	_lpart(torso, _cyl(0.07, 0.07, 0.48), roll, Vector3(0, 0.6, -0.26), Vector3(0, 0, PI * 0.5))
-	for sd in [-1.0, 1.0]:
-		_lpart(torso, _tor(0.068, 0.08), belt, Vector3(sd * 0.15, 0.6, -0.26), Vector3(0, 0, PI * 0.5))
-	_lpart(torso, _cyl(0.06, 0.055, 0.1), metal, Vector3(0.2, 0.2, -0.24))
+	# Заплечный вещмешок строится отдельной системой pack, чтобы его можно было снять и анимировать.
 	# --- руки: плечо, рукав, локоть, меховой обшлаг, кисть с пальцами
 	for side in [-1.0, 1.0]:
 		var arm: Node3D = arm_l if side < 0.0 else arm_r
@@ -316,6 +310,7 @@ func _ready() -> void:
 			_lpart(elb, _capsule(0.009, 0.06), skin, Vector3(side * -0.008, -0.36, -0.02 + f * 0.014), Vector3(0, 0, side * 0.1))
 		_lpart(elb, _capsule(0.01, 0.05), skin, Vector3(side * -0.02, -0.31, 0.04), Vector3(0.6, 0, side * 0.5))
 	_build_model()
+	refresh_clothing()
 	# факел-свет (ночью)
 	torch.light_color = Color(1.0, 0.7, 0.4)
 	torch.light_energy = 0.0
@@ -323,6 +318,52 @@ func _ready() -> void:
 	torch.position = Vector3(0, 1.7, 0.5)
 	add_child(torch)
 
+## Применяет экипировку к визуальной модели, используя те же подвижные узлы тела.
+func refresh_clothing() -> void:
+	for n in _wear_nodes:
+		if is_instance_valid(n):
+			n.queue_free()
+	_wear_nodes.clear()
+	if main == null:
+		return
+	var worn: Dictionary = main.worn
+	var fur := _paint(Color(0.72, 0.66, 0.53))
+	var fur_light := _paint(Color(0.9, 0.84, 0.7))
+	var hide := _paint(Color(0.42, 0.29, 0.19))
+	var seam := _paint(Color(0.24, 0.16, 0.1))
+	if String(worn.get("head", "")) == "fur_hat":
+		var hat := Node3D.new()
+		hat.name = "EquippedFurHat"
+		head_n.add_child(hat)
+		_lpart(hat, _loft([[0.105, 0.075, 0.08, 0.0], [0.13, 0.105, 0.11, 0.0], [0.18, 0.112, 0.115, -0.005], [0.23, 0.09, 0.095, -0.01], [0.25, 0.045, 0.05, -0.01]], 20), fur)
+		_lpart(hat, _tor(0.085, 0.115), fur_light, Vector3(0, 0.125, 0.0), Vector3.ZERO, Vector3(1, 0.55, 1.0))
+		for side in [-1.0, 1.0]:
+			_lpart(hat, _loft([[-0.005, 0.025, 0.035, 0.0], [0.045, 0.035, 0.04, 0.0], [0.09, 0.028, 0.03, 0.0]], 12), fur, Vector3(side * 0.09, 0.0, -0.005), Vector3(0, 0, side * -0.12))
+		_wear_nodes.append(hat)
+	if String(worn.get("body", "")) == "fur_coat":
+		var parka := Node3D.new()
+		parka.name = "EquippedFurParka"
+		torso.add_child(parka)
+		_lpart(parka, _loft([[-0.16, 0.235, 0.19, 0.0], [-0.06, 0.225, 0.18, 0.0], [0.12, 0.205, 0.16, 0.0], [0.3, 0.225, 0.165, 0.0], [0.48, 0.235, 0.16, 0.0], [0.59, 0.17, 0.12, 0.0]], 24, false, false), fur)
+		_lpart(parka, _tor(0.14, 0.205), fur_light, Vector3(0, 0.53, 0.0), Vector3.ZERO, Vector3(1.0, 0.75, 0.9))
+		_lpart(parka, _cyl(0.012, 0.012, 0.43), seam, Vector3(0.035, 0.19, 0.17))
+		for yy in [0.02, 0.16, 0.3, 0.43]:
+			_lpart(parka, _cyl(0.009, 0.009, 0.17), hide, Vector3(0.0, yy, 0.178), Vector3(0, 0, PI * 0.5))
+		_wear_nodes.append(parka)
+		for arm in [arm_l, arm_r]:
+			var sleeve := Node3D.new()
+			sleeve.name = "EquippedParkaSleeve"
+			arm.add_child(sleeve)
+			_lpart(sleeve, _loft([[-0.3, 0.059, 0.064, 0.0], [-0.16, 0.07, 0.072, 0.0], [0.0, 0.078, 0.078, 0.0]], 16), fur)
+			_wear_nodes.append(sleeve)
+	if String(worn.get("feet", "")) == "fur_boots":
+		for knee in [knee_l, knee_r]:
+			var boot_layer := Node3D.new()
+			boot_layer.name = "EquippedFurBoot"
+			knee.add_child(boot_layer)
+			_lpart(boot_layer, _loft([[-0.48, 0.067, 0.073, 0.0], [-0.4, 0.073, 0.082, -0.005], [-0.25, 0.08, 0.09, -0.01], [-0.2, 0.085, 0.09, -0.01]], 16), hide)
+			_lpart(boot_layer, _tor(0.072, 0.092), fur_light, Vector3(0, -0.23, -0.008), Vector3.ZERO, Vector3(1.0, 0.65, 1.0))
+			_wear_nodes.append(boot_layer)
 func _can_walk(p: Vector3) -> bool:
 	var half: float = main.SIZE * 0.5 - 8.0
 	if absf(p.x) > half or absf(p.z) > half:
