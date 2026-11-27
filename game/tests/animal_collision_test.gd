@@ -23,11 +23,16 @@ func _initialize() -> void:
 	var through_obstacle := animal._can_move_segment(Vector3(-1, 0, 0), Vector3(1, 0, 0))
 	var clear_path := animal._can_move_segment(Vector3(-1, 0, 1.5), Vector3(1, 0, 1.5))
 	var footprint := animal._obstacle_radius()
+	animal.position = Vector3(0.65, 0.0, 0.0)
+	animal._push_out()
+	var recovered_clearance := Vector2(animal.position.x, animal.position.z).length()
+	var recovered := recovered_clearance >= 0.4 + footprint
 	print("ANIMAL_COLLISION_TEST blocked_segment=", not through_obstacle,
-		" clear_segment=", clear_path, " footprint_radius=", footprint)
+		" clear_segment=", clear_path, " footprint_radius=", footprint,
+		" recovery_clearance=", recovered_clearance, " recovered=", recovered)
 	animal.free()
 	world.free()
-	if through_obstacle or not clear_path or footprint <= 0.18:
+	if through_obstacle or not clear_path or footprint <= 0.18 or not recovered:
 		quit(1)
 	else:
 		quit(0)
