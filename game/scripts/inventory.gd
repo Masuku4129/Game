@@ -30,7 +30,7 @@ var sheet := Control.new()
 var shown := 0.0        # 0..1 — видимость листа
 var cam_k := 0.0        # 0..1 — камера наезжает на героя
 var sel := ""
-var tab := 0            # 0 — короб, 1 — ремесло
+var tab := 0            # 0 — короб, 1 — ремесло, 2 — одежда, 3 — карта
 var rsel := ""          # выбранный рецепт
 var btn_use: Button
 var btn_belt: Button
@@ -273,6 +273,9 @@ func weight() -> float:
 		var n := int(main.inv[k])
 		if tools != null:
 			n -= tools.equipped_count(k)
+		for slot: String in main.worn:
+			if String(main.worn[slot]) == String(k):
+				n -= 1
 		w += float(ITEMS.get(k, {}).get("w", 0.3)) * maxi(n, 0)
 	return w
 
@@ -331,7 +334,11 @@ func missing(id: String) -> Dictionary:
 	var out := {}
 	var rc := recipe(id)
 	for k: String in rc:
-		var have: int = count(k) - (int(main.hero.tools.equipped_count(k)) if main.hero.tools != null else 0)
+		var worn_count := 0
+		for slot: String in main.worn:
+			if String(main.worn[slot]) == k:
+				worn_count += 1
+		var have: int = count(k) - (int(main.hero.tools.equipped_count(k)) if main.hero.tools != null else 0) - worn_count
 		if have < int(rc[k]):
 			out[k] = int(rc[k]) - have
 	return out
@@ -443,7 +450,7 @@ func _sheet_input(e: InputEvent) -> void:
 	var rs := recipes() if tab == 1 else []
 	var max_scroll := maxf(0.0, float(rs.size()) * ROW_H - (640.0 - GRID.y))
 	if e is InputEventScreenTouch and e.pressed and e.position.y < 100.0 and e.position.x > 210.0 and e.position.x < 800.0:
-		tab = 0 if e.position.x < 410.0 else (1 if e.position.x < 600.0 else 2)
+		tab = clampi(int((e.position.x - 210.0) / 175.0), 0, 3)
 		sheet.queue_redraw()
 		return
 	if tab == 1:
@@ -533,10 +540,20 @@ func _sheet_input(e: InputEvent) -> void:
 		return
 	var pos: Vector2 = e.position
 	if pos.y < 100.0 and pos.x > 210.0 and pos.x < 800.0:
-		tab = 0 if pos.x < 410.0 else (1 if pos.x < 600.0 else 2)
+		tab = clampi(int((pos.x - 210.0) / 175.0), 0, 3)
 		sheet.queue_redraw()
 		return
 	if tab == 2:
+		if pos.x < 610.0 and pos.y >= GRID.y and pos.y <= 640.0:
+			var wearable := _wearables()
+			var wi := int((pos.y - GRID.y) / ROW_H)
+			if wi >= 0 and wi < wearable.size():
+				sel = wearable[wi]
+		elif pos.x >= 640.0 and pos.y >= 500.0 and sel != "":
+			_wear_toggle(sel)
+		sheet.queue_redraw()
+		return
+	if tab == 3:
 		return
 	if tab == 1:
 		if pos.x < 610.0 and pos.y >= GRID.y and pos.y <= 640.0:
@@ -588,12 +605,12 @@ func _draw_sheet() -> void:
 		ci.draw_line(Vector2(x, y), Vector2(x + rng.randf_range(14, 50), y + rng.randf_range(-1, 1)), Color(0.06, 0.09, 0.07, rng.randf_range(0.25, 0.55)), rng.randf_range(1.5, 3.5))
 	ci.draw_rect(Rect2(14, 14, sz.x - 28, 84), UI.BORDER, false, 2.0)
 	# вкладки
-	for t in 3:
-		var r := Rect2(230 + t * 195, 22, 185, 68)
+	for t in 4:
+		var r := Rect2(210 + t * 175, 22, 165, 68)
 		var on := tab == t
 		ci.draw_rect(r, UI.PANEL_HOVER if on else UI.PANEL_SOFT)
 		ci.draw_rect(r, UI.BORDER, false, 2.0)
-		var lbl: String = ["Короб", "Ремесло", "Карта"][t]
+		var lbl: String = ["Короб", "Ремесло", "Одежда", "Карта"][t]
 		ci.draw_string(f, Vector2(r.position.x, r.position.y + 48), lbl, HORIZONTAL_ALIGNMENT_CENTER, r.size.x, 36, INK if on else Color(INK, 0.6))
 	var w := weight()
 	ci.draw_string_outline(f, Vector2(sz.x - 220, 66), "%.1f/%d кг" % [w, int(CAPACITY)], HORIZONTAL_ALIGNMENT_RIGHT, 190, 28, 6, Color(0.93, 0.9, 0.82))
@@ -603,6 +620,8 @@ func _draw_sheet() -> void:
 		_draw_pack(ci, f, w)
 	elif tab == 1:
 		_draw_craft(ci, f)
+	elif tab == 2:
+		_draw_clothes(ci, f)
 	else:
 		_draw_map(ci, f)
 
@@ -611,6 +630,58 @@ func _cell_bg(ci: CanvasItem, r: Rect2) -> void:
 	ci.draw_rect(Rect2(r.position + Vector2(4, 4), r.size - Vector2(8, 8)), UI.PANEL)
 	ci.draw_line(r.position, Vector2(r.end.x, r.position.y), UI.BORDER, 2.0)
 	ci.draw_line(r.position, Vector2(r.position.x, r.end.y), UI.BORDER, 2.0)
+
+func _wearables() -> Array:
+	var out: Array = []
+	for id: String in _kinds():
+		if ITEMS.get(id, {}).has("wear"):
+			out.append(id)
+	return out
+
+func _wear_toggle(id: String) -> void:
+	var slot := String(ITEMS.get(id, {}).get("wear", ""))
+	if slot == "":
+		return
+	if String(main.worn.get(slot, "")) == id:
+		main.worn.erase(slot)
+		main._say("Снято: " + _name(id).to_lower())
+		return
+	main.worn[slot] = id
+	main._say("Надето: " + _name(id).to_lower())
+
+func _draw_clothes(ci: CanvasItem, f: Font) -> void:
+	var wearable := _wearables()
+	for i in wearable.size():
+		var id := String(wearable[i])
+		var y := GRID.y + i * ROW_H
+		var slot := String(ITEMS[id].get("wear", ""))
+		var equipped := String(main.worn.get(slot, "")) == id
+		var r := Rect2(GRID.x, y, 574, ROW_H - 5)
+		ci.draw_rect(r, UI.PANEL_HOVER if equipped else UI.PANEL_SOFT)
+		ci.draw_rect(r, UI.BORDER, false, 1.5)
+		icon(ci, id, r.position + Vector2(26, 21), 17.0)
+		ci.draw_string(f, r.position + Vector2(56, 30), _name(id), HORIZONTAL_ALIGNMENT_LEFT, 300, 24, INK)
+		ci.draw_string(f, r.position + Vector2(370, 30), "Надето" if equipped else "В коробе", HORIZONTAL_ALIGNMENT_RIGHT, 170, 22, OK_C if equipped else Color(INK, 0.65))
+	var dr := Rect2(640, 124, 304, 500)
+	ci.draw_rect(dr, Color(0.8, 0.7, 0.5, 0.55))
+	ci.draw_rect(dr, Color(0.45, 0.33, 0.2), false, 3.0)
+	ci.draw_string(f, Vector2(656, 166), "Экипировка", HORIZONTAL_ALIGNMENT_LEFT, 270, 28, INK)
+	var y2 := 218.0
+	var total_warm := 0.0
+	for slot in ["head", "body", "feet"]:
+		var id := String(main.worn.get(slot, ""))
+		if id != "":
+			total_warm += float(ITEMS.get(id, {}).get("warm", 0.0))
+		var slot_name := {"head": "Голова", "body": "Туловище", "feet": "Ноги"}.get(slot, slot)
+		ci.draw_string(f, Vector2(660, y2), "%s: %s" % [slot_name, _name(id) if id != "" else "пусто"], HORIZONTAL_ALIGNMENT_LEFT, 265, 22, INK)
+		y2 += 48.0
+	ci.draw_string(f, Vector2(660, 382), "Тепло одежды: +%d%%" % int(round(total_warm * 100.0)), HORIZONTAL_ALIGNMENT_LEFT, 265, 24, OK_C)
+	ci.draw_rect(Rect2(660, 520, 250, 62), UI.PANEL_HOVER)
+	ci.draw_rect(Rect2(660, 520, 250, 62), UI.BORDER, false, 2.0)
+	var selected_slot := String(ITEMS.get(sel, {}).get("wear", ""))
+	var is_worn := selected_slot != "" and String(main.worn.get(selected_slot, "")) == sel
+	ci.draw_string(f, Vector2(660, 559), "Снять" if is_worn else "Надеть выбранное", HORIZONTAL_ALIGNMENT_CENTER, 250, 24, INK)
+	ci.draw_multiline_string(f, Vector2(660, 600), "Одежда сохраняется и повышает сопротивление холоду.", HORIZONTAL_ALIGNMENT_LEFT, 250, 20, 2, Color(INK, 0.75))
 
 func _draw_map(ci: CanvasItem, f: Font) -> void:
 	var cells: Dictionary = main.explored_map if main != null else {}
