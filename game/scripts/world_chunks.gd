@@ -218,9 +218,21 @@ func _update_stream_water(delta: float) -> void:
 	if main.weather == null:
 		return
 	var temperature: float = main.weather.temp
-	stream_water_material.set_shader_parameter("ice", clampf((-temperature - 0.5) / 5.0, 0.0, 1.0))
-	stream_water_material.set_shader_parameter("rain", clampf(main.weather.precip, 0.0, 1.0))
-	stream_water_material.set_shader_parameter("wind", clampf(main.weather.wind, 0.0, 1.0))
+	var ice_now := clampf((-temperature - 0.5) / 5.0, 0.0, 1.0)
+	var rain_now := clampf(main.weather.precip, 0.0, 1.0)
+	var wind_now := clampf(main.weather.wind, 0.0, 1.0)
+	stream_water_material.set_shader_parameter("ice", ice_now)
+	stream_water_material.set_shader_parameter("rain", rain_now)
+	stream_water_material.set_shader_parameter("wind", wind_now)
+	# Все активные чанки получают те же сезонные параметры, что и центральный ландшафт.
+	for chunk_key in terrain_materials:
+		var terrain: ShaderMaterial = terrain_materials[chunk_key]
+		terrain.set_shader_parameter("snow", main.weather.snow)
+		terrain.set_shader_parameter("wet", main.weather.wet)
+		terrain.set_shader_parameter("snow_m", main.weather.snow * 0.42)
+		terrain.set_shader_parameter("mud_m", main.weather.wet * 0.24)
+		terrain.set_shader_parameter("freeze", clampf(-temperature * 0.5, 0.0, 1.0))
+		terrain.set_shader_parameter("rain", rain_now)
 
 func _build_water_surface(c: Vector2i, parent: Node3D) -> void:
 	if stream_water_material == null:
