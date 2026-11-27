@@ -269,8 +269,10 @@ func weight() -> float:
 		w += float(ITEMS.get(k, {}).get("w", 0.3)) * maxi(n, 0)
 	return w
 
-func can_add(kind: String) -> bool:
-	return weight() + float(ITEMS.get(kind, {}).get("w", 0.3)) <= CAPACITY + 0.001
+func can_add(kind: String, amount: int = 1) -> bool:
+	if amount <= 0:
+		return true
+	return weight() + float(ITEMS.get(kind, {}).get("w", 0.3)) * float(amount) <= CAPACITY + 0.001
 
 func _name(kind: String) -> String:
 	if ITEMS.has(kind):
@@ -339,10 +341,23 @@ func craft(id: String) -> bool:
 	if not missing(id).is_empty() or not station_ok(_station(id)) or not _tool_ok(id):
 		return false
 	var rc := recipe(id)
-	if main == null or not bool(main.get("creative_mode")):
+	var output_count := int(EXTRA_OUT.get(id, ITEMS.get(id, {}).get("out", 1)))
+	var creative := main != null and bool(main.get("creative_mode"))
+	if not creative:
+		# Сначала считаем итоговый вес. Рецепт не должен списать материалы,
+		# а затем потерять готовый предмет из-за переполненного короба.
+		var consumed_weight := 0.0
 		for k: String in rc:
-			remove_item(k, int(rc[k]))
-	add_item(id, int(EXTRA_OUT.get(id, ITEMS.get(id, {}).get("out", 1))))  # core: out из items.gd
+			consumed_weight += float(ITEMS.get(k, {}).get("w", 0.3)) * float(rc[k])
+		var output_weight := float(ITEMS.get(id, {}).get("w", 0.3)) * float(output_count)
+		if weight() - consumed_weight + output_weight > CAPACITY + 0.001:
+			if main != null:
+				main._say("В коробе нет места для готового предмета")
+			return false
+		for k: String in rc:
+			if not remove_item(k, int(rc[k])):
+				return false
+	add_item(id, output_count)  # core: out из items.gd
 	main._say("Сделано: " + _name(id).to_lower())
 	if main.sfx != null:
 		main.sfx.play_at("chop" if id == "flint" else "cut", main.hero.position + Vector3(0, 0.6, 0), -2.0, 1.3)
