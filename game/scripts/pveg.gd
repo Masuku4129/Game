@@ -1218,11 +1218,18 @@ func model_variants(kind: String) -> Array:
 		out.append(v)
 	return out
 
-func _collect_meshes(n: Node, out: Array) -> void:
+func _collect_meshes(n: Node, out: Array, parent_xf: Transform3D = Transform3D.IDENTITY) -> void:
+	# GLB files often nest meshes under transform-only nodes. Preserve the full
+	# hierarchy; reading MeshInstance3D.transform alone silently drops parent
+	# rotations, offsets and scale, collapsing otherwise valid authored assets.
+	var local_xf := Transform3D.IDENTITY
+	if n is Node3D:
+		local_xf = (n as Node3D).transform
+	var world_xf := parent_xf * local_xf
 	if n is MeshInstance3D and (n as MeshInstance3D).mesh != null:
-		out.append(n)
-	for c in n.get_children():
-		_collect_meshes(c, out)
+		out.append([n, world_xf])
+	for child in n.get_children():
+		_collect_meshes(child, out, world_xf)
 
 ## Одна модель: свой масштаб, наклон и скрутка на вариант; материал по имени меша
 ## (bark / foliage / cut / rock). COLOR.r — оттенок «от тени к свету», COLOR.g — осенняя доля.
@@ -1241,10 +1248,11 @@ func model(file: String, seed_v: int, base_scale: float, bark_mat: String, folia
 	var twist := R(-0.35, 0.35)
 	var out := ArrayMesh.new()
 	var top := 0.0
-	for mi in src:
-		var xf: Transform3D = (mi as MeshInstance3D).transform
-		var nm := String((mi as MeshInstance3D).name).to_lower()
-		var msh: Mesh = (mi as MeshInstance3D).mesh
+	for entry in src:
+		var mi := entry[0] as MeshInstance3D
+		var xf: Transform3D = entry[1]
+		var nm := String(mi.name).to_lower()
+		var msh: Mesh = mi.mesh
 		for s in msh.get_surface_count():
 			var arr := msh.surface_get_arrays(s)
 			var verts: PackedVector3Array = arr[Mesh.ARRAY_VERTEX]
