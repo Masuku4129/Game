@@ -207,7 +207,7 @@ func step(dh: float) -> void:
 	# а влажная земля при отрицательной температуре постепенно покрывается коркой.
 	var liquid_precip := precip if temp >= 0.5 else precip * 0.18
 	var evaporation := (0.025 + main.day_factor * 0.045 + wind * 0.035) * clampf((temp + 5.0) / 18.0, 0.05, 1.0)
-	wet = clampf(wet + liquid_precip * dh * (0.72 + (1.0 - wet) * 0.28) - evaporation * dh, 0.0, 1.0)
+	wet = clampf(wet + liquid_precip * dh * (0.78 + (1.0 - wet) * 0.32) - evaporation * dh, 0.0, 1.0)
 	if temp < -1.5:
 		ice = minf(1.0, ice + dh * (0.004 + wet * 0.012) * clampf(-temp / 4.0, 0.35, 3.5))
 	elif temp > 0.0:
