@@ -173,7 +173,7 @@ func _commit(surfs: Array, mat_keys: Array) -> ArrayMesh:
 
 # ---------- породы ----------
 
-## Ель: ярусы свисающих лап, хвоя карточками в два слоя, тёмная сердцевина для объёма.
+## Ель: ярусы ветвей, густая хвоя в несколько перекрывающихся слоёв, асимметричная крона.
 func spruce(seed_v: int, dead: bool = false) -> Array:
 	rng.seed = seed_v
 	var H := R(10.0, 15.0)
@@ -183,7 +183,7 @@ func spruce(seed_v: int, dead: bool = false) -> Array:
 	var h := 1.3
 	while h < H - 0.4:
 		var f := 1.0 - h / H
-		var cnt := rng.randi_range(4, 5) if lod else rng.randi_range(6, 8)
+		var cnt := rng.randi_range(5, 6) if lod else rng.randi_range(8, 11)
 		for b in cnt:
 			var a := TAU * b / cnt + R(-0.3, 0.3) + h * 1.7
 			var L := (f * 3.6 + 0.45) * R(0.85, 1.1)
@@ -195,12 +195,12 @@ func spruce(seed_v: int, dead: bool = false) -> Array:
 				tube(bark, st, mid, en, 0.05 * (f + 0.4), 0.01, 2 if lod else 3, 3 if lod else 4)
 			if dead:
 				continue
-			var k := maxi(2, ceili(L / 0.6)) if lod else maxi(3, ceili(L / 0.27))
+			var k := maxi(3, ceili(L / 0.48)) if lod else maxi(4, ceili(L / 0.22))
 			for i in k:
 				var t := (i + 0.5) / k
 				var p := _bez(st, mid, en, t)
 				var tg := _bez_d(st, mid, en, t)
-				var sz := (0.75 + f * 0.55) * R(0.9, 1.25) * (1.7 if lod else 1.0)
+				var sz := (0.68 + f * 0.62) * R(0.82, 1.28) * (1.65 if lod else 1.0)
 				var shade := R(0.75, 1.05) * (0.8 + 0.2 * (1.0 - t))
 				# слой 1: лежит вдоль лапы почти горизонтально
 				var b1 := _basis_along(tg, R(-0.45, 0.45))
