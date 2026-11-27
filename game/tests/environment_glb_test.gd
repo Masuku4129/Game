@@ -15,6 +15,18 @@ func _run() -> void:
 	var builder = Pveg.new()
 	var ok := true
 	for kind in KINDS:
+		var variants: Array = builder.model_variants(kind)
+		if variants.is_empty():
+			push_error("GLB category did not produce placement variants: " + kind)
+			ok = false
+			continue
+		var placement: Array = variants[0]
+		if kind in ["rock", "pebble", "slab", "split_rock", "outcrop", "scree"] and (placement.size() < 3 or not (placement[2] is Vector3)):
+			push_error("GLB rock is missing collision bounds metadata: " + kind)
+			ok = false
+		if kind in ["fallen0", "fallen1"] and placement.size() < 5:
+			push_error("GLB fallen log is missing length/collision metadata: " + kind)
+			ok = false
 		var built: Array = builder.model_mesh(kind)
 		if built.size() < 2 or not (built[0] is Mesh):
 			push_error("GLB category did not produce a mesh: " + kind)
