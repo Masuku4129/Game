@@ -18,6 +18,7 @@ var center := Vector2i(1 << 20, 1 << 20)
 var _refresh := 0.0
 var _sequence := 0
 var terrain_nodes: Dictionary = {}
+var terrain_materials: Dictionary = {}
 var tree_mmis: Dictionary = {}
 var prop_mmis: Dictionary = {}
 var blocker_records: Dictionary = {}
@@ -342,7 +343,44 @@ func _build_terrain_chunk(c: Vector2i) -> void:
 	arrays[Mesh.ARRAY_INDEX] = indices
 	var mesh := ArrayMesh.new()
 	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
-	mesh.surface_set_material(0, main.terrain_mat)
+	var field_bytes := PackedByteArray()
+	var zone_bytes := PackedByteArray()
+	var field_values := PackedFloat32Array()
+	field_bytes.resize(side * side * 4)
+	zone_bytes.resize(side * side * 4)
+	field_values.resize(side * side)
+	for z in range(side):
+		for x in range(side):
+			var index := z * side + x
+			var wx := origin_x + float(x) * step
+			var wz := origin_z + float(z) * step
+			var h: float = main.height(wx, wz)
+			var density: float = main.forest_density(wx, wz)
+			var mud: float = clampf(main.wet_k(wx, wz, h), 0.0, 1.0)
+			field_bytes[index * 4] = int(density * 255.0)
+			field_bytes[index * 4 + 1] = 255
+			field_bytes[index * 4 + 2] = int(mud * 255.0)
+			field_bytes[index * 4 + 3] = 255
+			var zone_id: int = main.zone(wx, wz)
+			zone_bytes[index * 4] = 255 if zone_id == 1 else 0
+			zone_bytes[index * 4 + 1] = 255 if zone_id == 2 else 0
+			zone_bytes[index * 4 + 2] = 255 if zone_id == 3 else 0
+			zone_bytes[index * 4 + 3] = 255 if zone_id == 4 else 0
+			field_values[index] = h
+	var field_tex := ImageTexture.create_from_image(Image.create_from_data(side, side, false, Image.FORMAT_RGBA8, field_bytes))
+	var zone_tex := ImageTexture.create_from_image(Image.create_from_data(side, side, false, Image.FORMAT_RGBA8, zone_bytes))
+	var hmap_tex := ImageTexture.create_from_image(Image.create_from_data(side, side, false, Image.FORMAT_RF, field_values.to_byte_array()))
+	var chunk_material := main.terrain_mat.duplicate() as ShaderMaterial
+	chunk_material.set_shader_parameter("field_tex", field_tex)
+	chunk_material.set_shader_parameter("hmap_tex", hmap_tex)
+	chunk_material.set_shader_parameter("zone_tex", zone_tex)
+	chunk_material.set_shader_parameter("tsize", CHUNK_SIZE)
+	chunk_material.set_shader_parameter("tseg", float(seg))
+	chunk_material.set_shader_parameter("field_origin", Vector2(origin_x, origin_z))
+	chunk_material.set_shader_parameter("snow_m", 0.0)
+	chunk_material.set_shader_parameter("mud_m", 0.0)
+	mesh.surface_set_material(0, chunk_material)
+	terrain_materials[_key(c)] = chunk_material
 	var root := Node3D.new()
 	root.name = "TerrainChunk_%d_%d" % [c.x, c.y]
 	root.position = Vector3(origin_x, 0.0, origin_z)
@@ -741,6 +779,7 @@ func _remove_terrain_chunk(k: String) -> void:
 		return
 	var node: Node = terrain_nodes[k]
 	terrain_nodes.erase(k)
+	terrain_materials.erase(k)
 	if is_instance_valid(node):
 		node.queue_free()
 
