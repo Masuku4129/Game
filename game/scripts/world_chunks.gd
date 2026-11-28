@@ -624,7 +624,8 @@ func _build_water_surface(c: Vector2i, parent: Node3D) -> void:
 	if vertices.is_empty():
 		return
 	var arrays: Array = []
-	arrays.resize(Mesh.ARRAY_MAX)	arrays[Mesh.ARRAY_VERTEX] = vertices
+	arrays.resize(Mesh.ARRAY_MAX)
+	arrays[Mesh.ARRAY_VERTEX] = vertices
 	arrays[Mesh.ARRAY_NORMAL] = normals
 	arrays[Mesh.ARRAY_TEX_UV] = uvs
 	arrays[Mesh.ARRAY_INDEX] = indices
