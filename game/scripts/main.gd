@@ -1260,6 +1260,7 @@ func _grass_prebuild(c: Vector3) -> void:
 				_grass_begin(k)
 				while not _gb.is_empty():
 					_grass_step()
+					# Делим синхронную подготовку клетки на полосы и отдаём кадр после каждой.
 					if not _gb.is_empty():
 						await get_tree().process_frame
 
