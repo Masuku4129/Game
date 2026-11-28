@@ -278,7 +278,8 @@ func _ready() -> void:
 		animals.visible = false
 	# --- /colony ---
 	_update_near(true)
-	_grass_prebuild(player_rig.position)
+	# Grass cells are built incrementally by _process after the world becomes playable.
+	# Do not synchronously prebuild the 5x5 ring here; it stalls the launch screen.
 	# --- perf: PERF=1 — замер нагрузки без экрана (perf.gd) ---
 	if OS.get_environment("PERF") != "":
 		var pf: Node = preload("res://scripts/perf.gd").new()
