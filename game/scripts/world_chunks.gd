@@ -1122,7 +1122,14 @@ func _remove_tree_cover(k: String) -> bool:
 	if meshes.is_empty():
 		return false
 	for mm: MultiMesh in meshes:
-		for grid_key in main.tree_grid.keys():
+		# Touch only spatial cells occupied by this chunk's instances.
+		var owned_cells: Dictionary = {}
+		for instance_i in mm.instance_count:
+			var tree_pos := mm.get_instance_transform(instance_i).origin
+			owned_cells[Vector2i(floori(tree_pos.x / 16.0), floori(tree_pos.z / 16.0))] = true
+		for grid_key in owned_cells:
+			if not main.tree_grid.has(grid_key):
+				continue
 			var entries: Array = main.tree_grid[grid_key]
 			for i in range(entries.size() - 1, -1, -1):
 				if entries[i][0] == mm:
