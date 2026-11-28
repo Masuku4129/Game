@@ -1495,6 +1495,7 @@ const NEAR_R := 66.0
 var tree_grid := {}
 var near_mesh := {}
 var near_mmi := {}
+var _near_radius_materials: Dictionary = {}
 var _near_at := Vector3(1e9, 0, 0)
 var _near_t := 0.0
 var _near_update_interval := 0.2
@@ -1537,10 +1538,16 @@ func _update_near(force: bool = false) -> void:
 				by_key[key].append(t)
 	for m in veg.fade_list:
 		m.set_shader_parameter("near_c", c)
-		m.set_shader_parameter("near_r", NEAR_R)
+		var material_id := m.get_instance_id()
+		if not _near_radius_materials.has(material_id):
+			m.set_shader_parameter("near_r", NEAR_R)
+			_near_radius_materials[material_id] = true
 	for m in pv.fade_list:
 		m.set_shader_parameter("near_c", c)
-		m.set_shader_parameter("near_r", NEAR_R)
+		var material_id := m.get_instance_id()
+		if not _near_radius_materials.has(material_id):
+			m.set_shader_parameter("near_r", NEAR_R)
+			_near_radius_materials[material_id] = true
 	for key in near_mmi.keys():
 		if not by_key.has(key):
 			near_mmi[key].visible = false
