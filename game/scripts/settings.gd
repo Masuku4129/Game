@@ -142,8 +142,8 @@ func _build_sheet() -> void:
 	sheet.anchor_bottom = 0.5
 	sheet.offset_left = -470.0
 	sheet.offset_right = 470.0
-	sheet.offset_top = -330.0
-	sheet.offset_bottom = 330.0
+	sheet.offset_top = -430.0
+	sheet.offset_bottom = 430.0
 	sheet.mouse_filter = Control.MOUSE_FILTER_STOP
 	sheet.visible = false
 	add_child(sheet)
