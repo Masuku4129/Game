@@ -9,6 +9,8 @@ var left_leg: Node3D
 var right_leg: Node3D
 var left_arm: Node3D
 var right_arm: Node3D
+var left_elbow: Node3D
+var right_elbow: Node3D
 var left_knee: Node3D
 var right_knee: Node3D
 
@@ -31,8 +33,10 @@ func tick_animation(delta: float):
 		right_leg.rotation.x = sin(phase + PI) * amp
 		left_knee.rotation.x = max(0.0, -sin(phase)) * (0.8 if running else 0.35)
 		right_knee.rotation.x = max(0.0, -sin(phase + PI)) * (0.8 if running else 0.35)
-		left_arm.rotation.x = sin(phase + PI) * amp * 0.72
-		right_arm.rotation.x = sin(phase) * amp * 0.72
+		left_arm.rotation.x = sin(phase + PI) * amp * 0.58
+		right_arm.rotation.x = sin(phase) * amp * 0.58
+		left_elbow.rotation.x = max(0.0, sin(phase)) * (0.32 if running else 0.12)
+		right_elbow.rotation.x = max(0.0, sin(phase + PI)) * (0.32 if running else 0.12)
 		torso.rotation.x = -0.12 if running else 0.015
 		position.y = abs(sin(phase * 2.0)) * (0.075 if running else 0.035)
 		position += Vector3(move_dir.x, 0, move_dir.y) * delta * (4.8 if running else 2.7)
@@ -44,6 +48,8 @@ func tick_animation(delta: float):
 		right_knee.rotation.x = lerp(right_knee.rotation.x, 0.0, delta * 8)
 		left_arm.rotation.x = lerp(left_arm.rotation.x, 0.0, delta * 5)
 		right_arm.rotation.x = lerp(right_arm.rotation.x, 0.0, delta * 5)
+		left_elbow.rotation.x = lerp(left_elbow.rotation.x, 0.0, delta * 5)
+		right_elbow.rotation.x = lerp(right_elbow.rotation.x, 0.0, delta * 5)
 		torso.rotation.x = sin(phase * 1.5) * 0.02
 		position.y = sin(phase * 2.0) * 0.016
 		head.rotation.x = sin(phase * 1.25) * 0.02
@@ -105,6 +111,8 @@ func _build_character():
 	right_arm = _arm(Vector3(0.36,0.13,0))
 	torso.add_child(left_arm)
 	torso.add_child(right_arm)
+	left_elbow = left_arm.get_node("Elbow")
+	right_elbow = right_arm.get_node("Elbow")
 
 func _leg(offset: Vector3) -> Node3D:
 	var hip = Node3D.new()
@@ -123,10 +131,16 @@ func _arm(offset: Vector3) -> Node3D:
 	var shoulder = Node3D.new()
 	shoulder.position = offset
 	shoulder.rotation.z = -0.12 if offset.x < 0 else 0.12
-	shoulder.add_child(_capsule(Vector3(0,-0.2,0),0.105,0.4,Color(0.05,0.044,0.073)))
-	shoulder.add_child(_ellipsoid(Vector3(0,-0.39,0),Vector3(0.09,0.1,0.09),Color(0.055,0.05,0.08)))
-	shoulder.add_child(_ellipsoid(Vector3(0,-0.46,0.035),Vector3(0.075,0.085,0.07),Color(0.74,0.57,0.56)))
-	shoulder.add_child(_box(Vector3(0,-0.34,0),Vector3(0.18,0.07,0.15),Color(0.07,0.06,0.10)))
+	# Sleeve with cuff, forearm and exposed hand; elbow is independently animated.
+	shoulder.add_child(_capsule(Vector3(0,-0.18,0),0.115,0.39,Color(0.05,0.044,0.073)))
+	shoulder.add_child(_ellipsoid(Vector3(0,-0.37,0),Vector3(0.11,0.09,0.11),Color(0.055,0.05,0.08)))
+	var elbow = Node3D.new()
+	elbow.name = "Elbow"
+	elbow.position.y = -0.39
+	shoulder.add_child(elbow)
+	elbow.add_child(_capsule(Vector3(0,-0.16,0),0.09,0.32,Color(0.045,0.04,0.07)))
+	elbow.add_child(_ellipsoid(Vector3(0,-0.31,0.02),Vector3(0.075,0.085,0.07),Color(0.74,0.57,0.56)))
+	elbow.add_child(_box(Vector3(0,-0.025,0),Vector3(0.17,0.055,0.14),Color(0.07,0.06,0.10)))
 	return shoulder
 
 func _hair_lock(a: Vector3,b: Vector3,c: Vector3,color: Color) -> MeshInstance3D:
