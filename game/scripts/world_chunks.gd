@@ -878,12 +878,12 @@ func _build_tree_cover(c: Vector2i) -> void:
 			var saved_tree: Variant = tree_state.get(tree_id, {})
 			var stable_id := 1000000000 + posmod(_seed(c) + kind.hash() + vi * 73856093 + i * 19349663, 1000000000)
 			var found_record: Array = []
-			for cell_key in main.tree_grid:
-				for tree_rec: Array in main.tree_grid[cell_key]:
-					if tree_rec[0] == mm and int(tree_rec[1]) == i:
-						found_record = tree_rec
-					break
-				if not found_record.is_empty():
+			var tree_cell := Vector2i(floori(tree_pos.x / 16.0), floori(tree_pos.z / 16.0))
+			# The instance was registered in this exact spatial cell; avoid scanning
+			# the entire world tree-grid for every tree during chunk creation.
+			for tree_rec: Array in main.tree_grid.get(tree_cell, []):
+				if tree_rec[0] == mm and int(tree_rec[1]) == i:
+					found_record = tree_rec
 					break
 			if not found_record.is_empty():
 				found_record[4] = stable_id
