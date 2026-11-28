@@ -968,9 +968,12 @@ func tick(delta: float) -> void:
 			for other in neighbors:
 				if other == self or other.dead or other.state == "inlodge":
 					continue
-				var sep := Vector2(probe.x - other.position.x, probe.z - other.position.z).length()
+				var dx_sep: float = probe.x - other.position.x
+				var dz_sep: float = probe.z - other.position.z
+				var sep_sq: float = dx_sep * dx_sep + dz_sep * dz_sep
 				var min_sep := (body_len + float(other.parts.get("L", 1.0))) * 0.22
-				if sep < min_sep:
+				if sep_sq < min_sep * min_sep:
+					var sep: float = sqrt(sep_sq)
 					var same_group: bool = group >= 0 and group == other.group
 					score -= avoid_strength * (0.55 if same_group else 1.4) * (1.0 - clampf(sep / maxf(min_sep, 0.01), 0.0, 1.0))
 			if score > best_score:
