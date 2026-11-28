@@ -1,0 +1,10 @@
+config_version=5
+
+[application]
+config/name="Mita Prototype"
+run/main_scene="res://Main.tscn"
+
+[rendering]
+renderer/rendering_method="mobile"
+renderer/rendering_method.mobile="mobile"
+environment/defaults/default_clear_color=Color(0.025, 0.02, 0.065, 1)
