@@ -544,7 +544,8 @@ func _process(delta: float) -> void:
 			# Close wildlife keeps the same sim interval; far wildlife remains
 			# lower-frequency, with all elapsed time passed to the state machine.
 			if a._acc >= a._sim_tick_interval:
-				a.tick(a._acc)				a._acc = 0.0
+				a.tick(a._acc)
+				a._acc = 0.0
 	# perf: птицы вблизи — каждый кадр, дальше 50 м — раз в 0,2 с (накопленным шагом)
 	_bird_update_acc += delta
 	var bird_update := _bird_update_acc >= 0.033
