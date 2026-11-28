@@ -8,7 +8,7 @@ concurrency:
   group: taiga-feature-android-${{ github.ref }}
   cancel-in-progress: true
 permissions:
-  contents: read
+  contents: write
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -96,3 +96,13 @@ jobs:
             build/taiga-project.zip
           if-no-files-found: error
           retention-days: 30
+      - name: "Публикация APK в релиз feature-latest (прямая ссылка без входа в аккаунт)"
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: feature-latest
+          name: "Сборка ветки feature/world-survival-overhaul"
+          prerelease: true
+          target_commitish: ${{ github.sha }}
+          files: |
+            build/taiga.apk
+            build/taiga-project.zip
