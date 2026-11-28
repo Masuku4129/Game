@@ -516,6 +516,8 @@ func _clear_area(circles: Array, clear_snow: bool) -> void:
 					if Vector2(q.x - circle.x, q.z - circle.y).length() < circle.z:
 						arr.erase(it)
 						break
+			if arr.is_empty():
+					main.pickables.erase(pick_cell)
 	# Grass cells use world-space grid keys; check only the footprint's neighboring cells.
 	var grass_x0 := floori(lo.x / main.GCELL) - 1
 	var grass_x1 := floori(hi.x / main.GCELL) + 1
