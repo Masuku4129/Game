@@ -30,7 +30,7 @@ jobs:
           cd game
           timeout 600 godot --headless --import 2>&1 | tee /tmp/import.log
           grep -E "Parse Error|Failed loading resource" /tmp/import.log || true
-      - name: Сценарий: все игровые скрипты компилируются
+      - name: "Сценарий: все игровые скрипты компилируются"
         continue-on-error: true
         run: |
           cd game
@@ -44,7 +44,7 @@ jobs:
             fi
           done
           exit "$parse_failed"
-      - name: Сценарии: окружение, столкновения животных, анимации, болота
+      - name: "Сценарии: окружение, столкновения животных, анимации, болота"
         continue-on-error: true
         run: |
           cd game
@@ -61,20 +61,20 @@ jobs:
             echo "=== EXIT $test: $? ==="
           done
           exit 0
-      - name: Сценарий: главная игровая сцена запускается без ошибок
+      - name: "Сценарий: главная игровая сцена запускается без ошибок"
         continue-on-error: true
         run: |
           cd game
           timeout 300 godot --headless --quit-after 120 res://scenes/main.tscn 2>&1 | tee /tmp/smoke.log
           ! grep -E "SCRIPT ERROR|Parse Error|Invalid call|Nonexistent" /tmp/smoke.log
-      - name: Сценарий: Android APK успешно собирается
+      - name: "Сценарий: Android APK успешно собирается"
         continue-on-error: true
         run: |
           mkdir -p build
           cd game
           godot --headless --export-debug "Android" ../build/taiga.apk
           test -s ../build/taiga.apk
-      - name: Сценарий: исходники упаковываются для пользователя
+      - name: "Сценарий: исходники упаковываются для пользователя"
         continue-on-error: true
         run: |
           test -s PROJECT_RULES.md && test -s VERSION_CONTROL.md && zip -qr build/taiga-project.zip game README.md PROJECT_RULES.md VERSION_CONTROL.md ART_DIRECTION.md CHANGELOG.md WORLD_SURVIVAL_OVERHAUL_2026-11-27.md .github/workflows
