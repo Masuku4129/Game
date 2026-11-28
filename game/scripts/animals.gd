@@ -487,9 +487,10 @@ func near(p: Vector3, r: float) -> Array:
 	for gz in range(floori((p.z - r) / GC), floori((p.z + r) / GC) + 1):
 		for gx in range(floori((p.x - r) / GC), floori((p.x + r) / GC) + 1):
 			var k := Vector2i(gx, gz)
-			if not grid.has(k):
+			var cell: Array = grid.get(k, [])
+			if cell.is_empty():
 				continue
-			for a in grid[k]:
+			for a in cell:
 				if a == null or not is_instance_valid(a):
 					continue
 				var dx: float = a.position.x - p.x
