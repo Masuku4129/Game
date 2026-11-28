@@ -9,6 +9,7 @@ var joystick_active := false
 var joystick_touch := -1
 var base_ui: Control
 var stick: ColorRect
+var run_toggle := false
 
 func _ready():
 	_make_ground()
@@ -78,10 +79,42 @@ func _make_ui():
 	base_ui.add_child(nub)
 	stick = nub
 	var hint = Label.new()
-	hint.text = "MOVE • TOUCH / RUN • SHIFT"
+	hint.text = "MOVE • TOUCH / RUN BUTTON"
 	hint.position = Vector2(18, 18)
 	hint.add_theme_color_override("font_color", Color(0.68, 0.62, 0.85, 0.8))
 	base_ui.add_child(hint)
+	var run_button = Button.new()
+	run_button.text = "RUN"
+	run_button.custom_minimum_size = Vector2(92, 72)
+	run_button.position = Vector2(-122, -116)
+	run_button.anchor_left = 1
+	run_button.anchor_right = 1
+	run_button.anchor_top = 1
+	run_button.anchor_bottom = 1
+	run_button.add_theme_color_override("font_color", Color(0.92, 0.86, 1.0))
+	run_button.add_theme_color_override("font_pressed_color", Color(1.0, 1.0, 1.0))
+	run_button.add_theme_stylebox_override("normal", _ui_style(Color(0.15, 0.1, 0.24, 0.72)))
+	run_button.add_theme_stylebox_override("pressed", _ui_style(Color(0.42, 0.25, 0.65, 0.88)))
+	run_button.add_theme_stylebox_override("hover", _ui_style(Color(0.24, 0.17, 0.36, 0.8)))
+	run_button.toggle_mode = true
+	run_button.position.x = -122
+	run_button.position.y = -116
+	run_button.toggled.connect(func(value): run_toggle = value)
+	base_ui.add_child(run_button)
+
+func _ui_style(color: Color) -> StyleBox:
+	var style = StyleBoxFlat.new()
+	style.bg_color = color
+	style.corner_radius_top_left = 16
+	style.corner_radius_top_right = 16
+	style.corner_radius_bottom_left = 16
+	style.corner_radius_bottom_right = 16
+	style.border_width_left = 1
+	style.border_width_right = 1
+	style.border_width_top = 1
+	style.border_width_bottom = 1
+	style.border_color = Color(0.48, 0.35, 0.68, 0.8)
+	return style
 
 func _input(event):
 	if event is InputEventScreenTouch:
@@ -118,5 +151,5 @@ func _process(delta):
 		player.set_move(keyboard.normalized())
 	elif not joystick_active:
 		player.set_move(Vector2.ZERO)
-	player.set_running(Input.is_key_pressed(KEY_SHIFT))
+	player.set_running(run_toggle or Input.is_key_pressed(KEY_SHIFT))
 	player.tick_animation(delta)
