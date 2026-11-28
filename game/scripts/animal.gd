@@ -920,6 +920,15 @@ func tick(delta: float) -> void:
 		# лося или медведя выбирать узкий проход, в который корпус физически не помещается.
 		var body_len: float = float(parts.get("L", 1.0))
 		var probe_len := maxf(1.25, minf(5.2, maxf(maxf(step_len * 7.0, to.length() * 0.12), body_len * 0.78)))
+		# Cache origin terrain and weather inputs for the candidate sweep.
+		var current_ground: float = main.grid_height(position.x, position.z)
+		var current_bog: float = main.swamp_depth_at(position.x, position.z) if main.has_method("swamp_depth_at") else 0.0
+		var shelter_factor := 0.0
+		var shelter_need: float = 0.22 if kind in ["squirrel", "hare", "roe", "deer", "muskdeer"] else 0.12
+		if main.weather != null:
+			var cold_factor: float = clampf((-float(main.weather.temp) + 2.0) / 18.0, 0.0, 1.0)
+			var wind_factor: float = clampf((float(main.weather.wind) - 0.75) / 1.6, 0.0, 1.0)
+			shelter_factor = cold_factor * wind_factor
 		# Nearby animal spacing prevents crowding/overlap during otherwise obstacle-safe
 		# steering, while allowing members of the same herd to stay comparatively close.
 		var neighbors: Array = mgr.near(position, maxf(3.0, body_len * 1.8)) if mgr != null else []
@@ -937,7 +946,6 @@ func tick(delta: float) -> void:
 			# Prefer stable, dry footing when several routes are equally viable.
 			# This reduces animals skirting sharp rock ledges and entering deep bog
 			# pockets that pass endpoint checks but are poor corridors for their bodies.
-			var current_ground: float = main.grid_height(position.x, position.z)
 			var probe_ground: float = main.grid_height(probe.x, probe.z)
 			var ground_delta: float = absf(probe_ground - current_ground)
 			score -= minf(1.0, ground_delta / maxf(0.25, step_len + 0.25)) * 0.18
@@ -945,19 +953,13 @@ func tick(delta: float) -> void:
 			score -= minf(1.0, probe_water / 0.5) * 0.28
 			if main.has_method("swamp_depth_at"):
 				var probe_bog: float = main.swamp_depth_at(probe.x, probe.z)
-				var current_bog: float = main.swamp_depth_at(position.x, position.z)
 				if probe_bog > current_bog + 0.04:
 					score -= minf(1.0, probe_bog / 0.9) * 0.32
 			# During harsh cold and gusts, steering also weighs nearby canopy cover,
 			# helping wildlife route toward sheltered forest instead of exposed ridges.
-			if main.weather != null:
-				var cold_factor: float = clampf((-float(main.weather.temp) + 2.0) / 18.0, 0.0, 1.0)
-				var wind_factor: float = clampf((float(main.weather.wind) - 0.75) / 1.6, 0.0, 1.0)
-				var shelter_factor: float = cold_factor * wind_factor
-				if shelter_factor > 0.05:
-					var route_forest: float = clampf(float(main.forest_density(probe.x, probe.z)), 0.0, 1.0)
-					var ridge_exposure: float = clampf((probe_ground - main.WATER_Y - 8.0) / 20.0, 0.0, 1.0)
-					var shelter_need: float = 0.22 if kind in ["squirrel", "hare", "roe", "deer", "muskdeer"] else 0.12
+			if shelter_factor > 0.05:
+				var route_forest: float = clampf(float(main.forest_density(probe.x, probe.z)), 0.0, 1.0)
+				var ridge_exposure: float = clampf((probe_ground - main.WATER_Y - 8.0) / 20.0, 0.0, 1.0)
 					score += (route_forest * shelter_need - ridge_exposure * shelter_need) * shelter_factor
 			for other in neighbors:
 				if other == self or other.dead or other.state == "inlodge":
