@@ -20,16 +20,4 @@
 | Грибы | Original procedural GLB; cap/bark game shaders | Project-original | game/models/environment/taiga_mushroom.glb | Present in branch; Godot runtime visual check pending |
 | Цветы / кипрей | Original procedural GLB; seasonal foliage shader | Project-original | game/models/environment/taiga_flower.glb | Present in branch; Godot runtime visual check pending |
 
-
-| Пихта | Original procedural GLB; project paint shaders | Project-original | game/models/environment/taiga_fir.glb | Present in branch; gallery/runtime visual review pending |
-| Можжевельник | Original procedural GLB; project paint shaders | Project-original | game/models/environment/taiga_juniper.glb | Present in branch; gallery/runtime visual review pending |
-| Рябина | Original procedural GLB; project paint shaders | Project-original | game/models/environment/taiga_rowan.glb | Present in branch; gallery/runtime visual review pending |
-| Ива | Original procedural GLB; project paint shaders | Project-original | game/models/environment/taiga_willow.glb | Present in branch; gallery/runtime visual review pending |
-| Лещина | Original procedural GLB; project paint shaders | Project-original | game/models/environment/taiga_hazel.glb | Present in branch; gallery/runtime visual review pending |
-| Шиповник | Original procedural GLB; project paint shaders | Project-original | game/models/environment/taiga_dogrose.glb | Present in branch; gallery/runtime visual review pending |
-| Сухая берёза | Original procedural GLB; project paint shaders | Project-original | game/models/environment/taiga_dead_birch.glb | Present in branch; gallery/runtime visual review pending |
-| Осока | Original procedural GLB; project paint shaders | Project-original | game/models/environment/taiga_sedge.glb | Present in branch; gallery/runtime visual review pending |
-
 Source: tools/generate_taiga_models.py
-
-Total: 24 original GLB files. The isolated asset gallery enumerates all 24 registered model categories; visual quality still requires a rendered review.

@@ -2,7 +2,7 @@ extends Node3D
 ## Этап 2: кусок тайги 512×512 м в стиле 4: рельеф с обрывами и рекой,
 ## деревья с ветками-геометрией и хвоей/листвой из текстур.
 
-const SIZE := 1024.0
+const SIZE := 512.0
 const SEG := 384
 const WATER_Y := -2.0
 const CELL := 64.0
@@ -11,8 +11,8 @@ const PENDING_SEED_PATH := "user://pending_world_seed.txt"
 var map_seed: int = MAP_SEED
 var explored_map: Dictionary = {}
 var _map_reveal_t := 0.0
-const FOREST_DENSITY_MULTIPLIER := 1.0
-const FOREST_DENSITY_SPECIES := ["spruce", "pine", "birch", "larch", "aspen", "bare", "spruce_dead", "dead_birch", "hazel", "dogrose", "sedge", "bush", "fern", "reeds", "moss", "flower", "twig", "berry", "bilberry", "mushroom", "fir", "cedar", "willow", "alder", "cherry", "rose", "horsetail", "hummock", "sedge", "juniper", "stlanik", "rowan", "anthill", "mossrock", "stump_rot", "stump_mush", "fungus_snag", "birch_dead", "mosslog", "ledum", "cloudberry", "cranberry", "cotton", "lingon", "ernik", "raspberry", "currant", "bells", "daisy", "angelica", "brushpile", "chanterelle", "cones"]
+const FOREST_DENSITY_MULTIPLIER := 1.7
+const FOREST_DENSITY_SPECIES := ["spruce", "pine", "birch", "larch", "aspen", "bare", "spruce_dead", "bush", "fern", "reeds", "moss", "flower", "twig", "berry", "bilberry", "mushroom", "fir", "cedar", "willow", "alder", "cherry", "rose", "horsetail", "hummock", "sedge", "juniper", "stlanik", "rowan", "anthill", "mossrock", "stump_rot", "stump_mush", "fungus_snag", "birch_dead", "mosslog", "ledum", "cloudberry", "cranberry", "cotton", "lingon", "ernik", "raspberry", "currant", "bells", "daisy", "angelica", "brushpile", "chanterelle", "cones"]
 
 var n_hill := FastNoiseLite.new()
 var n_cliff := FastNoiseLite.new()
@@ -66,7 +66,6 @@ var msg := ""
 var water_mat: ShaderMaterial
 var beavers
 var inventory  # короб: inventory.gd
-var chunk_stream # постоянное состояние потокового мира
 # --- tools: инструменты, валка, брёвна, копья (world_tools.gd) ---
 var tools_world
 var res_spots := {}      # клетка 8 м → [[позиция, вид]] — кусты, ягодники (нож, руки)
@@ -74,7 +73,11 @@ var fallen_spots := {}   # клетка 16 м → [{kind, mm, i, xf, a, b, r}] �
 var hunt  # --- hunt: туши, разделка, кровь, запах крови (hunt.gd) ---
 var camp  # --- build: лагерь и постройки (structures.gd) ---
 var combat  # --- combat: удары, прицел, стрелы (combat.gd) ---
-var colony = null
+# --- colony: отряд землепроходцев, изометрическая камера, сценарий (colony.gd).
+# colony_mode = true — новая игра про острог; false — старый режим героя с джойстиком
+# (отладочный переключатель в настройках и переменная окружения HERO_MODE=1). ---
+var colony
+var colony_mode := true
 
 func _ready() -> void:
 	# Видимый экран загрузки: генерация мира больше не должна выглядеть как зависание.
@@ -96,6 +99,7 @@ func _ready() -> void:
 	boot_label.add_theme_color_override("font_color", Color(0.88, 0.91, 0.78))
 	boot_ui.add_child(boot_label)
 	_resolve_world_seed()
+	_colony_pick_mode()
 	_setup_noise()
 	weather = preload("res://scripts/weather.gd").new()
 	weather.main = self
@@ -104,11 +108,8 @@ func _ready() -> void:
 	boot_label.text = "TAIGA\nФормирование рельефа…"
 	await _make_terrain()
 	_make_water()
-	boot_label.text = "TAIGA\nПодготовка первой области…"
-	# Avoid the old global 8×8 vegetation scatter during world creation.
-	# The 512×512 terrain remains deterministic and is generated once; trees and
-	# understory are now exclusively produced by the nearby 64 m streaming system.
-	# This removes the expensive whole-world placement/occupancy pass from startup.
+	boot_label.text = "TAIGA\nСоздание леса и растительности…"
+	await _scatter_all()
 	grass_mesh_vars = [pv.tuft(1500), pv.tuft(1503, 1.3), pv.tuft(1504, 0.8)]
 	hero = preload("res://scripts/hero.gd").new()
 	hero.main = self
@@ -135,29 +136,38 @@ func _ready() -> void:
 	# с собой только кремнёвый нож на поясе
 	inv["knife"] = 1
 	hero.tools.to_belt("knife")
-	# Player-follow camera and hero controls are the only supported mode.
-	rig = preload("res://scripts/camera_rig.gd").new()
-	rig.target = hero
-	add_child(rig)
-	rig.position = hero.position
-	player_rig = hero
-	chunk_stream = preload("res://scripts/world_chunks.gd").new()
-	chunk_stream.main = self
-	add_child(chunk_stream)
+	# --- colony: в режиме острога — изометрическая камера (rts_camera.gd) вместо
+	# привязанной к герою; поля те же, поэтому старый код работает по-прежнему ---
+	if colony_mode:
+		rig = preload("res://scripts/rts_camera.gd").new()
+		rig.main = self
+		add_child(rig)
+		rig.snap_to(hero.position, 30.0, 0.6)
+		player_rig = rig
+		hero.visible = false
+		hero.process_mode = Node.PROCESS_MODE_DISABLED
+	else:
+		rig = preload("res://scripts/camera_rig.gd").new()
+		rig.target = hero
+		add_child(rig)
+		rig.position = hero.position
+		player_rig = hero
+	# --- /colony ---
 	var ui := CanvasLayer.new()
 	add_child(ui)
-	hud = preload("res://scripts/hud.gd").new()
-	hud.anchor_right = 1.0
-	hud.anchor_bottom = 1.0
-	ui.add_child(hud)
-	joy = preload("res://scripts/joystick.gd").new()
-	joy.anchor_top = 1.0
-	joy.anchor_bottom = 1.0
-	joy.offset_left = 40.0
-	joy.offset_right = 400.0
-	joy.offset_top = -400.0
-	joy.offset_bottom = -40.0
-	ui.add_child(joy)
+	if not colony_mode:
+		hud = preload("res://scripts/hud.gd").new()
+		hud.anchor_right = 1.0
+		hud.anchor_bottom = 1.0
+		ui.add_child(hud)
+		joy = preload("res://scripts/joystick.gd").new()
+		joy.anchor_top = 1.0
+		joy.anchor_bottom = 1.0
+		joy.offset_left = 40.0
+		joy.offset_right = 400.0
+		joy.offset_top = -400.0
+		joy.offset_bottom = -40.0
+		ui.add_child(joy)
 	act_btn = Button.new()
 	act_btn.anchor_left = 1.0
 	act_btn.anchor_right = 1.0
@@ -172,11 +182,14 @@ func _ready() -> void:
 	act_btn.visible = false
 	act_btn.pressed.connect(func(): hero.do_action())
 	ui.add_child(act_btn)
-	# Backpack and HUD are always part of hero mode.
-	inventory = preload("res://scripts/inventory.gd").new()
-	inventory.main = self
-	ui.add_child(inventory)
-	hud.setup(self)
+	if colony_mode:
+		act_btn.visible = false
+	else:
+		# --- инвентарь (короб): кнопка «Рюкзак» на HUD, лист вещей, анимация снятия короба ---
+		inventory = preload("res://scripts/inventory.gd").new()
+		inventory.main = self
+		ui.add_child(inventory)
+		hud.setup(self)
 	# --- hunt: разделка туш, кровь, запах крови (hunt.gd) ---
 	hunt = preload("res://scripts/hunt.gd").new()
 	hunt.main = self
@@ -194,20 +207,25 @@ func _ready() -> void:
 	camp.main = self
 	add_child(camp)
 	# --- /build ---
-	# Camp UI is kept enabled for the single-player survival mode.
+	# --- colony: лист лагеря (camp_ui) заменён листом острога ---
+	if colony_mode and camp.ui != null:
+		camp.ui.visible = false
+		camp.ui.set_process(false)
+		camp.ui.set_process_unhandled_input(false)
+	# --- /colony ---
 	fps_lbl = Label.new()
 	fps_lbl.anchor_left = 0.5
 	fps_lbl.anchor_right = 0.5
-	fps_lbl.offset_left = -360.0
-	fps_lbl.offset_right = 360.0
-	fps_lbl.offset_top = 12.0
+	fps_lbl.offset_left = -300.0
+	fps_lbl.offset_right = 300.0
+	fps_lbl.offset_top = 14.0
 	fps_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	fps_lbl.add_theme_font_size_override("font_size", 18)
+	fps_lbl.add_theme_font_size_override("font_size", 24)
 	fps_lbl.add_theme_color_override("font_outline_color", Color(0, 0, 0))
 	fps_lbl.add_theme_constant_override("outline_size", 6)
 	fps_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	ui.add_child(fps_lbl)
-	fps_lbl.visible = true # Temporary diagnostic overlay for the finite-world performance build
+	fps_lbl.visible = OS.get_environment("PERF") != ""
 	flash = ColorRect.new()
 	flash.anchor_right = 1.0
 	flash.anchor_bottom = 1.0
@@ -228,7 +246,22 @@ func _ready() -> void:
 	# --- core: настройки (качество, кадры, звук), сохранение, справочник, меню ---
 	_core_setup(ui)
 	# --- /core ---
-	# Colony/RTS mode and its test harness are removed from runtime.
+	# --- colony: отряд, лист острога и сценарий «Первая зима» ---
+	if colony_mode:
+		fps_lbl.offset_top = 120.0
+		fps_lbl.visible = false
+		var cl := CanvasLayer.new()
+		cl.layer = 3
+		add_child(cl)
+		colony = preload("res://scripts/colony.gd").new()
+		colony.rig = rig
+		add_child(colony)
+		colony.setup(self, cl)
+		rig.colony = colony
+		if OS.get_environment("COLONY_TEST") != "" or OS.get_environment("COLONY_SHOTS") != "":
+			var ct: Node = preload("res://scripts/colony_test.gd").new()
+			ct.set("main", self)
+			add_child(ct)
 	var _hx := OS.get_environment("CHIDE")
 	if "s" in _hx:
 		sun.shadow_enabled = false
@@ -252,6 +285,71 @@ func _ready() -> void:
 		pf.set("main", self)
 		add_child(pf)
 	boot_ui.queue_free()
+
+## --- colony: какой режим запускать. Старые проверки (бой, инструменты, охота, стройка,
+## сохранение, кадры, замер) идут по-прежнему от героя, поэтому для них — режим героя. ---
+func _resolve_world_seed() -> void:
+	# Новый мир получает собственный seed; продолжение читает seed до генерации рельефа.
+	if FileAccess.file_exists(PENDING_SEED_PATH):
+		var pending := FileAccess.open(PENDING_SEED_PATH, FileAccess.READ)
+		if pending != null:
+			map_seed = int(pending.get_as_text().strip_edges())
+			pending.close()
+		DirAccess.remove_absolute(ProjectSettings.globalize_path(PENDING_SEED_PATH))
+		if map_seed != 0:
+			return
+	var creative_selected := false
+	var cfg := ConfigFile.new()
+	if cfg.load("user://settings.cfg") == OK:
+		creative_selected = bool(cfg.get_value("game", "creative_mode", false))
+	var save_path := "user://creative_save.json" if creative_selected else "user://save.json"
+	if FileAccess.file_exists(save_path):
+		var sf := FileAccess.open(save_path, FileAccess.READ)
+		if sf != null:
+			var parsed: Variant = JSON.parse_string(sf.get_as_text())
+			sf.close()
+			if parsed is Dictionary:
+				var md: Dictionary = (parsed as Dictionary).get("main", {})
+				if md.has("map_seed"):
+					map_seed = int(md["map_seed"])
+					return
+	var rng := RandomNumberGenerator.new()
+	rng.randomize()
+	map_seed = int(rng.randi() & 0x7fffffff)
+	if map_seed == 0:
+		map_seed = MAP_SEED
+
+func _reveal_map_area() -> void:
+	# Открываем только пройденную местность. Храним компактные данные по клеткам 16×16 м.
+	var cx := floori(hero.position.x / 16.0)
+	var cz := floori(hero.position.z / 16.0)
+	for dz in range(-2, 3):
+		for dx in range(-2, 3):
+			var gx := cx + dx
+			var gz := cz + dz
+			var key := "%d,%d" % [gx, gz]
+			if explored_map.has(key):
+				continue
+			var wx := (float(gx) + 0.5) * 16.0
+			var wz := (float(gz) + 0.5) * 16.0
+			explored_map[key] = {
+				"zone": zone(wx, wz),
+				"river": river_dist(wx, wz) < 9.0,
+				"lake": lake_k(wx, wz) > 0.28,
+				"water": height(wx, wz) < water_level(wx, wz) + 0.25
+			}
+
+func _colony_pick_mode() -> void:
+	colony_mode = true
+	var cf := ConfigFile.new()
+	if cf.load("user://settings.cfg") == OK:
+		colony_mode = not bool(cf.get_value("game", "hero_mode", false))
+	for e: String in ["COMBAT_TEST", "TOOLS_TEST", "HUNT_TEST", "BUILD_TEST", "SAVE_TEST", "UI_SHOTS", "SHOTS", "PERF", "HERO_MODE"]:
+		if OS.get_environment(e) != "":
+			colony_mode = false
+	for e2: String in ["COLONY_TEST", "COLONY_SHOTS"]:
+		if OS.get_environment(e2) != "":
+			colony_mode = true
 
 func _find_start() -> Vector3:
 	for r in range(0, 120, 3):
@@ -367,42 +465,19 @@ func blocked(x: float, z: float, rad: float) -> bool:
 					return true
 	return false
 
-func _resolve_world_seed() -> void:
-	if not FileAccess.file_exists(PENDING_SEED_PATH):
-		return
-	var f := FileAccess.open(PENDING_SEED_PATH, FileAccess.READ)
-	if f == null:
-		return
-	var pending := f.get_as_text().strip_edges()
-	f.close()
-	var candidate := pending.to_int()
-	if candidate > 0:
-		map_seed = candidate
-	DirAccess.remove_absolute(ProjectSettings.globalize_path(PENDING_SEED_PATH))
-
-func _world_stream_seed(stream_id: int) -> int:
-	# Разводим независимые поля рельефа/биомов хешированием, а не соседними
-	# значениями map_seed: это сохраняет детерминизм и уменьшает корреляцию слоёв.
-	const MOD := 2147483647
-	var h := posmod(map_seed, MOD)
-	h = posmod(h + posmod(stream_id, MOD) * 104729, MOD)
-	h = posmod((h ^ (h >> 13)) * 1274126177, MOD)
-	h = posmod((h ^ (h >> 16)) * 1597334677, MOD)
-	return maxi(1, h)
-
 func _setup_noise() -> void:
-	n_hill.seed = _world_stream_seed(1640); n_hill.frequency = 0.004; n_hill.fractal_octaves = 4
-	n_cliff.seed = _world_stream_seed(77); n_cliff.frequency = 0.0045; n_cliff.fractal_octaves = 2
-	n_detail.seed = _world_stream_seed(5); n_detail.frequency = 0.05; n_detail.fractal_octaves = 3
-	n_crag.seed = _world_stream_seed(31); n_crag.frequency = 0.16; n_crag.fractal_octaves = 4
-	n_crag2.seed = _world_stream_seed(32); n_crag2.frequency = 0.55; n_crag2.fractal_octaves = 2
-	n_biome.seed = _world_stream_seed(4242); n_biome.frequency = 0.0042; n_biome.fractal_octaves = 2
-	n_forest.seed = _world_stream_seed(909); n_forest.frequency = 0.02; n_forest.fractal_octaves = 3
-	n_zone.seed = _world_stream_seed(2024); n_zone.noise_type = FastNoiseLite.TYPE_CELLULAR; n_zone.frequency = 0.018
+	n_hill.seed = map_seed + 1640; n_hill.frequency = 0.004; n_hill.fractal_octaves = 4
+	n_cliff.seed = map_seed + 77; n_cliff.frequency = 0.0045; n_cliff.fractal_octaves = 2
+	n_detail.seed = map_seed + 5; n_detail.frequency = 0.05; n_detail.fractal_octaves = 3
+	n_crag.seed = map_seed + 31; n_crag.frequency = 0.16; n_crag.fractal_octaves = 4
+	n_crag2.seed = map_seed + 32; n_crag2.frequency = 0.55; n_crag2.fractal_octaves = 2
+	n_biome.seed = map_seed + 4242; n_biome.frequency = 0.0042; n_biome.fractal_octaves = 2
+	n_forest.seed = map_seed + 909; n_forest.frequency = 0.02; n_forest.fractal_octaves = 3
+	n_zone.seed = map_seed + 2024; n_zone.noise_type = FastNoiseLite.TYPE_CELLULAR; n_zone.frequency = 0.018
 	n_zone.cellular_return_type = FastNoiseLite.RETURN_CELL_VALUE; n_zone.fractal_type = FastNoiseLite.FRACTAL_NONE
-	n_open.seed = _world_stream_seed(313); n_open.frequency = 0.0055; n_open.fractal_octaves = 2
-	n_wet.seed = _world_stream_seed(777); n_wet.frequency = 0.007; n_wet.fractal_octaves = 3
-	n_glade.seed = _world_stream_seed(555); n_glade.frequency = 0.011; n_glade.fractal_octaves = 2
+	n_open.seed = map_seed + 313; n_open.frequency = 0.0055; n_open.fractal_octaves = 2
+	n_wet.seed = map_seed + 777; n_wet.frequency = 0.007; n_wet.fractal_octaves = 3
+	n_glade.seed = map_seed + 555; n_glade.frequency = 0.011; n_glade.fractal_octaves = 2
 
 ## Уровень воды в точке: у бобровых плотин выше (пруд) или ниже (после плотины).
 func water_level(x: float, z: float) -> float:
@@ -453,9 +528,9 @@ func swamp_depth_at(x: float, z: float) -> float:
 	# Дождь насыщает торф водой и усиливает провал; в устойчивый мороз
 	# промёрзшая корка частично держит вес, но не превращает болото в сухую землю.
 	if weather != null:
-		depth *= 1.0 + clampf(weather.wet, 0.0, 1.0) * 0.22
+		depth *= 1.0 + clampf(weather.wet, 0.0, 1.0) * 0.18
 		if weather.temp < -2.0:
-			depth *= 1.0 - (1.0 - smoothstep(-12.0, -2.0, weather.temp)) * clampf(weather.snow, 0.0, 1.0) * 0.36
+			depth *= 1.0 - (1.0 - smoothstep(-12.0, -2.0, weather.temp)) * clampf(weather.snow, 0.0, 1.0) * 0.32
 	return clampf(depth, 0.0, 1.45)
 
 func biome(x: float, z: float) -> float:
@@ -624,7 +699,7 @@ func _update_sky() -> void:
 	if weather != null:
 		# глубинная дымка: в тумане и дождь начинается ближе и гуще
 		# камера ниже — видно дальше: дымка ближе, чтобы дальний край мира не появлялся на глазах
-		var low: float = 0.0 # fixed elevated camera pitch is locked at 45 degrees
+		var low: float = clampf((45.0 - float(rig.pitch)) / 20.0, 0.0, 1.0) if rig != null else 0.0
 		env.fog_depth_begin = 40.0 - low * 14.0 - fogv * 32.0 - wet_air * 12.0 - mist * 7.0
 		env.fog_depth_end = 118.0 - low * 20.0 - fogv * 58.0 - wet_air * 22.0
 		# туман в низинах: высотная дымка над рекой и в лощинах (утром и после дождя)
@@ -765,7 +840,7 @@ var _sky_timer := 0.0
 ## Трава клетками 32 м вокруг героя (3×3): меньше вызовов отрисовки, чем 5×5 клеток по 16 м;
 ## клетка строится по частям за несколько кадров, без рывка.
 const GCELL := 32.0
-const GRADIUS := 1
+const GRADIUS := 2
 var _gb := {}
 
 var _shot_n := 0
@@ -824,13 +899,7 @@ func _shots() -> void:
 		get_tree().quit()
 
 var _dbgf := 0
-var _visual_uniform_t := 0.0 # perf: ограничиваем частоту динамических uniforms
-var _grass_defer_toggle := false
-var _last_veg_hero_pos := Vector3(INF, INF, INF)
-var _last_veg_cam_pos := Vector3(INF, INF, INF)
-var _last_water_hero_pos := Vector3(INF, INF, INF)
-var _last_water_swim := -1.0
-var _last_water_move := -1.0
+var _visual_uniform_t := 0.0 # perf: обновляем пакет uniforms 10 раз/с
 func _process(delta: float) -> void:
 	_dbgf += 1
 	if hero == null or (joy == null and colony == null):
@@ -845,54 +914,36 @@ func _process(delta: float) -> void:
 		hp = Vector3(0, -1000.0, 0)
 		cp = colony.veg_focus()
 	# --- /colony ---
-	# Не обходим сотни материалов и не отправляем одинаковые uniforms повторно,
-	# если персонаж/камера стоят. Это сокращает CPU→RenderingServer вызовы без
-	# изменения LOD, дальности, плотности или визуального качества.
+	# Обновление uniforms на каждом кадре обходило весь список растительности и
+	# создавало лишнюю CPU-нагрузку. 20 Гц достаточно для плавного fade и реакции воды.
 	_visual_uniform_t -= delta
 	if _visual_uniform_t <= 0.0:
 		_visual_uniform_t = 0.1
-		var vegetation_moved := hp.distance_squared_to(_last_veg_hero_pos) > 0.0225 or cp.distance_squared_to(_last_veg_cam_pos) > 0.0225
-		if vegetation_moved:
-			_last_veg_hero_pos = hp
-			_last_veg_cam_pos = cp
-			for m in veg.fade_list:
-				m.set_shader_parameter("hero_pos", hp)
-				m.set_shader_parameter("cam_pos", cp)
-			for m in pv.fade_list:
-				m.set_shader_parameter("hero_pos", hp)
-				m.set_shader_parameter("cam_pos", cp)
-			pv.mats["tuft"].set_shader_parameter("hero_pos", hp)
-			pv.mats["tuft"].set_shader_parameter("cam_pos", cp)
+		for m in veg.fade_list:
+			m.set_shader_parameter("hero_pos", hp)
+			m.set_shader_parameter("cam_pos", cp)
+		for m in pv.fade_list:
+			m.set_shader_parameter("hero_pos", hp)
+			m.set_shader_parameter("cam_pos", cp)
+		pv.mats["tuft"].set_shader_parameter("hero_pos", hp)
+		pv.mats["tuft"].set_shader_parameter("cam_pos", cp)
 		pv.mats["tuft"].set_shader_parameter("grass_now", Time.get_ticks_msec() * 0.001)
-		var swim_now: float = hero.swimb if colony == null else 0.0
-		var move_now := clampf(hero.run_mag, 0.0, 1.0)
-		if hero.position.distance_squared_to(_last_water_hero_pos) > 0.0025:
-			_last_water_hero_pos = hero.position
-			water_mat.set_shader_parameter("hero_pos", hero.position)
-		if absf(swim_now - _last_water_swim) > 0.001:
-			_last_water_swim = swim_now
-			water_mat.set_shader_parameter("swim", swim_now)
-		if absf(move_now - _last_water_move) > 0.01:
-			_last_water_move = move_now
-			water_mat.set_shader_parameter("swim_move", move_now)
+		water_mat.set_shader_parameter("hero_pos", hero.position)
+		water_mat.set_shader_parameter("swim", hero.swimb if colony == null else 0.0)
+		water_mat.set_shader_parameter("swim_move", clampf(hero.run_mag, 0.0, 1.0))
 	_fps_t -= delta
 	if _fps_t <= 0.0:
 		_fps_t = 0.5
-		var chunk_info := "CHUNK idle · queue 0"
-		if chunk_stream != null:
-			var current_chunk: Dictionary = chunk_stream.get("_building_chunk")
-			var queue_size: int = chunk_stream.get("pending").size()
-			if not current_chunk.is_empty():
-				chunk_info = "CHUNK %s · stage %d · queue %d" % [str(current_chunk.get("coord", Vector2i.ZERO)), int(chunk_stream.get("_build_stage")), queue_size]
-			else:
-				chunk_info = "CHUNK idle · queue %d" % queue_size
-		fps_lbl.text = "FPS %d · draws %d · tris %.1fk · %s" % [Engine.get_frames_per_second(), Performance.get_monitor(Performance.RENDER_TOTAL_DRAW_CALLS_IN_FRAME), Performance.get_monitor(Performance.RENDER_TOTAL_PRIMITIVES_IN_FRAME) / 1000.0, chunk_info]
+		fps_lbl.text = "FPS %d · вызовов %d · треуг. %.1f тыс." % [Engine.get_frames_per_second(), Performance.get_monitor(Performance.RENDER_TOTAL_DRAW_CALLS_IN_FRAME), Performance.get_monitor(Performance.RENDER_TOTAL_PRIMITIVES_IN_FRAME) / 1000.0]
 	flash.color.a = maxf(0.0, flash.color.a - delta * 0.6)
 	if dead_t > 0.0:
 		dead_t -= delta
 		if dead_t <= 0.0:
 			_respawn()
-	# Chunk-stream discovery records explored cells; duplicate legacy reveal loop removed.
+	_map_reveal_t -= delta
+	if _map_reveal_t <= 0.0 and hero != null:
+		_map_reveal_t = 1.5
+		_reveal_map_area()
 	_near_t -= delta
 	if _near_t <= 0.0:
 		_near_t = _near_update_interval
@@ -913,27 +964,22 @@ func _process(delta: float) -> void:
 		_update_sky()
 		_update_stats(0.25)
 		_core_tick(0.25)  # core
-		weather.apply(veg.fade_list, pv.fade_list, terrain_mat, pv.mats["tuft"], water_mat)
+		weather.apply(veg.fade_list + pv.fade_list, terrain_mat, pv.mats["tuft"], water_mat)
 		if joy != null:
 			var lbl: String = hero.action_label()
 			act_btn.visible = lbl != ""
 			act_btn.text = lbl
 	if player_rig == null:
 		return
-	# Incomplete grass cells advance only on frames with spare time. The same
-	# strip size/density is retained; generation yields during slow mobile frames.
+	# недостроенная клетка травы: следующая полоса за кадр
 	if not _gb.is_empty():
-		if delta > 0.035:
-			_grass_defer_toggle = not _grass_defer_toggle
-			if _grass_defer_toggle:
-				return
 		_grass_step()
 		return
 	grass_timer -= delta
 	if grass_timer > 0.0:
 		return
 	grass_timer = 0.1
-	var c := Vector2i(floori(player_rig.position.x / GCELL), floori(player_rig.position.z / GCELL))
+	var c := Vector2i(floori((player_rig.position.x + SIZE * 0.5) / GCELL), floori((player_rig.position.z + SIZE * 0.5) / GCELL))
 	# удалить далёкие клетки
 	for k in grass_cells.keys():
 		if absi(k.x - c.x) > GRADIUS + 1 or absi(k.y - c.y) > GRADIUS + 1:
@@ -951,7 +997,7 @@ func _process(delta: float) -> void:
 	for dz in range(-GRADIUS, GRADIUS + 1):
 		for dx in range(-GRADIUS, GRADIUS + 1):
 			var k := Vector2i(c.x + dx, c.y + dz)
-			if grass_cells.has(k):
+			if grass_cells.has(k) or k.x < 0 or k.y < 0 or k.x >= int(SIZE / GCELL) or k.y >= int(SIZE / GCELL):
 				continue
 			var d := float(dx * dx + dz * dz) - Vector2(dx, dz).dot(fwd) * 1.2
 			if d < best_d:
@@ -976,12 +1022,8 @@ func _update_stats(dt: float) -> void:
 		msg_t -= dt
 		return
 	# --- /colony ---
-	var soak: float = maxf(float(weather.wet) * 0.6, float(hero.soaked))
-	var cold_stress := clampf((0.42 - warmth) / 0.42, 0.0, 1.0)
-	var wet_stress := clampf((soak - 0.22) / 0.78, 0.0, 1.0)
-	var exposure_load := cold_stress * (0.35 + wet_stress * 0.65)
-	hunger = maxf(0.0, hunger - 0.0004 * dt * (1.0 + exposure_load * 0.55))
-	thirst = maxf(0.0, thirst - 0.0007 * dt * (1.5 if hero.running else 1.0) * (1.0 + cold_stress * 0.18))
+	hunger = maxf(0.0, hunger - 0.0004 * dt)
+	thirst = maxf(0.0, thirst - 0.0007 * dt * (1.5 if hero.running else 1.0))
 	var gh := dt / 75.0
 	if health > 0.0:
 		# кровотечение, голод, жажда, холод — урон; сытый и в тепле — заживает
@@ -1002,16 +1044,12 @@ func _update_stats(dt: float) -> void:
 			_die("")
 	msg_t -= dt
 	var tc: float = weather.temp
+	var soak: float = maxf(float(weather.wet) * 0.6, float(hero.soaked))
 	var clothing_warmth := 0.0
 	for slot: String in worn:
 		var clothing_id := String(worn[slot])
 		clothing_warmth += float(preload("res://scripts/items.gd").DEF.get(clothing_id, {}).get("warm", 0.0))
-	# Wet clothing loses insulating value in wind; the wind penalty rises with
-	# exposure and soaked gear, while dry layered clothing remains effective.
-	var exposure := clampf(weather.wind / 2.8, 0.0, 1.0)
-	var wind_cooling: float = weather.wind * 0.05 + exposure * soak * 0.12
-	var insulation_loss := clothing_warmth * exposure * soak * 0.35
-	var target_w := clampf(0.55 + tc * 0.025 - soak * 0.35 - wind_cooling - insulation_loss - (0.25 if hero.swimb > 0.5 else 0.0) + clothing_warmth, 0.02, 0.95)
+	var target_w := clampf(0.55 + tc * 0.025 - soak * 0.35 - weather.wind * 0.05 - (0.25 if hero.swimb > 0.5 else 0.0) + clothing_warmth, 0.02, 0.95)
 	# --- build: костёр, шалаш, изба с печью греют; укрытие ослабляет ветер ---
 	if camp != null:
 		target_w = clampf(target_w + camp.warm_bonus() + weather.wind * 0.05 * (1.0 - camp.wind_k()), 0.02, 0.98)
@@ -1031,12 +1069,9 @@ func _update_stats(dt: float) -> void:
 		# по колено в снегу или грязи — тяжело, по пояс — очень тяжело
 		var sk: float = hero.sink + hero.mud_sink * 1.5
 		drain = drain * (1.0 + sk * 3.0) + sk * 0.01
-		# Cold and soaked clothes make exertion less efficient and raise recovery debt.
-		drain *= 1.0 + exposure_load * 0.45
 		stamina = maxf(0.0, stamina - drain * dt)
 	else:
-		var recovery := (0.14 if hero.state == "sit" else 0.07) * (1.0 - exposure_load * 0.5)
-		stamina = minf(1.0, stamina + recovery * dt)
+		stamina = minf(1.0, stamina + (0.14 if hero.state == "sit" else 0.07) * dt)
 	if creative_mode:
 		health = 1.0
 		hunger = 1.0
@@ -1059,10 +1094,6 @@ func _update_stats(dt: float) -> void:
 
 ## Высота видимой земли: билинейно по сетке рельефа (как её рисует сетка, в десятки раз быстрее height()).
 func grid_height(x: float, z: float) -> float:
-	# Вне стартовой сетки используем ту же мировую функцию рельефа.
-	# Это не обрезает навигацию животных и расчёт опоры по краю старой карты.
-	if absf(x) > SIZE * 0.5 or absf(z) > SIZE * 0.5:
-		return height(x, z)
 	var n := SEG + 1
 	var fx := clampf((x + SIZE * 0.5) / (SIZE / SEG), 0.0, SEG - 0.001)
 	var fz := clampf((z + SIZE * 0.5) / (SIZE / SEG), 0.0, SEG - 0.001)
@@ -1075,21 +1106,18 @@ func grid_height(x: float, z: float) -> float:
 
 ## Трава вокруг точки заранее, пока игрок не видит карту (при старте), без «вырастания» на глазах.
 func _grass_prebuild(c: Vector3) -> void:
-	var ck := Vector2i(floori(c.x / GCELL), floori(c.z / GCELL))
+	var ck := Vector2i(floori((c.x + SIZE * 0.5) / GCELL), floori((c.z + SIZE * 0.5) / GCELL))
 	for r in range(0, GRADIUS + 1):
 		for dz in range(-r, r + 1):
 			for dx in range(-r, r + 1):
 				if maxi(absi(dx), absi(dz)) != r:
 					continue
 				var k := Vector2i(ck.x + dx, ck.y + dz)
-				if grass_cells.has(k):
+				if grass_cells.has(k) or k.x < 0 or k.y < 0 or k.x >= int(SIZE / GCELL) or k.y >= int(SIZE / GCELL):
 					continue
 				_grass_begin(k)
 				while not _gb.is_empty():
 					_grass_step()
-					# Делим синхронную подготовку клетки на полосы и отдаём кадр после каждой.
-					if not _gb.is_empty():
-						await get_tree().process_frame
 
 func _grass_begin(k: Vector2i) -> void:
 	var rng := RandomNumberGenerator.new()
@@ -1107,8 +1135,8 @@ func _grass_step() -> void:
 	var k: Vector2i = _gb["k"]
 	var rng: RandomNumberGenerator = _gb["rng"]
 	var per_var: Array = _gb["pv"]
-	var x0 := float(k.x) * GCELL
-	var z0 := float(k.y) * GCELL
+	var x0 := k.x * GCELL - SIZE * 0.5
+	var z0 := k.y * GCELL - SIZE * 0.5
 	var step := 0.92
 	var z: float = _gb["z"]
 	var z_end := minf(z + 8.0, GCELL)
@@ -1311,12 +1339,11 @@ func _variants(kind: String) -> Array:
 			out.append(pv.bones(7500))
 	return out
 
-const TREE_KINDS := ["spruce", "pine", "birch", "larch", "aspen", "fir", "cedar", "alder", "willow", "rowan", "dead_birch"]
-const NEAR_R := 66.0
+const TREE_KINDS := ["spruce", "pine", "birch", "larch", "aspen", "fir", "cedar", "rowan"]
+const NEAR_R := 60.0
 var tree_grid := {}
 var near_mesh := {}
 var near_mmi := {}
-var _near_radius_materials: Dictionary = {}
 var _near_at := Vector3(1e9, 0, 0)
 var _near_t := 0.0
 var _near_update_interval := 0.2
@@ -1327,15 +1354,10 @@ var _tree_id := 0
 ## дизерингом (шейдер сравнивает расстояние до near_c), поэтому смены моделей не видно.
 func _update_near(force: bool = false) -> void:
 	var c: Vector3 = rig.position
-	# Детальные деревья готовятся с запасом по направлению взгляда и движения.
-	# Скорость добавляет упреждение, чтобы при быстром перемещении не догонять камеру.
+	# Detail models are prepared ahead of the camera so the visible forest does not pop in at the view edge.
 	var view_forward := Vector3(sin(rig.rotation.y), 0.0, -cos(rig.rotation.y))
-	var look_ahead := 54.0
-	if hero != null:
-		var horizontal_speed := Vector2(hero.vel.x, hero.vel.z).length()
-		look_ahead += clampf((horizontal_speed - 2.0) * 2.0, 0.0, 18.0)
-	c += view_forward * look_ahead
-	if not force and Vector2(c.x - _near_at.x, c.z - _near_at.z).length_squared() < 1.0:
+	c += view_forward * 30.0
+	if not force and Vector2(c.x - _near_at.x, c.z - _near_at.z).length_squared() < 2.25:
 		return
 	_near_at = c
 	var by_key := {}
@@ -1357,20 +1379,9 @@ func _update_near(force: bool = false) -> void:
 				if not by_key.has(key):
 					by_key[key] = []
 				by_key[key].append(t)
-	for m in veg.fade_list:
+	for m in veg.fade_list + pv.fade_list:
 		m.set_shader_parameter("near_c", c)
-		var material_id_a: int = m.get_instance_id()
-		var cached_radius_ref_a: WeakRef = _near_radius_materials.get(material_id_a)
-		if cached_radius_ref_a == null or cached_radius_ref_a.get_ref() != m:
-			m.set_shader_parameter("near_r", NEAR_R)
-			_near_radius_materials[material_id_a] = weakref(m)
-	for m in pv.fade_list:
-		m.set_shader_parameter("near_c", c)
-		var material_id_b: int = m.get_instance_id()
-		var cached_radius_ref_b: WeakRef = _near_radius_materials.get(material_id_b)
-		if cached_radius_ref_b == null or cached_radius_ref_b.get_ref() != m:
-			m.set_shader_parameter("near_r", NEAR_R)
-			_near_radius_materials[material_id_b] = weakref(m)
+		m.set_shader_parameter("near_r", NEAR_R)
 	for key in near_mmi.keys():
 		if not by_key.has(key):
 			near_mmi[key].visible = false
@@ -1386,24 +1397,16 @@ func _update_near(force: bool = false) -> void:
 			near_mmi[key] = mmi
 		var mi: MultiMeshInstance3D = near_mmi[key]
 		var xs: Array = by_key[key]
-		var instance_count_changed := mi.multimesh.instance_count != xs.size()
-		if instance_count_changed:
-			mi.multimesh.instance_count = xs.size()
+		mi.multimesh.instance_count = xs.size()
 		for i in xs.size():
 			mi.multimesh.set_instance_transform(i, xs[i])
-			if instance_count_changed:
-				mi.multimesh.set_instance_custom_data(i, Color(0.0, 1.0, 0.0, 0.0))
+			mi.multimesh.set_instance_custom_data(i, Color(0.0, 1.0, 0.0, 0.0))
 		mi.visible = true
 
 const PICK := ["berry", "mushroom", "twig", "pebble"]
 const PICK_NAME := {"berry": "ягоды", "mushroom": "гриб", "amanita": "мухомор", "twig": "хворост", "pebble": "камень", "flint": "кремень"}
 
 func _add_pick(p: Vector3, kind: String, mm: MultiMesh, i: int) -> void:
-	# Persistent collection state is checked before registering a generated
-	# instance, so rebuilding a chunk cannot make a consumed pickup reappear.
-	if chunk_stream != null and chunk_stream.is_resource_collected(p, kind):
-		mm.set_instance_transform(i, Transform3D(Basis().scaled(Vector3(0.001, 0.001, 0.001)), p - Vector3(0, 5, 0)))
-		return
 	var k := Vector2i(floori(p.x / 8.0), floori(p.z / 8.0))
 	if not pickables.has(k):
 		pickables[k] = []
@@ -1470,8 +1473,6 @@ func take_pick(it: Array) -> bool:
 	(pickables[k] as Array).erase(it)
 	if (pickables[k] as Array).is_empty():
 		pickables.erase(k)
-	if chunk_stream != null:
-		chunk_stream.mark_resource_collected(q, kind)
 	var mm: MultiMesh = it[2]
 	mm.set_instance_transform(it[3], Transform3D(Basis().scaled(Vector3(0.001, 0.001, 0.001)), q - Vector3(0, 5, 0)))
 	# Ягоды и грибы в коробе не съедаются автоматически. Без инвентаря действует прежний сбор. 
@@ -1550,8 +1551,6 @@ func nearest_tree(p: Vector3, r: float) -> Vector3:
 				if rec.size() < 4:
 					continue
 				var t: Transform3D = rec[2]
-				if t.origin.y < -100.0:
-					continue
 				var dd := Vector2(t.origin.x - p.x, t.origin.z - p.z).length_squared()
 				if dd < bd:
 					bd = dd
@@ -1570,8 +1569,6 @@ func tree_height_at(p: Vector3) -> float:
 				continue
 			for rec in tree_grid[k]:
 				var t: Transform3D = rec[2]
-				if t.origin.y < -100.0:
-					continue
 				var d := Vector2(t.origin.x - p.x, t.origin.z - p.z).length_squared()
 				if d < best:
 					best = d
@@ -1584,8 +1581,7 @@ func tree_height_at(p: Vector3) -> float:
 func tree_radius_at(p: Vector3) -> float:
 	# Крона намного шире ствола; для лазания используем оценку диаметра коры
 	# по высоте конкретного экземпляра, а не AABB всей кроны.
-	var h := tree_height_at(p)
-	return clampf(0.22 + h * 0.026, 0.26, 0.46) if h > 0.5 else 0.0
+	return clampf(0.22 + tree_height_at(p) * 0.026, 0.26, 0.46)
 
 ## Удар зверя: часть тела, кровотечение, переломы, отбрасывание.
 func hurt(amount: float, from: Vector3, kind: String) -> void:
@@ -1664,34 +1660,13 @@ func move_factor() -> float:
 		f = 0.5
 	elif injuries.has("рана: нога"):
 		f = 0.78
-	# Heavier carried loads gradually affect walking and running without
-	# punishing the player at the start of the box capacity.
-	var carried_weight := 0.0
-	if inventory != null and inventory.has_method("weight"):
-		carried_weight = float(inventory.weight())
-	var load_ratio := clampf(carried_weight / 15.0, 0.0, 1.0)
-	var load_factor := 1.0 - smoothstep(0.58, 1.0, load_ratio) * 0.18
-	return f * load_factor * (0.6 + 0.4 * clampf(health * 2.0, 0.0, 1.0))
+	return f * (0.6 + 0.4 * clampf(health * 2.0, 0.0, 1.0))
 
 const BLOCK_R := {"fungus_snag": 0.22, "birch_dead": 0.2, "snag": 0.25, "snag_b": 0.25, "cherry": 0.15, "fir": 0.36, "cedar": 0.38, "rowan": 0.2, "spruce": 0.4, "pine": 0.32, "birch": 0.28, "bare": 0.3, "spruce_dead": 0.3, "stump": 0.45, "rock": 0.5, "boulder": 0.6, "larch": 0.32, "aspen": 0.26}
 
-const START_WORLD_CHUNK_SEED := 20261129
-
 func _chunk_seed(cx: int, cz: int) -> int:
-	# The world-origin grass/stream cell alone receives a fresh layout seed.
-	if cx == 0 and cz == 0:
-		return START_WORLD_CHUNK_SEED
-	return _base_chunk_seed(cx, cz)
-
-func _base_chunk_seed(cx: int, cz: int) -> int:
-	# Keep the original coordinate hash for every other cell/chunk.
-	const MOD := 2147483647
-	var h := posmod(map_seed, MOD)
-	h = posmod(h + posmod(cx, MOD) * 73856093, MOD)
-	h = posmod(h + posmod(cz, MOD) * 19349663, MOD)
-	h = posmod((h ^ (h >> 13)) * 1274126177, MOD)
-	h = posmod((h ^ (h >> 16)) * 1597334677, MOD)
-	return maxi(1, h)
+	# Один детерминированный seed для каждого чанка, производный от общего seed карты.
+	return map_seed + cx * 73856093 + cz * 19349663
 
 func _scatter_all() -> void:
 	# вид, попыток на клетку 32 м, масштаб, дальность видимости, тень, правило
@@ -1705,9 +1680,6 @@ func _scatter_all() -> void:
 		["spruce_dead", 2, Vector2(0.9, 1.3), 110.0, true, "tree"],
 		["spruce", 8, Vector2(0.18, 0.35), 75.0, true, "under"],
 		["bush", 48, Vector2(0.8, 1.5), 75.0, false, "under"],
-		["hazel", 20, Vector2(0.75, 1.2), 58.0, false, "under"],
-		["dogrose", 12, Vector2(0.75, 1.15), 52.0, false, "edge"],
-		["dead_birch", 3, Vector2(0.9, 1.2), 100.0, true, "tree"],
 		["fern", 90, Vector2(0.7, 1.2), 62.0, false, "fern"],
 		["reeds", 20, Vector2(0.8, 1.4), 110.0, false, "reed"],
 		["twig", 90, Vector2(0.8, 1.3), 45.0, false, "under"],
@@ -1790,180 +1762,168 @@ func _scatter_all() -> void:
 				pv.lod = false
 	_cliff_rocks(cache["rock"])
 	var cells := int(SIZE / CELL)
-	# Scatter nearer the world origin first: the start area is populated before distant cells.
-	# Cell seeds remain independent, so traversal order does not alter placement.
-	var cell_order: Array[Vector2i] = []
 	for cz in cells:
 		for cx in cells:
-			cell_order.append(Vector2i(cx, cz))
-	cell_order.sort_custom(func(a: Vector2i, b: Vector2i) -> bool:
-		return a.distance_squared_to(Vector2i(cells / 2, cells / 2)) < b.distance_squared_to(Vector2i(cells / 2, cells / 2)))
-
-	for cell: Vector2i in cell_order:
-		var cx: int = cell.x
-		var cz: int = cell.y
-		var rng := RandomNumberGenerator.new()
-		# Fresh layout is scoped to the start cell only; neighboring cells
-		# retain their previous deterministic seeds and vegetation patterns.
-		rng.seed = START_WORLD_CHUNK_SEED if cx == cells / 2 and cz == cells / 2 else _base_chunk_seed(cx, cz)
-		var x0 := cx * CELL - SIZE * 0.5
-		var z0 := cz * CELL - SIZE * 0.5
-		for r in rules:
-			var vars: Array = cache[r[0]]
-			var per_var := []
-			for v in vars:
-				per_var.append([])
-			var pick_kind: String = r[0] if r[0] in PICK else ""
-			var attempt_multiplier := 4
-			if r[0] in FOREST_DENSITY_SPECIES:
-				attempt_multiplier = int(round(4.0 * FOREST_DENSITY_MULTIPLIER))
-			for k in int(r[1]) * attempt_multiplier:
-				var x := x0 + rng.randf() * CELL
-				var z := z0 + rng.randf() * CELL
-				if not _accept(r[5], x, z, rng):
-					continue
-				var vi := rng.randi() % vars.size()
-				var sc: Vector2 = r[2]
-				var s := rng.randf_range(sc.x, sc.y)
-				var kind: String = r[0]
-				var b := Basis(Vector3.UP, rng.randf() * TAU).scaled(Vector3(s, s * rng.randf_range(0.9, 1.1), s))
-				if kind == "slab":
-					b = b.scaled(Vector3(1.0, 0.35, 1.0))
-				# место занято (ствол, камень, поваленное дерево) — не ставим
-				var occ_r := _occ_radius(kind, vars[vi], s)
-				var by: float = height(x, z) - 0.05
-				var o := Vector3(x, by, z)
-				# широкие вещи не висят над склоном: опора — самая низкая точка под ними
-				var foot: float = FOOT_R.get(kind, 0.0) * s
-				if kind in ROCKISH:
-					var rv: Vector3 = _rock_half_extents(vars[vi])
-					foot = (rv.x + rv.z) * 0.35 * s
-				if foot > 0.0:
-					var hm := by + 0.05
-					for k2 in 6:
-						var a2 := TAU * k2 / 6.0
-						hm = minf(hm, height(x + cos(a2) * foot, z + sin(a2) * foot))
-					o.y = hm - 0.05
-				# плоские мелочи ложатся по склону
-				if kind in HUG:
-					var nrm := normal_at(x, z)
-					if nrm.y < 0.999:
-						b = Basis(Quaternion(Vector3.UP, nrm)) * b
-				var fall_len := 0.0
-				if kind == "fallen0" or kind == "fallen1":
-					var fv: Array = vars[vi]
-					fall_len = float(fv[1]) * s
-					var ax0: Vector3 = b.x.normalized()
-					var x0f: float = float(fv[4]) * s
-					var pr := o + ax0 * x0f
-					var pt := o + ax0 * (x0f + fall_len)
-					if not _occ_free_line(pr, pt, float(fv[2]) * s + 0.3):
+			var rng := RandomNumberGenerator.new()
+			rng.seed = _chunk_seed(cx, cz)
+			var x0 := cx * CELL - SIZE * 0.5
+			var z0 := cz * CELL - SIZE * 0.5
+			for r in rules:
+				var vars: Array = cache[r[0]]
+				var per_var := []
+				for v in vars:
+					per_var.append([])
+				var pick_kind: String = r[0] if r[0] in PICK else ""
+				var attempt_multiplier := 4
+				if r[0] in FOREST_DENSITY_SPECIES:
+					attempt_multiplier = int(round(4.0 * FOREST_DENSITY_MULTIPLIER))
+				for k in int(r[1]) * attempt_multiplier:
+					var x := x0 + rng.randf() * CELL
+					var z := z0 + rng.randf() * CELL
+					if not _accept(r[5], x, z, rng):
 						continue
-					var hr := height(pr.x, pr.z)
-					var ht := height(pt.x, pt.z)
-					b = Basis(ax0.cross(Vector3.UP).normalized(), atan2(ht - hr, fall_len)) * b
-					o.y = hr - 0.05
-				elif kind == "mosslog":
-					var hl: float = float(vars[vi][1]) * 0.5 * s
-					var axm: Vector3 = b.x.normalized()
-					if not _occ_free_line(o - axm * hl, o + axm * hl, float(vars[vi][2]) * s + 0.3):
+					var vi := rng.randi() % vars.size()
+					var sc: Vector2 = r[2]
+					var s := rng.randf_range(sc.x, sc.y)
+					var kind: String = r[0]
+					var b := Basis(Vector3.UP, rng.randf() * TAU).scaled(Vector3(s, s * rng.randf_range(0.9, 1.1), s))
+					if kind == "slab":
+						b = b.scaled(Vector3(1.0, 0.35, 1.0))
+					# место занято (ствол, камень, поваленное дерево) — не ставим
+					var occ_r := _occ_radius(kind, vars[vi], s)
+					var by: float = height(x, z) - 0.05
+					var o := Vector3(x, by, z)
+					# широкие вещи не висят над склоном: опора — самая низкая точка под ними
+					var foot: float = FOOT_R.get(kind, 0.0) * s
+					if kind in ROCKISH:
+						var rv: Vector3 = _rock_half_extents(vars[vi])
+						foot = (rv.x + rv.z) * 0.35 * s
+					if foot > 0.0:
+						var hm := by + 0.05
+						for k2 in 6:
+							var a2 := TAU * k2 / 6.0
+							hm = minf(hm, height(x + cos(a2) * foot, z + sin(a2) * foot))
+						o.y = hm - 0.05
+					# плоские мелочи ложатся по склону
+					if kind in HUG:
+						var nrm := normal_at(x, z)
+						if nrm.y < 0.999:
+							b = Basis(Quaternion(Vector3.UP, nrm)) * b
+					var fall_len := 0.0
+					if kind == "fallen0" or kind == "fallen1":
+						var fv: Array = vars[vi]
+						fall_len = float(fv[1]) * s
+						var ax0: Vector3 = b.x.normalized()
+						var x0f: float = float(fv[4]) * s
+						var pr := o + ax0 * x0f
+						var pt := o + ax0 * (x0f + fall_len)
+						if not _occ_free_line(pr, pt, float(fv[2]) * s + 0.3):
+							continue
+						var hr := height(pr.x, pr.z)
+						var ht := height(pt.x, pt.z)
+						b = Basis(ax0.cross(Vector3.UP).normalized(), atan2(ht - hr, fall_len)) * b
+						o.y = hr - 0.05
+					elif kind == "mosslog":
+						var hl: float = float(vars[vi][1]) * 0.5 * s
+						var axm: Vector3 = b.x.normalized()
+						if not _occ_free_line(o - axm * hl, o + axm * hl, float(vars[vi][2]) * s + 0.3):
+							continue
+						var ha := height(o.x - axm.x * hl, o.z - axm.z * hl)
+						var hb2 := height(o.x + axm.x * hl, o.z + axm.z * hl)
+						b = Basis(axm.cross(Vector3.UP).normalized(), atan2(hb2 - ha, hl * 2.0)) * b
+						o.y = (ha + hb2) * 0.5 - 0.08
+					elif occ_r > 0.0:
+						if not _occ_free(x, z, occ_r):
+							continue
+						_occ_add(x, z, occ_r)
+					per_var[vi].append(Transform3D(b, o))
+					if kind in ROCKISH:
+						# камень — твёрдый купол: на него можно встать или залезть
+						var rsc: Vector3 = _rock_half_extents(vars[vi])
+						var hr2: float = (rsc.x + rsc.z) * 0.6 * s
+						var ht2: float = rsc.y * 0.9 * b.y.length()
+						if ht2 > 0.12:
+							_add_solid([0, o, Vector3.ZERO, hr2, ht2])
+						# высокий камень (выше пояса) — преграда для людей и зверей; низкий можно перешагнуть
+						if ht2 > 0.85:
+							_add_blocker(o.x, o.z, maxf(hr2 * 0.96 + 0.12, 0.55))
+					elif kind == "stump":
+						_add_solid([2, o, Vector3.ZERO, 0.45 * s, 0.75 * s])
+						_add_seat(Vector3(x, height(x, z) + 0.7 * s, z), rng.randf() * TAU)
+					elif kind == "stump_rot" or kind == "stump_mush":
+						var sh: float = float(vars[vi][1]) * s
+						_add_solid([2, o, Vector3.ZERO, 0.42 * s, sh])
+						_add_seat(Vector3(x, height(x, z) + sh - 0.05, z), rng.randf() * TAU)
+					elif kind == "mosslog":
+						# колода: по ней можно пройти и на неё сесть
+						var xl := Transform3D(b, o)
+						var hl2: float = float(vars[vi][1]) * 0.5
+						var rl: float = float(vars[vi][2])
+						var la := xl * Vector3(-hl2, rl * 0.8, 0)
+						var lb := xl * Vector3(hl2, rl * 0.7, 0)
+						_add_solid([1, la, lb, rl * s * 0.95, 0.0])
+						_occ_add_line(la, lb, rl * s + 0.2)
+						var lm := la.lerp(lb, 0.5)
+						var axl: Vector3 = b.x.normalized()
+						_add_seat(Vector3(lm.x, solid_top(lm.x, lm.z), lm.z), atan2(axl.z, -axl.x))
+					elif fall_len > 0.0:
+						# по стволу можно пройти: две капсулы (комель толще), сиденье у комля
+						var fv2: Array = vars[vi]
+						var xf := Transform3D(b, o)
+						var r0: float = float(fv2[2]) * s
+						var yb: float = float(fv2[3])
+						var x0b: float = float(fv2[4])
+						var Lm: float = float(fv2[1])
+						var pa := xf * Vector3(x0b, yb - r0 / s * 0.2, 0)
+						var pm := xf * Vector3(x0b + Lm * 0.5, r0 / s * 0.9 + 0.08 - r0 / s * 0.2, 0)
+						var pe := xf * Vector3(x0b + Lm * 0.85, 0.12, 0)
+						_add_solid([1, pa, pm, r0 * 0.95, 0.0])
+						_add_solid([1, pm, pe, r0 * 0.55, 0.0])
+						_occ_add_line(pa, pe, r0 + 0.2)
+						var ax: Vector3 = b.x.normalized()
+						_add_blocker(pa.x - ax.x * 0.3, pa.z - ax.z * 0.3, 1.0 if kind == "fallen0" else 0.5)
+						var ps := xf * Vector3(x0b + Lm * 0.3, 0, 0)
+						_add_seat(Vector3(ps.x, solid_top(ps.x, ps.z), ps.z), atan2(ax.z, -ax.x))
+					else:
+						var br: float = BLOCK_R.get(kind, 0.0)
+						if br > 0.0 and not (kind in ["spruce", "birch"] and s < 0.5):
+							_add_blocker(x, z, br * s)
+				# мелочь у земли — не больше двух вариантов в клетке: каждый вариант это отдельные
+				# вызовы отрисовки, а различие мелких кустиков в кадре почти не видно
+				# (камни и прочее — не больше четырёх)
+				var nv: int = 2 if float(r[3]) <= 66.0 else 4
+				if pick_kind == "" and not cache_lod.has(r[0]) and vars.size() > nv:
+					for vi in range(nv, vars.size()):
+						per_var[vi % nv].append_array(per_var[vi])
+						per_var[vi] = []
+				for vi in vars.size():
+					if per_var[vi].is_empty():
 						continue
-					var ha := height(o.x - axm.x * hl, o.z - axm.z * hl)
-					var hb2 := height(o.x + axm.x * hl, o.z + axm.z * hl)
-					b = Basis(axm.cross(Vector3.UP).normalized(), atan2(hb2 - ha, hl * 2.0)) * b
-					o.y = (ha + hb2) * 0.5 - 0.08
-				elif occ_r > 0.0:
-					if not _occ_free(x, z, occ_r):
-						continue
-					_occ_add(x, z, occ_r)
-				per_var[vi].append(Transform3D(b, o))
-				if kind in ROCKISH:
-					# камень — твёрдый купол: на него можно встать или залезть
-					var rsc: Vector3 = _rock_half_extents(vars[vi])
-					var hr2: float = (rsc.x + rsc.z) * 0.6 * s
-					var ht2: float = rsc.y * 0.9 * b.y.length()
-					if ht2 > 0.12:
-						_add_solid([0, o, Vector3.ZERO, hr2, ht2])
-					# высокий камень (выше пояса) — преграда для людей и зверей; низкий можно перешагнуть
-					if ht2 > 0.85:
-						_add_blocker(o.x, o.z, maxf(hr2 * 0.96 + 0.12, 0.55))
-				elif kind == "stump":
-					_add_solid([2, o, Vector3.ZERO, 0.45 * s, 0.75 * s])
-					_add_seat(Vector3(x, height(x, z) + 0.7 * s, z), rng.randf() * TAU)
-				elif kind == "stump_rot" or kind == "stump_mush":
-					var sh: float = float(vars[vi][1]) * s
-					_add_solid([2, o, Vector3.ZERO, 0.42 * s, sh])
-					_add_seat(Vector3(x, height(x, z) + sh - 0.05, z), rng.randf() * TAU)
-				elif kind == "mosslog":
-					# колода: по ней можно пройти и на неё сесть
-					var xl := Transform3D(b, o)
-					var hl2: float = float(vars[vi][1]) * 0.5
-					var rl: float = float(vars[vi][2])
-					var la := xl * Vector3(-hl2, rl * 0.8, 0)
-					var lb := xl * Vector3(hl2, rl * 0.7, 0)
-					_add_solid([1, la, lb, rl * s * 0.95, 0.0])
-					_occ_add_line(la, lb, rl * s + 0.2)
-					var lm := la.lerp(lb, 0.5)
-					var axl: Vector3 = b.x.normalized()
-					_add_seat(Vector3(lm.x, solid_top(lm.x, lm.z), lm.z), atan2(axl.z, -axl.x))
-				elif fall_len > 0.0:
-					# по стволу можно пройти: две капсулы (комель толще), сиденье у комля
-					var fv2: Array = vars[vi]
-					var xf := Transform3D(b, o)
-					var r0: float = float(fv2[2]) * s
-					var yb: float = float(fv2[3])
-					var x0b: float = float(fv2[4])
-					var Lm: float = float(fv2[1])
-					var pa := xf * Vector3(x0b, yb - r0 / s * 0.2, 0)
-					var pm := xf * Vector3(x0b + Lm * 0.5, r0 / s * 0.9 + 0.08 - r0 / s * 0.2, 0)
-					var pe := xf * Vector3(x0b + Lm * 0.85, 0.12, 0)
-					_add_solid([1, pa, pm, r0 * 0.95, 0.0])
-					_add_solid([1, pm, pe, r0 * 0.55, 0.0])
-					_occ_add_line(pa, pe, r0 + 0.2)
-					var ax: Vector3 = b.x.normalized()
-					_add_blocker(pa.x - ax.x * 0.3, pa.z - ax.z * 0.3, 1.0 if kind == "fallen0" else 0.5)
-					var ps := xf * Vector3(x0b + Lm * 0.3, 0, 0)
-					_add_seat(Vector3(ps.x, solid_top(ps.x, ps.z), ps.z), atan2(ax.z, -ax.x))
-				else:
-					var br: float = BLOCK_R.get(kind, 0.0)
-					if br > 0.0 and not (kind in ["spruce", "birch"] and s < 0.5):
-						_add_blocker(x, z, br * s)
-			# мелочь у земли — не больше двух вариантов в клетке: каждый вариант это отдельные
-			# вызовы отрисовки, а различие мелких кустиков в кадре почти не видно
-			# (камни и прочее — не больше четырёх)
-			var nv: int = 2 if float(r[3]) <= 66.0 else 4
-			if pick_kind == "" and not cache_lod.has(r[0]) and vars.size() > nv:
-				for vi in range(nv, vars.size()):
-					per_var[vi % nv].append_array(per_var[vi])
-					per_var[vi] = []
-			for vi in vars.size():
-				if per_var[vi].is_empty():
-					continue
-				var is_tree: bool = cache_lod.has(r[0])
-				# мелочь — клетками 32 м (лучше отсекается камерой), деревья — 64 м (меньше вызовов)
-				var fine: bool = true
-				# мелочь у земли (дальность по правилу до 66 м) тает к 44 м: дальше её не разглядеть,
-				# а при низкой камере там уже дымка; так в кадре вдвое меньше клеток мелочи
-				# всё остальное тает к 95 м — там уже сплошная дымка (fog_depth_end ≤ 100)
-				# кусты и стланик (до 85 м) — к 62 м
-				var far: float = minf(float(r[3]), 125.0) if is_tree else (minf(float(r[3]), 95.0) if float(r[3]) > 85.0 else (minf(float(r[3]), 62.0) if float(r[3]) > 66.0 else minf(float(r[3]), 44.0)))
-				for xs: Array in _split_cell(per_var[vi], x0, z0, fine):
-					var mm := _vis_multimesh(cache_lod[r[0]][vi][0] if is_tree else vars[vi][0], xs, far, is_tree)
-					var mmi := MultiMeshInstance3D.new()
-					mmi.multimesh = mm
-					# клетка видна, пока хоть один её экземпляр может быть виден; каждый экземпляр
-					# растворяется сам по своей дальности (шейдер), поэтому клетки не «щёлкают»
-					mmi.visibility_range_end = far + (34.0 if is_tree else (23.0 if fine else 46.0))
-					# тени только у крупного (деревья, валуны, стволы); мелочь без теней — вдвое меньше вызовов
-					# у деревьев тень бросает детальная ближняя модель (_update_near), дальняя — нет:
-					# дальше NEAR_R теней всё равно нет (directional_shadow_max_distance)
-					var shadow: bool = r[4] and float(r[3]) > 80.0 and not is_tree
-					mmi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON if shadow else GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-					add_child(mmi)
-					_place_cell_records(mm, xs, r, vi, vars, is_tree, pick_kind)
-			# Каждая группа вида/чанка отдаёт кадр; иначе один чанк с десятками
-			# видов растений надолго блокирует главный поток даже при async _ready().
-			await get_tree().process_frame
+					var is_tree: bool = cache_lod.has(r[0])
+					# мелочь — клетками 32 м (лучше отсекается камерой), деревья — 64 м (меньше вызовов)
+					var fine: bool = true
+					# мелочь у земли (дальность по правилу до 66 м) тает к 44 м: дальше её не разглядеть,
+					# а при низкой камере там уже дымка; так в кадре вдвое меньше клеток мелочи
+					# всё остальное тает к 95 м — там уже сплошная дымка (fog_depth_end ≤ 100)
+					# кусты и стланик (до 85 м) — к 62 м
+					var far: float = minf(float(r[3]), 125.0) if is_tree else (minf(float(r[3]), 95.0) if float(r[3]) > 85.0 else (minf(float(r[3]), 62.0) if float(r[3]) > 66.0 else minf(float(r[3]), 44.0)))
+					for xs: Array in _split_cell(per_var[vi], x0, z0, fine):
+						var mm := _vis_multimesh(cache_lod[r[0]][vi][0] if is_tree else vars[vi][0], xs, far, is_tree)
+						var mmi := MultiMeshInstance3D.new()
+						mmi.multimesh = mm
+						# клетка видна, пока хоть один её экземпляр может быть виден; каждый экземпляр
+						# растворяется сам по своей дальности (шейдер), поэтому клетки не «щёлкают»
+						mmi.visibility_range_end = far + (34.0 if is_tree else (23.0 if fine else 46.0))
+						# тени только у крупного (деревья, валуны, стволы); мелочь без теней — вдвое меньше вызовов
+						# у деревьев тень бросает детальная ближняя модель (_update_near), дальняя — нет:
+						# дальше NEAR_R теней всё равно нет (directional_shadow_max_distance)
+						var shadow: bool = r[4] and float(r[3]) > 80.0 and not is_tree
+						mmi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON if shadow else GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+						add_child(mmi)
+						_place_cell_records(mm, xs, r, vi, vars, is_tree, pick_kind)
+				# Каждая группа вида/чанка отдаёт кадр; иначе один чанк с десятками
+				# видов растений надолго блокирует главный поток даже при async _ready().
+				await get_tree().process_frame
 
 ## Разбить экземпляры клетки 64 м на четыре клетки 32 м (fine) или оставить одной группой.
 func _split_cell(xs: Array, x0: float, z0: float, fine: bool) -> Array:
@@ -2299,7 +2259,7 @@ func _core_setup(_ui: CanvasLayer) -> void:
 		st.set("main", self)
 		st.set("mode", OS.get_environment("SAVE_TEST"))
 		add_child(st)
-	if DisplayServer.get_name() == "headless" or OS.get_environment("SHOTS") != "" or OS.get_environment("UI_SHOTS") != "" or auto != "":
+	if DisplayServer.get_name() == "headless" or OS.get_environment("SHOTS") != "" or OS.get_environment("COLONY_SHOTS") != "" or OS.get_environment("COLONY_TEST") != "" or OS.get_environment("UI_SHOTS") != "" or auto != "":
 		if auto == "load":
 			saver.load_game()
 		saver.enabled = auto != ""
@@ -2356,7 +2316,7 @@ func to_save() -> Dictionary:
 		"belt": (t.belt as Array).duplicate() if t != null else [], "lamp_h": _lamp_h,
 		"back": String(t.get("back")) if t != null and t.get("back") != null else "",
 		"logs": int(t.get("logs")) if t != null and t.get("logs") != null else 0,
-		"bundle": _bundle_save(t), "world_chunks": chunk_stream.to_save() if chunk_stream != null else {}}
+		"bundle": _bundle_save(t)}
 
 ## Связка брёвен на верёвке (hero_tools.bundle, log_bundle.gd): брёвна [{r, L, bark}].
 func _bundle_save(t: Node) -> Array:
@@ -2371,8 +2331,6 @@ func _bundle_save(t: Node) -> Array:
 func from_save(d: Dictionary) -> void:
 	var SV = preload("res://scripts/save.gd")
 	map_seed = int(d.get("map_seed", map_seed))
-	if chunk_stream != null:
-		chunk_stream.from_save(d.get("world_chunks", {}))
 	explored_map = d.get("explored_map", {}).duplicate(true)
 	t_hours = float(d.get("t_hours", t_hours))
 	day_count = int(d.get("day", day_count))

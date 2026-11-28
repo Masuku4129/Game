@@ -1171,20 +1171,13 @@ const MODEL_DIR := "res://models/environment/"
 ## Цвета, мазки, свет, снег, осень и растворение дают шейдеры игры (paint/*), а не текстуры GLB.
 const MODEL_KINDS := {
 	"spruce": ["taiga_spruce.glb", 6, 1.0, "bark", "spruce"],
-	"fir": ["taiga_fir.glb", 5, 1.0, "bark", "fir"],
+	"fir": ["taiga_spruce.glb", 5, 1.3, "bark", "fir"],
 	"pine": ["taiga_pine.glb", 5, 1.0, "bark_pine", "pine"],
 	"cedar": ["taiga_cedar.glb", 5, 1.0, "bark", "cedar"],
 	"larch": ["taiga_larch.glb", 5, 1.0, "bark", "larch"],
 	"birch": ["taiga_birch.glb", 5, 1.1, "bark_birch", "birch"],
 	"aspen": ["taiga_aspen.glb", 5, 1.0, "bark_aspen", "leaf"],
 	"alder": ["taiga_alder.glb", 5, 0.55, "bark", "alder"],
-	"willow": ["taiga_willow.glb", 5, 0.85, "bark", "willow"],
-	"rowan": ["taiga_rowan.glb", 5, 0.85, "bark", "rowan"],
-	"juniper": ["taiga_juniper.glb", 5, 0.85, "bark", "juniper"],
-	"hazel": ["taiga_hazel.glb", 4, 0.78, "bark", "bush"],
-	"dogrose": ["taiga_dogrose.glb", 4, 0.82, "bark", "rose"],
-	"dead_birch": ["taiga_dead_birch.glb", 4, 1.0, "bark_birch", "moss"],
-	"sedge": ["taiga_sedge.glb", 4, 0.72, "bark", "reed_glb"],
 	"bush": ["taiga_bush.glb", 5, 0.75, "bark", "bush"],
 	"fern": ["taiga_fern.glb", 4, 0.85, "bark", "fern"],
 	"reeds": ["taiga_reed.glb", 4, 0.8, "bark", "reed_glb"],
@@ -1225,18 +1218,11 @@ func model_variants(kind: String) -> Array:
 		out.append(v)
 	return out
 
-func _collect_meshes(n: Node, out: Array, parent_xf: Transform3D = Transform3D.IDENTITY) -> void:
-	# GLB files often nest meshes under transform-only nodes. Preserve the full
-	# hierarchy; reading MeshInstance3D.transform alone silently drops parent
-	# rotations, offsets and scale, collapsing otherwise valid authored assets.
-	var local_xf := Transform3D.IDENTITY
-	if n is Node3D:
-		local_xf = (n as Node3D).transform
-	var world_xf := parent_xf * local_xf
+func _collect_meshes(n: Node, out: Array) -> void:
 	if n is MeshInstance3D and (n as MeshInstance3D).mesh != null:
-		out.append([n, world_xf])
-	for child in n.get_children():
-		_collect_meshes(child, out, world_xf)
+		out.append(n)
+	for c in n.get_children():
+		_collect_meshes(c, out)
 
 ## Одна модель: свой масштаб, наклон и скрутка на вариант; материал по имени меша
 ## (bark / foliage / cut / rock). COLOR.r — оттенок «от тени к свету», COLOR.g — осенняя доля.
@@ -1255,16 +1241,10 @@ func model(file: String, seed_v: int, base_scale: float, bark_mat: String, folia
 	var twist := R(-0.35, 0.35)
 	var out := ArrayMesh.new()
 	var top := 0.0
-	for entry in src:
-		var mi := entry[0] as MeshInstance3D
-		var xf: Transform3D = entry[1]
-		var nm := String(mi.name).to_lower()
-		var msh: Mesh = mi.mesh
-		# Разбиваем одинаковые GLB-кроны по силуэту: лёгкий изгиб и асимметрия
-		# применяются только к листве, не деформируя стволы и ветви.
-		var crown_phase := rng.randf_range(0.0, TAU)
-		var crown_amp := rng.randf_range(0.045, 0.13)
-		var crown_depth := maxf(msh.get_aabb().size.y, 0.1)
+	for mi in src:
+		var xf: Transform3D = (mi as MeshInstance3D).transform
+		var nm := String((mi as MeshInstance3D).name).to_lower()
+		var msh: Mesh = (mi as MeshInstance3D).mesh
 		for s in msh.get_surface_count():
 			var arr := msh.surface_get_arrays(s)
 			var verts: PackedVector3Array = arr[Mesh.ARRAY_VERTEX]
@@ -1279,12 +1259,6 @@ func model(file: String, seed_v: int, base_scale: float, bark_mat: String, folia
 				q.x += lean.x * q.y
 				q.z += lean.y * q.y
 				q = Vector3(q.x * sx, q.y * sy, q.z * sx)
-				if nm.begins_with("foliage"):
-					var crown_k := clampf(q.y / (crown_depth * sy), 0.0, 1.0)
-					var angle := atan2(q.z, q.x)
-					var lobes := sin(angle * 3.0 + crown_phase) * 0.55 + sin(angle * 5.0 - crown_phase * 0.7) * 0.25
-					q.x += sin(q.y * 1.35 + crown_phase) * crown_amp * crown_k + cos(angle * 2.0 + crown_phase) * crown_amp * lobes * crown_k
-					q.z += cos(q.y * 1.15 - crown_phase) * crown_amp * 0.65 * crown_k + sin(angle * 4.0 + crown_phase) * crown_amp * 0.35 * crown_k
 				verts[i] = q
 				s_top = maxf(s_top, q.y)
 				# Нормаль должна пройти обратное транспонирование всей деформации:

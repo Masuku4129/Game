@@ -127,24 +127,25 @@ func _rebuild(c: Vector3) -> void:
 	var cj := int(floor((c.z + half) / CELL))
 	var cnt := 0
 	for jz in range(cj - n, cj + n + 1):
-		if cnt >= 9000:
-			break
 		for jx in range(ci - n, ci + n + 1):
 			if jx < 0 or jz < 0 or jx >= dim or jz >= dim:
 				continue
 			if mask[jz * dim + jx] != 1:
 				continue
-			# Край области подсвечиваем ярче; соседние клетки проверяем без
-			# временного массива направлений на каждый квадрат.
-			var brim := jx == 0 or jz == 0 or jx == dim - 1 or jz == dim - 1
-			if not brim:
-				var row := jz * dim
-				brim = mask[row + jx - 1] == 0 or mask[row + jx + 1] == 0 or mask[row - dim + jx] == 0 or mask[row + dim + jx] == 0
+			# край области подсвечиваем ярче — видно границу
+			var brim := false
+			for d: Vector2i in [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]:
+				var ax := jx + d.x
+				var az := jz + d.y
+				if ax < 0 or az < 0 or ax >= dim or az >= dim or mask[az * dim + ax] != 1:
+					brim = true
 			var x0 := -half + float(jx) * CELL
 			var z0 := -half + float(jz) * CELL
 			st.set_color(edge if brim else col)
 			_quad(st, x0, z0)
 			cnt += 1
+			if cnt > 9000:
+				break
 	overlay.mesh = st.commit()
 
 func _quad(st: SurfaceTool, x0: float, z0: float) -> void:

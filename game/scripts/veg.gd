@@ -418,7 +418,7 @@ func grass_patch(seed_v: int) -> Array:
 	rng.seed = seed_v
 	var s := Surf.new()
 	var tone := R(0.85, 1.1)
-	for i in 60:
+	for i in 220:
 		var a := R(0, TAU)
 		var r := sqrt(R(0.0, 1.0)) * 0.82
 		var base := Vector3(cos(a) * r, 0, sin(a) * r)

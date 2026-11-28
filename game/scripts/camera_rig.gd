@@ -1,12 +1,13 @@
 extends Node3D
-## Fixed elevated 45-degree camera: follows the player with stable framing.
-## Camera rotation, pitch and zoom are intentionally locked.
+## Изометрическая камера под 45°: следует за героем; палец вне джойстика вращает,
+## два пальца приближают и вращают; вверх-вниз — наклон 25–45°.
 
-const PITCH := 45.0
-const DISTANCE := 12.0
-const FOLLOW_XZ := 9.0
-const FOLLOW_Y := 3.0
+var pitch := 45.0
+var distance := 12.0
 var target: Node3D
+var touches := {}
+var last_pinch := 0.0
+var last_angle := 0.0
 var cam := Camera3D.new()
 
 func _ready() -> void:
@@ -18,12 +19,44 @@ func _ready() -> void:
 
 func _process(delta: float) -> void:
 	if target != null:
+		# по горизонтали — плотно за героем, по высоте — мягко, чтобы не дёргало на кочках и прыжках
 		var tp: Vector3 = target.position
-		position.x = lerpf(position.x, tp.x, 1.0 - exp(-FOLLOW_XZ * delta))
-		position.z = lerpf(position.z, tp.z, 1.0 - exp(-FOLLOW_XZ * delta))
-		position.y = lerpf(position.y, tp.y, 1.0 - exp(-FOLLOW_Y * delta))
-	# Fixed camera orientation; update only the rig position each frame.
+		position.x = lerpf(position.x, tp.x, 1.0 - exp(-9.0 * delta))
+		position.z = lerpf(position.z, tp.z, 1.0 - exp(-9.0 * delta))
+		position.y = lerpf(position.y, tp.y, 1.0 - exp(-3.0 * delta))
+	_update()
 
 func _update() -> void:
-	cam.position = Vector3(0, sin(deg_to_rad(PITCH)) * DISTANCE, cos(deg_to_rad(PITCH)) * DISTANCE)
+	cam.position = Vector3(0, sin(deg_to_rad(pitch)) * distance, cos(deg_to_rad(pitch)) * distance)
 	cam.look_at(global_position + Vector3(0, 1.0, 0), Vector3.UP)
+
+func _unhandled_input(e: InputEvent) -> void:
+	if e is InputEventScreenTouch:
+		if e.pressed:
+			touches[e.index] = e.position
+		else:
+			touches.erase(e.index)
+		if touches.size() == 2:
+			var p: Array = touches.values()
+			last_pinch = p[0].distance_to(p[1])
+			last_angle = (p[1] - p[0]).angle()
+	elif e is InputEventScreenDrag:
+		touches[e.index] = e.position
+		if touches.size() == 1:
+			rotation.y -= e.relative.x * 0.006
+			# вверх-вниз пальцем — наклон камеры от 25° до 45°
+			pitch = clampf(pitch + e.relative.y * 0.08, 25.0, 45.0)
+		elif touches.size() == 2:
+			var p: Array = touches.values()
+			var d: float = p[0].distance_to(p[1])
+			var a: float = (p[1] - p[0]).angle()
+			if last_pinch > 0.0:
+				distance = clampf(distance * last_pinch / d, 6.0, 16.0)
+			rotation.y -= a - last_angle
+			last_pinch = d
+			last_angle = a
+	elif e is InputEventMouseButton and e.pressed:
+		if e.button_index == MOUSE_BUTTON_WHEEL_UP:
+			distance = maxf(6.0, distance * 0.9)
+		elif e.button_index == MOUSE_BUTTON_WHEEL_DOWN:
+			distance = minf(16.0, distance * 1.1)
