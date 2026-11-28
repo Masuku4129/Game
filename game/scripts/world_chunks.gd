@@ -34,7 +34,7 @@ var _far_mesh_cache: Dictionary = {}
 var stream_water_material: ShaderMaterial
 var _water_state_clock := 0.0
 var _chunk_weather_clock := 0.0
-var _last_chunk_weather_values: Dictionary = {}
+var _weather_material_cache: Dictionary = {}
 const STREAM_TREE_KINDS := ["spruce", "pine", "birch", "larch", "aspen", "fir", "cedar", "alder", "willow", "rowan"]
 
 func _process(delta: float) -> void:
@@ -164,14 +164,17 @@ func _sync_chunk_weather() -> void:
 		"freeze": freeze_now, "rain": rain_now,
 		"snow_m": snow_depth_now, "mud_m": mud_depth_now
 	}
-	# Weather can tick often, but material writes are only needed when shader
-	# inputs actually change. Avoid touching every streamed material on steady weather.
-	if values == _last_chunk_weather_values:
-		return
-		_last_chunk_weather_values = values.duplicate()
+	# Update only materials whose parameters changed. A per-material cache also
+	# ensures newly streamed chunks receive current weather immediately.
 	for material: ShaderMaterial in terrain_materials.values():
+		var material_id := material.get_instance_id()
+		if _weather_material_cache.get(material_id, {}) == values:
+			continue
 		for parameter: String in values:
 			material.set_shader_parameter(parameter, values[parameter])
+		_weather_material_cache.clear()
+		for material: ShaderMaterial in terrain_materials.values():
+			_weather_material_cache[material.get_instance_id()] = values.duplicate()
 
 func _key(c: Vector2i) -> String:
 	return "%d,%d" % [c.x, c.y]
