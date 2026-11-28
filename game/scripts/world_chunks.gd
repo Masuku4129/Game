@@ -1147,13 +1147,15 @@ func _remove_tree_cover(k: String) -> bool:
 	tree_mmis.erase(k)
 	blocker_records.erase(k)
 	return true
-	# Кэш near_mesh оставляем: другие чанки могут использовать те же варианты GLB.
 
 func _remove_terrain_chunk(k: String) -> void:
 	if not terrain_nodes.has(k):
 		return
 	var node: Node = terrain_nodes[k]
 	terrain_nodes.erase(k)
+	var old_material: ShaderMaterial = terrain_materials.get(k)
+	if old_material != null:
+		_weather_material_cache.erase(old_material.get_instance_id())
 	terrain_materials.erase(k)
 	if is_instance_valid(node):
 		node.queue_free()
