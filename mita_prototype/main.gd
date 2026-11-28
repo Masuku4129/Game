@@ -90,13 +90,14 @@ func _input(event):
 			joystick_center = event.position
 			joystick_active = true
 			_update_stick(event.position)
-		elif event is InputEventScreenDrag and event.index == joystick_touch:
-			_update_stick(event.position)
-		elif event is InputEventScreenTouch and not event.pressed and event.index == joystick_touch:
+		elif not event.pressed and event.index == joystick_touch:
 			joystick_touch = -1
 			joystick_active = false
 			move_vector = Vector2.ZERO
 			stick.position = Vector2(72, -128)
+			player.set_move(Vector2.ZERO)
+		elif event is InputEventScreenDrag and event.index == joystick_touch:
+			_update_stick(event.position)
 		elif event is InputEventKey:
 			if event.keycode == KEY_SHIFT:
 				player.set_running(event.pressed)
