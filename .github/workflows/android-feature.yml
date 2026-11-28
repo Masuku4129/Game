@@ -77,7 +77,7 @@ jobs:
       - name: Сценарий: исходники упаковываются для пользователя
         continue-on-error: true
         run: |
-          zip -qr build/taiga-project.zip game README.md ART_DIRECTION.md CHANGELOG.md WORLD_SURVIVAL_OVERHAUL_2026-11-27.md .github/workflows
+          test -s PROJECT_RULES.md && test -s VERSION_CONTROL.md && zip -qr build/taiga-project.zip game README.md PROJECT_RULES.md VERSION_CONTROL.md ART_DIRECTION.md CHANGELOG.md WORLD_SURVIVAL_OVERHAUL_2026-11-27.md .github/workflows
           test -s build/taiga-project.zip
       - uses: actions/upload-artifact@v4
         if: always()
