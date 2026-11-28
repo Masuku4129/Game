@@ -1187,6 +1187,11 @@ func _remove_tree_cover(k: String) -> bool:
 	var meshes: Array = tree_mmis.get(k, [])
 	if meshes.is_empty():
 		return false
+	var chunk_coords: PackedStringArray = k.split(",")
+	var chunk_x := int(chunk_coords[0])
+	var chunk_z := int(chunk_coords[1])
+	var x0 := float(chunk_x) * CHUNK_SIZE
+	var z0 := float(chunk_z) * CHUNK_SIZE
 	for node: Node in tree_nodes.get(k, []):
 		if is_instance_valid(node):
 			node.queue_free()
@@ -1205,27 +1210,24 @@ func _remove_tree_cover(k: String) -> bool:
 					entries.remove_at(i)
 			if entries.is_empty():
 				main.tree_grid.erase(grid_key)
-		# Tree-derived harvest spots share the 8m resource grid; prune only this chunk.
-		var chunk_coords: PackedStringArray = k.split(",")
-		var chunk_x := int(chunk_coords[0])
-		var chunk_z := int(chunk_coords[1])
-		var resource_x0 := floori((float(chunk_x) * CHUNK_SIZE - 8.0) / 8.0)
-		var resource_x1 := floori((float(chunk_x + 1) * CHUNK_SIZE + 8.0) / 8.0)
-		var resource_z0 := floori((float(chunk_z) * CHUNK_SIZE - 8.0) / 8.0)
-		var resource_z1 := floori((float(chunk_z + 1) * CHUNK_SIZE + 8.0) / 8.0)
-		for rx in range(resource_x0, resource_x1 + 1):
-			for rz in range(resource_z0, resource_z1 + 1):
-				var resource_cell := Vector2i(rx, rz)
-				if not main.res_spots.has(resource_cell):
-					continue
-				var spots: Array = main.res_spots[resource_cell]
-				for spot_i in range(spots.size() - 1, -1, -1):
-					var spot_pos: Vector3 = spots[spot_i][0]
-					if floori(spot_pos.x / CHUNK_SIZE) == chunk_x and floori(spot_pos.z / CHUNK_SIZE) == chunk_z:
+	# Tree-derived harvest spots share the 8m grid; prune this chunk once.
+	var rx0 := floori((x0 - 8.0) / 8.0)
+	var rx1 := floori((x0 + CHUNK_SIZE + 8.0) / 8.0)
+	var rz0 := floori((z0 - 8.0) / 8.0)
+	var rz1 := floori((z0 + CHUNK_SIZE + 8.0) / 8.0)
+	for rx in range(rx0, rx1 + 1):
+		for rz in range(rz0, rz1 + 1):
+			var resource_cell := Vector2i(rx, rz)
+			if not main.res_spots.has(resource_cell):
+				continue
+			var spots: Array = main.res_spots[resource_cell]
+			for spot_i in range(spots.size() - 1, -1, -1):
+				var spot_pos: Vector3 = spots[spot_i][0]
+				if floori(spot_pos.x / CHUNK_SIZE) == chunk_x and floori(spot_pos.z / CHUNK_SIZE) == chunk_z:
 					spots.remove_at(spot_i)
-				if spots.is_empty():
-					main.res_spots.erase(resource_cell)
-	# Удаляем только блокираторы, поставленные этим чанком.
+			if spots.is_empty():
+				main.res_spots.erase(resource_cell)
+	# Remove only blockers registered by this chunk.
 	for item: Array in blocker_records.get(k, []):
 		var grid_key: Vector2i = item[0]
 		var obstacle: Vector3 = item[1]
