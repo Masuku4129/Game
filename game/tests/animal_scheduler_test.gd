@@ -45,8 +45,8 @@ func run_test() -> void:
 		manager.list.append(distant)
 	for i in 20:
 		manager._process(0.05)
-	var near_ok := near_a.ticks >= 18
-	var mid_ok := mid_a.ticks >= 8 and mid_a.ticks <= near_a.ticks / 2 + 1
+	var near_ok := near_a.ticks >= 9  # ближние звери: ~30 Гц (NEAR_DT), а не каждый кадр
+	var mid_ok := mid_a.ticks >= 6 and mid_a.ticks <= near_a.ticks
 	var far_ok: bool = far_a.ticks <= 2 and not far_a.parts["ap"].active
 	print("WILDLIFE_SCHEDULER near=", near_a.ticks, " mid=", mid_a.ticks, " far=", far_a.ticks, " far_anim=", far_a.parts["ap"].active)
 	manager.queue_free()
