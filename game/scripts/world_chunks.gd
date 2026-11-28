@@ -309,6 +309,21 @@ func mark_explored(world_position: Vector3) -> void:
 	rec["explored"] = true
 	persistent[k] = rec
 
+func save_map_cells(chunk_coord: Vector2i, cells: Dictionary) -> void:
+	# Batch exploration writes use the map grid's 16m cell keys (x:z).
+	for cell_key: String in cells:
+		var parts := cell_key.split(":")
+		if parts.size() != 2:
+			continue
+		var grid_x := int(parts[0])
+		var grid_z := int(parts[1])
+		var world_x := (float(grid_x) + 0.5) * MAP_SAMPLE_STEP
+		var world_z := (float(grid_z) + 0.5) * MAP_SAMPLE_STEP
+		var actual_chunk := Vector2i(floori(world_x / CHUNK_SIZE), floori(world_z / CHUNK_SIZE))
+		if actual_chunk != chunk_coord:
+			continue
+			save_map_cell(world_x, world_z, cell_key, cells[cell_key])
+
 func save_map_cell(world_x: float, world_z: float, cell_key: String, data: Dictionary) -> void:
 	var chunk_coord := Vector2i(floori(world_x / CHUNK_SIZE), floori(world_z / CHUNK_SIZE))
 	var k := _key(chunk_coord)
