@@ -38,6 +38,7 @@ var _water_state_clock := 0.0
 var _chunk_weather_clock := 0.0
 var _weather_material_cache: Dictionary = {}
 var _resource_state_cache: Dictionary = {}
+var _chunk_stage_defer_toggle := false
 const STREAM_TREE_KINDS := ["spruce", "pine", "birch", "larch", "aspen", "fir", "cedar", "alder", "willow", "rowan"]
 
 func _process(delta: float) -> void:
@@ -249,8 +250,12 @@ func _process_queue(delta: float) -> void:
 	# At most one heavy visual generation stage per frame, preserving detail.
 	# If the previous frame exceeded ~28ms, defer scenery work to avoid piling
 	# another generation spike onto a slow mobile frame; no content is discarded.
-	if delta > 0.035 or _building_chunk.is_empty():
+	if _building_chunk.is_empty():
 		return
+	if delta > 0.035:
+		_chunk_stage_defer_toggle = not _chunk_stage_defer_toggle
+		if _chunk_stage_defer_toggle:
+			return
 	var coord: Vector2i = _building_chunk["coord"]
 	match _build_stage:
 		0:
