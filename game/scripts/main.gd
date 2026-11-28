@@ -1853,15 +1853,20 @@ func move_factor() -> float:
 
 const BLOCK_R := {"fungus_snag": 0.22, "birch_dead": 0.2, "snag": 0.25, "snag_b": 0.25, "cherry": 0.15, "fir": 0.36, "cedar": 0.38, "rowan": 0.2, "spruce": 0.4, "pine": 0.32, "birch": 0.28, "bare": 0.3, "spruce_dead": 0.3, "stump": 0.45, "rock": 0.5, "boulder": 0.6, "larch": 0.32, "aspen": 0.26}
 
+const START_WORLD_CHUNK_SEED := 20261129
+
 func _chunk_seed(cx: int, cz: int) -> int:
-	# Независимое перемешивание координат: соседние чанки не наследуют простую
-	# линейную последовательность, а новый seed карты меняет весь рисунок леса.
+	# The world-origin grass/stream cell alone receives a fresh layout seed.
+	if cx == 0 and cz == 0:
+		return START_WORLD_CHUNK_SEED
+	return _base_chunk_seed(cx, cz)
+
+func _base_chunk_seed(cx: int, cz: int) -> int:
+	# Keep the original coordinate hash for every other cell/chunk.
 	const MOD := 2147483647
-	# Ревизия полностью меняет размещение растительности в каждом чанке,
-	# сохраняя при этом высоту рельефа и общий seed мира.
 	var h := posmod(map_seed, MOD)
 	h = posmod(h + posmod(cx, MOD) * 73856093, MOD)
-	h = posmod(h + posmod(cz, MOD) * 19349663, MOD)
+	h = posmod(h + posmod(cz, MOD) * 193496663, MOD)
 	h = posmod((h ^ (h >> 13)) * 1274126177, MOD)
 	h = posmod((h ^ (h >> 16)) * 1597334677, MOD)
 	return maxi(1, h)
@@ -1977,7 +1982,7 @@ func _scatter_all() -> void:
 			var rng := RandomNumberGenerator.new()
 			# Fresh layout is scoped to the start cell only; neighboring cells
 			# retain their previous deterministic seeds and vegetation patterns.
-			rng.seed = 20261129 if cx == cells / 2 and cz == cells / 2 else _chunk_seed(cx, cz)
+			rng.seed = START_WORLD_CHUNK_SEED if cx == cells / 2 and cz == cells / 2 else _base_chunk_seed(cx, cz)
 			var x0 := cx * CELL - SIZE * 0.5
 			var z0 := cz * CELL - SIZE * 0.5
 			for r in rules:
