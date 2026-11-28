@@ -535,6 +535,8 @@ func _build_bog_water(c: Vector2i, parent: Node3D) -> void:
 	var uvs := PackedVector2Array()
 	var indices := PackedInt32Array()
 	for z in range(cells):
+		if z > 0 and z % 4 == 0:
+			await get_tree().process_frame
 		for x in range(cells):
 			var wx := float(c.x) * CHUNK_SIZE + (float(x) + 0.5) * step
 			var wz := float(c.y) * CHUNK_SIZE + (float(z) + 0.5) * step
