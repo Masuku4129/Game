@@ -79,4 +79,4 @@
 - Streamed vegetation nodes are tracked directly for teardown; near-tree MultiMesh buffers avoid redundant resize/custom-data updates.
 - Structure cleanup now searches footprint-local pickup/grass cells; grass clearing uses world-space cell coordinates.
 - Starting layout seed is scoped to the origin scatter cell (4,4) and grass cell (0,0) (20261129); unaffected cells keep their original deterministic hash.
-- APK, strict parser, regression suite and main-scene smoke run still pending for this pass.
+- Strict GDScript parse, gameplay regression tests, main-scene smoke run and Android export passed in GitHub Actions run #71 (`923e838f`); APK is 44,586,112 bytes. Device installation/runtime profiling remains unperformed.
