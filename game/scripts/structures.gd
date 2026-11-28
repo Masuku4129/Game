@@ -516,13 +516,21 @@ func _clear_area(circles: Array, clear_snow: bool) -> void:
 					if Vector2(q.x - circle.x, q.z - circle.y).length() < circle.z:
 						arr.erase(it)
 						break
-	# клетки травы перестроятся без травы под постройкой
-	for k in main.grass_cells.keys():
-		var x0: float = k.x * main.GCELL - main.SIZE * 0.5
-		var z0: float = k.y * main.GCELL - main.SIZE * 0.5
-		if hi.x >= x0 and lo.x <= x0 + main.GCELL and hi.y >= z0 and lo.y <= z0 + main.GCELL:
-			main.grass_cells[k].queue_free()
-			main.grass_cells.erase(k)
+	# Grass cells use world-space grid keys; check only the footprint's neighboring cells.
+	var grass_x0 := floori(lo.x / main.GCELL) - 1
+	var grass_x1 := floori(hi.x / main.GCELL) + 1
+	var grass_z0 := floori(lo.y / main.GCELL) - 1
+	var grass_z1 := floori(hi.y / main.GCELL) + 1
+	for gx in range(grass_x0, grass_x1 + 1):
+		for gz in range(grass_z0, grass_z1 + 1):
+			var grass_key := Vector2i(gx, gz)
+			if not main.grass_cells.has(grass_key):
+				continue
+			var x0: float = float(gx) * main.GCELL
+			var z0: float = float(gz) * main.GCELL
+			if hi.x >= x0 and lo.x <= x0 + main.GCELL and hi.y >= z0 and lo.y <= z0 + main.GCELL:
+				main.grass_cells[grass_key].queue_free()
+				main.grass_cells.erase(grass_key)
 
 ## Трава здесь не растёт (под постройкой).
 func cleared(x: float, z: float) -> bool:
