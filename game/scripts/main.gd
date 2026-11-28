@@ -198,16 +198,16 @@ func _ready() -> void:
 	fps_lbl = Label.new()
 	fps_lbl.anchor_left = 0.5
 	fps_lbl.anchor_right = 0.5
-	fps_lbl.offset_left = -300.0
-	fps_lbl.offset_right = 300.0
-	fps_lbl.offset_top = 14.0
+	fps_lbl.offset_left = -360.0
+	fps_lbl.offset_right = 360.0
+	fps_lbl.offset_top = 12.0
 	fps_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	fps_lbl.add_theme_font_size_override("font_size", 24)
+	fps_lbl.add_theme_font_size_override("font_size", 18)
 	fps_lbl.add_theme_color_override("font_outline_color", Color(0, 0, 0))
 	fps_lbl.add_theme_constant_override("outline_size", 6)
 	fps_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	ui.add_child(fps_lbl)
-	fps_lbl.visible = OS.get_environment("PERF") != ""
+	fps_lbl.visible = true # Temporary diagnostic overlay for the finite-world performance build
 	flash = ColorRect.new()
 	flash.anchor_right = 1.0
 	flash.anchor_bottom = 1.0
@@ -878,7 +878,15 @@ func _process(delta: float) -> void:
 	_fps_t -= delta
 	if _fps_t <= 0.0:
 		_fps_t = 0.5
-		fps_lbl.text = "FPS %d · вызовов %d · треуг. %.1f тыс." % [Engine.get_frames_per_second(), Performance.get_monitor(Performance.RENDER_TOTAL_DRAW_CALLS_IN_FRAME), Performance.get_monitor(Performance.RENDER_TOTAL_PRIMITIVES_IN_FRAME) / 1000.0]
+		var chunk_info := "CHUNK idle · queue 0"
+		if chunk_stream != null:
+			var current_chunk: Dictionary = chunk_stream.get("_building_chunk")
+			var queue_size: int = chunk_stream.get("pending").size()
+			if not current_chunk.is_empty():
+				chunk_info = "CHUNK %s · stage %d · queue %d" % [str(current_chunk.get("coord", Vector2i.ZERO)), int(chunk_stream.get("_build_stage")), queue_size]
+			else:
+				chunk_info = "CHUNK idle · queue %d" % queue_size
+		fps_lbl.text = "FPS %d · draws %d · tris %.1fk · %s" % [Engine.get_frames_per_second(), Performance.get_monitor(Performance.RENDER_TOTAL_DRAW_CALLS_IN_FRAME), Performance.get_monitor(Performance.RENDER_TOTAL_PRIMITIVES_IN_FRAME) / 1000.0, chunk_info]
 	flash.color.a = maxf(0.0, flash.color.a - delta * 0.6)
 	if dead_t > 0.0:
 		dead_t -= delta
