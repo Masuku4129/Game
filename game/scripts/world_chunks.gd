@@ -322,7 +322,7 @@ func save_map_cells(chunk_coord: Vector2i, cells: Dictionary) -> void:
 		var actual_chunk := Vector2i(floori(world_x / CHUNK_SIZE), floori(world_z / CHUNK_SIZE))
 		if actual_chunk != chunk_coord:
 			continue
-			save_map_cell(world_x, world_z, cell_key, cells[cell_key])
+		save_map_cell(world_x, world_z, cell_key, cells[cell_key])
 
 func save_map_cell(world_x: float, world_z: float, cell_key: String, data: Dictionary) -> void:
 	var chunk_coord := Vector2i(floori(world_x / CHUNK_SIZE), floori(world_z / CHUNK_SIZE))
