@@ -109,7 +109,7 @@ func _ready() -> void:
 	await _make_terrain()
 	_make_water()
 	boot_label.text = "TAIGA\nСоздание леса и растительности…"
-	await _scatter_all()
+	_scatter_all()
 	grass_mesh_vars = [pv.tuft(1500), pv.tuft(1503, 1.3), pv.tuft(1504, 0.8)]
 	hero = preload("res://scripts/hero.gd").new()
 	hero.main = self
