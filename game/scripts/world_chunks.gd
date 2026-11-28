@@ -1105,11 +1105,10 @@ func _remove_prop_cover(k: String) -> void:
 	var chunk_z := int(coords[1])
 	var x0 := float(chunk_x) * CHUNK_SIZE
 	var z0 := float(chunk_z) * CHUNK_SIZE
-	# Free registered nodes directly; no global scene-child search per mesh.
 	for node: Node in prop_nodes.get(k, []):
 		if is_instance_valid(node):
 			node.queue_free()
-	# Query only spatial cells occupied by this chunk's generated objects.
+	# Query bounded pickup/log cells per mesh, not all global grid entries.
 	for mm: MultiMesh in meshes:
 		var gx0 := floori((x0 - 8.0) / 8.0)
 		var gx1 := floori((x0 + CHUNK_SIZE + 8.0) / 8.0)
@@ -1125,15 +1124,7 @@ func _remove_prop_cover(k: String) -> void:
 							picks.remove_at(i)
 					if picks.is_empty():
 						main.pickables.erase(cell_key)
-				if main.res_spots.has(cell_key):
-					var spots: Array = main.res_spots[cell_key]
-					for i in range(spots.size() - 1, -1, -1):
-						var p: Vector3 = spots[i][0]
-						if floori(p.x / CHUNK_SIZE) == chunk_x and floori(p.z / CHUNK_SIZE) == chunk_z:
-							spots.remove_at(i)
-					if spots.is_empty():
-						main.res_spots.erase(cell_key)
-		# Fallen-log records are keyed at 16m with a modest offset from origin.
+		# Fallen-log records are keyed at 16m and offset from the chunk origin.
 		var fx0 := floori((x0 - 12.0) / 16.0)
 		var fx1 := floori((x0 + CHUNK_SIZE + 12.0) / 16.0)
 		var fz0 := floori((z0 - 12.0) / 16.0)
@@ -1149,7 +1140,24 @@ func _remove_prop_cover(k: String) -> void:
 						fallen.remove_at(i)
 				if fallen.is_empty():
 					main.fallen_spots.erase(fallen_key)
-	# Remove blocker and solid registrations owned by this chunk.
+	# Resource spots have no MultiMesh backlink; remove this chunk's entries once.
+	var rx0 := floori((x0 - 8.0) / 8.0)
+	var rx1 := floori((x0 + CHUNK_SIZE + 8.0) / 8.0)
+	var rz0 := floori((z0 - 8.0) / 8.0)
+	var rz1 := floori((z0 + CHUNK_SIZE + 8.0) / 8.0)
+	for rx in range(rx0, rx1 + 1):
+		for rz in range(rz0, rz1 + 1):
+			var resource_cell := Vector2i(rx, rz)
+			if not main.res_spots.has(resource_cell):
+				continue
+			var spots: Array = main.res_spots[resource_cell]
+			for spot_i in range(spots.size() - 1, -1, -1):
+				var spot_pos: Vector3 = spots[spot_i][0]
+				if floori(spot_pos.x / CHUNK_SIZE) == chunk_x and floori(spot_pos.z / CHUNK_SIZE) == chunk_z:
+					spots.remove_at(spot_i)
+			if spots.is_empty():
+				main.res_spots.erase(resource_cell)
+	# Remove chunk-owned blockers and solid records using their spatial bounds.
 	for item: Array in prop_blocker_records.get(k, []):
 		var grid_key: Vector2i = item[0]
 		var obstacle: Vector3 = item[1]
