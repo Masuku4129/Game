@@ -364,6 +364,7 @@ func _apply_resource_state() -> void:
 	var pickables: Dictionary = main.pickables
 	if pickables.is_empty():
 		return
+	var resource_state_cache: Dictionary = {}
 	for cell_key in pickables.keys():
 		var entries: Array = pickables[cell_key]
 		for entry in entries.duplicate():
@@ -371,7 +372,11 @@ func _apply_resource_state() -> void:
 				continue
 			var p: Vector3 = entry[0]
 			var kind := String(entry[1])
-			var state := read_state(p, "resource_state")
+			var chunk_coord := Vector2i(floori(p.x / CHUNK_SIZE), floori(p.z / CHUNK_SIZE))
+			var state_key := _key(chunk_coord)
+			if not resource_state_cache.has(state_key):
+				resource_state_cache[state_key] = read_state(p, "resource_state")
+			var state: Dictionary = resource_state_cache[state_key]
 			var saved: Variant = state.get(_resource_key(p, kind), {})
 			if not saved is Dictionary or not bool(saved.get("collected", false)):
 				continue
