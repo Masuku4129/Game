@@ -15,7 +15,6 @@ var groups := {}
 var rng := RandomNumberGenerator.new()
 var _bird_acc := 0.0
 var _classify_acc := 0.0
-var _animal_update_acc := 0.0
 var _animal_slice := 0
 var _bird_update_acc := 0.0
 var _spawn_serial := 0
