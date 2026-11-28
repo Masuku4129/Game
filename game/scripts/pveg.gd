@@ -156,7 +156,7 @@ func _grass_tex() -> Texture2D:
 		var x0 := r.randf_range(0.12, 0.88)
 		var bend := r.randf_range(-0.25, 0.25)
 		var top := r.randf_range(0.05, 0.5)
-		var wd := r.randf_range(0.03, 0.06)
+		var wd := r.randf_range(0.05, 0.09)
 		var g := r.randf()
 		for y in h:
 			var t := float(y) / h
