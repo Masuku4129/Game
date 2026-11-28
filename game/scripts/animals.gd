@@ -5,8 +5,8 @@ const Animal = preload("res://scripts/animal.gd")
 const SHOW_R := 75.0
 const NEAR_R := 70.0
 const MID_R := 25.0   # ближайшая зона — животные детальнее реагируют
-const NEAR_DT := 0.033 # близкая симуляция 30 Гц вместо каждого кадра; AnimPlayer продолжает интерполировать циклы
-const MID_DT := 0.08  # средняя дистанция — 12,5 Гц
+const NEAR_DT := 0.05 # близкая симуляция 30 Гц вместо каждого кадра; AnimPlayer продолжает интерполировать циклы
+const MID_DT := 0.12  # средняя дистанция — 12,5 Гц
 
 var main: Node3D
 var list: Array = []
@@ -512,7 +512,7 @@ func _process(delta: float) -> void:
 	var hp: Vector3 = main.rig.position
 	_grid_t -= delta
 	if _grid_t <= 0.0:
-		_grid_t = 0.5
+		_grid_t = 0.75
 		_rebuild_grid()
 		for i in range(carcasses.size() - 1, -1, -1):
 			if carcasses[i].meat <= 0.0:
@@ -525,7 +525,7 @@ func _process(delta: float) -> void:
 		var animal_dt := _animal_update_acc
 		_animal_update_acc = fmod(_animal_update_acc, 0.033)
 		_classify_acc += animal_dt
-		var classify_now := _classify_acc >= 0.1
+		var classify_now := _classify_acc >= 0.15
 		if classify_now:
 			_classify_acc = fmod(_classify_acc, 0.1)
 		for a in list:
@@ -534,7 +534,7 @@ func _process(delta: float) -> void:
 				var d2 := Vector2(a.position.x - hp.x, a.position.z - hp.z).length_squared()
 				var was_far: bool = a.far
 				a.far = d2 > NEAR_R * NEAR_R
-				a._sim_tick_interval = 0.72 if a.far else (NEAR_DT if d2 < MID_R * MID_R else MID_DT)
+				a._sim_tick_interval = 0.85 if a.far else (NEAR_DT if d2 < MID_R * MID_R else MID_DT)
 				if was_far and not a.far:
 					a._acc = 0.0
 				var show_r: float = 40.0 if a.kind in ["hare", "squirrel", "beaver"] else SHOW_R
