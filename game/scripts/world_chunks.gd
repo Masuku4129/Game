@@ -1117,10 +1117,10 @@ func _remove_prop_cover(k: String) -> void:
 	prop_blocker_records.erase(k)
 	prop_solid_records.erase(k)
 
-func _remove_tree_cover(k: String) -> void:
+func _remove_tree_cover(k: String) -> bool:
 	var meshes: Array = tree_mmis.get(k, [])
 	if meshes.is_empty():
-		return
+		return false
 	for mm: MultiMesh in meshes:
 		for grid_key in main.tree_grid.keys():
 			var entries: Array = main.tree_grid[grid_key]
@@ -1146,8 +1146,7 @@ func _remove_tree_cover(k: String) -> void:
 			main.blockers.erase(grid_key)
 	tree_mmis.erase(k)
 	blocker_records.erase(k)
-	if main != null:
-		main._update_near(true)
+	return true
 	# Кэш near_mesh оставляем: другие чанки могут использовать те же варианты GLB.
 
 func _remove_terrain_chunk(k: String) -> void:
@@ -1160,6 +1159,7 @@ func _remove_terrain_chunk(k: String) -> void:
 		node.queue_free()
 
 func _unload_distant() -> void:
+	var near_tree_set_changed := false
 	# Cancel an in-flight visual build if the player has already moved outside
 	# the preload ring; avoid spending CPU on scenery that will be discarded.
 	if not _building_chunk.is_empty():
@@ -1180,10 +1180,12 @@ func _unload_distant() -> void:
 			persistent[k] = rec
 		else:
 			persistent.erase(k)
-		_remove_tree_cover(k)
+		near_tree_set_changed = _remove_tree_cover(k) or near_tree_set_changed
 		_remove_prop_cover(k)
 		_remove_terrain_chunk(k)
 		active.erase(k)
+	if near_tree_set_changed and main != null:
+		main._update_near(true)
 	_prune()
 
 func _prune() -> void:
