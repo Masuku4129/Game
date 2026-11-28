@@ -15,3 +15,7 @@ No story, terrain dressing, NPCs, combat, or extra gameplay systems. This is onl
 
 ## Important
 The character is currently a procedural mesh prototype, not a finished imported sculpted GLB character. Replace this prototype geometry with a proper authored/generated rigged character asset when one is available.
+
+
+## Character asset work (current)
+See [ASSET_PIPELINE.md](ASSET_PIPELINE.md) for the account-free source strategy and the download helper. The current procedural Mita is still placeholder geometry, not the required final art model. Touch joystick drag routing was fixed in commit 203a71d.
