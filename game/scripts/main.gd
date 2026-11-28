@@ -131,38 +131,25 @@ func _ready() -> void:
 	# с собой только кремнёвый нож на поясе
 	inv["knife"] = 1
 	hero.tools.to_belt("knife")
-	# --- colony: в режиме острога — изометрическая камера (rts_camera.gd) вместо
-	# привязанной к герою; поля те же, поэтому старый код работает по-прежнему ---
-	if colony_mode:
-		rig = preload("res://scripts/rts_camera.gd").new()
-		rig.main = self
-		add_child(rig)
-		rig.snap_to(hero.position, 30.0, 0.6)
-		player_rig = rig
-		hero.visible = false
-		hero.process_mode = Node.PROCESS_MODE_DISABLED
-	else:
 		rig = preload("res://scripts/camera_rig.gd").new()
-		rig.target = hero
-		add_child(rig)
-		rig.position = hero.position
-		player_rig = hero
-	# --- /colony ---
+	rig.target = hero
+	add_child(rig)
+	rig.position = hero.position
+	player_rig = hero
 	var ui := CanvasLayer.new()
 	add_child(ui)
-	if not colony_mode:
 		hud = preload("res://scripts/hud.gd").new()
-		hud.anchor_right = 1.0
-		hud.anchor_bottom = 1.0
-		ui.add_child(hud)
-		joy = preload("res://scripts/joystick.gd").new()
-		joy.anchor_top = 1.0
-		joy.anchor_bottom = 1.0
-		joy.offset_left = 40.0
-		joy.offset_right = 400.0
-		joy.offset_top = -400.0
-		joy.offset_bottom = -40.0
-		ui.add_child(joy)
+	hud.anchor_right = 1.0
+	hud.anchor_bottom = 1.0
+	ui.add_child(hud)
+	joy = preload("res://scripts/joystick.gd").new()
+	joy.anchor_top = 1.0
+	joy.anchor_bottom = 1.0
+	joy.offset_left = 40.0
+	joy.offset_right = 400.0
+	joy.offset_top = -400.0
+	joy.offset_bottom = -40.0
+	ui.add_child(joy)
 	act_btn = Button.new()
 	act_btn.anchor_left = 1.0
 	act_btn.anchor_right = 1.0
@@ -177,14 +164,10 @@ func _ready() -> void:
 	act_btn.visible = false
 	act_btn.pressed.connect(func(): hero.do_action())
 	ui.add_child(act_btn)
-	if colony_mode:
-		act_btn.visible = false
-	else:
-		# --- инвентарь (короб): кнопка «Рюкзак» на HUD, лист вещей, анимация снятия короба ---
-		inventory = preload("res://scripts/inventory.gd").new()
-		inventory.main = self
-		ui.add_child(inventory)
-		hud.setup(self)
+	inventory = preload("res://scripts/inventory.gd").new()
+	inventory.main = self
+	ui.add_child(inventory)
+	hud.setup(self)
 	# --- hunt: разделка туш, кровь, запах крови (hunt.gd) ---
 	hunt = preload("res://scripts/hunt.gd").new()
 	hunt.main = self
@@ -202,12 +185,7 @@ func _ready() -> void:
 	camp.main = self
 	add_child(camp)
 	# --- /build ---
-	# --- colony: лист лагеря (camp_ui) заменён листом острога ---
-	if colony_mode and camp.ui != null:
-		camp.ui.visible = false
-		camp.ui.set_process(false)
-		camp.ui.set_process_unhandled_input(false)
-	# --- /colony ---
+	
 	fps_lbl = Label.new()
 	fps_lbl.anchor_left = 0.5
 	fps_lbl.anchor_right = 0.5
@@ -241,23 +219,7 @@ func _ready() -> void:
 	# --- core: настройки (качество, кадры, звук), сохранение, справочник, меню ---
 	_core_setup(ui)
 	# --- /core ---
-	# --- colony: отряд, лист острога и сценарий «Первая зима» ---
-	if colony_mode:
-		fps_lbl.offset_top = 120.0
-		fps_lbl.visible = false
-		var cl := CanvasLayer.new()
-		cl.layer = 3
-		add_child(cl)
-		colony = preload("res://scripts/colony.gd").new()
-		colony.rig = rig
-		add_child(colony)
-		colony.setup(self, cl)
-		rig.colony = colony
-		if OS.get_environment("COLONY_TEST") != "" or OS.get_environment("COLONY_SHOTS") != "":
-			var ct: Node = preload("res://scripts/colony_test.gd").new()
-			ct.set("main", self)
-			add_child(ct)
-	var _hx := OS.get_environment("CHIDE")
+		var _hx := OS.get_environment("CHIDE")
 	if "s" in _hx:
 		sun.shadow_enabled = false
 	if "f" in _hx:
@@ -282,62 +244,6 @@ func _ready() -> void:
 		add_child(pf)
 	boot_ui.queue_free()
 
-## --- colony: какой режим запускать. Старые проверки (бой, инструменты, охота, стройка,
-## сохранение, кадры, замер) идут по-прежнему от героя, поэтому для них — режим героя. ---
-func _resolve_world_seed() -> void:
-	# Новый мир получает собственный seed; продолжение читает seed до генерации рельефа.
-	if FileAccess.file_exists(PENDING_SEED_PATH):
-		var pending := FileAccess.open(PENDING_SEED_PATH, FileAccess.READ)
-		if pending != null:
-			map_seed = int(pending.get_as_text().strip_edges())
-			pending.close()
-		DirAccess.remove_absolute(ProjectSettings.globalize_path(PENDING_SEED_PATH))
-		if map_seed != 0:
-			return
-	var creative_selected := false
-	var cfg := ConfigFile.new()
-	if cfg.load("user://settings.cfg") == OK:
-		creative_selected = bool(cfg.get_value("game", "creative_mode", false))
-	var save_path := "user://creative_save.json" if creative_selected else "user://save.json"
-	if FileAccess.file_exists(save_path):
-		var sf := FileAccess.open(save_path, FileAccess.READ)
-		if sf != null:
-			var parsed: Variant = JSON.parse_string(sf.get_as_text())
-			sf.close()
-			if parsed is Dictionary:
-				var md: Dictionary = (parsed as Dictionary).get("main", {})
-				if md.has("map_seed"):
-					map_seed = int(md["map_seed"])
-					return
-	var rng := RandomNumberGenerator.new()
-	rng.randomize()
-	map_seed = int(rng.randi() & 0x7fffffff)
-	if map_seed == 0:
-		map_seed = MAP_SEED
-
-func _reveal_map_area() -> void:
-	# Открываем только пройденную местность. Храним компактные данные по клеткам 16×16 м.
-	var cx := floori(hero.position.x / 16.0)
-	var cz := floori(hero.position.z / 16.0)
-	for dz in range(-2, 3):
-		for dx in range(-2, 3):
-			var gx := cx + dx
-			var gz := cz + dz
-			var key := "%d,%d" % [gx, gz]
-			if explored_map.has(key):
-				continue
-			var wx := (float(gx) + 0.5) * 16.0
-			var wz := (float(gz) + 0.5) * 16.0
-			explored_map[key] = {
-				"zone": zone(wx, wz),
-				"river": river_dist(wx, wz) < 9.0,
-				"lake": lake_k(wx, wz) > 0.28,
-				"water": height(wx, wz) < water_level(wx, wz) + 0.25
-			}
-
-func _colony_pick_mode() -> void:
-	# The classic player-controlled survival mode is the only game mode.
-	colony_mode = false
 
 func _find_start() -> Vector3:
 	for r in range(0, 120, 3):
@@ -696,10 +602,7 @@ func _update_sky() -> void:
 	if hero != null:
 		hero.torch.light_energy = 2.2 * (1.0 - d) * (1.6 if lamp_lit else 1.0)  # core: жирник
 		hero.torch.omni_range = 17.0 if lamp_lit else 11.0
-	# --- colony: на отъезде дымка отступает — видна вся долина ---
-	if colony != null:
-		colony.fog_adjust()
-	# --- /colony ---
+	
 	day_factor = d
 
 var hmap_tex: ImageTexture
@@ -890,18 +793,12 @@ var _dbgf := 0
 var _visual_uniform_t := 0.0 # perf: обновляем пакет uniforms 10 раз/с
 func _process(delta: float) -> void:
 	_dbgf += 1
-	if hero == null or (joy == null and colony == null):
+	if hero == null or joy == null:
 		return
 	if OS.get_environment("SHOTS") != "":
 		_shots()
-	# --- colony: далёкая камера — растворение растений считаем от середины взгляда,
-	# а не от камеры: иначе на отъезде пропала бы вся долина ---
 	var hp: Vector3 = hero.position + Vector3(0, 1.0, 0)
 	var cp: Vector3 = rig.cam.global_position
-	if colony != null:
-		hp = Vector3(0, -1000.0, 0)
-		cp = colony.veg_focus()
-	# --- /colony ---
 	# Обновление uniforms на каждом кадре обходило весь список растительности и
 	# создавало лишнюю CPU-нагрузку. 20 Гц достаточно для плавного fade и реакции воды.
 	_visual_uniform_t -= delta
@@ -917,7 +814,7 @@ func _process(delta: float) -> void:
 		pv.mats["tuft"].set_shader_parameter("cam_pos", cp)
 		pv.mats["tuft"].set_shader_parameter("grass_now", Time.get_ticks_msec() * 0.001)
 		water_mat.set_shader_parameter("hero_pos", hero.position)
-		water_mat.set_shader_parameter("swim", hero.swimb if colony == null else 0.0)
+		water_mat.set_shader_parameter("swim", hero.swimb)
 		water_mat.set_shader_parameter("swim_move", clampf(hero.run_mag, 0.0, 1.0))
 	_fps_t -= delta
 	if _fps_t <= 0.0:
@@ -996,8 +893,6 @@ func _process(delta: float) -> void:
 
 ## Проверка сезонов: тап по часам в правом верхнем углу перематывает время на 2 дня вперёд.
 func _unhandled_input(e: InputEvent) -> void:
-	if colony != null:
-		return  # colony: палец разбирают камера и лист острога
 	if e is InputEventScreenTouch and e.pressed:
 		var vs := get_viewport().get_visible_rect().size
 		if e.position.x > vs.x - 520.0 and e.position.y < 90.0:
@@ -1005,11 +900,7 @@ func _unhandled_input(e: InputEvent) -> void:
 			get_viewport().set_input_as_handled()
 
 func _update_stats(dt: float) -> void:
-	# --- colony: голод, тепло и усталость — у каждого свои (unit.needs_tick) ---
-	if colony != null:
-		msg_t -= dt
-		return
-	# --- /colony ---
+	# Survival needs are tracked for the player.
 	hunger = maxf(0.0, hunger - 0.0004 * dt)
 	thirst = maxf(0.0, thirst - 0.0007 * dt * (1.5 if hero.running else 1.0))
 	var gh := dt / 75.0
@@ -2247,7 +2138,7 @@ func _core_setup(_ui: CanvasLayer) -> void:
 		st.set("main", self)
 		st.set("mode", OS.get_environment("SAVE_TEST"))
 		add_child(st)
-	if DisplayServer.get_name() == "headless" or OS.get_environment("SHOTS") != "" or OS.get_environment("COLONY_SHOTS") != "" or OS.get_environment("COLONY_TEST") != "" or OS.get_environment("UI_SHOTS") != "" or auto != "":
+	if DisplayServer.get_name() == "headless" or OS.get_environment("SHOTS") != "" or OS.get_environment("UI_SHOTS") != "" or auto != "":
 		if auto == "load":
 			saver.load_game()
 		saver.enabled = auto != ""
