@@ -842,6 +842,9 @@ func _build_tree_cover(c: Vector2i) -> void:
 		groups[bucket_key].transforms.append(xf)
 	var created: Array = []
 	var blockers_for_chunk: Array = []
+	# Tree-state belongs to one chunk. Read/deep-copy it once instead of once
+	# per generated tree instance (which scales poorly after many trees are felled).
+	var chunk_tree_state := read_state(Vector3(float(c.x) * CHUNK_SIZE + 32.0, 0.0, float(c.y) * CHUNK_SIZE + 32.0), "tree_state")
 	for bucket_key: String in groups:
 		var group: Dictionary = groups[bucket_key]
 		var kind := String(group.kind)
@@ -873,7 +876,7 @@ func _build_tree_cover(c: Vector2i) -> void:
 		# загрузки чанков. Состояние переживает выгрузку и повторную генерацию.
 		for i in transforms.size():
 			var tree_pos: Vector3 = transforms[i].origin
-			var tree_state := read_state(tree_pos, "tree_state")
+			var tree_state: Dictionary = chunk_tree_state
 			var tree_id := _tree_state_key(tree_pos)
 			var saved_tree: Variant = tree_state.get(tree_id, {})
 			var stable_id := 1000000000 + posmod(_seed(c) + kind.hash() + vi * 73856093 + i * 19349663, 1000000000)
