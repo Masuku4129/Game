@@ -73,7 +73,7 @@ var fallen_spots := {}   # клетка 16 м → [{kind, mm, i, xf, a, b, r}] �
 var hunt  # --- hunt: туши, разделка, кровь, запах крови (hunt.gd) ---
 var camp  # --- build: лагерь и постройки (structures.gd) ---
 var combat  # --- combat: удары, прицел, стрелы (combat.gd) ---
-# Player-controlled wilderness survival.ar colony_mode := false
+# Player-controlled wilderness survival.
 
 func _ready() -> void:
 	# Видимый экран загрузки: генерация мира больше не должна выглядеть как зависание.
