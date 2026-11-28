@@ -1,7 +1,7 @@
 shader_type spatial;
 render_mode cull_disabled;
 #include "res://shaders/paint/paint.gdshaderinc"
-#include "res://shaders/fade.gdshaderinc
+#include "res://shaders/fade.gdshaderinc"
 uniform sampler2D strokes_tex : filter_linear_mipmap, repeat_disable;
 uniform vec3 col_root = vec3(0.36, 0.44, 0.20);
 uniform vec3 col_tip = vec3(0.58, 0.64, 0.30);
