@@ -18,8 +18,8 @@ const PRESETS := [
 ]
 
 var main: Node3D
-var preset := 0
-var fps := 30
+var preset := 1
+var fps := 60
 var volume := 0.8
 var creative_mode := false
 var creative_btn: Button
@@ -31,8 +31,10 @@ var _vol: HSlider
 var _vol_lbl: Label
 var _info: Label
 var _was_paused := false
-var _hero_btn: Button      # colony: режим героя (отладка)
-var hero_mode := false     # colony: читается при запуске (main._colony_pick_mode)
+var adaptive_scale := 1.0
+var _adaptive_low_t := 0.0
+var _adaptive_high_t := 0.0
+var _adaptive_frame_ms := 16.7
 
 class GearBtn extends Button:
 	var kind := "gear"   # gear | book
@@ -93,20 +95,18 @@ func _corner(b: Control, x: float) -> void:
 func _load() -> void:
 	var c := ConfigFile.new()
 	if c.load(CFG) == OK:
-		preset = clampi(int(c.get_value("video", "preset", 0)), 0, 2)
-		fps = int(c.get_value("video", "fps", PRESETS[preset]["fps"]))
+		preset = clampi(int(c.get_value("video", "preset", 1)), 0, 2)
+		fps = int(c.get_value("video", "fps", 60))
 		volume = clampf(float(c.get_value("audio", "volume", 0.8)), 0.0, 1.0)
-		hero_mode = bool(c.get_value("game", "hero_mode", false))  # colony
 		creative_mode = bool(c.get_value("game", "creative_mode", false))
 	else:
-		fps = int(PRESETS[preset]["fps"])
+		fps = 60
 
 func _store() -> void:
 	var c := ConfigFile.new()
 	c.set_value("video", "preset", preset)
 	c.set_value("video", "fps", fps)
 	c.set_value("audio", "volume", volume)
-	c.set_value("game", "hero_mode", hero_mode)  # colony
 	c.set_value("game", "creative_mode", creative_mode)
 	c.save(CFG)
 
@@ -120,7 +120,7 @@ func apply() -> void:
 	# FSR в Godot 4.3 есть только в Forward+; у мобильного рендера — билинейное масштабирование
 	var method := String(ProjectSettings.get_setting("rendering/renderer/rendering_method", "mobile"))
 	vp.scaling_3d_mode = Viewport.SCALING_3D_MODE_FSR if method == "forward_plus" else Viewport.SCALING_3D_MODE_BILINEAR
-	vp.scaling_3d_scale = float(p["scale"])
+	vp.scaling_3d_scale = maxf(0.5, float(p["scale"]) * adaptive_scale)
 	vp.msaa_3d = Viewport.MSAA_DISABLED
 	RenderingServer.directional_shadow_atlas_set_size(int(p["shadow"]), true)
 	if main != null:
@@ -142,8 +142,8 @@ func _build_sheet() -> void:
 	sheet.anchor_bottom = 0.5
 	sheet.offset_left = -470.0
 	sheet.offset_right = 470.0
-	sheet.offset_top = -330.0
-	sheet.offset_bottom = 330.0
+	sheet.offset_top = -430.0
+	sheet.offset_bottom = 430.0
 	sheet.mouse_filter = Control.MOUSE_FILTER_STOP
 	sheet.visible = false
 	add_child(sheet)
@@ -182,13 +182,10 @@ func _build_sheet() -> void:
 	sv.pressed.connect(_save_now)
 	var cl := _btn("Закрыть", Rect2(480, 540, 420, 84), 28)
 	cl.pressed.connect(close)
-	# --- colony: отладочный переключатель старого режима героя (джойстик, от первого лица) ---
 	creative_btn = _btn(_creative_text(), Rect2(40, 636, 860, 68), 24)
 	creative_btn.pressed.connect(_toggle_creative_mode)
-	_hero_btn = _btn(_hero_text(), Rect2(40, 718, 860, 68), 22)
-	_hero_btn.pressed.connect(_toggle_hero_mode)
-	sheet.offset_top = -430.0
-	sheet.offset_bottom = 430.0
+	sheet.offset_top = -330.0
+	sheet.offset_bottom = 330.0
 
 func _label(t: String, p: Vector2, fs: int) -> Label:
 	var l := Label.new()
@@ -238,10 +235,6 @@ func _set_vol(v: float) -> void:
 	_store()
 	apply()
 
-# --- colony: старый режим героя — для отладки; меняется при следующем запуске ---
-func _hero_text() -> String:
-	return "Режим героя (отладка): %s · нужен перезапуск" % ("да" if hero_mode else "нет")
-
 func _creative_text() -> String:
 	return "Творческий режим: %s · бесплатно, мгновенная стройка, максимум характеристик" % ("включён" if creative_mode else "выключен")
 
@@ -254,15 +247,6 @@ func _toggle_creative_mode() -> void:
 		creative_btn.text = _creative_text()
 	if main != null:
 		main._say("Творческий режим включён" if creative_mode else "Обычный режим включён")
-
-func _toggle_hero_mode() -> void:
-	hero_mode = not hero_mode
-	_store()
-	if _hero_btn != null:
-		_hero_btn.text = _hero_text()
-	if main != null:
-		main._say("Режим героя включён — перезапустите игру" if hero_mode else "Режим острога — перезапустите игру")
-# --- /colony ---
 
 func _save_now() -> void:
 	if main != null and main.saver != null:
@@ -289,9 +273,40 @@ func close() -> void:
 	sheet.visible = false
 	get_tree().paused = _was_paused
 
-func _process(_d: float) -> void:
+func _process(delta: float) -> void:
 	if main == null or main.hero == null:
 		return
+	_adaptive_tick(delta)
 	var inv_open: bool = main.inventory != null and (main.inventory.is_open() or main.hero.pack_stage != "")
-	# colony: в режиме острога шестерёнка всегда на месте
-	gear.visible = main.colony != null or (not inv_open and main.hero.state != "dead")
+	gear.visible = not inv_open and main.hero.state != "dead"
+
+func _adaptive_tick(delta: float) -> void:
+	# Адаптация только по фактическому frame time: это не датчик температуры и
+	# не заменяет длительный тепловой тест на физическом Samsung.
+	if OS.get_environment("PERF") != "" or get_tree().paused:
+		return
+	var target_ms := 1000.0 / float(maxi(fps, 30))
+	var frame_ms := delta * 1000.0
+	# Faster response to sustained frame pressure; resolution is the only
+	# adaptive graphics variable, never content/population/object counts.
+	_adaptive_frame_ms = lerpf(_adaptive_frame_ms, frame_ms, minf(1.0, delta * 4.0))
+	if _adaptive_frame_ms > target_ms * 1.08:
+		_adaptive_low_t += delta
+		_adaptive_high_t = 0.0
+	elif _adaptive_frame_ms < target_ms * 0.94:
+		_adaptive_high_t += delta
+		_adaptive_low_t = 0.0
+	else:
+		_adaptive_low_t = maxf(0.0, _adaptive_low_t - delta * 0.35)
+		_adaptive_high_t = maxf(0.0, _adaptive_high_t - delta * 0.35)
+	var changed := false
+	if _adaptive_low_t >= 0.9 and adaptive_scale > 0.52:
+		adaptive_scale = maxf(0.52, adaptive_scale - 0.045)
+		_adaptive_low_t = 0.0
+		changed = true
+	elif _adaptive_high_t >= 5.0 and adaptive_scale < 1.0:
+		adaptive_scale = minf(1.0, adaptive_scale + 0.015)
+		_adaptive_high_t = 0.0
+		changed = true
+	if changed:
+		get_viewport().scaling_3d_scale = maxf(0.5, float(PRESETS[preset]["scale"]) * adaptive_scale)

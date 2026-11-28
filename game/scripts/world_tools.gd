@@ -9,6 +9,8 @@ extends Node3D
 
 const IT = preload("res://scripts/items.gd")
 const TM = preload("res://scripts/tool_models.gd")
+var pending_fells: Dictionary = {}   # id дерева -> запись валки, ждущая загрузки чанка
+var pending_gen: Array = []   # отложенные сгенерированные брёвна/пни до готовности чанка
 const SEG := 1.25            # длина бревна, м
 const TRUNK_R0 := {"birch": 0.17, "aspen": 0.17, "rowan": 0.17, "larch": 0.17, "spruce": 0.24, "fir": 0.24, "pine": 0.28, "cedar": 0.28}
 const TRUNK_R1 := {"birch": 0.05, "aspen": 0.05, "rowan": 0.05, "larch": 0.05, "spruce": 0.05, "fir": 0.05, "pine": 0.08, "cedar": 0.08}
@@ -74,12 +76,9 @@ func _snd(n: String, p: Vector3, db: float, pitch: float = 1.0) -> void:
 func _give(id: String, n: int) -> int:
 	var got := 0
 	for i in n:
-		if main.inventory != null and not main.inventory.can_add(id):
+		# Счётчик добычи растёт только после подтверждённой выдачи предмета.
+		if not main._record_resource(id, 1):
 			break
-		if main.inventory != null:
-			main.inventory.add_item(id, 1)
-		else:
-			main.inv[id] = int(main.inv.get(id, 0)) + 1
 		got += 1
 	if got > 0:
 		main._say("+%d %s" % [got, IT.name_of(id).to_lower()])
@@ -122,6 +121,28 @@ func tree_pos(rec: Array) -> Vector3:
 
 func _hide_tree(rec: Array) -> void:
 	var o: Vector3 = (rec[2] as Transform3D).origin
+	# Запоминаем срубленное дерево по мировым координатам: MultiMesh ID меняется
+	# при потоковой выгрузке, координатный ID остаётся неизменным.
+	if main.chunk_stream != null:
+		var state: Dictionary = main.chunk_stream.read_state(o, "tree_state")
+		var tree_key := "%d:%d" % [roundi(o.x * 10.0), roundi(o.z * 10.0)]
+		state[tree_key] = {"hidden": true}
+		main.chunk_stream.write_state(o, "tree_state", state)
+	# Убираем коллизию стоящего ствола; упавший ствол получает собственную
+	# протяжённую коллизию в FellTree и не оставляет невидимый цилиндр на пне.
+	var tree_kind := kind_of(rec)
+	var tree_scale: float = (rec[2] as Transform3D).basis.x.length()
+	var blocker_radius: float = float(main.BLOCK_R.get(tree_kind, 0.0)) * tree_scale
+	if blocker_radius > 0.0:
+		var grid_key := Vector2i(floori(o.x / 8.0), floori(o.z / 8.0))
+		if main.blockers.has(grid_key):
+			var obstacles: Array = main.blockers[grid_key]
+			var expected := Vector3(o.x, o.z, blocker_radius)
+			for i in range(obstacles.size() - 1, -1, -1):
+				if obstacles[i].distance_to(expected) < 0.03:
+					obstacles.remove_at(i)
+			if obstacles.is_empty():
+				main.blockers.erase(grid_key)
 	rec[2] = Transform3D(Basis().scaled(Vector3(0.0001, 0.0001, 0.0001)), Vector3(o.x, -500.0, o.z))
 	(rec[0] as MultiMesh).set_instance_transform(rec[1], rec[2])
 	main._update_near(true)
@@ -136,7 +157,18 @@ func chop_tree(rec: Array, hero_p: Vector3, hits: int) -> bool:
 		var kind := kind_of(rec)
 		f = FellTree.new()
 		add_child(f)
-		f.setup(main.near_mesh[rec[3]], rec[2], kind, main, hero_p)
+		# Берём mesh непосредственно из того MultiMeshInstance, где стоит дерево.
+		# Это гарантирует совпадение GLB/LOD/материалов при замене стоящего экземпляра
+		# анимированным поваленным стволом.
+		var source_mm: MultiMesh = rec[0]
+		# Дальняя MultiMesh может содержать упрощённый LOD; при валке всегда
+		# берём исходную полноразмерную GLB-модель из near_mesh.
+		var source_mesh: Mesh = main.near_mesh.get(String(rec[3]), source_mm.mesh)
+		if source_mesh == null:
+			remove_child(f)
+			f.queue_free()
+			return false
+		f.setup(source_mesh, rec[2], kind, main, hero_p)
 		main.pv.fade_list.append(f.bm)
 		fells[id] = f
 	if f.phase != "stand":
@@ -235,6 +267,11 @@ func chop_trunk(tr: Dictionary, hits: int) -> bool:
 func _unblock_spot(sp: Dictionary) -> void:
 	var mm: MultiMesh = sp["mm"]
 	var xf: Transform3D = sp["xf"]
+	# Убранный из генерации валежник не должен появиться снова после выгрузки чанка.
+	if main.chunk_stream != null:
+		var state: Dictionary = main.chunk_stream.read_state(xf.origin, "fallen_state")
+		state[_key(xf.origin)] = {"done": true}
+		main.chunk_stream.write_state(xf.origin, "fallen_state", state)
 	mm.set_instance_transform(int(sp["i"]), Transform3D(Basis().scaled(Vector3(0.0001, 0.0001, 0.0001)), xf.origin - Vector3(0, 500, 0)))
 	var a: Vector3 = sp["a"]
 	var b: Vector3 = sp["b"]
@@ -528,6 +565,43 @@ func stab(p: Vector3, tip: Vector3, yaw: float) -> void:
 			return
 	_snd("whoosh", tip, -8.0, 1.3)
 
+func _restore_pending_gen() -> void:
+	if pending_gen.is_empty() or main == null or main.fallen_spots.is_empty():
+		return
+	var restored := 0
+	for index in range(pending_gen.size() - 1, -1, -1):
+		if restored >= 3:
+			break
+		var saved: Dictionary = pending_gen[index]
+		var p: Vector3 = saved["pos"]
+		var kind := String(saved.get("kind", "fallen0"))
+		var center := Vector2i(floori(p.x / 16.0), floori(p.z / 16.0))
+		var found: Dictionary = {}
+		for dz in range(-1, 2):
+			for dx in range(-1, 2):
+				var cell := Vector2i(center.x + dx, center.y + dz)
+				if not main.fallen_spots.has(cell):
+					continue
+				for spot: Dictionary in main.fallen_spots[cell]:
+					if String(spot.get("kind", "")) == kind and (spot["xf"] as Transform3D).origin.distance_to(p) < 0.35:
+						found = spot
+						break
+				if not found.is_empty():
+					break
+		if found.is_empty() or bool(found.get("done", false)):
+			continue
+		found["done"] = true
+		var trunk := GenTrunk.new()
+		add_child(trunk)
+		trunk.setup(found, main)
+		trunk.set_meta("spot", found)
+		trunk.cur = float(saved.get("cur", 0.0))
+		trunk._rebuild()
+		_unblock_spot(found)
+		trunks.append(trunk)
+		pending_gen.remove_at(index)
+		restored += 1
+
 func _process(delta: float) -> void:
 	if main == null:
 		return
@@ -541,6 +615,7 @@ func _process(delta: float) -> void:
 				_snd("thud", f.landing_point(), 10.0)
 				trunks.append(f)
 	_fly(delta)
+	_restore_pending_gen()
 	for i in range(wounds.size() - 1, -1, -1):
 		var w: Array = wounds[i]
 		var a: Node3D = w[0]
@@ -731,8 +806,8 @@ func harvest(r: Dictionary, knife: bool) -> void:
 			var q: Vector3 = it[0]
 			var k := Vector2i(floori(q.x / 8.0), floori(q.z / 8.0))
 			if main.pickables.has(k) and (main.pickables[k] as Array).has(it):
-				main.take_pick(it)
-				if knife:
+				var taken: bool = main.take_pick(it)
+				if taken and knife:
 					_give("berry", 1)
 		"berry":
 			_spend(r["key"], 3)
@@ -927,15 +1002,39 @@ class FellTree extends Node3D:
 			_start_fall()
 
 	func _start_fall() -> void:
+		# Пень физически и визуально отсутствует до полного завершения падения.
+		stump.visible = false
 		phase = "fall"
 		th = 0.025
 		w = 0.03
-		var L := H * s
-		var d := L * 0.55
-		var q := pivot.position + dir * d
-		var gy: float = main.ground_at(q.x, q.z) if main != null else 0.0
-		var drop := pivot.position.y - gy - r0 * s * 0.5
-		th_g = clampf(PI * 0.5 + atan2(drop, d), 1.2, 1.9)
+		th_g = _find_ground_contact_angle()
+
+	## Ищем первый угол реального контакта ствола с рельефом.
+	## Проверяем не условную точку на расстоянии 55% длины, а несколько
+	## точек вдоль всей исходной модели: на склоне ствол не должен уйти
+	## под землю серединой или зависнуть над ней одним концом.
+	func _find_ground_contact_angle() -> float:
+		if main == null:
+			return 1.5
+		var previous := 0.05
+		var chosen := 1.5
+		for sample_angle in range(4, 101):
+			var angle := float(sample_angle) * 0.025
+			pivot.basis = Basis(axis, angle)
+			var clearance := INF
+			for i in range(1, 17):
+				var y := lerpf(notch + 0.15 / s, H, float(i) / 16.0)
+				var p: Vector3 = top.global_transform * Vector3(0, y, 0)
+				var radius := _r_at(y) * s * 0.88
+				var floor_y: float = main.ground_at(p.x, p.z)
+				clearance = minf(clearance, p.y - radius - floor_y)
+			if clearance <= 0.025:
+				chosen = previous
+				break
+			previous = angle
+			chosen = angle
+		pivot.basis = Basis.IDENTITY
+		return clampf(chosen, 0.15, 2.5)
 
 	## Падение: стержень на шарнире (ускорение растёт с наклоном), удар и затухающие отскоки.
 	func step(delta: float) -> void:
@@ -960,9 +1059,13 @@ class FellTree extends Node3D:
 
 	## Лёг: ствол становится твёрдым (по нему можно пройти).
 	var _solid: Array = []
+	var _stump_solid: Array = []
 	func _lay() -> void:
-		stump.visible = true
+		# Вызывается только после затухания отскоков в step(); до этого момента
+		# виден один и тот же поворачивающийся исходный ствол.
+		phase = "down"
 		upper.visible = false
+		stump.visible = true
 		_update_solid()
 
 	func _update_solid() -> void:
@@ -971,17 +1074,24 @@ class FellTree extends Node3D:
 		_remove_solid()
 		var a := _world_y(clip + 0.3 / s)
 		var b := _world_y(H * float(CLEAN.get(kind, 0.4)))
-		if a.distance_to(b) < 0.5:
-			return
-		_solid = [1, a, b, _r_at(clip) * s * 0.9, 0.0]
-		main._add_solid(_solid)
+		if a.distance_to(b) >= 0.5:
+			_solid = [1, a, b, _r_at(clip) * s * 0.9, 0.0]
+			main._add_solid(_solid)
+		# Пень остаётся отдельной опорой после падения ствола.
+		if stump.visible:
+			_stump_solid = [2, xf.origin, Vector3.ZERO, r0 * s * 0.92, notch * s]
+			main._add_solid(_stump_solid)
 
 	func _remove_solid() -> void:
-		if _solid.is_empty():
+		if main == null:
 			return
 		for arr: Array in main.solids.values():
-			arr.erase(_solid)
+			if not _solid.is_empty():
+				arr.erase(_solid)
+			if not _stump_solid.is_empty():
+				arr.erase(_stump_solid)
 		_solid = []
+		_stump_solid = []
 
 	func _world_y(y: float) -> Vector3:
 		return top.global_transform * Vector3(0, y, 0)
@@ -1264,11 +1374,16 @@ func to_save() -> Dictionary:
 	for t: Node3D in trunks:
 		if t is GenTrunk:
 			var g: GenTrunk = t
-			for k in main.fallen_spots:
-				var i: int = (main.fallen_spots[k] as Array).find(_spot_of(g))
-				if i >= 0:
-					gen.append({"k": SV.enc(k), "i": i, "cur": g.cur})
-					break
+			var spot := _spot_of(g)
+			if not spot.is_empty():
+				var origin: Vector3 = (spot["xf"] as Transform3D).origin
+				gen.append({"pos": SV.enc(origin), "kind": String(spot.get("kind", "fallen0")), "cur": g.cur})
+			else:
+				for k in main.fallen_spots:
+					var i: int = (main.fallen_spots[k] as Array).find(_spot_of(g))
+					if i >= 0:
+						gen.append({"k": SV.enc(k), "i": i, "cur": g.cur})
+						break
 	var logs: Array = []
 	var others: Array = []
 	for it: Dictionary in items:
@@ -1279,23 +1394,90 @@ func to_save() -> Dictionary:
 			logs.append({"xf": SV.enc(n.global_transform), "r": float(it.get("r", 0.13)), "bark": SV.enc(it.get("bark", Color(0.42, 0.33, 0.24)))})
 		else:
 			others.append({"id": it["id"], "xf": SV.enc(n.global_transform)})
-	# поваленные деревья: что осталось в стволе — брёвнами рядом
+	# Сохраняем сам объект валки, а не только скрытый экземпляр дерева.
+	# Это сохраняет прогресс подруба, а также фазу падения и состояние пня.
+	var fell: Array = []
 	for id: int in fells:
 		var f2: FellTree = fells[id]
-		if f2.phase == "stand":
-			continue
-		var y := f2.clip
-		var lim: float = f2.H * float(CLEAN.get(f2.kind, 0.4))
-		while y + SEG / f2.s < lim and f2.phase == "down":
-			var y1 := y + SEG / f2.s
-			var c := f2._world_y((y + y1) * 0.5)
-			var ax := (f2._world_y(y1) - f2._world_y(y)).normalized()
-			logs.append({"c": SV.enc(c), "ax": SV.enc(ax), "r": f2._r_at((y + y1) * 0.5) * f2.s, "bark": SV.enc(f2.bark)})
-			y = y1
-	return {"hidden": hidden, "gen": gen, "logs": logs, "items": others, "uses": SV.enc(uses)}
+		fell.append({
+			"id": id, "kind": f2.kind, "xf": SV.enc(f2.xf), "hits": f2.hits,
+			"phase": f2.phase, "k": f2.k, "face_a": f2.face_a,
+			"dir": SV.enc(f2.dir), "axis": SV.enc(f2.axis),
+			"th": f2.th, "w": f2.w, "th_g": f2.th_g, "bounce": f2.bounce,
+			"clip": f2.clip, "logs_cut": f2.logs_cut
+		})
+	return {"hidden": hidden, "gen": gen, "logs": logs, "fell": fell, "items": others, "uses": SV.enc(uses)}
 
 func _spot_of(g: GenTrunk) -> Dictionary:
 	return g.get_meta("spot", {})
+
+func _find_tree_record(tree_id: int) -> Array:
+	for cell in main.tree_grid.values():
+		for candidate: Array in cell:
+			if int(candidate[4]) == tree_id:
+				return candidate
+	return []
+
+func _restore_fell_record(fe: Dictionary, tree_rec: Array) -> void:
+	var tree_id := int(fe.get("id", -1))
+	if fells.has(tree_id):
+		return
+	var SV = preload("res://scripts/save.gd")
+	var source_mesh: Mesh = main.near_mesh.get(String(tree_rec[3]), (tree_rec[0] as MultiMesh).mesh)
+	if source_mesh == null:
+		return
+	var xf: Transform3D = SV.dec(fe["xf"])
+	var f := FellTree.new()
+	add_child(f)
+	f.setup(source_mesh, xf, String(fe.get("kind", kind_of(tree_rec))), main, main.hero.position)
+	f.hits = int(fe.get("hits", 0))
+	f.k = float(fe.get("k", float(f.hits) / float(maxi(f.need, 1))))
+	f.face_a = float(fe.get("face_a", f.face_a))
+	f.dir = SV.dec(fe.get("dir", SV.enc(f.dir)))
+	f.axis = SV.dec(fe.get("axis", SV.enc(f.axis)))
+	f.th = float(fe.get("th", 0.0))
+	f.w = float(fe.get("w", 0.0))
+	f.th_g = float(fe.get("th_g", 1.5))
+	f.bounce = int(fe.get("bounce", 0))
+	f.clip = float(fe.get("clip", f.clip))
+	f.logs_cut = int(fe.get("logs_cut", 0))
+	f.bm.set_shader_parameter("clip_y", f.clip)
+	fells[tree_id] = f
+	match String(fe.get("phase", "stand")):
+		"fall":
+			f.phase = "fall"
+			f.top.visible = true
+			f.upper.visible = true
+			f.stump.visible = false
+			f.pivot.basis = Basis(f.axis, f.th)
+		"down":
+			f.phase = "down"
+			f.top.visible = true
+			f.upper.visible = false
+			f.stump.visible = true
+			f.th = f.th_g
+			f.pivot.basis = Basis(f.axis, f.th)
+			f._lay()
+			f.cap.visible = f.logs_cut > 0
+			if f.cap.visible:
+				var rr := f._r_at(f.clip)
+				f.cap.transform = Transform3D(Basis().scaled(Vector3(rr, 1.0, rr)), Vector3(0, f.clip + 0.002, 0))
+			trunks.append(f)
+		_:
+			f.phase = "stand"
+			f.top.visible = false
+			f.upper.visible = false
+			f.stump.visible = false
+
+func restore_pending_tree_fells() -> void:
+	if pending_fells.is_empty():
+		return
+	for tree_id: Variant in pending_fells.keys():
+		var tree_rec := _find_tree_record(int(tree_id))
+		if tree_rec.is_empty():
+			continue
+		_restore_fell_record(pending_fells[tree_id], tree_rec)
+		pending_fells.erase(tree_id)
 
 func from_save(d: Dictionary) -> void:
 	var SV = preload("res://scripts/save.gd")
@@ -1309,7 +1491,20 @@ func from_save(d: Dictionary) -> void:
 				rec[2] = Transform3D(Basis().scaled(Vector3(0.0001, 0.0001, 0.0001)), Vector3(o.x, -500.0, o.z))
 				(rec[0] as MultiMesh).set_instance_transform(rec[1], rec[2])
 	main._update_near(true)
+	# Восстанавливаем валку сразу для загруженных деревьев, остальные ждут свой чанк.
+	pending_fells.clear()
+	for fe: Dictionary in d.get("fell", []):
+		var tree_id := int(fe.get("id", -1))
+		var tree_rec := _find_tree_record(tree_id)
+		if tree_rec.is_empty():
+			pending_fells[tree_id] = fe
+		else:
+			_restore_fell_record(fe, tree_rec)
 	for e: Dictionary in d.get("gen", []):
+		if e.has("pos"):
+			pending_gen.append({"pos": SV.dec(e["pos"]), "kind": String(e.get("kind", "fallen0")), "cur": float(e.get("cur", 0.0))})
+			continue
+		# Поддержка старого формата сохранений с индексом записи в сетке.
 		var k: Vector2i = SV.dec(e["k"])
 		var arr: Array = main.fallen_spots.get(k, [])
 		var i := int(e["i"])
@@ -1327,6 +1522,7 @@ func from_save(d: Dictionary) -> void:
 		g._rebuild()
 		_unblock_spot(sp)
 		trunks.append(g)
+	_restore_pending_gen()
 	for e2: Dictionary in d.get("logs", []):
 		if e2.has("xf"):
 			var xf: Transform3D = SV.dec(e2["xf"])

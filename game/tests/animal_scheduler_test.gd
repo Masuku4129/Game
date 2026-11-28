@@ -12,6 +12,7 @@ class MockAnimal extends Node3D:
 	var kind := "roe"
 	var far := false
 	var _acc := 0.0
+	var _sim_tick_interval := 0.08
 	var dead := false
 	var meat := 1.0
 	var state := "wander"

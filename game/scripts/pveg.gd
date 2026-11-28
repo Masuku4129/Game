@@ -92,6 +92,17 @@ func _init() -> void:
 			m.set_shader_parameter(p, mats[k].get_shader_parameter(p))
 		mats[k + "_card"] = m
 	# черёмуха: белый цвет только поздней весной (blossom), летом зелёная, осенью багряная
+	# Отдельный объёмный материал для GLB-камыша. Старый reed использует
+	# grasscard.gdshader и предназначен только для UV-карточек травы; на трубчатых
+	# листьях GLB он давал неверную альфу/рисунок и мог выглядеть как пропавшая листва.
+	var reed_glb := ShaderMaterial.new()
+	reed_glb.shader = fol
+	reed_glb.set_shader_parameter("col_dark", Color(0.10, 0.22, 0.12))
+	reed_glb.set_shader_parameter("col_mid", Color(0.28, 0.46, 0.22))
+	reed_glb.set_shader_parameter("col_light", Color(0.56, 0.68, 0.34))
+	reed_glb.set_shader_parameter("autumn_k", 0.25)
+	mats["reed_glb"] = reed_glb
+	# Черёмуха: белый цвет только поздней весной (blossom), летом зелёная, осенью багряная
 	for k in ["cherry", "cherry_card"]:
 		mats[k].set_shader_parameter("bloom_k", 1.0)
 		mats[k].set_shader_parameter("col_autumn", Color(0.75, 0.28, 0.16))
@@ -1168,6 +1179,12 @@ const MODEL_KINDS := {
 	"aspen": ["taiga_aspen.glb", 5, 1.0, "bark_aspen", "leaf"],
 	"alder": ["taiga_alder.glb", 5, 0.55, "bark", "alder"],
 	"bush": ["taiga_bush.glb", 5, 0.75, "bark", "bush"],
+	"fern": ["taiga_fern.glb", 4, 0.85, "bark", "fern"],
+	"reeds": ["taiga_reed.glb", 4, 0.8, "bark", "reed_glb"],
+	"fireweed": ["taiga_flower.glb", 4, 0.9, "bark", "fireweed"],
+	"moss": ["taiga_moss.glb", 4, 0.85, "bark", "moss"],
+	"mushroom": ["taiga_mushroom.glb", 4, 0.9, "bark", "cap_red"],
+	"flower": ["taiga_flower.glb", 4, 0.9, "bark", "fireweed"],
 	"stump": ["taiga_stump.glb", 3, 1.0, "log", "moss"],
 	"rock": ["taiga_rock.glb", 6, 1.0, "rock", "moss"],
 	"pebble": ["taiga_rock.glb", 4, 0.42, "rock", "moss"],
@@ -1244,7 +1261,11 @@ func model(file: String, seed_v: int, base_scale: float, bark_mat: String, folia
 				q = Vector3(q.x * sx, q.y * sy, q.z * sx)
 				verts[i] = q
 				s_top = maxf(s_top, q.y)
-				nrm[i] = (xf.basis * nrm[i]).normalized()
+				# Нормаль должна пройти обратное транспонирование всей деформации:
+				# исходный GLB transform → индивидуальная скрутка → наклон → масштаб.
+				var deform := Basis(Vector3(sx, 0, 0), Vector3(lean.x * sy, sy, lean.y * sy), Vector3(0, 0, sx))
+				var full_basis := deform * Basis(Vector3.UP, ang) * xf.basis
+				nrm[i] = (full_basis.inverse().transposed() * nrm[i]).normalized()
 			top = maxf(top, s_top)
 			for i in verts.size():
 				var shade := clampf(0.45 + 0.35 * nrm[i].y + 0.3 * (verts[i].y / maxf(s_top, 0.1)) + R(-0.06, 0.06), 0.25, 1.0)

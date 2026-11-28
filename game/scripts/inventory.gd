@@ -30,7 +30,7 @@ var sheet := Control.new()
 var shown := 0.0        # 0..1 — видимость листа
 var cam_k := 0.0        # 0..1 — камера наезжает на героя
 var sel := ""
-var tab := 0            # 0 — короб, 1 — ремесло
+var tab := 0            # 0 — короб, 1 — ремесло, 2 — одежда, 3 — карта
 var rsel := ""          # выбранный рецепт
 var btn_use: Button
 var btn_belt: Button
@@ -45,6 +45,8 @@ var craft_scroll := 0.0
 var _craft_dragging := false
 var _craft_drag_y := 0.0
 var _craft_scroll_start := 0.0
+var _craft_drag_mode := "list" # list | scrollbar
+var _craft_bar_offset := 0.0
 var _edge := PackedVector2Array()
 var _blots: Array = []
 
@@ -243,11 +245,22 @@ func _kinds() -> Array:
 func count(id: String) -> int:
 	return int(main.inv.get(id, 0))
 
-func add_item(id: String, n: int = 1) -> void:
+func add_item(id: String, n: int = 1) -> bool:
+	if n <= 0:
+		return false
+	if main == null:
+		return false
+	if not bool(main.get("creative_mode")) and not can_add(id, n):
+		return false
 	main.inv[id] = count(id) + n
+	return int(main.inv[id]) >= n
 
 func remove_item(id: String, n: int = 1) -> bool:
-	if count(id) < n:
+	var worn_count := 0
+	for slot: String in main.worn:
+		if String(main.worn[slot]) == id:
+			worn_count += 1
+	if count(id) - worn_count < n:
 		return false
 	main.inv[id] = count(id) - n
 	if int(main.inv[id]) <= 0:
@@ -264,11 +277,18 @@ func weight() -> float:
 		var n := int(main.inv[k])
 		if tools != null:
 			n -= tools.equipped_count(k)
+		for slot: String in main.worn:
+			if String(main.worn[slot]) == String(k):
+				n -= 1
 		w += float(ITEMS.get(k, {}).get("w", 0.3)) * maxi(n, 0)
 	return w
 
-func can_add(kind: String) -> bool:
-	return weight() + float(ITEMS.get(kind, {}).get("w", 0.3)) <= CAPACITY + 0.001
+func can_add(kind: String, amount: int = 1) -> bool:
+	if amount <= 0:
+		return true
+	if main != null and bool(main.get("creative_mode")):
+		return true
+	return weight() + float(ITEMS.get(kind, {}).get("w", 0.3)) * float(amount) <= CAPACITY + 0.001
 
 func _name(kind: String) -> String:
 	if ITEMS.has(kind):
@@ -307,8 +327,20 @@ func recipes() -> Array:
 	for id: String in ITEMS:
 		if ITEMS[id].has("craft"):
 			out.append(id)
-	var ok := func(id: String) -> int: return 1 if missing(id).is_empty() else 0
-	out.sort_custom(func(a: String, b: String) -> bool: return ok.call(a) > ok.call(b))
+	var readiness := func(id: String) -> Array:
+		var miss: Dictionary = missing(id)
+		var total := 0
+		for amount: int in miss.values():
+			total += amount
+		return [1 if miss.is_empty() and station_ok(_station(id)) and _tool_ok(id) else 0, -total, _name(id)]
+	out.sort_custom(func(a: String, b: String) -> bool:
+		var ra: Array = readiness.call(a)
+		var rb: Array = readiness.call(b)
+		if int(ra[0]) != int(rb[0]):
+			return int(ra[0]) > int(rb[0])
+		if int(ra[1]) != int(rb[1]):
+			return int(ra[1]) > int(rb[1])
+		return String(ra[2]) < String(rb[2]))
 	return out
 
 ## Чего не хватает: {id: сколько}.
@@ -318,7 +350,11 @@ func missing(id: String) -> Dictionary:
 	var out := {}
 	var rc := recipe(id)
 	for k: String in rc:
-		var have: int = count(k) - (int(main.hero.tools.equipped_count(k)) if main.hero.tools != null else 0)
+		var worn_count := 0
+		for slot: String in main.worn:
+			if String(main.worn[slot]) == k:
+				worn_count += 1
+		var have: int = count(k) - (int(main.hero.tools.equipped_count(k)) if main.hero.tools != null else 0) - worn_count
 		if have < int(rc[k]):
 			out[k] = int(rc[k]) - have
 	return out
@@ -337,10 +373,28 @@ func craft(id: String) -> bool:
 	if not missing(id).is_empty() or not station_ok(_station(id)) or not _tool_ok(id):
 		return false
 	var rc := recipe(id)
-	if main == null or not bool(main.get("creative_mode")):
+	var output_count := int(EXTRA_OUT.get(id, ITEMS.get(id, {}).get("out", 1)))
+	var creative := main != null and bool(main.get("creative_mode"))
+	# Транзакция крафта: проверяем вместимость до списания, затем фиксируем
+	# снимок инвентаря и откатываем его целиком при любом отказе выдачи.
+	var before: Dictionary = main.inv.duplicate(true)
+	if not creative:
+		var consumed_weight := 0.0
 		for k: String in rc:
-			remove_item(k, int(rc[k]))
-	add_item(id, int(EXTRA_OUT.get(id, ITEMS.get(id, {}).get("out", 1))))  # core: out из items.gd
+			consumed_weight += float(ITEMS.get(k, {}).get("w", 0.3)) * float(rc[k])
+		var output_weight := float(ITEMS.get(id, {}).get("w", 0.3)) * float(output_count)
+		if weight() - consumed_weight + output_weight > CAPACITY + 0.001:
+			main._say("В коробе нет места для готового предмета")
+			return false
+		for k: String in rc:
+			if not remove_item(k, int(rc[k])):
+				main.inv = before
+				main.hero.tools.sync()
+				return false
+	if not add_item(id, output_count):
+		main.inv = before
+		main.hero.tools.sync()
+		return false
 	main._say("Сделано: " + _name(id).to_lower())
 	if main.sfx != null:
 		main.sfx.play_at("chop" if id == "flint" else "cut", main.hero.position + Vector3(0, 0.6, 0), -2.0, 1.3)
@@ -416,6 +470,22 @@ func _take(kind: String) -> void:
 func _sheet_input(e: InputEvent) -> void:
 	var rs := recipes() if tab == 1 else []
 	var max_scroll := maxf(0.0, float(rs.size()) * ROW_H - (640.0 - GRID.y))
+	if e is InputEventScreenTouch and e.pressed and e.position.y < 100.0 and e.position.x > 210.0 and e.position.x < 800.0:
+		tab = clampi(int((e.position.x - 210.0) / 175.0), 0, 3)
+		sheet.queue_redraw()
+		return
+	if tab == 2 and e is InputEventScreenTouch:
+		var clothing_touch := e as InputEventScreenTouch
+		if clothing_touch.pressed:
+			if clothing_touch.position.x < 610.0 and clothing_touch.position.y >= GRID.y and clothing_touch.position.y <= 640.0:
+				var clothing_list := _wearables()
+				var clothing_index := int((clothing_touch.position.y - GRID.y) / ROW_H)
+				if clothing_index >= 0 and clothing_index < clothing_list.size():
+					sel = clothing_list[clothing_index]
+			elif clothing_touch.position.x >= 640.0 and clothing_touch.position.y >= 500.0 and sel != "":
+				_wear_toggle(sel)
+			sheet.queue_redraw()
+		return
 	if tab == 1:
 		if e is InputEventMouseButton:
 			var mb := e as InputEventMouseButton
@@ -428,8 +498,21 @@ func _sheet_input(e: InputEvent) -> void:
 				sheet.queue_redraw()
 				return
 			if mb.button_index == MOUSE_BUTTON_LEFT:
-				if mb.pressed and mb.position.x < 620.0 and mb.position.y >= GRID.y and mb.position.y <= 640.0:
+				if mb.pressed and mb.position.x >= 604.0 and mb.position.x <= 642.0 and mb.position.y >= GRID.y and mb.position.y <= 640.0 and max_scroll > 0.0:
 					_craft_dragging = true
+					_craft_drag_mode = "scrollbar"
+					var track_top := GRID.y
+					var track_h_mouse := 516.0
+					var thumb_h_mouse := maxf(42.0, track_h_mouse * track_h_mouse / (float(rs.size()) * ROW_H))
+					var thumb_y_mouse := track_top + (track_h_mouse - thumb_h_mouse) * craft_scroll / max_scroll
+					_craft_bar_offset = mb.position.y - thumb_y_mouse if mb.position.y >= thumb_y_mouse and mb.position.y <= thumb_y_mouse + thumb_h_mouse else thumb_h_mouse * 0.5
+					var next_top_mouse := clampf(mb.position.y - _craft_bar_offset, track_top, track_top + track_h_mouse - thumb_h_mouse)
+					craft_scroll = (next_top_mouse - track_top) / maxf(track_h_mouse - thumb_h_mouse, 1.0) * max_scroll
+					sheet.queue_redraw()
+					return
+				if mb.pressed and mb.position.x < 604.0 and mb.position.y >= GRID.y and mb.position.y <= 640.0:
+					_craft_dragging = true
+					_craft_drag_mode = "list"
 					_craft_drag_y = mb.position.y
 					_craft_scroll_start = craft_scroll
 					var row_i := int((mb.position.y - GRID.y + craft_scroll) / ROW_H)
@@ -439,22 +522,71 @@ func _sheet_input(e: InputEvent) -> void:
 					return
 				elif not mb.pressed:
 					_craft_dragging = false
+		if e is InputEventScreenTouch:
+			var touch := e as InputEventScreenTouch
+			if not touch.pressed:
+				_craft_dragging = false
+				return
+			if touch.position.y >= GRID.y and touch.position.y <= 640.0:
+				if touch.position.x >= 604.0 and touch.position.x <= 642.0 and max_scroll > 0.0:
+					_craft_dragging = true
+					_craft_drag_mode = "scrollbar"
+					var track_h_touch := 516.0
+					var thumb_h_touch := maxf(42.0, track_h_touch * track_h_touch / (float(rs.size()) * ROW_H))
+					var thumb_y_touch := GRID.y + (track_h_touch - thumb_h_touch) * craft_scroll / max_scroll
+					_craft_bar_offset = touch.position.y - thumb_y_touch if touch.position.y >= thumb_y_touch and touch.position.y <= thumb_y_touch + thumb_h_touch else thumb_h_touch * 0.5
+					var next_top_touch := clampf(touch.position.y - _craft_bar_offset, GRID.y, GRID.y + track_h_touch - thumb_h_touch)
+					craft_scroll = (next_top_touch - GRID.y) / maxf(track_h_touch - thumb_h_touch, 1.0) * max_scroll
+				elif touch.position.x < 604.0:
+					_craft_dragging = true
+					_craft_drag_mode = "list"
+					_craft_drag_y = touch.position.y
+					_craft_scroll_start = craft_scroll
+					var row_i := int((touch.position.y - GRID.y + craft_scroll) / ROW_H)
+					if row_i >= 0 and row_i < rs.size():
+						rsel = rs[row_i]
+				sheet.queue_redraw()
+				return
 		if e is InputEventScreenDrag and _craft_dragging:
 			var drag := e as InputEventScreenDrag
-			craft_scroll = clampf(_craft_scroll_start - (drag.position.y - _craft_drag_y), 0.0, max_scroll)
+			if _craft_drag_mode == "scrollbar":
+				var track_h_drag := 516.0
+				var thumb_h_drag := maxf(42.0, track_h_drag * track_h_drag / (float(rs.size()) * ROW_H))
+				var top_drag := clampf(drag.position.y - _craft_bar_offset, GRID.y, GRID.y + track_h_drag - thumb_h_drag)
+				craft_scroll = (top_drag - GRID.y) / maxf(track_h_drag - thumb_h_drag, 1.0) * max_scroll
+			else:
+				craft_scroll = clampf(_craft_scroll_start - (drag.position.y - _craft_drag_y), 0.0, max_scroll)
 			sheet.queue_redraw()
 			return
 		if e is InputEventMouseMotion and _craft_dragging:
 			var motion := e as InputEventMouseMotion
-			craft_scroll = clampf(_craft_scroll_start - (motion.position.y - _craft_drag_y), 0.0, max_scroll)
+			if _craft_drag_mode == "scrollbar":
+				var track_h_motion := 516.0
+				var thumb_h_motion := maxf(42.0, track_h_motion * track_h_motion / (float(rs.size()) * ROW_H))
+				var top_motion := clampf(motion.position.y - _craft_bar_offset, GRID.y, GRID.y + track_h_motion - thumb_h_motion)
+				craft_scroll = (top_motion - GRID.y) / maxf(track_h_motion - thumb_h_motion, 1.0) * max_scroll
+			else:
+				craft_scroll = clampf(_craft_scroll_start - (motion.position.y - _craft_drag_y), 0.0, max_scroll)
 			sheet.queue_redraw()
 			return
 	if not (e is InputEventMouseButton and e.pressed and e.button_index == MOUSE_BUTTON_LEFT):
 		return
 	var pos: Vector2 = e.position
-	if pos.y < 100.0 and pos.x > 300.0 and pos.x < 760.0:
-		tab = 0 if pos.x < 530.0 else 1
+	if pos.y < 100.0 and pos.x > 210.0 and pos.x < 800.0:
+		tab = clampi(int((pos.x - 210.0) / 175.0), 0, 3)
 		sheet.queue_redraw()
+		return
+	if tab == 2:
+		if pos.x < 610.0 and pos.y >= GRID.y and pos.y <= 640.0:
+			var wearable := _wearables()
+			var wi := int((pos.y - GRID.y) / ROW_H)
+			if wi >= 0 and wi < wearable.size():
+				sel = wearable[wi]
+		elif pos.x >= 640.0 and pos.y >= 500.0 and sel != "":
+			_wear_toggle(sel)
+		sheet.queue_redraw()
+		return
+	if tab == 3:
 		return
 	if tab == 1:
 		if pos.x < 610.0 and pos.y >= GRID.y and pos.y <= 640.0:
@@ -506,12 +638,12 @@ func _draw_sheet() -> void:
 		ci.draw_line(Vector2(x, y), Vector2(x + rng.randf_range(14, 50), y + rng.randf_range(-1, 1)), Color(0.06, 0.09, 0.07, rng.randf_range(0.25, 0.55)), rng.randf_range(1.5, 3.5))
 	ci.draw_rect(Rect2(14, 14, sz.x - 28, 84), UI.BORDER, false, 2.0)
 	# вкладки
-	for t in 2:
-		var r := Rect2(310 + t * 225, 22, 215, 68)
+	for t in 4:
+		var r := Rect2(210 + t * 175, 22, 165, 68)
 		var on := tab == t
 		ci.draw_rect(r, UI.PANEL_HOVER if on else UI.PANEL_SOFT)
 		ci.draw_rect(r, UI.BORDER, false, 2.0)
-		var lbl: String = ["Короб", "Ремесло"][t]
+		var lbl: String = ["Короб", "Ремесло", "Одежда", "Карта"][t]
 		ci.draw_string(f, Vector2(r.position.x, r.position.y + 48), lbl, HORIZONTAL_ALIGNMENT_CENTER, r.size.x, 36, INK if on else Color(INK, 0.6))
 	var w := weight()
 	ci.draw_string_outline(f, Vector2(sz.x - 220, 66), "%.1f/%d кг" % [w, int(CAPACITY)], HORIZONTAL_ALIGNMENT_RIGHT, 190, 28, 6, Color(0.93, 0.9, 0.82))
@@ -519,14 +651,116 @@ func _draw_sheet() -> void:
 	ci.draw_string(f, Vector2(36, 70), "Тайга", HORIZONTAL_ALIGNMENT_LEFT, -1, 40, Color(INK, 0.85))
 	if tab == 0:
 		_draw_pack(ci, f, w)
-	else:
+	elif tab == 1:
 		_draw_craft(ci, f)
+	elif tab == 2:
+		_draw_clothes(ci, f)
+	else:
+		_draw_map(ci, f)
 
 func _cell_bg(ci: CanvasItem, r: Rect2) -> void:
 	ci.draw_rect(r, UI.PANEL_SOFT)
 	ci.draw_rect(Rect2(r.position + Vector2(4, 4), r.size - Vector2(8, 8)), UI.PANEL)
 	ci.draw_line(r.position, Vector2(r.end.x, r.position.y), UI.BORDER, 2.0)
 	ci.draw_line(r.position, Vector2(r.position.x, r.end.y), UI.BORDER, 2.0)
+
+func _wearables() -> Array:
+	var out: Array = []
+	for id: String in _kinds():
+		if ITEMS.get(id, {}).has("wear"):
+			out.append(id)
+	return out
+
+func _wear_toggle(id: String) -> void:
+	var slot := String(ITEMS.get(id, {}).get("wear", ""))
+	if slot == "":
+		return
+	if String(main.worn.get(slot, "")) == id:
+		main.worn.erase(slot)
+		if main.hero != null:
+			main.hero.refresh_clothing()
+		main._say("Снято: " + _name(id).to_lower())
+		return
+	main.worn[slot] = id
+	if main.hero != null:
+		main.hero.refresh_clothing()
+	main._say("Надето: " + _name(id).to_lower())
+
+func _draw_clothes(ci: CanvasItem, f: Font) -> void:
+	var wearable := _wearables()
+	for i in wearable.size():
+		var id := String(wearable[i])
+		var y := GRID.y + i * ROW_H
+		var slot := String(ITEMS[id].get("wear", ""))
+		var equipped := String(main.worn.get(slot, "")) == id
+		var r := Rect2(GRID.x, y, 574, ROW_H - 5)
+		ci.draw_rect(r, UI.PANEL_HOVER if equipped else UI.PANEL_SOFT)
+		ci.draw_rect(r, UI.BORDER, false, 1.5)
+		icon(ci, id, r.position + Vector2(26, 21), 17.0)
+		ci.draw_string(f, r.position + Vector2(56, 30), _name(id), HORIZONTAL_ALIGNMENT_LEFT, 300, 24, INK)
+		ci.draw_string(f, r.position + Vector2(370, 30), "Надето" if equipped else "В коробе", HORIZONTAL_ALIGNMENT_RIGHT, 170, 22, OK_C if equipped else Color(INK, 0.65))
+	var dr := Rect2(640, 124, 304, 500)
+	ci.draw_rect(dr, Color(0.8, 0.7, 0.5, 0.55))
+	ci.draw_rect(dr, Color(0.45, 0.33, 0.2), false, 3.0)
+	ci.draw_string(f, Vector2(656, 166), "Экипировка", HORIZONTAL_ALIGNMENT_LEFT, 270, 28, INK)
+	var y2 := 218.0
+	var total_warm := 0.0
+	for slot in ["head", "body", "feet"]:
+		var id := String(main.worn.get(slot, ""))
+		if id != "":
+			total_warm += float(ITEMS.get(id, {}).get("warm", 0.0))
+		var slot_name: String = {"head": "Голова", "body": "Туловище", "feet": "Ноги"}.get(slot, slot)
+		ci.draw_string(f, Vector2(660, y2), "%s: %s" % [slot_name, _name(id) if id != "" else "пусто"], HORIZONTAL_ALIGNMENT_LEFT, 265, 22, INK)
+		y2 += 48.0
+	ci.draw_string(f, Vector2(660, 382), "Тепло одежды: +%d%%" % int(round(total_warm * 100.0)), HORIZONTAL_ALIGNMENT_LEFT, 265, 24, OK_C)
+	ci.draw_rect(Rect2(660, 520, 250, 62), UI.PANEL_HOVER)
+	ci.draw_rect(Rect2(660, 520, 250, 62), UI.BORDER, false, 2.0)
+	var selected_slot := String(ITEMS.get(sel, {}).get("wear", ""))
+	var is_worn := selected_slot != "" and String(main.worn.get(selected_slot, "")) == sel
+	ci.draw_string(f, Vector2(660, 559), "Снять" if is_worn else "Надеть выбранное", HORIZONTAL_ALIGNMENT_CENTER, 250, 24, INK)
+	ci.draw_multiline_string(f, Vector2(660, 600), "Одежда сохраняется и повышает сопротивление холоду.", HORIZONTAL_ALIGNMENT_LEFT, 250, 20, 2, Color(INK, 0.75))
+
+func _draw_map(ci: CanvasItem, f: Font) -> void:
+	var cells: Dictionary = main.explored_map if main != null else {}
+	var center_x := floori(main.hero.position.x / 16.0)
+	var center_z := floori(main.hero.position.z / 16.0)
+	var cell_size := 18.0
+	var origin := Vector2(76.0, 142.0)
+	var cols := 29
+	var rows := 25
+	var map_rect := Rect2(origin, Vector2(cols * cell_size, rows * cell_size))
+	ci.draw_rect(map_rect, Color(0.28, 0.31, 0.25, 0.22))
+	for rz in rows:
+		for rx in cols:
+			var gx := center_x + rx - cols / 2
+			var gz := center_z + rz - rows / 2
+			var key := "%d,%d" % [gx, gz]
+			var r := Rect2(origin + Vector2(rx, rz) * cell_size, Vector2(cell_size - 1.0, cell_size - 1.0))
+			if not cells.has(key):
+				continue
+			var data: Dictionary = cells[key]
+			var col := Color(0.28, 0.43, 0.24)
+			match int(data.get("zone", 0)):
+				1: col = Color(0.28, 0.25, 0.2)
+				2: col = Color(0.38, 0.43, 0.29)
+				4: col = Color(0.43, 0.39, 0.31)
+			if bool(data.get("water", false)) or bool(data.get("lake", false)) or bool(data.get("river", false)):
+				col = Color(0.25, 0.46, 0.55) if bool(data.get("water", false)) or bool(data.get("lake", false)) else Color(0.34, 0.56, 0.62)
+			ci.draw_rect(r, col)
+		ci.draw_rect(map_rect, Color(0.28, 0.2, 0.13), false, 3.0)
+	var marker := origin + Vector2(cols / 2.0, rows / 2.0) * cell_size + Vector2(cell_size * 0.5, cell_size * 0.5)
+	ci.draw_colored_polygon(PackedVector2Array([marker + Vector2(0, -8), marker + Vector2(6, 6), marker + Vector2(-6, 6)]), Color(0.82, 0.22, 0.12))
+	var info := Rect2(620, 142, 324, 482)
+	ci.draw_rect(info, Color(0.8, 0.7, 0.5, 0.55))
+	ci.draw_rect(info, Color(0.45, 0.33, 0.2), false, 3.0)
+	ci.draw_string(f, Vector2(640, 184), "Исследованная местность", HORIZONTAL_ALIGNMENT_LEFT, 285, 26, INK)
+	ci.draw_string(f, Vector2(640, 222), "Открыто участков: %d" % cells.size(), HORIZONTAL_ALIGNMENT_LEFT, 285, 22, INK)
+	var legends := [[Color(0.28, 0.43, 0.24), "Лес"], [Color(0.38, 0.43, 0.29), "Болото"], [Color(0.25, 0.46, 0.55), "Вода / озеро"], [Color(0.34, 0.56, 0.62), "Река"], [Color(0.28, 0.25, 0.2), "Гарь"]]
+	for i in legends.size():
+		var yy := 280.0 + i * 48.0
+		ci.draw_rect(Rect2(644, yy - 18, 28, 24), legends[i][0])
+		ci.draw_string(f, Vector2(688, yy), legends[i][1], HORIZONTAL_ALIGNMENT_LEFT, 230, 22, INK)
+	ci.draw_multiline_string(f, Vector2(644, 550), "Карта открывается по мере исследования. Неизведанные участки не показываются.", HORIZONTAL_ALIGNMENT_LEFT, 275, 24, 3, Color(INK, 0.75))
 
 func _draw_pack(ci: CanvasItem, f: Font, w: float) -> void:
 	var tools: Node = main.hero.tools
@@ -626,12 +860,13 @@ func _draw_craft(ci: CanvasItem, f: Font) -> void:
 			icon(ci, k, Vector2(x + 14, y + 22), 13.0)
 			ci.draw_string(f, Vector2(x + 30, y + 32), "%d" % int(rc[k]), HORIZONTAL_ALIGNMENT_LEFT, -1, 22, BAD_C if miss.has(k) else OK_C)
 			x += 66
-	var track := Rect2(616, GRID.y, 10, 516)
-	ci.draw_rect(track, Color(0.22, 0.19, 0.14, 0.22))
+	var track := Rect2(610, GRID.y, 20, 516)
+	ci.draw_rect(track, Color(0.22, 0.19, 0.14, 0.38))
 	if max_scroll > 0.0:
-		var thumb_h := maxf(36.0, track.size.y * track.size.y / (float(rs.size()) * ROW_H))
+		var thumb_h := maxf(42.0, track.size.y * track.size.y / (float(rs.size()) * ROW_H))
 		var thumb_y := track.position.y + (track.size.y - thumb_h) * craft_scroll / max_scroll
-		ci.draw_rect(Rect2(track.position.x, thumb_y, track.size.x, thumb_h), UI.ACCENT)
+		ci.draw_rect(Rect2(track.position.x + 3.0, thumb_y, 14.0, thumb_h), UI.ACCENT)
+		ci.draw_rect(Rect2(track.position.x + 7.0, thumb_y + 5.0, 6.0, maxf(8.0, thumb_h - 10.0)), Color(1.0, 0.88, 0.7, 0.55))
 	if rs.is_empty():
 		ci.draw_string(f, GRID + Vector2(0, 40), "Нечего мастерить", HORIZONTAL_ALIGNMENT_LEFT, -1, 26, Color(INK, 0.6))
 	var dr := Rect2(640, 124, 304, 500)

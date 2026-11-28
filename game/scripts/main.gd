@@ -6,10 +6,13 @@ const SIZE := 512.0
 const SEG := 384
 const WATER_Y := -2.0
 const CELL := 64.0
-const MAP_SEED := 20261127 # единый seed всей карты: рельеф, биомы, река, озёра, лес и трава
+const MAP_SEED := 20261127 # fallback для старых сохранений
+const PENDING_SEED_PATH := "user://pending_world_seed.txt"
 var map_seed: int = MAP_SEED
+var explored_map: Dictionary = {}
+var _map_reveal_t := 0.0
 const FOREST_DENSITY_MULTIPLIER := 1.7
-const FOREST_DENSITY_SPECIES := ["spruce", "pine", "birch", "larch", "aspen", "bare", "spruce_dead", "bush", "fern", "reeds", "twig", "berry", "bilberry", "mushroom", "fir", "cedar", "willow", "alder", "cherry", "rose", "horsetail", "hummock", "sedge", "juniper", "stlanik", "rowan", "anthill", "mossrock", "stump_rot", "stump_mush", "fungus_snag", "birch_dead", "mosslog", "ledum", "cloudberry", "cranberry", "cotton", "lingon", "ernik", "raspberry", "currant", "bells", "daisy", "angelica", "brushpile", "chanterelle", "cones"]
+const FOREST_DENSITY_SPECIES := ["spruce", "pine", "birch", "larch", "aspen", "bare", "spruce_dead", "bush", "fern", "reeds", "moss", "flower", "twig", "berry", "bilberry", "mushroom", "fir", "cedar", "willow", "alder", "cherry", "rose", "horsetail", "hummock", "sedge", "juniper", "stlanik", "rowan", "anthill", "mossrock", "stump_rot", "stump_mush", "fungus_snag", "birch_dead", "mosslog", "ledum", "cloudberry", "cranberry", "cotton", "lingon", "ernik", "raspberry", "currant", "bells", "daisy", "angelica", "brushpile", "chanterelle", "cones"]
 
 var n_hill := FastNoiseLite.new()
 var n_cliff := FastNoiseLite.new()
@@ -51,6 +54,7 @@ var bleed := 0.0
 var injuries := {}
 var inv := {}
 var resource_gained := {}
+var worn: Dictionary = {}
 var creative_mode := false
 var pickables := {}
 var animals
@@ -69,21 +73,37 @@ var fallen_spots := {}   # клетка 16 м → [{kind, mm, i, xf, a, b, r}] �
 var hunt  # --- hunt: туши, разделка, кровь, запах крови (hunt.gd) ---
 var camp  # --- build: лагерь и постройки (structures.gd) ---
 var combat  # --- combat: удары, прицел, стрелы (combat.gd) ---
-# --- colony: отряд землепроходцев, изометрическая камера, сценарий (colony.gd).
-# colony_mode = true — новая игра про острог; false — старый режим героя с джойстиком
-# (отладочный переключатель в настройках и переменная окружения HERO_MODE=1). ---
-var colony
-var colony_mode := true
+# Player-controlled wilderness survival.
 
 func _ready() -> void:
-	_colony_pick_mode()
+	# Видимый экран загрузки: генерация мира больше не должна выглядеть как зависание.
+	var boot_ui := CanvasLayer.new()
+	boot_ui.layer = 100
+	boot_ui.process_mode = Node.PROCESS_MODE_ALWAYS
+	add_child(boot_ui)
+	var boot_bg := ColorRect.new()
+	boot_bg.color = Color(0.055, 0.075, 0.055, 0.94)
+	boot_bg.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	boot_bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	boot_ui.add_child(boot_bg)
+	var boot_label := Label.new()
+	boot_label.text = "TAIGA\nПодготовка мира…"
+	boot_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	boot_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	boot_label.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	boot_label.add_theme_font_size_override("font_size", 34)
+	boot_label.add_theme_color_override("font_color", Color(0.88, 0.91, 0.78))
+	boot_ui.add_child(boot_label)
+	_resolve_world_seed()
 	_setup_noise()
 	weather = preload("res://scripts/weather.gd").new()
 	weather.main = self
 	add_child(weather)
 	_make_environment()
-	_make_terrain()
+	boot_label.text = "TAIGA\nФормирование рельефа…"
+	await _make_terrain()
 	_make_water()
+	boot_label.text = "TAIGA\nСоздание леса и растительности…"
 	_scatter_all()
 	grass_mesh_vars = [pv.tuft(1500), pv.tuft(1503, 1.3), pv.tuft(1504, 0.8)]
 	hero = preload("res://scripts/hero.gd").new()
@@ -111,38 +131,25 @@ func _ready() -> void:
 	# с собой только кремнёвый нож на поясе
 	inv["knife"] = 1
 	hero.tools.to_belt("knife")
-	# --- colony: в режиме острога — изометрическая камера (rts_camera.gd) вместо
-	# привязанной к герою; поля те же, поэтому старый код работает по-прежнему ---
-	if colony_mode:
-		rig = preload("res://scripts/rts_camera.gd").new()
-		rig.main = self
-		add_child(rig)
-		rig.snap_to(hero.position, 30.0, 0.6)
-		player_rig = rig
-		hero.visible = false
-		hero.process_mode = Node.PROCESS_MODE_DISABLED
-	else:
-		rig = preload("res://scripts/camera_rig.gd").new()
-		rig.target = hero
-		add_child(rig)
-		rig.position = hero.position
-		player_rig = hero
-	# --- /colony ---
+	rig = preload("res://scripts/camera_rig.gd").new()
+	rig.target = hero
+	add_child(rig)
+	rig.position = hero.position
+	player_rig = hero
 	var ui := CanvasLayer.new()
 	add_child(ui)
-	if not colony_mode:
-		hud = preload("res://scripts/hud.gd").new()
-		hud.anchor_right = 1.0
-		hud.anchor_bottom = 1.0
-		ui.add_child(hud)
-		joy = preload("res://scripts/joystick.gd").new()
-		joy.anchor_top = 1.0
-		joy.anchor_bottom = 1.0
-		joy.offset_left = 40.0
-		joy.offset_right = 400.0
-		joy.offset_top = -400.0
-		joy.offset_bottom = -40.0
-		ui.add_child(joy)
+	hud = preload("res://scripts/hud.gd").new()
+	hud.anchor_right = 1.0
+	hud.anchor_bottom = 1.0
+	ui.add_child(hud)
+	joy = preload("res://scripts/joystick.gd").new()
+	joy.anchor_top = 1.0
+	joy.anchor_bottom = 1.0
+	joy.offset_left = 40.0
+	joy.offset_right = 400.0
+	joy.offset_top = -400.0
+	joy.offset_bottom = -40.0
+	ui.add_child(joy)
 	act_btn = Button.new()
 	act_btn.anchor_left = 1.0
 	act_btn.anchor_right = 1.0
@@ -157,14 +164,10 @@ func _ready() -> void:
 	act_btn.visible = false
 	act_btn.pressed.connect(func(): hero.do_action())
 	ui.add_child(act_btn)
-	if colony_mode:
-		act_btn.visible = false
-	else:
-		# --- инвентарь (короб): кнопка «Рюкзак» на HUD, лист вещей, анимация снятия короба ---
-		inventory = preload("res://scripts/inventory.gd").new()
-		inventory.main = self
-		ui.add_child(inventory)
-		hud.setup(self)
+	inventory = preload("res://scripts/inventory.gd").new()
+	inventory.main = self
+	ui.add_child(inventory)
+	hud.setup(self)
 	# --- hunt: разделка туш, кровь, запах крови (hunt.gd) ---
 	hunt = preload("res://scripts/hunt.gd").new()
 	hunt.main = self
@@ -182,12 +185,7 @@ func _ready() -> void:
 	camp.main = self
 	add_child(camp)
 	# --- /build ---
-	# --- colony: лист лагеря (camp_ui) заменён листом острога ---
-	if colony_mode and camp.ui != null:
-		camp.ui.visible = false
-		camp.ui.set_process(false)
-		camp.ui.set_process_unhandled_input(false)
-	# --- /colony ---
+	
 	fps_lbl = Label.new()
 	fps_lbl.anchor_left = 0.5
 	fps_lbl.anchor_right = 0.5
@@ -221,22 +219,6 @@ func _ready() -> void:
 	# --- core: настройки (качество, кадры, звук), сохранение, справочник, меню ---
 	_core_setup(ui)
 	# --- /core ---
-	# --- colony: отряд, лист острога и сценарий «Первая зима» ---
-	if colony_mode:
-		fps_lbl.offset_top = 120.0
-		fps_lbl.visible = false
-		var cl := CanvasLayer.new()
-		cl.layer = 3
-		add_child(cl)
-		colony = preload("res://scripts/colony.gd").new()
-		colony.rig = rig
-		add_child(colony)
-		colony.setup(self, cl)
-		rig.colony = colony
-		if OS.get_environment("COLONY_TEST") != "" or OS.get_environment("COLONY_SHOTS") != "":
-			var ct: Node = preload("res://scripts/colony_test.gd").new()
-			ct.set("main", self)
-			add_child(ct)
 	var _hx := OS.get_environment("CHIDE")
 	if "s" in _hx:
 		sun.shadow_enabled = false
@@ -251,28 +233,17 @@ func _ready() -> void:
 			m.visible = false
 	if "a" in _hx:
 		animals.visible = false
-	# --- /colony ---
+	
 	_update_near(true)
-	_grass_prebuild(player_rig.position)
+	# Grass cells are built incrementally by _process after the world becomes playable.
+	# Do not synchronously prebuild the 5x5 ring here; it stalls the launch screen.
 	# --- perf: PERF=1 — замер нагрузки без экрана (perf.gd) ---
 	if OS.get_environment("PERF") != "":
 		var pf: Node = preload("res://scripts/perf.gd").new()
 		pf.set("main", self)
 		add_child(pf)
+	boot_ui.queue_free()
 
-## --- colony: какой режим запускать. Старые проверки (бой, инструменты, охота, стройка,
-## сохранение, кадры, замер) идут по-прежнему от героя, поэтому для них — режим героя. ---
-func _colony_pick_mode() -> void:
-	colony_mode = true
-	var cf := ConfigFile.new()
-	if cf.load("user://settings.cfg") == OK:
-		colony_mode = not bool(cf.get_value("game", "hero_mode", false))
-	for e: String in ["COMBAT_TEST", "TOOLS_TEST", "HUNT_TEST", "BUILD_TEST", "SAVE_TEST", "UI_SHOTS", "SHOTS", "PERF", "HERO_MODE"]:
-		if OS.get_environment(e) != "":
-			colony_mode = false
-	for e2: String in ["COLONY_TEST", "COLONY_SHOTS"]:
-		if OS.get_environment(e2) != "":
-			colony_mode = true
 
 func _find_start() -> Vector3:
 	for r in range(0, 120, 3):
@@ -389,18 +360,18 @@ func blocked(x: float, z: float, rad: float) -> bool:
 	return false
 
 func _setup_noise() -> void:
-	n_hill.seed = MAP_SEED + 1640; n_hill.frequency = 0.004; n_hill.fractal_octaves = 4
-	n_cliff.seed = MAP_SEED + 77; n_cliff.frequency = 0.0045; n_cliff.fractal_octaves = 2
-	n_detail.seed = MAP_SEED + 5; n_detail.frequency = 0.05; n_detail.fractal_octaves = 3
-	n_crag.seed = MAP_SEED + 31; n_crag.frequency = 0.16; n_crag.fractal_octaves = 4
-	n_crag2.seed = MAP_SEED + 32; n_crag2.frequency = 0.55; n_crag2.fractal_octaves = 2
-	n_biome.seed = MAP_SEED + 4242; n_biome.frequency = 0.0042; n_biome.fractal_octaves = 2
-	n_forest.seed = MAP_SEED + 909; n_forest.frequency = 0.02; n_forest.fractal_octaves = 3
-	n_zone.seed = MAP_SEED + 2024; n_zone.noise_type = FastNoiseLite.TYPE_CELLULAR; n_zone.frequency = 0.018
+	n_hill.seed = map_seed + 1640; n_hill.frequency = 0.004; n_hill.fractal_octaves = 4
+	n_cliff.seed = map_seed + 77; n_cliff.frequency = 0.0045; n_cliff.fractal_octaves = 2
+	n_detail.seed = map_seed + 5; n_detail.frequency = 0.05; n_detail.fractal_octaves = 3
+	n_crag.seed = map_seed + 31; n_crag.frequency = 0.16; n_crag.fractal_octaves = 4
+	n_crag2.seed = map_seed + 32; n_crag2.frequency = 0.55; n_crag2.fractal_octaves = 2
+	n_biome.seed = map_seed + 4242; n_biome.frequency = 0.0042; n_biome.fractal_octaves = 2
+	n_forest.seed = map_seed + 909; n_forest.frequency = 0.02; n_forest.fractal_octaves = 3
+	n_zone.seed = map_seed + 2024; n_zone.noise_type = FastNoiseLite.TYPE_CELLULAR; n_zone.frequency = 0.018
 	n_zone.cellular_return_type = FastNoiseLite.RETURN_CELL_VALUE; n_zone.fractal_type = FastNoiseLite.FRACTAL_NONE
-	n_open.seed = MAP_SEED + 313; n_open.frequency = 0.0055; n_open.fractal_octaves = 2
-	n_wet.seed = MAP_SEED + 777; n_wet.frequency = 0.007; n_wet.fractal_octaves = 3
-	n_glade.seed = MAP_SEED + 555; n_glade.frequency = 0.011; n_glade.fractal_octaves = 2
+	n_open.seed = map_seed + 313; n_open.frequency = 0.0055; n_open.fractal_octaves = 2
+	n_wet.seed = map_seed + 777; n_wet.frequency = 0.007; n_wet.fractal_octaves = 3
+	n_glade.seed = map_seed + 555; n_glade.frequency = 0.011; n_glade.fractal_octaves = 2
 
 ## Уровень воды в точке: у бобровых плотин выше (пруд) или ниже (после плотины).
 func water_level(x: float, z: float) -> float:
@@ -408,8 +379,8 @@ func water_level(x: float, z: float) -> float:
 
 ## Расстояние до русла по нормали к оси (на крутой излучине река не сужается).
 func river_dist(x: float, z: float) -> float:
-	var d: float = RP.dzc(x)
-	return absf(z - RP.zc(x)) / sqrt(1.0 + d * d)
+	var d: float = RP.dzc(x, map_seed)
+	return absf(z - RP.zc(x, map_seed)) / sqrt(1.0 + d * d)
 
 ## 1 в центре озера, плавно к 0 у берега.
 func lake_k(x: float, z: float) -> float:
@@ -424,23 +395,37 @@ func lake_k(x: float, z: float) -> float:
 func wet_k(x: float, z: float, h: float) -> float:
 	return clampf((WATER_Y + 4.0 - h) / 3.0, 0.0, 1.0) * smoothstep(-0.08, 0.3, n_wet.get_noise_2d(x, z))
 
-## Особые участки леса (ячейки ~90 м): 0 обычный, 1 гарь, 2 болото, 3 курумник, 4 бурелом.
+## Особые участки леса (ячейки ~90 м): 0 обычный, 1 гарь, 2 болото, 4 бурелом.
+## Каменный биом удалён: отдельные скалы и валуны размещаются по уклону и геологии локально.
 func zone(x: float, z: float) -> int:
 	var jx := x + n_detail.get_noise_2d(x * 0.7, z * 0.7) * 9.0
 	var jz := z + n_detail.get_noise_2d(z * 0.7 + 50.0, x * 0.7) * 9.0
 	var v := n_zone.get_noise_2d(jx, jz)
 	var y := height(x, z)
-	# зоны редкие и небольшие: ~1/3 прежней площади
 	if v < -0.86:
 		return 1
-	if (v < -0.7 and y < WATER_Y + 4.0) or (y > WATER_Y + 0.1 and y < WATER_Y + 3.0 and wet_k(x, z, y) > 0.3):
+	if (v < -0.64 and y < WATER_Y + 4.0) or (y > WATER_Y + 0.1 and y < WATER_Y + 3.0 and wet_k(x, z, y) > 0.3):
 		return 2
-	# каменистые склоны и курумники: в скалистой части карты крупными пятнами
-	if v > 0.88 or (v > 0.76 and biome(x, z) > 0.2) or (biome(x, z) > 0.42 and n_detail.get_noise_2d(x * 0.3, z * 0.3) > 0.1):
-		return 3
 	if v > 0.2 and v < 0.3:
 		return 4
 	return 0
+
+## Глубина трясины: только заболоченная зона; неоднородные окна топкого грунта.
+## Возвращает глубину потенциального провала в метрах (0..1.45), не подменяя уровень воды.
+func swamp_depth_at(x: float, z: float) -> float:
+	if zone(x, z) != 2:
+		return 0.0
+	var wet := smoothstep(-0.25, 0.42, n_wet.get_noise_2d(x * 0.72 + 137.0, z * 0.72 - 91.0))
+	var pockets := smoothstep(-0.18, 0.5, n_detail.get_noise_2d(x * 0.42 - 53.0, z * 0.42 + 211.0))
+	var low := clampf((WATER_Y + 3.8 - height(x, z)) / 3.2, 0.0, 1.0)
+	var depth := (0.18 + wet * 0.72 + pockets * 0.38) * low
+	# Дождь насыщает торф водой и усиливает провал; в устойчивый мороз
+	# промёрзшая корка частично держит вес, но не превращает болото в сухую землю.
+	if weather != null:
+		depth *= 1.0 + clampf(weather.wet, 0.0, 1.0) * 0.18
+		if weather.temp < -2.0:
+			depth *= 1.0 - (1.0 - smoothstep(-12.0, -2.0, weather.temp)) * clampf(weather.snow, 0.0, 1.0) * 0.32
+	return clampf(depth, 0.0, 1.45)
 
 func biome(x: float, z: float) -> float:
 	return clampf(n_biome.get_noise_2d(x, z) * 2.2, -1.0, 1.0)
@@ -467,7 +452,7 @@ func height(x: float, z: float) -> float:
 	var wk := wet_k(x, z, h)
 	if wk > 0.0:
 		h = lerpf(h, WATER_Y + 0.5 + n_detail.get_noise_2d(x * 0.8, z * 0.8) * 0.12, wk * 0.85)
-		h = lerpf(h, WATER_Y - 0.9, smoothstep(0.5, 0.62, n_detail.get_noise_2d(x * 0.25 + 90.0, z * 0.25)) * wk)
+		h = lerpf(h, WATER_Y - 0.9, smoothstep(-0.18, 0.08, n_detail.get_noise_2d(x * 0.25 + 90.0, z * 0.25)) * wk)
 	h = lerpf(h, WATER_Y - 2.2, lake_k(x, z))
 	var r := 1.0 - smoothstep(7.0, 26.0, river_dist(x, z))
 	return lerpf(h, WATER_Y - 2.5, r)
@@ -617,10 +602,7 @@ func _update_sky() -> void:
 	if hero != null:
 		hero.torch.light_energy = 2.2 * (1.0 - d) * (1.6 if lamp_lit else 1.0)  # core: жирник
 		hero.torch.omni_range = 17.0 if lamp_lit else 11.0
-	# --- colony: на отъезде дымка отступает — видна вся долина ---
-	if colony != null:
-		colony.fog_adjust()
-	# --- /colony ---
+	
 	day_factor = d
 
 var hmap_tex: ImageTexture
@@ -640,6 +622,8 @@ func _make_terrain() -> void:
 	for iz in n:
 		for ix in n:
 			hs[iz * n + ix] = height(ix * step - half, iz * step - half)
+		if iz % 12 == 0:
+			await get_tree().process_frame
 	for iz in n:
 		for ix in n:
 			var x := ix * step - half
@@ -661,6 +645,8 @@ func _make_terrain() -> void:
 			var zn := zone(x, z)
 			zuv[i] = Vector2(1.0 if zn == 1 else 0.0, 1.0 if zn == 2 else 0.0)
 			zuv2[i] = Vector2(1.0 if zn == 3 else 0.0, 1.0 if zn == 4 else 0.0)
+		if iz % 12 == 0:
+			await get_tree().process_frame
 	var himg := Image.create_from_data(n, n, false, Image.FORMAT_RF, hs.to_byte_array())
 	hmap_tex = ImageTexture.create_from_image(himg)
 	var zb := PackedByteArray(); zb.resize(n * n * 4)
@@ -712,6 +698,8 @@ func _make_terrain() -> void:
 			mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 			mi.extra_cull_margin = 2.0  # снег поднимает поверхность в шейдере
 			add_child(mi)
+		if cz % 2 == 0:
+			await get_tree().process_frame
 
 func _make_water() -> void:
 	var plane := PlaneMesh.new()
@@ -802,32 +790,32 @@ func _shots() -> void:
 		get_tree().quit()
 
 var _dbgf := 0
+var _visual_uniform_t := 0.0 # perf: обновляем пакет uniforms 10 раз/с
 func _process(delta: float) -> void:
 	_dbgf += 1
-	if hero == null or (joy == null and colony == null):
+	if hero == null or joy == null:
 		return
 	if OS.get_environment("SHOTS") != "":
 		_shots()
-	# --- colony: далёкая камера — растворение растений считаем от середины взгляда,
-	# а не от камеры: иначе на отъезде пропала бы вся долина ---
 	var hp: Vector3 = hero.position + Vector3(0, 1.0, 0)
 	var cp: Vector3 = rig.cam.global_position
-	if colony != null:
-		hp = Vector3(0, -1000.0, 0)
-		cp = colony.veg_focus()
-	# --- /colony ---
-	for m in veg.fade_list:
-		m.set_shader_parameter("hero_pos", hp)
-		m.set_shader_parameter("cam_pos", cp)
-	for m in pv.fade_list:
-		m.set_shader_parameter("hero_pos", hp)
-		m.set_shader_parameter("cam_pos", cp)
-	pv.mats["tuft"].set_shader_parameter("hero_pos", hp)
-	pv.mats["tuft"].set_shader_parameter("cam_pos", cp)
-	pv.mats["tuft"].set_shader_parameter("grass_now", Time.get_ticks_msec() * 0.001)
-	water_mat.set_shader_parameter("hero_pos", hero.position)
-	water_mat.set_shader_parameter("swim", hero.swimb if colony == null else 0.0)
-	water_mat.set_shader_parameter("swim_move", clampf(hero.run_mag, 0.0, 1.0))
+	# Обновление uniforms на каждом кадре обходило весь список растительности и
+	# создавало лишнюю CPU-нагрузку. 20 Гц достаточно для плавного fade и реакции воды.
+	_visual_uniform_t -= delta
+	if _visual_uniform_t <= 0.0:
+		_visual_uniform_t = 0.1
+		for m in veg.fade_list:
+			m.set_shader_parameter("hero_pos", hp)
+			m.set_shader_parameter("cam_pos", cp)
+		for m in pv.fade_list:
+			m.set_shader_parameter("hero_pos", hp)
+			m.set_shader_parameter("cam_pos", cp)
+		pv.mats["tuft"].set_shader_parameter("hero_pos", hp)
+		pv.mats["tuft"].set_shader_parameter("cam_pos", cp)
+		pv.mats["tuft"].set_shader_parameter("grass_now", Time.get_ticks_msec() * 0.001)
+		water_mat.set_shader_parameter("hero_pos", hero.position)
+		water_mat.set_shader_parameter("swim", hero.swimb)
+		water_mat.set_shader_parameter("swim_move", clampf(hero.run_mag, 0.0, 1.0))
 	_fps_t -= delta
 	if _fps_t <= 0.0:
 		_fps_t = 0.5
@@ -837,9 +825,13 @@ func _process(delta: float) -> void:
 		dead_t -= delta
 		if dead_t <= 0.0:
 			_respawn()
+	_map_reveal_t -= delta
+	if _map_reveal_t <= 0.0 and hero != null:
+		_map_reveal_t = 1.5
+		_reveal_map_area()
 	_near_t -= delta
 	if _near_t <= 0.0:
-		_near_t = 0.06
+		_near_t = _near_update_interval
 		_update_near()
 	if joy != null:
 		hero.move_vec = joy.value if health > 0.0 else Vector2.ZERO
@@ -901,8 +893,6 @@ func _process(delta: float) -> void:
 
 ## Проверка сезонов: тап по часам в правом верхнем углу перематывает время на 2 дня вперёд.
 func _unhandled_input(e: InputEvent) -> void:
-	if colony != null:
-		return  # colony: палец разбирают камера и лист острога
 	if e is InputEventScreenTouch and e.pressed:
 		var vs := get_viewport().get_visible_rect().size
 		if e.position.x > vs.x - 520.0 and e.position.y < 90.0:
@@ -910,11 +900,7 @@ func _unhandled_input(e: InputEvent) -> void:
 			get_viewport().set_input_as_handled()
 
 func _update_stats(dt: float) -> void:
-	# --- colony: голод, тепло и усталость — у каждого свои (unit.needs_tick) ---
-	if colony != null:
-		msg_t -= dt
-		return
-	# --- /colony ---
+	# Survival needs are tracked for the player.
 	hunger = maxf(0.0, hunger - 0.0004 * dt)
 	thirst = maxf(0.0, thirst - 0.0007 * dt * (1.5 if hero.running else 1.0))
 	var gh := dt / 75.0
@@ -938,7 +924,11 @@ func _update_stats(dt: float) -> void:
 	msg_t -= dt
 	var tc: float = weather.temp
 	var soak: float = maxf(float(weather.wet) * 0.6, float(hero.soaked))
-	var target_w := clampf(0.55 + tc * 0.025 - soak * 0.35 - weather.wind * 0.05 - (0.25 if hero.swimb > 0.5 else 0.0), 0.02, 0.95)
+	var clothing_warmth := 0.0
+	for slot: String in worn:
+		var clothing_id := String(worn[slot])
+		clothing_warmth += float(preload("res://scripts/items.gd").DEF.get(clothing_id, {}).get("warm", 0.0))
+	var target_w := clampf(0.55 + tc * 0.025 - soak * 0.35 - weather.wind * 0.05 - (0.25 if hero.swimb > 0.5 else 0.0) + clothing_warmth, 0.02, 0.95)
 	# --- build: костёр, шалаш, изба с печью греют; укрытие ослабляет ветер ---
 	if camp != null:
 		target_w = clampf(target_w + camp.warm_bonus() + weather.wind * 0.05 * (1.0 - camp.wind_k()), 0.02, 0.98)
@@ -1131,7 +1121,7 @@ func _variants(kind: String) -> Array:
 		"rowan":
 			for i in 2: out.append(pv.birch(2300 + i, "rowan"))
 		"fern":
-			for i in 5: out.append(pv.fern(700 + i))
+			for i in 4: out.append(pv.fern(700 + i))
 		"grass":
 			for i in 4: out.append(veg.grass(800 + i))
 		"rock":
@@ -1235,6 +1225,7 @@ var near_mesh := {}
 var near_mmi := {}
 var _near_at := Vector3(1e9, 0, 0)
 var _near_t := 0.0
+var _near_update_interval := 0.2
 var _tree_id := 0
 
 ## Детальные деревья только вблизи: в радиусе NEAR_R дерево берётся из полной модели.
@@ -1244,8 +1235,8 @@ func _update_near(force: bool = false) -> void:
 	var c: Vector3 = rig.position
 	# Detail models are prepared ahead of the camera so the visible forest does not pop in at the view edge.
 	var view_forward := Vector3(sin(rig.rotation.y), 0.0, -cos(rig.rotation.y))
-	c += view_forward * 18.0
-	if not force and Vector2(c.x - _near_at.x, c.z - _near_at.z).length() < 0.55:
+	c += view_forward * 30.0
+	if not force and Vector2(c.x - _near_at.x, c.z - _near_at.z).length_squared() < 2.25:
 		return
 	_near_at = c
 	var by_key := {}
@@ -1318,30 +1309,55 @@ func find_pick(p: Vector3) -> Array:
 					best = it
 	return best
 
-func _record_resource(kind: String, amount: int = 1) -> void:
+func _record_resource(kind: String, amount: int = 1) -> bool:
 	if amount <= 0:
-		return
+		return false
+	var before := int(inv.get(kind, 0))
 	if inventory != null:
-		inventory.add_item(kind, amount)
+		if not inventory.add_item(kind, amount):
+			return false
 	else:
-		inv[kind] = int(inv.get(kind, 0)) + amount
-	resource_gained[kind] = int(resource_gained.get(kind, 0)) + amount
+		inv[kind] = before + amount
+	var received := int(inv.get(kind, 0)) - before
+	if received != amount:
+		# Защита от частичной выдачи: откатить то, что успело попасть в инвентарь.
+		if received > 0:
+			inv[kind] = before
+			if before <= 0:
+				inv.erase(kind)
+		return false
+	resource_gained[kind] = int(resource_gained.get(kind, 0)) + received
+	return true
 
-func take_pick(it: Array) -> void:
-	if inventory != null and not inventory.can_add(String(it[1])):
-		_say("Короб полон")
-		return
+func take_pick(it: Array) -> bool:
+	# Подбор — атомарная операция: предмет остаётся в мире, если инвентарь не принимает его.
+	if it.size() < 4:
+		return false
 	var q: Vector3 = it[0]
 	var k := Vector2i(floori(q.x / 8.0), floori(q.z / 8.0))
-	pickables[k].erase(it)
+	if not pickables.has(k) or not (pickables[k] as Array).has(it):
+		return false
+	var kind: String = String(it[1])
+	if inventory != null and not inventory.can_add(kind):
+		_say("Короб полон")
+		return false
+	# Сначала подтверждаем фактическое получение. Только после этого удаляем
+	# экземпляр из мира — при отказе инвентаря ресурс остаётся доступен.
+	var stored := false
+	if inventory != null:
+		stored = _record_resource(kind, 1)
+		if not stored:
+			_say("Не удалось положить ресурс в короб")
+			return false
+	(pickables[k] as Array).erase(it)
+	if (pickables[k] as Array).is_empty():
+		pickables.erase(k)
 	var mm: MultiMesh = it[2]
 	mm.set_instance_transform(it[3], Transform3D(Basis().scaled(Vector3(0.001, 0.001, 0.001)), q - Vector3(0, 5, 0)))
-	var kind: String = it[1]
-	# съедобное теперь кладём в короб (есть — из инвентаря), если хватает места
+	# Ягоды и грибы в коробе не съедаются автоматически. Без инвентаря действует прежний сбор. 
 	if inventory != null and kind in ["berry", "mushroom", "amanita"]:
-		_record_resource(kind, 1)
-		_say("+1 %s — в короб" % PICK_NAME[kind])
-		return
+		_say("+1 %s — в короб" % PICK_NAME.get(kind, kind))
+		return true
 	match kind:
 		"berry":
 			hunger = minf(1.0, hunger + 0.05)
@@ -1356,8 +1372,10 @@ func take_pick(it: Array) -> void:
 			flash.color.a = 0.25
 			_say("Мухомор! Отравление")
 		_:
-			_record_resource(kind, 1)
-			_say("+1 %s" % PICK_NAME[kind])
+			if inventory == null and not _record_resource(kind, 1):
+				return false
+			_say("+1 %s" % PICK_NAME.get(kind, kind))
+	return true
 
 func near_water(p: Vector3) -> bool:
 	for a in 8:
@@ -1446,11 +1464,14 @@ func tree_radius_at(p: Vector3) -> float:
 
 ## Удар зверя: часть тела, кровотечение, переломы, отбрасывание.
 func hurt(amount: float, from: Vector3, kind: String) -> void:
-	# --- colony: бьют не героя, а того из отряда, кто ближе и слабее ---
-	if colony != null:
-		colony.hurt_nearest(amount, from, kind)
+	# Damage is applied to the player.
+	# В творческом режиме урон не должен даже кратковременно запускать смерть,
+	# отбрасывание, кровотечение или прерывание текущего действия.
+	if creative_mode:
+		health = 1.0
+		bleed = 0.0
+		injuries.clear()
 		return
-	# --- /colony ---
 	if health <= 0.0:
 		return
 	var big := kind in ["bear", "tiger"]
@@ -1520,7 +1541,7 @@ const BLOCK_R := {"fungus_snag": 0.22, "birch_dead": 0.2, "snag": 0.25, "snag_b"
 
 func _chunk_seed(cx: int, cz: int) -> int:
 	# Один детерминированный seed для каждого чанка, производный от общего seed карты.
-	return MAP_SEED + cx * 73856093 + cz * 19349663
+	return map_seed + cx * 73856093 + cz * 19349663
 
 func _scatter_all() -> void:
 	# вид, попыток на клетку 32 м, масштаб, дальность видимости, тень, правило
@@ -1560,6 +1581,8 @@ func _scatter_all() -> void:
 		["berry", 25, Vector2(0.7, 1.3), 55.0, false, "under"],
 		["bilberry", 42, Vector2(0.9, 1.5), 55.0, false, "under"],
 		["mushroom", 14, Vector2(0.8, 1.4), 40.0, false, "under"],
+		["moss", 105, Vector2(0.75, 1.25), 48.0, false, "under"],
+		["flower", 18, Vector2(0.75, 1.25), 52.0, false, "meadow"],
 		["fir", 15, Vector2(1.05, 1.45), 110.0, true, "fir_t"],
 		["cedar", 8, Vector2(1.05, 1.5), 110.0, true, "cedar_t"],
 		["willow", 22, Vector2(0.8, 1.3), 75.0, true, "river"],
@@ -1773,6 +1796,9 @@ func _scatter_all() -> void:
 						mmi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON if shadow else GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 						add_child(mmi)
 						_place_cell_records(mm, xs, r, vi, vars, is_tree, pick_kind)
+				# Каждая группа вида/чанка отдаёт кадр; иначе один чанк с десятками
+				# видов растений надолго блокирует главный поток даже при async _ready().
+				await get_tree().process_frame
 
 ## Разбить экземпляры клетки 64 м на четыре клетки 32 м (fine) или оставить одной группой.
 func _split_cell(xs: Array, x0: float, z0: float, fine: bool) -> Array:
@@ -1933,7 +1959,7 @@ func _cliff_rocks(vars: Array) -> void:
 		push_warning("Cliff rock variants are empty; skipping cliff scatter")
 		return
 	var rng := RandomNumberGenerator.new()
-	rng.seed = MAP_SEED + 4711
+	rng.seed = map_seed + 4711
 	var per_var := []
 	for v in vars:
 		per_var.append([])
@@ -2016,12 +2042,13 @@ func _accept(kind: String, x: float, z: float, rng: RandomNumberGenerator) -> bo
 		"bog_z":
 			return zn == 2 and slope < 0.2 and rng.randf() < 0.9
 		"rocky_z":
-			return zn == 3 and rng.randf() < 0.85
+			# Камни остаются локальными элементами склонов, а не отдельным биомом.
+			return slope > 0.16 and y > WATER_Y + 0.8 and rng.randf() < clampf((slope - 0.12) * 1.8, 0.08, 0.42)
 		"meadow":
 			return zn == 0 and slope < 0.2 and rng.randf() < (1.0 - fd) * 0.8
 		"bank":
 			return slope < 0.3 and y < WATER_Y + 0.9 and river_dist(x, z) < 22.0 and rng.randf() < 0.8
-	# на гари, болоте и курумнике живого леса мало
+	# на гари и болоте живого леса мало; отдельного каменного биома больше нет
 	var zk: float = [1.0, 0.06, 0.25, 0.3, 0.7][zn]
 	if kind.ends_with("_t") or kind in ["tree", "edge", "under", "fern"]:
 		if rng.randf() > zk:
@@ -2107,10 +2134,18 @@ func _core_setup(_ui: CanvasLayer) -> void:
 		st.set("main", self)
 		st.set("mode", OS.get_environment("SAVE_TEST"))
 		add_child(st)
-	if DisplayServer.get_name() == "headless" or OS.get_environment("SHOTS") != "" or OS.get_environment("COLONY_SHOTS") != "" or OS.get_environment("COLONY_TEST") != "" or OS.get_environment("UI_SHOTS") != "" or auto != "":
+	if DisplayServer.get_name() == "headless" or OS.get_environment("SHOTS") != "" or OS.get_environment("UI_SHOTS") != "" or auto != "":
 		if auto == "load":
 			saver.load_game()
 		saver.enabled = auto != ""
+		return
+	# Новая игра перезагружает сцену ради применения нового seed до генерации мира.
+	# Флаг, созданный стартовым меню, запрещает повторно показывать меню и оставлять
+	# дерево на паузе после этой перезагрузки.
+	if FileAccess.file_exists("user://pending_new_game.flag"):
+		DirAccess.remove_absolute(ProjectSettings.globalize_path("user://pending_new_game.flag"))
+		get_tree().paused = false
+		saver.enabled = true
 		return
 	var menu: Control = preload("res://scripts/start_menu.gd").new()
 	menu.main = self
@@ -2149,9 +2184,9 @@ func _core_tick(dt: float) -> void:
 func to_save() -> Dictionary:
 	var SV = preload("res://scripts/save.gd")
 	var t: Node = hero.tools
-	return {"t_hours": t_hours, "day": day_count, "hunger": hunger, "thirst": thirst, "warmth": warmth,
+	return {"t_hours": t_hours, "day": day_count, "map_seed": map_seed, "explored_map": explored_map.duplicate(true), "hunger": hunger, "thirst": thirst, "warmth": warmth,
 		"stamina": stamina, "health": health, "bleed": bleed, "injuries": injuries.duplicate(),
-		"inv": inv.duplicate(), "pos": SV.enc(hero.position), "yaw": float(hero.body.rotation.y),
+		"inv": inv.duplicate(), "worn": worn.duplicate(true), "pos": SV.enc(hero.position), "yaw": float(hero.body.rotation.y),
 		"cam_yaw": float(rig.rotation.y), "held": String(t.held) if t != null else "",
 		"belt": (t.belt as Array).duplicate() if t != null else [], "lamp_h": _lamp_h,
 		"back": String(t.get("back")) if t != null and t.get("back") != null else "",
@@ -2170,6 +2205,8 @@ func _bundle_save(t: Node) -> Array:
 
 func from_save(d: Dictionary) -> void:
 	var SV = preload("res://scripts/save.gd")
+	map_seed = int(d.get("map_seed", map_seed))
+	explored_map = d.get("explored_map", {}).duplicate(true)
 	t_hours = float(d.get("t_hours", t_hours))
 	day_count = int(d.get("day", day_count))
 	hunger = float(d.get("hunger", hunger))
@@ -2184,6 +2221,9 @@ func from_save(d: Dictionary) -> void:
 	for k: String in inj:
 		injuries[k] = float(inj[k])
 	inv = SV.int_dict(d.get("inv", {}))
+	worn = d.get("worn", {}).duplicate(true)
+	if hero != null:
+		hero.refresh_clothing()
 	var p: Vector3 = SV.dec(d.get("pos", SV.enc(hero.position)))
 	hero.position = p
 	hero.vel = Vector3.ZERO

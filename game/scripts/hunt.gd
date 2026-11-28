@@ -64,9 +64,13 @@ var carried: Node3D = null       # тушка на поясе героя
 var debug := false
 var _keys := {}
 var rng := RandomNumberGenerator.new()
+var traveler_seed := 0
 
 func setup() -> void:
 	rng.seed = 5150
+	var traveler_rng := RandomNumberGenerator.new()
+	traveler_rng.randomize()
+	traveler_seed = traveler_rng.randi()
 	t0 = now_h()
 	blood = BloodMM.new()
 	add_child(blood)
@@ -78,6 +82,81 @@ func setup() -> void:
 	debug = OS.get_environment("HUNT_DEBUG") != ""
 	if main.hero != null and main.hero.get("m_sk") != null:
 		_build_overlays(main.hero.m_sk)
+	_spawn_rare_swamp_traveler()
+
+## Редкая находка на болоте: один путник на карту, если сработал шанс генерации.
+## Позиция детерминирована seed карты; при загрузке сохранения находка восстанавливается из loot pile.
+func _spawn_rare_swamp_traveler() -> void:
+	if (main.get("colony_mode") == true):
+		return
+	var srng := RandomNumberGenerator.new()
+	srng.seed = traveler_seed
+	if srng.randf() > 0.22:
+		return
+	var half := float(main.SIZE) * 0.5
+	for attempt in 700:
+		var x := srng.randf_range(-half + 8.0, half - 8.0)
+		var z := srng.randf_range(-half + 8.0, half - 8.0)
+		if int(main.zone(x, z)) != 2:
+			continue
+		var depth := float(main.swamp_depth_at(x, z))
+		if depth < 0.12 or depth > 0.82:
+			continue
+		if main.normal_at(x, z).y < 0.97 or main.height(x, z) < main.WATER_Y - 0.2:
+			continue
+		var p := Vector3(x, surface_y(x, z), z)
+		_create_traveler_pile(p, srng.randf() * TAU, srng.randi_range(3, 8))
+		return
+
+func _create_traveler_body(parent: Node3D) -> void:
+	# Используем полноценную скелетную GLTF-модель человека и штатную систему одежды,
+	# а не собираем силуэт путника из примитивных капсул.
+	var palette := {
+		"jacket": Color(0.25, 0.19, 0.12),
+		"pants": Color(0.18, 0.19, 0.16),
+		"boots": Color(0.16, 0.11, 0.07),
+		"fur": Color(0.42, 0.34, 0.23),
+		"hair": Color(0.25, 0.17, 0.11)
+	}
+	var built: Dictionary = preload("res://scripts/hero_skin.gd").build(parent, palette)
+	var model: Node3D = built["model"]
+	model.scale = Vector3(0.9, 0.9, 0.9)
+	# Лежит лицом в мох, на спине виден вещмешок; голова направлена к южному краю.
+	model.rotation.x = PI * 0.5
+	model.position = Vector3(0.0, 0.08, -0.82)
+	# Потёртый дорожный вещмешок остаётся на спине путника.
+	var pack_mat := StandardMaterial3D.new()
+	pack_mat.albedo_color = Color(0.19, 0.12, 0.07)
+	pack_mat.roughness = 1.0
+	var pack := MeshInstance3D.new()
+	var pm := BoxMesh.new()
+	pm.size = Vector3(0.34, 0.42, 0.19)
+	pack.mesh = pm
+	pack.material_override = pack_mat
+	pack.position = Vector3(0.0, 1.12, -0.17)
+	model.add_child(pack)
+	var strap := MeshInstance3D.new()
+	var sm := BoxMesh.new()
+	sm.size = Vector3(0.035, 0.55, 0.025)
+	strap.mesh = sm
+	strap.material_override = pack_mat
+	strap.rotation.z = -0.28
+	strap.position = Vector3(0.18, 0.94, 0.0)
+	model.add_child(strap)
+
+
+func _create_traveler_pile(pos: Vector3, yaw: float, rounds: int, has_rifle: bool = true) -> void:
+	var pl := _new_pile(pos, yaw)
+	pl["corpse"] = true
+	pl["r"] = 1.25
+	var body := Node3D.new()
+	body.position.y = 0.015
+	(pl["node"] as Node3D).add_child(body)
+	_create_traveler_body(body)
+	if has_rifle:
+		_drop_generic("rifle", pos + Vector3(0.55, 0.0, 0.15))
+	for i in rounds:
+		_drop_generic("rifle_round", pos + Vector3(0.55, 0.0, 0.15))
 
 func now_h() -> float:
 	return float(main.t_hours) + float(main.day_count) * 24.0
@@ -561,7 +640,7 @@ func _new_pile(pos: Vector3, yaw: float) -> Dictionary:
 	add_child(node)
 	node.position = pos
 	node.rotation.y = yaw
-	var pl := {"pos": pos, "items": {}, "node": node, "hide": null, "meats": [], "r": 0.5, "cut": 0, "L": 0.0}
+	var pl := {"pos": pos, "items": {}, "node": node, "hide": null, "meats": [], "r": 0.5, "cut": 0, "L": 0.0, "corpse": false}
 	piles.append(pl)
 	return pl
 
@@ -1171,7 +1250,7 @@ func to_save() -> Dictionary:
 	var ps: Array = []
 	for pl: Dictionary in piles:
 		if not (pl["items"] as Dictionary).is_empty():
-			ps.append({"pos": SV.enc(pl["pos"]), "items": (pl["items"] as Dictionary).duplicate()})
+			ps.append({"pos": SV.enc(pl["pos"]), "items": (pl["items"] as Dictionary).duplicate(), "corpse": bool(pl.get("corpse", false)), "yaw": float((pl["node"] as Node3D).rotation.y)})
 	var cs: Array = []
 	if main.animals != null:
 		for a in carc.keys():
@@ -1179,16 +1258,22 @@ func to_save() -> Dictionary:
 				var i: int = main.animals.list.find(a)
 				if i >= 0:
 					cs.append({"i": i, "p": float(carc[a]["p"]), "done": bool(carc[a]["done"])})
-	return {"piles": ps, "carc": cs}
+	return {"piles": ps, "carc": cs, "traveler_seed": traveler_seed}
 
 func from_save(d: Dictionary) -> void:
 	var SV = preload("res://scripts/save.gd")
+	traveler_seed = int(d.get("traveler_seed", main.get("map_seed")))
 	for pl: Dictionary in piles:
 		(pl["node"] as Node3D).queue_free()
 	piles.clear()
 	for e: Dictionary in d.get("piles", []):
 		var pos: Vector3 = SV.dec(e["pos"])
 		var it := SV.int_dict(e.get("items", {}))
+		if bool(e.get("corpse", false)):
+			var rounds := int(it.get("rifle_round", 0))
+			_create_traveler_pile(pos, float(e.get("yaw", 0.0)), rounds, int(it.get("rifle", 0)) > 0)
+			it.erase("rifle_round")
+			it.erase("rifle")
 		for id: String in it:
 			for k in mini(int(it[id]), 40):
 				drop_item(id, pos)

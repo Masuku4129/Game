@@ -5,6 +5,7 @@ const RP := preload("res://scripts/river_path.gd")
 
 const AM = preload("res://scripts/animal_model.gd")
 const SK = preload("res://scripts/skin.gd")
+const STEER_OFFSETS := [0.0, 0.28, -0.28, 0.58, -0.58, 0.92, -0.92, 1.3, -1.3, 1.75, -1.75, 2.25, -2.25, 2.7, -2.7, PI]
 
 # чутьё на человека (м), время активности, роль
 const SENSE := {"hare": 14.0, "squirrel": 10.0, "fox": 26.0, "roe": 36.0, "deer": 45.0, "boar": 22.0, "wolf": 55.0, "bear": 26.0, "tiger": 40.0, "beaver": 8.0}
@@ -61,16 +62,21 @@ var leader: Node3D = null
 var pack_slot := 0.0
 var bites := 0
 var attack_cd := 0.0
+var attack_lane := 0.0
+var attack_lane_locked := false
 var dead := false
 var respawn_at := 0.0
 var head_pitch := 0.0
 var rest_k := 0.0
 var tree := Vector3.ZERO
 var tree_top := 0.0
+var tree_orbit_angle := 0.0 # устойчивый угол спирального подъёма белки вокруг ствола
 var climb_h := 0.0
 var far := false
 var group := -1
+var world_id := ""
 var _acc := randf() * 0.05  # perf: сдвиг шага между зверями
+var _sim_tick_interval := 0.08
 var trk := 0.0       # путь с последнего следа
 var trk_side := 1.0
 var rng := RandomNumberGenerator.new()
@@ -116,6 +122,7 @@ func setup(k: String, m: Node3D, mg: Node, pos: Vector3, seed_v: int, sc: float 
 	hp_left = int(TOUGH.get(k, 1)) if sc > 0.75 else 1
 	slot_a = rng.randf() * TAU
 	_build(false)
+	_cached_obstacle_radius = clampf(float(parts.get("L", 0.5)) * 0.18, 0.18, 0.75)
 	_new_wander()
 
 func _build(winter: bool) -> void:
@@ -125,6 +132,7 @@ func _build(winter: bool) -> void:
 		parts = SK.build_animal(self, kind, scale_k, winter)
 	else:
 		parts = AM.build(self, kind, scale_k, male, winter)
+	_cached_obstacle_radius = clampf(float(parts.get("L", 0.5)) * 0.18, 0.18, 0.75)
 	winter_skin = winter
 
 ## Активен ли вид сейчас (по времени суток).
@@ -140,11 +148,78 @@ func is_active() -> bool:
 	return true
 
 func _new_wander() -> void:
-	var a := rng.randf() * TAU
-	var r := rng.randf_range(5.0, 25.0)
-	target = position + Vector3(cos(a), 0, sin(a)) * r
-	if target.distance_to(home) > home_r:
-		target = home + (target - home).normalized() * home_r * 0.6
+	# Pick a destination that is reachable from the local terrain. The former
+	# single random point could repeatedly land inside rocks, water or steep faces.
+	var chosen := Vector3.INF
+	var chosen_score := -INF
+	for attempt in range(18):
+		var a := rng.randf() * TAU
+		var r := rng.randf_range(5.0, 25.0)
+		var candidate := position + Vector3(cos(a), 0, sin(a)) * r
+		if candidate.distance_to(home) > home_r:
+			candidate = home + (candidate - home).normalized() * home_r * 0.6
+		var candidate_y: float = main.height(candidate.x, candidate.z)
+		if candidate_y < main.water_level(candidate.x, candidate.z) - 0.2 and not swimmer():
+			continue
+		if main.normal_at(candidate.x, candidate.z).y < 0.68:
+			continue
+		if main.blocked(candidate.x, candidate.z, maxf(0.35, _obstacle_radius() * 0.6)):
+			continue
+		if not _can_move_segment(position, candidate):
+			continue
+		var score := _habitat_score(candidate) + rng.randf_range(-0.18, 0.18)
+		if score > chosen_score:
+			chosen = candidate
+			chosen_score = score
+	if chosen == Vector3.INF:
+		# Fallback probes stay close to the animal and use the same habitat,
+		# slope and obstacle rules, preventing short random targets from trapping
+		# the animal inside a blocker or on a sharp terrain edge.
+		var fallback_score := -INF
+		for fallback_attempt in range(14):
+			var fallback_angle := rng.randf() * TAU
+			var fallback_radius := rng.randf_range(1.5, 5.0)
+			var fallback := position + Vector3(cos(fallback_angle), 0.0, sin(fallback_angle)) * fallback_radius
+			var fallback_y: float = main.height(fallback.x, fallback.z)
+			if fallback_y < main.water_level(fallback.x, fallback.z) - 0.2 and not swimmer():
+				continue
+			if main.normal_at(fallback.x, fallback.z).y < 0.68:
+				continue
+			if main.blocked(fallback.x, fallback.z, maxf(0.35, _obstacle_radius() * 0.6)):
+				continue
+			if not _can_move_segment(position, fallback):
+				continue
+			var score := _habitat_score(fallback) + rng.randf_range(-0.1, 0.1)
+			if score > fallback_score:
+				chosen = fallback
+				fallback_score = score
+		if chosen == Vector3.INF:
+			# Final recovery is a validated probe, never a random point inside
+			# a trunk, rock, steep slope or deep bog. If no exit is reachable,
+			# keep the current position and let the next stuck-recovery tick retry.
+			var recovery_score := -INF
+			var recovery_point := position
+			for radius in [0.7, 1.2, 1.8, 2.6, 3.6, 4.8, 6.2]:
+				for probe_i in range(36):
+					var probe_angle := TAU * float(probe_i) / 36.0
+					var probe: Vector3 = position + Vector3(cos(probe_angle), 0.0, sin(probe_angle)) * radius
+					var probe_y: float = main.height(probe.x, probe.z)
+					if probe_y < main.water_level(probe.x, probe.z) - 0.2 and not swimmer():
+						continue
+					if main.normal_at(probe.x, probe.z).y < 0.68:
+						continue
+					if main.blocked(probe.x, probe.z, maxf(0.35, _obstacle_radius() * 0.6)):
+						continue
+					if not _can_move_segment(position, probe):
+						continue
+					var score: float = _habitat_score(probe) - float(radius) * 0.035
+					if score > recovery_score:
+						recovery_score = score
+						recovery_point = probe
+				if recovery_point != position and radius >= 3.6:
+					break
+			chosen = recovery_point
+	target = chosen
 	# цель на другом ярусе уступа или в реке (для тех, кто не плавает) — ближе к дому
 	# стадо держится вместе: не вожак — пасётся рядом с вожаком
 	if mgr != null and group >= 0 and kind in HERD:
@@ -154,8 +229,18 @@ func _new_wander() -> void:
 			target = ld.position + Vector3(cos(a2), 0, sin(a2)) * rng.randf_range(2.5, 8.0)
 	# цель на другом ярусе уступа или в воде (воду обходят все, кроме бобра) — ближе к дому
 	var th: float = main.height(target.x, target.z)
-	if absf(th - main.height(position.x, position.z)) > 4.0 or (th < main.WATER_Y - 0.3 and kind != "beaver"):
+	var target_water: float = main.water_level(target.x, target.z)
+	var current_water: float = main.water_level(position.x, position.z)
+	var target_is_deep_water: bool = th < target_water - 0.3
+	var current_is_deep_water: bool = main.height(position.x, position.z) < current_water - 0.3
+	# Пруд за бобровой плотиной и изменённый уровень воды учитываются так же,
+	# как основное русло: неплавающие звери не получают цель под поверхностью.
+	if absf(th - main.height(position.x, position.z)) > 4.0 or (target_is_deep_water and kind != "beaver" and not swimmer()):
 		target = home + Vector3(rng.randf_range(-8, 8), 0, rng.randf_range(-8, 8))
+	elif current_is_deep_water and kind != "beaver" and not swimmer():
+		var bank := _bank_spot(position.x, _bank_side(position))
+		if bank != Vector3.INF:
+			target = bank
 	# на тот берег — редко и только вплавь (переправа); иначе цель зеркалится на свой берег
 	cross = false
 	if mgr != null and kind != "beaver" and _bank_side(target) != _bank_side(position) and main.river_dist(position.x, position.z) < 45.0:
@@ -165,7 +250,42 @@ func _new_wander() -> void:
 			var zc := _river_zc(target.x)
 			target.z = zc + (zc - target.z)
 	state = "wander"
+	attack_lane_locked = false
 	state_t = rng.randf_range(8.0, 20.0)
+
+## Видовые предпочтения биотопа влияют на выбор направления блуждания.
+func _habitat_score(p: Vector3) -> float:
+	var forest := clampf(float(main.forest_density(p.x, p.z)), 0.0, 1.0)
+	var wet := clampf(float(main.wet_k(p.x, p.z, main.height(p.x, p.z))), 0.0, 1.0)
+	var water_d := float(main.river_dist(p.x, p.z))
+	var slope := 1.0 - clampf(float(main.normal_at(p.x, p.z).y), 0.0, 1.0)
+	var prefs: Dictionary = {
+		"squirrel": [0.92, 0.28, 0.1], "capercaillie": [0.82, 0.4, 0.1],
+		"lynx": [0.78, 0.25, 0.1], "wolverine": [0.65, 0.32, 0.22],
+		"wolf": [0.65, 0.35, 0.15], "bear": [0.55, 0.58, 0.18],
+		"fox": [0.38, 0.28, 0.1], "hare": [0.28, 0.35, 0.12],
+		"roe": [0.42, 0.4, 0.18], "deer": [0.48, 0.42, 0.16],
+		"moose": [0.38, 0.78, 0.28], "muskdeer": [0.75, 0.35, 0.5],
+		"boar": [0.58, 0.62, 0.12], "beaver": [0.18, 0.75, 0.05]
+	}
+	var pref: Array = prefs.get(kind, [0.5, 0.4, 0.15])
+	var score := 1.0 - absf(forest - float(pref[0])) * 0.85
+	score += 1.0 - absf(wet - float(pref[1])) * 0.7
+	if water_d < 32.0:
+		score += (1.0 - water_d / 32.0) * float(pref[2])
+	if kind in ["muskdeer", "wolverine"]:
+		score += slope * 0.12
+	elif kind in ["hare", "roe", "deer", "moose", "beaver"]:
+		score -= slope * 0.16
+	# During gusts, shelter-seeking is stronger: dense forest scores better
+	# for small species and exposed ridges become less attractive to grazers.
+	if main.weather != null and float(main.weather.wind) > 1.0:
+		var exposure := clampf((main.height(p.x, p.z) - main.WATER_Y - 5.0) / 18.0, 0.0, 1.0)
+		var wind_strength := clampf((float(main.weather.wind) - 1.0) / 1.2, 0.0, 1.0)
+		var shelter_need := 0.35 if kind in ["squirrel", "hare", "roe", "deer", "muskdeer"] else 0.18
+		score += forest * shelter_need * wind_strength
+		score -= exposure * shelter_need * wind_strength
+	return score
 
 static func _river_zc(x: float) -> float:
 	return RP.zc(x)
@@ -197,6 +317,10 @@ func think() -> void:
 	var dh := hero_dist()
 	var w = main.weather
 	var sense: float = _sense() * (1.0 + float(hero.run_mag) * 0.6) * (0.6 + 0.4 * float(main.day_factor)) * (1.0 - float(w.precip) * 0.3)
+	# Wind disperses scent and slightly reduces long-range predator detection;
+	# close visual detection is still governed by the normal sight/stealth checks.
+	if kind in ["wolf", "fox", "lynx", "bear", "tiger", "wolverine"]:
+		sense *= clampf(1.0 - float(w.wind) * 0.09, 0.62, 1.0)
 	if hero.state == "sit":
 		sense *= 0.5
 	# --- combat: присевшего замечают позже ---
@@ -246,6 +370,7 @@ func think() -> void:
 				if state == "stalk" or state == "chase" or state == "ambush":
 					return
 			if CHARGE.has(kind) and hero_alive and dh < float(CHARGE[kind]):
+				_lock_attack_lane(hero)
 				state = "charge"
 				state_t = 6.0
 				return
@@ -278,6 +403,7 @@ func think() -> void:
 			var ap = mgr.nearest_of(self, HUNTS[kind], 13.0)
 			if ap != null:
 				prey = ap
+				_lock_attack_lane(ap)
 				state = "chase"
 				state_t = 6.0
 			elif state_t <= 0.0:
@@ -294,11 +420,13 @@ func think() -> void:
 			if _danger(dh, sense, hero_alive, false):
 				return
 			if CHARGE.has(kind) and hero_alive and dh < float(CHARGE[kind]):
+				_lock_attack_lane(hero)
 				state = "charge"
 				state_t = 6.0
 		"to_fish", "fish", "fish_bank", "eat":
 			if hero_alive and dh < float(CHARGE.get(kind, 0.0)):
 				_drop_fish()
+				_lock_attack_lane(hero)
 				state = "charge"
 				state_t = 6.0
 		"attack":
@@ -339,6 +467,7 @@ func _flee_from(t: Node3D, tm: float) -> void:
 		var tp: Vector3 = main.nearest_tree(position, 15.0)
 		if tp != Vector3.INF:
 			tree = tp
+			tree_orbit_angle = atan2(position.x - tp.x, position.z - tp.z)
 			tree_top = clampf(main.tree_height_at(tp) * 0.82, 2.8, 10.0)
 			state = "to_tree"
 
@@ -430,6 +559,7 @@ func _update_hunt(dh: float, hero_alive: bool) -> void:
 			food = prey
 			prey = null
 			state = "feed"
+			attack_lane_locked = false
 			state_t = rng.randf_range(40.0, 80.0)
 			return
 	if prey == null or (prey != main.hero and (prey.dead or prey.state == "inlodge" or prey.climb_h > 1.0)) or (prey == main.hero and not hero_alive):
@@ -443,11 +573,13 @@ func _update_hunt(dh: float, hero_alive: bool) -> void:
 		prey = null
 		if was_hero:
 			state = "retreat"
+			attack_lane_locked = false
 			state_t = 6.0
 		else:
 			_new_wander()
 		return
 	if state == "stalk" and d < (9.0 if kind in ["tiger", "lynx"] else 14.0):
+		_lock_attack_lane(prey)
 		state = "chase"
 		state_t = 25.0 if kind == "wolf" else 12.0
 		if kind == "wolf":
@@ -601,10 +733,20 @@ func tick(delta: float) -> void:
 		"chase", "charge":
 			var tg: Node3D = prey if state == "chase" else main.hero
 			if tg != null:
-				goal = tg.position
-				var d := Vector2(goal.x - position.x, goal.z - position.z).length()
-				want = run * (0.75 if state == "charge" and d > 10.0 else 1.0)
-				if d < 0.6 + float(parts["L"]) * 0.55:
+				if not attack_lane_locked:
+					_lock_attack_lane(tg)
+				var lane := Vector3(sin(attack_lane), 0.0, cos(attack_lane))
+				var reach := 0.6 + float(parts["L"]) * 0.55
+				var d := Vector2(tg.position.x - position.x, tg.position.z - position.z).length()
+				if d > reach:
+					# Подход к фиксированной точке атаки: зверь не пытается обогнуть
+					# движущуюся цель и не описывает вокруг неё бесконечные круги.
+					goal = tg.position + lane * reach * 0.72
+					want = run * (0.75 if state == "charge" and d > 10.0 else 1.0)
+				else:
+					goal = position
+					want = 0.0
+					face = tg.position
 					_strike(tg)
 		"retreat":
 			var away2: Vector3 = position - main.hero.position
@@ -673,17 +815,22 @@ func tick(delta: float) -> void:
 				else:
 					_new_wander()
 		"to_tree":
-			goal = tree
+			# Наводимся не в центр ствола (он заблокирован коллизией), а на
+			# доступную точку у коры. Иначе белка упирается в trunk clearance
+			# и никогда не достигает порога перехода в состояние лазания.
+			var dt2 := Vector2(position.x - tree.x, position.z - tree.z)
+			if dt2.length_squared() < 0.001:
+				dt2 = Vector2(sin(heading), cos(heading))
+			var radial_to_bark := dt2.normalized()
+			var trunk_clearance: float = main.tree_radius_at(tree) + _obstacle_radius() + 0.16
+			goal = Vector3(tree.x + radial_to_bark.x * trunk_clearance, main.grid_height(position.x, position.z), tree.z + radial_to_bark.y * trunk_clearance)
 			want = run
-			var dt2 := Vector2(tree.x - position.x, tree.z - position.z)
-			if dt2.length() < 1.3:
-				# Остановиться у коры, а не внутри ствола; повернуться к дереву.
-				var away := dt2.normalized()
-				if away.length_squared() < 0.01:
-					away = Vector2(cos(heading), sin(heading))
-				position.x = tree.x - away.x * 0.42
-				position.z = tree.z - away.y * 0.42
+			if dt2.length() <= trunk_clearance + 0.28:
+				# Фиксируем белку снаружи коры, не проталкивая её сквозь коллизию.
+				position.x = tree.x + radial_to_bark.x * trunk_clearance
+				position.z = tree.z + radial_to_bark.y * trunk_clearance
 				heading = atan2(tree.x - position.x, tree.z - position.z)
+				tree_orbit_angle = atan2(position.x - tree.x, position.z - tree.z)
 				tree_top = clampf(main.tree_height_at(tree) * 0.82, 2.8, 10.0)
 				state = "tree"
 				state_t = rng.randf_range(15.0, 30.0)
@@ -691,20 +838,28 @@ func tick(delta: float) -> void:
 			want = 0.0
 	if face != Vector3.INF and want <= 0.0:
 		heading = lerp_angle(heading, atan2(face.x - position.x, face.z - position.z), minf(1.0, delta * 4.0))
-	# беличье дерево: вверх по стволу и обратно
+	# Белка карабкается по коре устойчивой спиралью. Срубленное дерево
+	# перестаёт быть точкой привязки: зверёк спускается и уходит на землю.
 	if kind == "squirrel":
+		if climb_h > 0.0 and tree != Vector3.ZERO and main.tree_height_at(tree) <= 0.5:
+			climb_h = 0.0
+			state = "flee"
+			state_t = 2.8
+			target = position + Vector3(sin(heading + PI * 0.5), 0.0, cos(heading + PI * 0.5)) * 5.0
+			position.y = main.ground_at(position.x, position.z)
+			tree = Vector3.ZERO
 		if state == "tree":
-			climb_h = minf(climb_h + delta * 1.25, maxf(tree_top, 2.8))
+			climb_h = minf(climb_h + delta * 1.45, maxf(tree_top, 2.8))
 		elif climb_h > 0.0:
-			climb_h = maxf(climb_h - delta * 1.15, 0.0)
+			climb_h = maxf(climb_h - delta * 1.25, 0.0)
 			if climb_h <= 0.0 and state == "down_tree":
+				tree = Vector3.ZERO
 				_new_wander()
-		# Держим белку у поверхности ствола и слегка обводим вокруг коры по мере подъёма.
 		if climb_h > 0.0 and tree != Vector3.ZERO:
-			var radial := Vector2(position.x - tree.x, position.z - tree.z).normalized()
-			if radial.length_squared() < 0.01:
-				radial = Vector2(cos(heading), sin(heading))
-			var bark_offset: float = main.tree_radius_at(tree) + 0.10 + sin(climb_h * 1.7) * 0.025
+			var climb_progress := clampf(climb_h / maxf(tree_top, 0.1), 0.0, 1.0)
+			var climb_angle: float = tree_orbit_angle + smoothstep(0.0, 1.0, climb_progress) * TAU * 1.35 + sin(climb_progress * TAU * 3.0) * 0.018
+			var radial := Vector2(sin(climb_angle), cos(climb_angle))
+			var bark_offset: float = main.tree_radius_at(tree) + maxf(0.08, _obstacle_radius() * 0.42)
 			position.x = tree.x + radial.x * bark_offset
 			position.z = tree.z + radial.y * bark_offset
 			heading = atan2(tree.x - position.x, tree.z - position.z)
@@ -723,6 +878,25 @@ func tick(delta: float) -> void:
 	elif swim_k > 0.05:
 		var sv: float = float(SWIM_V.get(kind, 0.5)) * (0.75 + 0.25 * minf(scale_k, 1.0))
 		want = minf(want, lerpf(want, sv, clampf(swim_k * 1.5, 0.0, 1.0)))
+	# Топкая почва замедляет зверей по-разному: мелкие виды почти не заходят
+	# в глубокую трясину, крупные копытные и медведи проходят, но тяжело.
+	var bog_depth: float = float(main.swamp_depth_at(position.x, position.z)) if main.has_method("swamp_depth_at") else 0.0
+	if bog_depth > 0.08:
+		var bog_resistance := float({"squirrel": 3.2, "hare": 2.8, "capercaillie": 2.4, "fox": 1.9, "lynx": 1.8, "muskdeer": 1.5, "roe": 1.35, "deer": 1.15, "moose": 0.72, "bear": 0.85, "boar": 1.1, "wolf": 1.2, "wolverine": 1.0, "beaver": 0.45}.get(kind, 1.2))
+		want *= 1.0 / (1.0 + bog_depth * bog_resistance)
+	# Snow depth creates species-specific movement resistance: small animals sink
+	# deeply, while broad-footed moose and hares retain better mobility.
+	if main.weather != null:
+		var snow_depth: float = float(main.weather.snow)
+		if snow_depth > 0.05 and swim_k < 0.5:
+			var snow_resistance := float({"squirrel": 2.8, "hare": 0.65, "capercaillie": 1.5, "fox": 1.65, "lynx": 1.45, "muskdeer": 1.3, "roe": 1.7, "deer": 1.35, "moose": 0.42, "bear": 0.95, "boar": 1.55, "wolf": 1.25, "wolverine": 0.85, "beaver": 1.3}.get(kind, 1.2))
+			want *= 1.0 / (1.0 + snow_depth * snow_resistance * 0.55)
+		# Wet ground increases traction cost on slopes; a dry rocky slope is not
+		# penalized by this term, and swimming remains handled above.
+		var ground_wet: float = float(main.weather.wet)
+		var slope_k: float = 1.0 - main.normal_at(position.x, position.z).y
+		if ground_wet > 0.25 and slope_k > 0.12 and swim_k < 0.5:
+			want *= 1.0 - clampf(ground_wet * slope_k * 0.38, 0.0, 0.22)
 	# поворот к цели и разгон
 	var to := goal - position
 	to.y = 0
@@ -742,10 +916,35 @@ func tick(delta: float) -> void:
 		var step_len := maxf(0.18, speed * delta)
 		# Try the direct path first, then progressively wider arcs. This avoids
 		# the old fixed-angle bounce that trapped animals against the same blocker.
-		var offsets := [0.0, 0.32, -0.32, 0.65, -0.65, 1.0, -1.0, 1.4, -1.4, 1.9, -1.9, 2.45, -2.45, PI]
+		# Shared immutable steering angles avoid allocating this list for each animal.
+		var offsets: Array = STEER_OFFSETS
 		var found := false
 		# Look beyond the animal's immediate step: a 10 cm probe cannot see a way around a boulder.
-		var probe_len := maxf(1.25, minf(2.8, maxf(step_len * 7.0, to.length() * 0.12)))
+		# Крупным животным нужен более дальний обзор: короткая проверка заставляет
+		# лося или медведя выбирать узкий проход, в который корпус физически не помещается.
+		var body_len: float = float(parts.get("L", 1.0))
+		var probe_len := maxf(1.25, minf(5.2, maxf(maxf(step_len * 7.0, to.length() * 0.12), body_len * 0.78)))
+		# Cache origin terrain and weather inputs for the candidate sweep.
+		var current_ground: float = main.grid_height(position.x, position.z)
+		var current_bog: float = main.swamp_depth_at(position.x, position.z) if main.has_method("swamp_depth_at") else 0.0
+		var shelter_factor := 0.0
+		var shelter_need: float = 0.22 if kind in ["squirrel", "hare", "roe", "deer", "muskdeer"] else 0.12
+		if main.weather != null:
+			var cold_factor: float = clampf((-float(main.weather.temp) + 2.0) / 18.0, 0.0, 1.0)
+			var wind_factor: float = clampf((float(main.weather.wind) - 0.75) / 1.6, 0.0, 1.0)
+			shelter_factor = cold_factor * wind_factor
+		# Nearby animal spacing prevents crowding/overlap during otherwise obstacle-safe
+		# steering, while allowing members of the same herd to stay comparatively close.
+		var neighbors: Array = mgr.near(position, maxf(3.0, body_len * 1.8)) if mgr != null else []
+		var avoid_strength := 1.0 if state in ["flee", "chase", "charge"] else 0.62
+		# Precompute each neighbor's footprint and group weight once per steering pass.
+		var steering_neighbors: Array[Vector4] = []
+		for other in neighbors:
+			if other == self or other.dead or other.state == "inlodge":
+				continue
+			var min_sep: float = (body_len + float(other.parts.get("L", 1.0))) * 0.22
+			var group_weight: float = 0.55 if group >= 0 and group == other.group else 1.4
+			steering_neighbors.append(Vector4(other.position.x, other.position.z, min_sep, group_weight))
 		for off in offsets:
 			var candidate: float = lerp_angle(heading, desired, 0.35) + float(off)
 			var cd := Vector3(sin(candidate), 0.0, cos(candidate))
@@ -756,6 +955,32 @@ func tick(delta: float) -> void:
 			var align := cd.dot(to.normalized())
 			var turn_cost := absf(wrapf(candidate - heading, -PI, PI)) * 0.10
 			var score := align - turn_cost
+			# Prefer stable, dry footing when several routes are equally viable.
+			# This reduces animals skirting sharp rock ledges and entering deep bog
+			# pockets that pass endpoint checks but are poor corridors for their bodies.
+			var probe_ground: float = main.grid_height(probe.x, probe.z)
+			var ground_delta: float = absf(probe_ground - current_ground)
+			score -= minf(1.0, ground_delta / maxf(0.25, step_len + 0.25)) * 0.18
+			var probe_water: float = maxf(0.0, main.water_level(probe.x, probe.z) - probe_ground)
+			score -= minf(1.0, probe_water / 0.5) * 0.28
+			if main.has_method("swamp_depth_at"):
+				var probe_bog: float = main.swamp_depth_at(probe.x, probe.z)
+				if probe_bog > current_bog + 0.04:
+					score -= minf(1.0, probe_bog / 0.9) * 0.32
+			# During harsh cold and gusts, steering also weighs nearby canopy cover,
+			# helping wildlife route toward sheltered forest instead of exposed ridges.
+			if shelter_factor > 0.05:
+				var route_forest: float = clampf(float(main.forest_density(probe.x, probe.z)), 0.0, 1.0)
+				var ridge_exposure: float = clampf((probe_ground - main.WATER_Y - 8.0) / 20.0, 0.0, 1.0)
+				score += (route_forest * shelter_need - ridge_exposure * shelter_need) * shelter_factor
+			for other_data: Vector4 in steering_neighbors:
+				var dx_sep: float = probe.x - other_data.x
+				var dz_sep: float = probe.z - other_data.y
+				var sep_sq: float = dx_sep * dx_sep + dz_sep * dz_sep
+				var min_sep: float = other_data.z
+				if sep_sq < min_sep * min_sep:
+					var sep: float = sqrt(sep_sq)
+					score -= avoid_strength * other_data.w * (1.0 - clampf(sep / maxf(min_sep, 0.01), 0.0, 1.0))
 			if score > best_score:
 				best_score = score
 				chosen = candidate
@@ -764,10 +989,19 @@ func tick(delta: float) -> void:
 			heading = lerp_angle(heading, chosen, minf(1.0, delta * 7.0))
 			var move_dir := Vector3(sin(heading), 0.0, cos(heading))
 			var np2 := position + move_dir * step_len
+			# Плавный поворот мог оставить зверя на заблокированной промежуточной траектории.
+			# В таком случае используем уже проверенный свободный курс, иначе считаем столкновение.
+			if not _can_move_segment(position, np2, flying):
+				heading = chosen
+				move_dir = Vector3(sin(heading), 0.0, cos(heading))
+				np2 = position + move_dir * step_len
 			if _can_move_segment(position, np2, flying):
 				position.x = np2.x
 				position.z = np2.z
 				_bump = maxi(0, _bump - 1)
+			else:
+				speed *= 0.35
+				_bump += 1
 		else:
 			speed *= 0.35
 			_bump += 1
@@ -808,38 +1042,85 @@ func _sense() -> float:
 ## Застрял (упирается в склон, ствол или воду и почти не движется) — новая цель в сторону,
 ## откуда пришёл, со сменой направления обхода; долго не выходит — переносится к дому.
 ## Проверка короткого шага: коллизии, вода, границы карты и непроходимый подъём.
+var _cached_obstacle_radius := 0.35
+
 func _obstacle_radius() -> float:
-	# Approximate animal footprint by body length; prevents large species from
-	# squeezing through visually impassable gaps while keeping small animals agile.
-	return clampf(float(parts.get("L", 0.5)) * 0.18, 0.18, 0.75)
+	# Model dimensions are static for each skin; cache the footprint used by
+	# high-frequency obstacle/path probes instead of reading the parts dictionary.
+	return _cached_obstacle_radius
+
+## Путь выхода из застревания: пока зверь внутри препятствия, первые отсчёты занятые — это
+## нормально; но как только путь стал свободным, вновь упереться в стену уже нельзя.
+func _can_escape_segment(from: Vector3, to: Vector3) -> bool:
+	var distance := Vector2(to.x - from.x, to.z - from.z).length()
+	var spacing := clampf(_obstacle_radius() * 0.28, 0.06, 0.13)
+	var steps := maxi(1, ceili(distance / spacing))
+	var previous := from
+	var seen_free := false
+	for i in range(1, steps + 1):
+		var sample := from.lerp(to, float(i) / float(steps))
+		if _can_step(sample, false, previous):
+			seen_free = true
+		elif seen_free:
+			return false
+		previous = sample
+	return seen_free
 
 func _can_move_segment(from: Vector3, to: Vector3, flying: bool = false) -> bool:
 	var distance := Vector2(to.x - from.x, to.z - from.z).length()
-	var steps := maxi(1, ceili(distance / 0.6))
+	# Adaptive sampling: large-bodied species use tighter collision sweeps;
+	# tiny wildlife retains a cheaper pass without skipping narrow obstacles.
+	var radius := _obstacle_radius()
+	var sample_spacing := clampf(radius * 0.28, 0.06, 0.13)
+	var steps := maxi(1, ceili(distance / sample_spacing))
+	var previous := from
 	for i in range(1, steps + 1):
 		var sample := from.lerp(to, float(i) / float(steps))
-		if not _can_step(sample, flying):
+		if not _can_step(sample, flying, previous):
 			return false
+		previous = sample
 	return true
 
-func _can_step(p: Vector3, flying: bool = false) -> bool:
-	if absf(p.x) > main.SIZE * 0.5 - 10.0 or absf(p.z) > main.SIZE * 0.5 - 10.0:
-		return false
+func _can_step(p: Vector3, flying: bool = false, from_pos: Vector3 = Vector3.INF) -> bool:
+	var reference := position if from_pos == Vector3.INF else from_pos
 	if main.blocked(p.x, p.z, _obstacle_radius()):
 		return false
 	var base_y: float = main.grid_height(p.x, p.z)
+	# Неплавающие виды обходят глубокую воду, включая подпруженные бобрами участки.
+	# Если зверь уже оказался в воде, разрешаем только шаги без увеличения глубины,
+	# чтобы восстановление маршрута могло вывести его обратно на сушу.
+	var water_depth := maxf(0.0, main.water_level(p.x, p.z) - base_y)
+	var current_depth := maxf(0.0, main.water_level(reference.x, reference.z) - main.grid_height(reference.x, reference.z))
+	if not swimmer():
+		var water_limit := 0.16 if kind in ["squirrel", "hare", "capercaillie"] else (0.28 if kind in ["fox", "lynx", "muskdeer", "wolverine"] else 0.38)
+		if water_depth > water_limit and water_depth > current_depth + 0.025:
+			return false
+	# Избегаем непроходимых окон трясины, если зверь ещё на твёрдой почве.
+	# Если уже оказался внутри — разрешаем шаги наружу, чтобы не создать soft-lock.
+	if main.has_method("swamp_depth_at"):
+		var bog_here: float = main.swamp_depth_at(p.x, p.z)
+		var bog_current: float = main.swamp_depth_at(reference.x, reference.z)
+		var bog_limit := float({"squirrel": 0.18, "hare": 0.22, "capercaillie": 0.2, "fox": 0.38, "lynx": 0.42, "muskdeer": 0.62, "roe": 0.68, "deer": 0.78, "moose": 1.05, "bear": 0.95, "boar": 0.72, "wolf": 0.7, "wolverine": 0.65, "beaver": 1.4}.get(kind, 0.65))
+		# Не позволяем войти в непроходимую трясину или углубиться в неё;
+		# уже увязшее животное может двигаться только к более мелкому месту.
+		if bog_here > bog_limit and bog_here > bog_current + 0.02:
+			return false
 	var solid_y: float = main.solid_top(p.x, p.z)
-	var obstacle_h: float = solid_y - base_y
-	# Животные могут забираться на низкие камни, но обходят отвесные валуны.
+	# Высота поверхности валуна над землёй не является высотой ступени:
+	# при движении по склону камня сравниваем соседние точки опоры ниже.
 	var step_limit := 0.58 if kind in ["hare", "squirrel", "fox"] else (0.78 if kind in ["roe", "deer", "muskdeer", "lynx"] else 0.68)
-	if not flying and obstacle_h > step_limit:
-		return false
 	var gy: float = maxf(base_y, solid_y)
-	var g0: float = maxf(main.grid_height(position.x, position.z), main.solid_top(position.x, position.z))
+	# Сравниваем высоту с предыдущей точкой маршрута, а не с исходной
+	# позицией зверя: длинный probe должен проходить по плавному склону.
+	var g0: float = maxf(main.grid_height(reference.x, reference.z), main.solid_top(reference.x, reference.z))
 	if gy < main.WATER_Y - 0.3 and not swimmer() and not flying:
 		return false
 	if swimmer() and kind != "beaver" and not flying and swim_k < 0.2 and not cross and not (state in ["flee", "chase", "charge"]):
 		if main.water_level(p.x, p.z) - gy > 0.6:
+			return false
+	if (not flying):
+		var drop_limit := step_limit * (1.35 if kind in ["hare", "squirrel", "fox"] else 1.15)
+		if (g0 - gy) > drop_limit and g0 > main.WATER_Y:
 			return false
 	if (gy - g0) > step_limit and gy > main.WATER_Y and not flying:
 		return false
@@ -848,21 +1129,27 @@ func _can_step(p: Vector3, flying: bool = false) -> bool:
 
 ## Зверь оказался внутри ствола или камня (родился, построили рядом) — вытолкнуть к ближайшему свободному месту.
 func _push_out() -> void:
-	if not main.blocked(position.x, position.z, _obstacle_radius()) and main.solid_top(position.x, position.z) - main.grid_height(position.x, position.z) <= 0.45:
+	# Высота камня под лапами сама по себе не означает застревание:
+	# зверь может стоять на валуне. Выталкиваем только при перекрытии тела сверху.
+	var overhead: float = main.solid_top(position.x, position.z) - position.y
+	if not main.blocked(position.x, position.z, _obstacle_radius()) and overhead <= 0.55:
 		return
-	# Search wider and more densely so animals can escape tree/rock gaps.
-	for r in [0.5, 0.9, 1.3, 1.8, 2.4, 3.2, 4.2, 5.4]:
-		for k in 24:
-			var a := TAU * float(k) / 24.0 + float(r) * 0.31
-			var q: Vector3 = position + Vector3(sin(a), 0.0, cos(a)) * float(r)
-			if _can_step(q):
+	# Recovery searches several rings with alternating angular offsets. A candidate
+	# must be both free and connected by a valid sampled path, preventing escapes
+	# through rock walls or tree trunks.
+	var origin := position
+	for r in [0.45, 0.7, 1.0, 1.4, 1.9, 2.5, 3.2, 4.0, 5.0, 6.2]:
+		for k in 32:
+			var a := TAU * float(k) / 32.0 + float(r) * 0.23
+			var q: Vector3 = origin + Vector3(sin(a), 0.0, cos(a)) * float(r)
+			if _can_step(q) and _can_escape_segment(origin, q):
 				position.x = q.x
 				position.z = q.z
 				return
 
 func _unstick(delta: float) -> void:
 	_chk_t += delta
-	if _chk_t < 1.2:
+	if _chk_t < 0.9:
 		return
 	_push_out()
 	var moved := Vector2(position.x - _chk_p.x, position.z - _chk_p.z).length()
@@ -891,19 +1178,43 @@ func _unstick(delta: float) -> void:
 		_bump = 0
 		var escape := heading + rng.randf_range(-PI * 0.75, PI * 0.75)
 		var recovered := false
-		for radius in [4.0, 7.0, 11.0, 16.0]:
-			for turn in range(8):
-				var ang := escape + TAU * float(turn) / 8.0
+		var best_probe := Vector3.INF
+		var best_score := -INF
+		# Score all reachable probes instead of accepting the first open angle.
+		# Favor progress toward the current destination while avoiding immediate reversals.
+		var goal_vector := Vector2(target.x - position.x, target.z - position.z)
+		var goal_len := goal_vector.length()
+		var goal_dir := goal_vector.normalized() if goal_len > 0.1 else Vector2(sin(heading), cos(heading))
+		for radius in [2.0, 3.5, 5.0, 7.0, 10.0, 14.0, 18.0, 24.0, 32.0]:
+			for turn in range(32):
+				var ang := escape + TAU * float(turn) / 32.0
 				var probe: Vector3 = position + Vector3(sin(ang), 0.0, cos(ang)) * float(radius)
-				if _can_step(probe):
-					target = probe
+				if not _can_step(probe) or not _can_move_segment(position, probe):
+					continue
+				var candidate_dir := Vector2(sin(ang), cos(ang))
+				var alignment := candidate_dir.dot(goal_dir)
+				var remaining := Vector2(target.x - probe.x, target.z - probe.z).length()
+				var score: float = alignment * 4.0 - remaining * 0.35 - float(radius) * 0.025
+				if score > best_score:
+					best_score = score
+					best_probe = probe
 					recovered = true
-					break
-			if recovered:
+			if recovered and radius >= 10.0 and best_score > 1.0:
 				break
-		if not recovered:
+		if recovered:
+			target = best_probe
+		else:
 			state_t = 0.0
 			want = 0.0
+
+func _lock_attack_lane(tg: Node3D) -> void:
+	if tg == null:
+		return
+	var away := Vector2(position.x - tg.position.x, position.z - tg.position.z)
+	if away.length_squared() < 0.01:
+		away = Vector2(sin(heading), cos(heading))
+	attack_lane = atan2(away.x, away.y)
+	attack_lane_locked = true
 
 func _strike(tg: Node3D) -> void:
 	if attack_cd > 0.0:
@@ -917,6 +1228,7 @@ func _strike(tg: Node3D) -> void:
 		if (kind == "wolf" and bites >= 2) or kind in ["boar", "moose", "wolverine"]:
 			bites = 0
 			state = "retreat"
+			attack_lane_locked = false
 			state_t = rng.randf_range(5.0, 10.0)
 	else:
 		tg.bitten(self)
@@ -1116,17 +1428,23 @@ func _animate(delta: float) -> void:
 		hip.rotation.x = lerpf(sw, (-1.3 if front else 1.1), rest_k)
 		var bend := maxf(0.0, cos(ph)) * amp * 1.3 * mv
 		knee.rotation.x = lerpf((bend if front else -bend * 0.8 - 0.15 * mv), (2.4 if front else -2.2), rest_k)
-	# Белка перебирает лапами независимо от скорости перемещения по стволу.
+	# Белка синхронизирует перебор лап с фактической скоростью подъёма;
+	# при остановке хват остаётся, лапы не продолжают быстро «бежать».
 	if kind == "squirrel" and climb_h > 0.0:
-		phase += delta * 7.0
+		var climb_rate: float = clampf((1.45 if state == "tree" else 1.25) / maxf(float(sp.get("climb", 2.2)), 0.1), 0.0, 1.0)
+		var climb_phase_rate := lerpf(1.4, 8.0, climb_rate)
+		phase += delta * climb_phase_rate
 		for i in 4:
 			var lg: Dictionary = legs[i]
 			var front: bool = lg["front"]
 			var ph := phase + float([0.0, PI, PI, 0.0][i])
-			var reach := sin(ph)
-			var tuck := maxf(0.0, cos(ph))
-			(lg["hip"] as Node3D).rotation.x = (0.25 if front else -0.15) + reach * 0.62
-			(lg["knee"] as Node3D).rotation.x = (-tuck * 0.95 if front else tuck * 0.75)
+			var reach := sin(ph) * climb_rate
+			var tuck := maxf(0.0, cos(ph)) * climb_rate
+			var hip_base := 0.22 if front else -0.12
+			var hip_target := hip_base + reach * (0.48 if front else 0.36)
+			var knee_target := (-tuck * 0.72 if front else tuck * 0.62)
+			(lg["hip"] as Node3D).rotation.x = lerpf((lg["hip"] as Node3D).rotation.x, hip_target, minf(1.0, delta * 9.0))
+			(lg["knee"] as Node3D).rotation.x = lerpf((lg["knee"] as Node3D).rotation.x, knee_target, minf(1.0, delta * 9.0))
 	# наклон тела по склону, подпрыгивание
 	var fwd := Vector3(sin(heading), 0, cos(heading))
 	var hf: float = main.ground_at(position.x + fwd.x * L * 0.4, position.z + fwd.z * L * 0.4)

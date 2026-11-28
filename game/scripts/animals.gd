@@ -5,17 +5,21 @@ const Animal = preload("res://scripts/animal.gd")
 const SHOW_R := 75.0
 const NEAR_R := 70.0
 const MID_R := 25.0   # ближайшая зона — животные детальнее реагируют
-const NEAR_DT := 0.033 # близкая симуляция 30 Гц вместо каждого кадра; AnimPlayer продолжает интерполировать циклы
-const MID_DT := 0.08  # средняя дистанция — 12,5 Гц
+const NEAR_DT := 0.05 # близкая симуляция 30 Гц вместо каждого кадра; AnimPlayer продолжает интерполировать циклы
+const MID_DT := 0.12  # средняя дистанция — 12,5 Гц
 
 var main: Node3D
 var list: Array = []
 var birds: Array = []
 var groups := {}
 var rng := RandomNumberGenerator.new()
-var _far_acc := 0.0
 var _bird_acc := 0.0
-var _far_i := 0
+var _classify_acc := 0.0
+var _animal_slice := 0
+var _bird_update_acc := 0.0
+var _spawn_serial := 0
+var streamed_chunks: Dictionary = {}
+var pending_saved_animals: Dictionary = {}
 var bird_mesh := {}
 # сетка зверей (ячейка GC м), перестраивается раз в 0,5 с: соседей ищем только в ближних ячейках
 const GC := 32.0
@@ -26,63 +30,22 @@ var carcasses: Array = []
 var fish: Node3D
 
 func populate() -> void:
+	# Mobile-first population: do not instantiate the entire ecosystem at startup.
+	# Animals are created deterministically by nearby chunk streaming instead.
 	rng.seed = int(main.get("map_seed")) + 7741
 	var start: Vector3 = main.hero.position
-	# заяц: опушки и поляны
-	for i in 50:
-		_spawn("hare", _spot(func(x, z): return main.forest_density(x, z) < 0.55, start, 25.0), 1.0, -1)
-	# белка: у деревьев
-	for i in 80:
-		var p := _spot(func(x, z): return main.nearest_tree(Vector3(x, 0, z), 6.0) != Vector3.INF, start, 15.0)
-		_spawn("squirrel", p, 1.0, -1)
-	for i in 12:
-		_spawn("fox", _spot(func(x, z): return main.forest_density(x, z) < 0.6, start, 50.0), 1.0, -1)
-	# первая встреча: пара косуль на опушке недалеко от старта
-	var c0 := _spot(func(x, z): return main.forest_density(x, z) < 0.5 and Vector2(x - start.x, z - start.z).length() < 70.0, start, 35.0)
-	for k in 2:
-		_spawn("roe", _near(c0, 4.0), rng.randf_range(0.9, 1.05), 99)
-	# водопои: звери держатся у реки
+	_make_bird_mesh()
+	# Ambient birds are intentionally local; distant flocks are streamed later.
 	for gi in 4:
-		var c := _spot(func(x, z): return main.river_dist(x, z) < 32.0 and main.river_dist(x, z) > 20.0 and main.height(x, z) > main.WATER_Y + 0.4, start, 50.0)
-		for k in rng.randi_range(2, 3):
-			_spawn("roe", _near(c, 5.0), rng.randf_range(0.9, 1.05), 110 + gi)
-	# косули — группы по 2–3, олени — стада 4–5
-	for gi in 10:
-		var c := _spot(func(x, z): return main.forest_density(x, z) < 0.7, start, 60.0)
-		for k in rng.randi_range(2, 3):
-			_spawn("roe", _near(c, 6.0), rng.randf_range(0.9, 1.05), 100 + gi)
-	for gi in 5:
-		var c := _spot(func(x, z): return main.forest_density(x, z) < 0.5 and main.normal_at(x, z).y > 0.9, start, 80.0)
-		for k in rng.randi_range(4, 5):
-			_spawn("deer", _near(c, 8.0), rng.randf_range(0.85, 1.05), 200 + gi)
-	# кабаны с поросятами
-	for gi in 7:
-		var c := _spot(func(x, z): return main.forest_density(x, z) > 0.4, start, 70.0)
-		_spawn("boar", c, 1.0, 300 + gi)
-		_spawn("boar", _near(c, 4.0), 0.85, 300 + gi)
-		for k in 3:
-			_spawn("boar", _near(c, 4.0), 0.4, 300 + gi)
-	# волчья стая с логовом вдали от старта
-	var den := _spot(func(x, z): return main.forest_density(x, z) > 0.5 and main.normal_at(x, z).y > 0.85, start, 150.0)
-	_den(den, 1.6, 0.9)
-	for k in 5:
-		var w = _spawn("wolf", _near(den, 5.0), rng.randf_range(0.9, 1.05) if k > 0 else 1.1, 400)
-		w.home_r = 170.0
-	var den2 := _spot(func(x, z): return main.forest_density(x, z) > 0.5 and main.normal_at(x, z).y > 0.85 and den.distance_to(Vector3(x, den.y, z)) > 180.0, start, 150.0)
-	_den(den2, 1.6, 0.9)
-	for k in 4:
-		var w2 = _spawn("wolf", _near(den2, 5.0), rng.randf_range(0.9, 1.05) if k > 0 else 1.1, 401)
-		w2.home_r = 170.0
-	# медведи: берлоги в каменистой местности
-	for bi in 3:
-		var bden := _spot(func(x, z): return main.biome(x, z) > 0.2 and main.normal_at(x, z).y > 0.8, start, 100.0)
-		_den(bden, 2.2, 1.3)
-		_spawn("bear", _near(bden, 3.0), 1.0 if bi == 0 else 0.9, -1)
-	# тигры: юго-восток
-	for ti in 2:
-		var tp := _spot(func(x, z): return x > 60.0 and z > 60.0, start, 120.0)
-		_spawn("tiger", tp, 1.0, -1)
-	# бобры: по 3 у каждой хатки (колонии — в beavers.gd)
+		var c := start + Vector3(rng.randf_range(-32.0, 32.0), 0.0, rng.randf_range(-32.0, 32.0))
+		c.y = main.ground_at(c.x, c.z)
+		for k in rng.randi_range(3, 5):
+			var b := Bird.new()
+			b.setup(self, _near(c, 3.0), rng.randi())
+			add_child(b)
+			birds.append(b)
+	# Keep beaver dam associations intact; their population is small and tied
+	# directly to the generated lodge records.
 	for ci in main.beavers.colonies.size():
 		var col: Dictionary = main.beavers.colonies[ci]
 		var lp: Vector3 = col["lodge"]
@@ -91,23 +54,169 @@ func populate() -> void:
 			bv.home = lp
 			bv.door = col.get("door", Vector3.INF)
 			col["beavers"].append(bv)
-	# птицы: стайки
-	_make_bird_mesh()
-	for gi in 28:
-		var c := _spot(func(x, z): return true, start, 10.0)
-		for k in rng.randi_range(4, 9):
-			var b := Bird.new()
-			b.setup(self, _near(c, 3.0), rng.randi())
-			add_child(b)
-			birds.append(b)
-
-	_populate_taiga(start)
 	_rebuild_grid()
-	# рыба в реке
+	# Fish remain initialized at startup; fish system has its own lightweight update.
 	fish = preload("res://scripts/fish.gd").new()
 	fish.main = main
 	add_child(fish)
 	fish.setup()
+
+func populate_stream_chunk(coord: Vector2i, chunk_seed: int) -> void:
+	var key := "%d,%d" % [coord.x, coord.y]
+	if streamed_chunks.has(key):
+		_restore_pending_chunk_animals(key)
+		return
+	streamed_chunks[key] = true
+	var previous_seed := rng.seed
+	rng.seed = chunk_seed ^ 0x35A91D7
+	var origin := Vector3(float(coord.x) * 64.0, 0.0, float(coord.y) * 64.0)
+	var candidates: Array = []
+	var bog_candidates: Array = []
+	var forest_candidates: Array = []
+	var open_candidates: Array = []
+	var waterside_candidates: Array = []
+	for attempt in range(176):
+		var x := origin.x + rng.randf_range(3.0, 61.0)
+		var z := origin.z + rng.randf_range(3.0, 61.0)
+		var y: float = main.height(x, z)
+		if y < main.WATER_Y + 0.35 or main.normal_at(x, z).y < 0.78:
+			continue
+		if main.river_dist(x, z) < 4.0 or main.lake_k(x, z) > 0.55:
+			continue
+		if main.blocked(x, z, 0.8):
+			continue
+		var candidate := Vector3(x, y, z)
+		candidates.append(candidate)
+		var local_zone: int = main.zone(x, z)
+		var local_forest: float = main.forest_density(x, z)
+		var local_wet: float = main.wet_k(x, z, y)
+		var river_d: float = main.river_dist(x, z)
+		if local_zone == 2 or local_wet > 0.62:
+			bog_candidates.append(candidate)
+		if local_forest > 0.48 and local_zone != 1:
+			forest_candidates.append(candidate)
+		if local_forest < 0.38 and local_zone != 2:
+			open_candidates.append(candidate)
+		if river_d < 28.0 and river_d > 5.0:
+			waterside_candidates.append(candidate)
+	if candidates.is_empty():
+		rng.seed = previous_seed
+		return
+	var zone_id: int = main.zone(origin.x + 32.0, origin.z + 32.0)
+	var group_id := 100000000 + posmod(chunk_seed, 900000000)
+	var herd_kind := "roe"
+	if zone_id == 2:
+		herd_kind = "moose" if rng.randf() < 0.38 else "boar"
+	elif main.biome(origin.x + 32.0, origin.z + 32.0) > 0.48:
+		herd_kind = "deer" if rng.randf() < 0.65 else "bear"
+	elif rng.randf() < 0.24:
+		herd_kind = "boar"
+	var habitat_candidates: Array = candidates
+	if herd_kind in ["moose", "boar"] and not bog_candidates.is_empty() and zone_id == 2:
+		habitat_candidates = bog_candidates
+	elif herd_kind in ["deer", "roe"] and not forest_candidates.is_empty():
+		habitat_candidates = forest_candidates
+	elif herd_kind in ["fox", "wolf"] and not open_candidates.is_empty():
+		habitat_candidates = open_candidates
+	var center_pos: Vector3 = habitat_candidates[rng.randi_range(0, habitat_candidates.size() - 1)]
+	var herd_size := rng.randi_range(1, 3) if herd_kind in ["roe", "deer", "boar"] else 1
+	for i in range(herd_size):
+		var p := center_pos
+		if i > 0:
+			p = _near(center_pos, 7.0)
+		_spawn(herd_kind, p, rng.randf_range(0.82, 1.08), group_id, "chunk:%s:herd:%d" % [key, i])
+	# Chunks spanning distinct habitats may support a second, smaller local group.
+	# Its species and center are selected from the secondary habitat pool, so a
+	# single chunk can transition from forest animals to open-ground animals.
+	var secondary_pool: Array = []
+	var secondary_kind := ""
+	if not forest_candidates.is_empty() and not open_candidates.is_empty():
+		if forest_candidates.size() > open_candidates.size() and rng.randf() < 0.42:
+			secondary_pool = open_candidates
+			secondary_kind = "hare" if rng.randf() < 0.62 else "roe"
+		elif open_candidates.size() > forest_candidates.size() and rng.randf() < 0.30:
+			secondary_pool = forest_candidates
+			secondary_kind = "squirrel" if rng.randf() < 0.24 else "deer"
+	elif not waterside_candidates.is_empty() and not forest_candidates.is_empty() and rng.randf() < 0.22:
+		secondary_pool = waterside_candidates
+		secondary_kind = "beaver" if rng.randf() < 0.18 else "boar"
+	if not secondary_pool.is_empty() and secondary_kind != "":
+		var secondary_center: Vector3 = secondary_pool[rng.randi_range(0, secondary_pool.size() - 1)]
+		var secondary_count := rng.randi_range(1, 2)
+		for secondary_i in range(secondary_count):
+			var secondary_pos := secondary_center if secondary_i == 0 else _near(secondary_center, 5.5)
+			_spawn(secondary_kind, secondary_pos, rng.randf_range(0.84, 1.06), group_id + 4, "chunk:%s:secondary:%d" % [key, secondary_i])	# Riparian encounters are independent of the forest/open-ground pairing:
+	# small water-edge populations can occur even in otherwise inland chunks
+	# that include a narrow stream corridor.
+	if not waterside_candidates.is_empty() and rng.randf() < 0.16:
+		var bank_center: Vector3 = waterside_candidates[rng.randi_range(0, waterside_candidates.size() - 1)]
+		var bank_species := "beaver" if rng.randf() < 0.22 else ("boar" if rng.randf() < 0.35 else "roe")
+		var bank_count := 1 if bank_species == "beaver" else rng.randi_range(1, 2)
+		for bank_i in range(bank_count):
+			var bank_pos := bank_center if bank_i == 0 else _near(bank_center, 4.5)
+			_spawn(bank_species, bank_pos, rng.randf_range(0.86, 1.05), group_id + 5, "chunk:%s:bank:%d" % [key, bank_i])
+	# Мелкая живность населяет каждый подходящий лесной чанк; белки появляются
+	# только там, где уже создана древесная опора для карабканья.
+	if rng.randf() < 0.96:
+		var small_kind := "hare"
+		if main.forest_density(center_pos.x, center_pos.z) > 0.55 and rng.randf() < 0.55:
+			small_kind = "squirrel"
+		var small_pool: Array = forest_candidates if small_kind == "squirrel" and not forest_candidates.is_empty() else open_candidates if small_kind == "hare" and not open_candidates.is_empty() else candidates
+		var small_center: Vector3 = small_pool[rng.randi_range(0, small_pool.size() - 1)]
+		var small_group := rng.randi_range(1, 3)
+		for small_i in range(small_group):
+			var small_pos := small_center if small_i == 0 else _near(small_center, 4.0)
+			_spawn(small_kind, small_pos, rng.randf_range(0.88, 1.08), -1, "chunk:%s:small:%d" % [key, small_i])
+	# Независимые одиночные встречи добавляют разнообразие между стадами:
+	# лесные хищники, росомаха и кабарга имеют собственные предпочтения среды.
+	var forest_k: float = main.forest_density(center_pos.x, center_pos.z)
+	var biome_k: float = main.biome(center_pos.x, center_pos.z)
+	var extra_kind := ""
+	var extra_chance := 0.0
+	if zone_id == 2:
+		extra_kind = "wolverine"
+		extra_chance = 0.12
+	elif forest_k > 0.62 and biome_k < 0.45:
+		extra_kind = "lynx"
+		extra_chance = 0.10
+	elif forest_k < 0.35:
+		extra_kind = "fox"
+		extra_chance = 0.13
+	if extra_kind != "" and rng.randf() < extra_chance:
+		var extra_pool: Array = bog_candidates if extra_kind == "wolverine" and not bog_candidates.is_empty() else forest_candidates if extra_kind == "lynx" and not forest_candidates.is_empty() else open_candidates if extra_kind == "fox" and not open_candidates.is_empty() else candidates
+		var extra_pos: Vector3 = extra_pool[rng.randi_range(0, extra_pool.size() - 1)]
+		_spawn(extra_kind, extra_pos, rng.randf_range(0.9, 1.1), group_id + 2, "chunk:%s:extra:%s" % [key, extra_kind])
+	# Лиса или волк появляются редко, чтобы не создавать искусственную плотность хищников.
+	if rng.randf() < 0.20:
+		var predator := "fox" if zone_id != 4 or rng.randf() < 0.5 else "wolf"
+		var predator_pos: Vector3 = candidates[rng.randi_range(0, candidates.size() - 1)]
+		_spawn(predator, predator_pos, rng.randf_range(0.9, 1.08), group_id + 1, "chunk:%s:predator:0" % key)
+	# Rare ground birds appear on forest edges as a separate encounter from
+	# the ambient airborne flock; deterministic IDs keep them stable when chunks reload.
+	if not forest_candidates.is_empty() and rng.randf() < 0.075:
+		var bird_group := rng.randi_range(1, 2)
+		var bird_center: Vector3 = forest_candidates[rng.randi_range(0, forest_candidates.size() - 1)]
+		for bird_i in range(bird_group):
+			var bird_pos := bird_center if bird_i == 0 else _near(bird_center, 5.0)
+			_spawn("capercaillie", bird_pos, rng.randf_range(0.88, 1.06), group_id + 3, "chunk:%s:groundbird:%d" % [key, bird_i])
+	rng.seed = previous_seed
+
+func _restore_pending_chunk_animals(chunk_key: String) -> void:
+	var prefix := "chunk:%s:" % chunk_key
+	var restore_ids: Array = []
+	for id: String in pending_saved_animals:
+		if id.begins_with(prefix):
+			restore_ids.append(id)
+	for id: String in restore_ids:
+		var saved: Dictionary = pending_saved_animals[id]
+		var kind := String(saved.get("kind", "hare"))
+		var position_data: Variant = saved.get("p", null)
+		if position_data == null:
+			pending_saved_animals.erase(id)
+			continue
+		var SV = preload("res://scripts/save.gd")
+		var p: Vector3 = SV.dec(position_data)
+		_spawn(kind, p, float(saved.get("scale", 1.0)), int(saved.get("group", -1)), id)
 
 func _spot(cond: Callable, start: Vector3, min_d: float) -> Vector3:
 	var half: float = main.SIZE * 0.5 - 20.0
@@ -126,19 +235,32 @@ func _spot(cond: Callable, start: Vector3, min_d: float) -> Vector3:
 	return Vector3(rng.randf_range(-half, half), 0, rng.randf_range(-half, half))
 
 func _near(c: Vector3, r: float) -> Vector3:
-	for t in 20:
+	for t in 32:
 		var a := rng.randf() * TAU
 		var p := c + Vector3(cos(a), 0, sin(a)) * rng.randf_range(0.5, r)
-		if not main.blocked(p.x, p.z, 0.5):
-			return p
+		var ground_y: float = main.height(p.x, p.z)
+		if ground_y < main.water_level(p.x, p.z) + 0.18:
+			continue
+		if main.normal_at(p.x, p.z).y < 0.72:
+			continue
+		if main.blocked(p.x, p.z, 0.5):
+			continue
+		return Vector3(p.x, ground_y, p.z)
 	return c
 
-func _spawn(k: String, p: Vector3, sc: float, grp: int) -> Node3D:
+func _spawn(k: String, p: Vector3, sc: float, grp: int, stable_id: String = "") -> Node3D:
 	var a := Animal.new()
 	add_child(a)
 	a.setup(k, main, self, Vector3(p.x, main.ground_at(p.x, p.z), p.z), rng.randi(), sc)
+	# Random phase spreads wildlife state updates across frames instead of a spawn burst.
+	a._acc = rng.randf_range(0.0, 0.18)
+	_spawn_serial += 1
+	a.world_id = stable_id if stable_id != "" else "base:%d" % _spawn_serial
 	a.group = grp
 	list.append(a)
+	if pending_saved_animals.has(a.world_id):
+		_apply_saved_animal(a, pending_saved_animals[a.world_id])
+		pending_saved_animals.erase(a.world_id)
 	if grp >= 0:
 		if not groups.has(grp):
 			groups[grp] = []
@@ -185,22 +307,31 @@ func nearest_predator(a: Node3D, r: float) -> Node3D:
 	if preds.is_empty():
 		return null
 	var best: Node3D = null
-	var bd := r
+	var best_score := -INF
 	for o in near(a.position, r):
-		if o.dead or not (o.kind in preds) or o.state == "sleep" or o.state == "inlodge":
+		if o.dead or not (o.kind in preds) or o.state in ["sleep", "inlodge"]:
 			continue
-		# в погоне хищник заметен издалека, подкрадывающийся — вполовину, в засаде — почти нет
-		var k := 0.4
+		var visibility := 0.4
 		match o.state:
 			"chase":
-				k = 1.0
+				visibility = 1.0
 			"stalk":
-				k = 0.55
+				visibility = 0.55
 			"ambush":
-				k = 0.15
+				visibility = 0.15
+		# Active movement raises detectability regardless of AI state.
+		if o.speed > 1.8:
+			visibility = maxf(visibility, 0.72)
+		elif o.speed > 0.6:
+			visibility = maxf(visibility, 0.52)
 		var d: float = a.position.distance_to(o.position)
-		if d < bd * k:
-			bd = d / k
+		if d >= r * visibility:
+			continue
+		# Close range and sudden movement raise the threat response.
+		var urgency := 1.0 - d / maxf(r * visibility, 0.01)
+		var score := urgency * visibility + (0.18 if o.state == "chase" else 0.0)
+		if score > best_score:
+			best_score = score
 			best = o
 	return best
 
@@ -347,18 +478,28 @@ func _rebuild_grid() -> void:
 		if a.dead or a.state == "inlodge":
 			continue
 		var k := Vector2i(floori(a.position.x / GC), floori(a.position.z / GC))
-		if not grid.has(k):
-			grid[k] = []
-		grid[k].append(a)
+		var cell: Array = grid.get(k, [])
+		if cell.is_empty():
+			grid[k] = cell
+		cell.append(a)
 
 ## Звери в ячейках, перекрывающих круг радиуса r (без точной проверки расстояния).
 func near(p: Vector3, r: float) -> Array:
 	var out: Array = []
+	var r2 := r * r
 	for gz in range(floori((p.z - r) / GC), floori((p.z + r) / GC) + 1):
 		for gx in range(floori((p.x - r) / GC), floori((p.x + r) / GC) + 1):
 			var k := Vector2i(gx, gz)
-			if grid.has(k):
-				out.append_array(grid[k])
+			var cell: Array = grid.get(k, [])
+			if cell.is_empty():
+				continue
+			for a in cell:
+				if a == null or not is_instance_valid(a):
+					continue
+				var dx: float = a.position.x - p.x
+				var dz: float = a.position.z - p.z
+				if dx * dx + dz * dz <= r2:
+					out.append(a)
 	return out
 
 ## Тревога в стаде: все бегут вместе.
@@ -375,55 +516,70 @@ func _process(delta: float) -> void:
 	var hp: Vector3 = main.rig.position
 	_grid_t -= delta
 	if _grid_t <= 0.0:
-		_grid_t = 0.5
+		_grid_t = 0.75
 		_rebuild_grid()
-		for c in carcasses.duplicate():
-			if c.meat <= 0.0:
-				carcasses.erase(c)
-	# ближние — каждый кадр, дальние — по кругу, несколько за кадр
-	_far_acc += delta
-	var n := list.size()
-	for a in list:
-		var d := Vector2(a.position.x - hp.x, a.position.z - hp.z).length()
-		var was_far: bool = a.far
-		a.far = d > NEAR_R
-		# perf: вблизи (до MID_R) — каждый кадр; дальше в пределах NEAR_R — ~20 раз в секунду
-		# со сдвигом по зверям (накопленным шагом), чтобы не грелся телефон
-		if not a.far:
-			a._acc += delta
-			var tick_interval: float = NEAR_DT if d < MID_R else MID_DT
-			if a._acc >= tick_interval:
-				a.tick(a._acc)
-				a._acc = 0.0
-		else:
-			a._acc += delta
-		if was_far and not a.far:
-			a._acc = 0.0
-		a.visible = d < (40.0 if a.kind in ["hare", "squirrel", "beaver"] else SHOW_R) and (not a.dead or a.meat > 0.0) and a.state != "sleep" and a.state != "inlodge"
-		if a.parts.has("ap"):
-			a.parts["ap"].active = a.visible and not a.dead and not a.far
-	# perf: дальние (за NEAR_R) — по кругу, каждый примерно раз в секунду
-	var per := maxi(1, n / 60)
-	for k in per:
-		if n == 0:
-			break
-		_far_i = (_far_i + 1) % n
-		var a = list[_far_i]
-		if a.far and a._acc > 0.0:
-			a.tick(minf(a._acc, 2.0))
-			a._acc = 0.0
+		for i in range(carcasses.size() - 1, -1, -1):
+			if carcasses[i].meat <= 0.0:
+				carcasses.remove_at(i)
+	# Animal orchestration is capped at 30 Hz; simulation time accumulates,
+	# so intervals remain consistent while per-frame list traversal is reduced.
+	# Split the existing 30 Hz wildlife workload across alternating frame slices.
+	# Each animal receives the accumulated elapsed time on its own slice; total
+	# simulation rate and world population remain intact while peak work is spread.
+	_classify_acc += delta
+	var classify_now := _classify_acc >= 0.15
+	if classify_now:
+		_classify_acc = fmod(_classify_acc, 0.15)
+	var slice_count := 2
+	var animal_count := list.size()
+	var slice_size := ceili(float(animal_count) / float(slice_count))
+	var slice_start := _animal_slice * slice_size
+	var slice_end := mini(animal_count, slice_start + slice_size)
+	_animal_slice = (_animal_slice + 1) % slice_count
+	for animal_i in range(slice_start, slice_end):
+		var a = list[animal_i]
+		a._acc += delta * float(slice_count)
+		if classify_now:
+			var animal_dx: float = a.position.x - hp.x
+			var animal_dz: float = a.position.z - hp.z
+			var d2: float = animal_dx * animal_dx + animal_dz * animal_dz
+			var was_far: bool = a.far
+			a.far = d2 > NEAR_R * NEAR_R
+			a._sim_tick_interval = 0.85 if a.far else (NEAR_DT if d2 < MID_R * MID_R else MID_DT)
+			if was_far and not a.far:
+				a._acc = rng.randf_range(0.0, a._sim_tick_interval)
+			var show_r: float = 40.0 if a.kind in ["hare", "squirrel", "beaver"] else SHOW_R
+			a.visible = d2 < show_r * show_r and (not a.dead or a.meat > 0.0) and a.state != "sleep" and a.state != "inlodge"
+			if a.parts.has("ap"):
+				a.parts["ap"].active = a.visible and not a.dead and not a.far
+		# Wildlife decisions are time-based, independent of slice cadence.
+		if a._acc >= a._sim_tick_interval:
+			a.tick(a._acc)
+			a._acc = fmod(a._acc, a._sim_tick_interval)
 	# perf: птицы вблизи — каждый кадр, дальше 50 м — раз в 0,2 с (накопленным шагом)
+	_bird_update_acc += delta
+	var bird_update := _bird_update_acc >= 0.033
+	var bird_dt := _bird_update_acc
+	if bird_update:
+		_bird_update_acc = fmod(_bird_update_acc, 0.033)
 	_bird_acc += delta
 	var bird_slow := _bird_acc >= 0.2
+	var bird_slow_dt := _bird_acc
 	if bird_slow:
-		_bird_acc = 0.0
+		_bird_acc = fmod(_bird_acc, 0.2)
 	for b in birds:
-		var d := Vector2(b.position.x - hp.x, b.position.z - hp.z).length()
-		b.visible = d < 45.0
-		if d < 50.0:
-			b.tick(delta)
-		elif d < 90.0 and bird_slow:
-			b.tick(0.2)
+		if not bird_update and not bird_slow:
+			continue
+
+		var bird_dx: float = b.position.x - hp.x
+		var bird_dz: float = b.position.z - hp.z
+		var d2: float = bird_dx * bird_dx + bird_dz * bird_dz
+		b.visible = d2 < 45.0 * 45.0
+		if d2 < 50.0 * 50.0:
+			if bird_update:
+				b.tick(bird_dt)
+		elif d2 < 90.0 * 90.0 and bird_slow:
+			b.tick(bird_slow_dt)
 
 func _make_bird_mesh() -> void:
 	var m := StandardMaterial3D.new()
@@ -666,28 +822,43 @@ func to_save() -> Dictionary:
 	var SV = preload("res://scripts/save.gd")
 	var out: Array = []
 	for a in list:
-		var e := {"p": SV.enc(a.position), "h": float(a.heading)}
+		var e := {"id": a.world_id, "kind": a.kind, "p": SV.enc(a.position), "h": float(a.heading), "scale": float(a.scale_k), "group": int(a.group)}
 		if a.dead:
 			e["dead"] = true
 			e["meat"] = float(a.meat)
 			e["resp"] = float(a.respawn_at)
 		out.append(e)
-	return {"n": list.size(), "list": out}
+	return {"n": list.size(), "list": out, "streamed_chunks": streamed_chunks.duplicate(true)}
+
+func _apply_saved_animal(a: Node3D, e: Dictionary) -> void:
+	var SV = preload("res://scripts/save.gd")
+	a.position = SV.dec(e.get("p", SV.enc(a.position)))
+	a.heading = float(e.get("h", a.heading))
+	a.rotation.y = a.heading
+	if bool(e.get("dead", false)):
+		if not a.dead:
+			a.kill()
+		a.meat = float(e.get("meat", a.meat))
+		a.respawn_at = float(e.get("resp", a.respawn_at))
 
 func from_save(d: Dictionary) -> void:
-	var SV = preload("res://scripts/save.gd")
 	var arr: Array = d.get("list", [])
-	if int(d.get("n", -1)) != list.size():
+	streamed_chunks = d.get("streamed_chunks", {}).duplicate(true)
+	pending_saved_animals.clear()
+	var legacy: bool = arr.size() > 0 and not arr[0].has("id") and int(d.get("n", -1)) == list.size()
+	if legacy:
+		for i in mini(arr.size(), list.size()):
+			_apply_saved_animal(list[i], arr[i])
 		return
-	for i in arr.size():
-		var a = list[i]
-		var e: Dictionary = arr[i]
-		a.position = SV.dec(e["p"])
-		a.heading = float(e.get("h", 0.0))
-		a.rotation.y = a.heading
-		if bool(e.get("dead", false)):
-			if not a.dead:
-				a.kill()
-			a.meat = float(e.get("meat", a.meat))
-			a.respawn_at = float(e.get("resp", a.respawn_at))
+	for e: Variant in arr:
+		if not e is Dictionary:
+			continue
+		var id := String(e.get("id", ""))
+		if id == "":
+			continue
+		pending_saved_animals[id] = e
+	for a in list:
+		if pending_saved_animals.has(a.world_id):
+			_apply_saved_animal(a, pending_saved_animals[a.world_id])
+			pending_saved_animals.erase(a.world_id)
 # --- /core ---

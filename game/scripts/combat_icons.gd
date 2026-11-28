@@ -3,6 +3,18 @@ extends RefCounted
 
 static func icon(ci: CanvasItem, kind: String, c: Vector2, r: float) -> bool:
 	match kind:
+		"rifle":
+			var wood := Color(0.45, 0.29, 0.16)
+			var steel := Color(0.28, 0.31, 0.32)
+			ci.draw_line(c + Vector2(-r * 0.82, r * 0.58), c + Vector2(r * 0.65, -r * 0.48), wood, r * 0.22)
+			ci.draw_line(c + Vector2(-r * 0.2, r * 0.12), c + Vector2(r * 0.92, -r * 0.76), steel, r * 0.12)
+			ci.draw_line(c + Vector2(r * 0.45, -r * 0.42), c + Vector2(r * 0.92, -r * 0.76), steel.lightened(0.25), r * 0.045)
+			ci.draw_line(c + Vector2(-r * 0.28, r * 0.18), c + Vector2(-r * 0.43, r * 0.52), Color(0.2, 0.16, 0.12), r * 0.08)
+			return true
+		"rifle_round":
+			ci.draw_colored_polygon(PackedVector2Array([c + Vector2(-r * 0.22, r * 0.78), c + Vector2(r * 0.22, r * 0.78), c + Vector2(r * 0.22, -r * 0.25), c + Vector2(0, -r * 0.78), c + Vector2(-r * 0.22, -r * 0.25)]), Color(0.65, 0.48, 0.22))
+			ci.draw_line(c + Vector2(-r * 0.18, r * 0.55), c + Vector2(r * 0.18, r * 0.55), Color(0.9, 0.72, 0.38), r * 0.07)
+			return true
 		"bow":
 			# плечи дугой, тетива, обмотка рукояти
 			var pts := PackedVector2Array()

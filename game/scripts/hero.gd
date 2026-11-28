@@ -5,7 +5,7 @@ var main: Node3D
 var move_vec := Vector2.ZERO
 var cam_yaw := 0.0
 var speed := 1.7
-var run_speed := 3.6
+var run_speed := 6.5 # ускоренный бег: +30% к прежней максимальной скорости
 var running := false
 var climbing := 0.0
 var moving := false
@@ -42,6 +42,9 @@ var soaked := 0.0
 var depth := 0.0
 var sink := 0.0      # погружение в снег, м
 var mud_sink := 0.0  # погружение в грязь, м (модель опускается)
+var swamp_sink := 0.0 # провал в трясину, м; требуется жердь для выхода
+var swamp_escape_progress := 0.0
+var swamp_depth := 0.0
 var vy := 0.0
 var airborne := false
 var fallb := 0.0
@@ -59,6 +62,7 @@ var torch := OmniLight3D.new()
 ## Инструменты (hero_tools.gd): held — что в руке ("" / knife / axe / spear / shovel / log).
 var tools: Node
 var held := ""
+var _wear_nodes: Array[Node] = []
 
 func has_tool(id: String) -> bool:
 	return tools != null and tools.has_tool(id)
@@ -289,14 +293,7 @@ func _ready() -> void:
 	_lpart(head_n, _loft([[-0.12, 0.04, 0.03, 0.06], [-0.08, 0.08, 0.055, 0.06], [-0.035, 0.1, 0.075, 0.045], [0.0, 0.098, 0.09, 0.02], [0.02, 0.095, 0.085, 0.0]], 16), hair, Vector3(0, -0.04, 0.01))
 	for sd in [-1.0, 1.0]:
 		_lpart(head_n, _sph(), hair, Vector3(sd * 0.022, -0.04, 0.108), Vector3(0, 0, sd * 0.5), Vector3(0.04, 0.014, 0.018))
-	# --- спина: берестяной короб на лямках, скатка сверху, котелок сбоку
-	_lpart(torso, _loft([[0.0, 0.16, 0.085, 0.0], [0.42, 0.165, 0.09, 0.0], [0.45, 0.15, 0.08, 0.0]], 4), wood, Vector3(0, 0.08, -0.25), Vector3(0, PI * 0.25, 0))
-	for sd in [-1.0, 1.0]:
-		_lpart(torso, BoxMesh.new(), belt, Vector3(sd * 0.11, 0.42, 0.0), Vector3.ZERO, Vector3(0.04, 0.4, 0.32))
-	_lpart(torso, _cyl(0.07, 0.07, 0.48), roll, Vector3(0, 0.6, -0.26), Vector3(0, 0, PI * 0.5))
-	for sd in [-1.0, 1.0]:
-		_lpart(torso, _tor(0.068, 0.08), belt, Vector3(sd * 0.15, 0.6, -0.26), Vector3(0, 0, PI * 0.5))
-	_lpart(torso, _cyl(0.06, 0.055, 0.1), metal, Vector3(0.2, 0.2, -0.24))
+	# Заплечный вещмешок строится отдельной системой pack, чтобы его можно было снять и анимировать.
 	# --- руки: плечо, рукав, локоть, меховой обшлаг, кисть с пальцами
 	for side in [-1.0, 1.0]:
 		var arm: Node3D = arm_l if side < 0.0 else arm_r
@@ -314,6 +311,7 @@ func _ready() -> void:
 			_lpart(elb, _capsule(0.009, 0.06), skin, Vector3(side * -0.008, -0.36, -0.02 + f * 0.014), Vector3(0, 0, side * 0.1))
 		_lpart(elb, _capsule(0.01, 0.05), skin, Vector3(side * -0.02, -0.31, 0.04), Vector3(0.6, 0, side * 0.5))
 	_build_model()
+	refresh_clothing()
 	# факел-свет (ночью)
 	torch.light_color = Color(1.0, 0.7, 0.4)
 	torch.light_energy = 0.0
@@ -321,6 +319,52 @@ func _ready() -> void:
 	torch.position = Vector3(0, 1.7, 0.5)
 	add_child(torch)
 
+## Применяет экипировку к визуальной модели, используя те же подвижные узлы тела.
+func refresh_clothing() -> void:
+	for n in _wear_nodes:
+		if is_instance_valid(n):
+			n.queue_free()
+	_wear_nodes.clear()
+	if main == null:
+		return
+	var worn: Dictionary = main.worn
+	var fur := _paint(Color(0.72, 0.66, 0.53))
+	var fur_light := _paint(Color(0.9, 0.84, 0.7))
+	var hide := _paint(Color(0.42, 0.29, 0.19))
+	var seam := _paint(Color(0.24, 0.16, 0.1))
+	if String(worn.get("head", "")) == "fur_hat":
+		var hat := Node3D.new()
+		hat.name = "EquippedFurHat"
+		head_n.add_child(hat)
+		_lpart(hat, _loft([[0.105, 0.075, 0.08, 0.0], [0.13, 0.105, 0.11, 0.0], [0.18, 0.112, 0.115, -0.005], [0.23, 0.09, 0.095, -0.01], [0.25, 0.045, 0.05, -0.01]], 20), fur)
+		_lpart(hat, _tor(0.085, 0.115), fur_light, Vector3(0, 0.125, 0.0), Vector3.ZERO, Vector3(1, 0.55, 1.0))
+		for side in [-1.0, 1.0]:
+			_lpart(hat, _loft([[-0.005, 0.025, 0.035, 0.0], [0.045, 0.035, 0.04, 0.0], [0.09, 0.028, 0.03, 0.0]], 12), fur, Vector3(side * 0.09, 0.0, -0.005), Vector3(0, 0, side * -0.12))
+		_wear_nodes.append(hat)
+	if String(worn.get("body", "")) == "fur_coat":
+		var parka := Node3D.new()
+		parka.name = "EquippedFurParka"
+		torso.add_child(parka)
+		_lpart(parka, _loft([[-0.16, 0.235, 0.19, 0.0], [-0.06, 0.225, 0.18, 0.0], [0.12, 0.205, 0.16, 0.0], [0.3, 0.225, 0.165, 0.0], [0.48, 0.235, 0.16, 0.0], [0.59, 0.17, 0.12, 0.0]], 24, false, false), fur)
+		_lpart(parka, _tor(0.14, 0.205), fur_light, Vector3(0, 0.53, 0.0), Vector3.ZERO, Vector3(1.0, 0.75, 0.9))
+		_lpart(parka, _cyl(0.012, 0.012, 0.43), seam, Vector3(0.035, 0.19, 0.17))
+		for yy in [0.02, 0.16, 0.3, 0.43]:
+			_lpart(parka, _cyl(0.009, 0.009, 0.17), hide, Vector3(0.0, yy, 0.178), Vector3(0, 0, PI * 0.5))
+		_wear_nodes.append(parka)
+		for arm in [arm_l, arm_r]:
+			var sleeve := Node3D.new()
+			sleeve.name = "EquippedParkaSleeve"
+			arm.add_child(sleeve)
+			_lpart(sleeve, _loft([[-0.3, 0.059, 0.064, 0.0], [-0.16, 0.07, 0.072, 0.0], [0.0, 0.078, 0.078, 0.0]], 16), fur)
+			_wear_nodes.append(sleeve)
+	if String(worn.get("feet", "")) == "fur_boots":
+		for knee in [knee_l, knee_r]:
+			var boot_layer := Node3D.new()
+			boot_layer.name = "EquippedFurBoot"
+			knee.add_child(boot_layer)
+			_lpart(boot_layer, _loft([[-0.48, 0.067, 0.073, 0.0], [-0.4, 0.073, 0.082, -0.005], [-0.25, 0.08, 0.09, -0.01], [-0.2, 0.085, 0.09, -0.01]], 16), hide)
+			_lpart(boot_layer, _tor(0.072, 0.092), fur_light, Vector3(0, -0.23, -0.008), Vector3.ZERO, Vector3(1.0, 0.65, 1.0))
+			_wear_nodes.append(boot_layer)
 func _can_walk(p: Vector3) -> bool:
 	var half: float = main.SIZE * 0.5 - 8.0
 	if absf(p.x) > half or absf(p.z) > half:
@@ -332,7 +376,9 @@ func _can_walk(p: Vector3) -> bool:
 	if y < position.y - 0.6 or airborne:
 		return not main.blocked(p.x, p.z, 0.32)
 	var n: Vector3 = main.ground_normal(p.x, p.z)
-	if n.y < 0.42:
+	# Проходимые скальные склоны не должны превращаться в невидимую стену.
+	# Почти отвесные участки остаются зоной отдельного лазания.
+	if n.y < 0.25:
 		return false
 	return not main.blocked(p.x, p.z, 0.32)
 
@@ -358,6 +404,8 @@ func action_label() -> String:
 		return "Встать"
 	if swimb > 0.3:
 		return ""
+	if swamp_sink > 0.72:
+		return "Упереться жердью" if int(main.inv.get("bog_pole", 0)) > 0 else ("Нужна жердь!" if swamp_sink >= 1.12 else "")
 	if state == "butcher":
 		return "Прервать"
 	if tools != null:
@@ -386,6 +434,32 @@ func do_action() -> void:
 		return
 	if state == "sit":
 		_stand_up()
+		return
+	if swamp_sink > 0.72:
+		if int(main.inv.get("bog_pole", 0)) <= 0:
+			main._say("Трясина удерживает. Нужна изготовленная жердь.")
+			return
+		if main.stamina < 0.045:
+			main._say("Не хватает сил упереться жердью")
+			return
+		# Inventory load is calculated at the moment this action is performed.
+		var carried_load: float = 0.0
+		if main.inventory != null:
+			carried_load = clampf(main.inventory.weight() / main.inventory.CAPACITY, 0.0, 1.0)
+		var pole_effort: float = 0.045 + carried_load * 0.025
+		var escape_gain := (0.24 + swamp_depth * 0.035) * (1.0 - carried_load * 0.38)
+		main.stamina = maxf(0.0, float(main.stamina) - pole_effort)
+		swamp_escape_progress = minf(1.0, swamp_escape_progress + escape_gain)
+		swamp_sink = maxf(0.0, swamp_sink - (0.13 + swamp_escape_progress * 0.045) * (1.0 - carried_load * 0.25))
+		mud_sink = minf(mud_sink, 0.2)
+		vel = Vector3.ZERO
+		land_t = 0.2
+		land_k = 0.2
+		if swamp_sink <= 0.72:
+			swamp_escape_progress = 0.0
+			main._say("Вы выбрались из трясины, опираясь на жердь")
+		else:
+			main._say("Жердь держит вес. Нужно ещё несколько усилий")
 		return
 	if tools != null and tools.action_label() != "" and main.bleed <= 0.02:
 		tools.do_action()
@@ -445,16 +519,27 @@ func _stand_up() -> void:
 	state = "walk"
 	position = stand_pos
 
+const WORLD_HALF_EXTENT := 512.0
+const WORLD_EDGE_MARGIN := 0.35
+
 func _process(delta: float) -> void:
 	if tools != null:
 		tools.process(delta)
 	_process_main(delta)
+	# Diagnostic map is finite: prevent walking beyond the 1 km square edge.
+	position.x = clampf(position.x, -WORLD_HALF_EXTENT + WORLD_EDGE_MARGIN, WORLD_HALF_EXTENT - WORLD_EDGE_MARGIN)
+	position.z = clampf(position.z, -WORLD_HALF_EXTENT + WORLD_EDGE_MARGIN, WORLD_HALF_EXTENT - WORLD_EDGE_MARGIN)
 	_animate_model(delta)
 
 func _process_main(delta: float) -> void:
 	if main == null:
 		return
-	soaked = maxf(0.0, soaked - delta * 0.004 * (1.0 + maxf(float(main.weather.temp), 0.0) * 0.1))
+	# Считаем вес один раз за кадр: инвентарь влияет на разгон и скорость,
+	# но не должен повторно обходить все предметы из разных участков движения.
+	var carried_load := 0.0
+	if main.inventory != null:
+		carried_load = clampf(main.inventory.weight() / main.inventory.CAPACITY, 0.0, 1.0)
+	soaked = maxf(0.0, soaked - delta * 0.0032 * (1.0 + maxf(float(main.weather.temp), 0.0) * 0.12 + main.weather.wind * 0.08))
 	if state == "dead":
 		pack_abort()
 		_process_dead(delta)
@@ -482,6 +567,14 @@ func _process_main(delta: float) -> void:
 	leg_l.rotation.z = 0.0
 	leg_r.rotation.z = 0.0
 	var mag := minf(move_vec.length(), 1.0)
+	swamp_depth = main.swamp_depth_at(position.x, position.z) if main.has_method("swamp_depth_at") else 0.0
+	if swamp_depth > 0.22 and not airborne and depth < 0.6:
+		var exertion := 0.12 + mag * 0.34
+		swamp_sink = minf(1.3, swamp_sink + delta * swamp_depth * exertion)
+	else:
+		swamp_sink = maxf(0.0, swamp_sink - delta * 0.045)
+		if swamp_sink < 0.35:
+			swamp_escape_progress = 0.0
 	var n: Vector3 = main.ground_normal(position.x, position.z)
 	var down := Vector3(n.x, 0, n.z)
 	var slope := down.length() / maxf(n.y, 0.01)
@@ -499,8 +592,13 @@ func _process_main(delta: float) -> void:
 			f = minf(1.0 + along * slope * 0.2, 1.15)
 		var stam: float = main.stamina
 		running = mag > 0.92 and stam > 0.08 and (tools == null or tools.can_run()) and not crouch
-		var sp_base := run_speed if running else speed
-		var wf := 1.0
+		# Масса содержимого короба влияет на походку: пустой и перегруженный
+		# путник не должны двигаться с одинаковой скоростью и инерцией.
+		var sp_base := (run_speed if running else speed) * (1.0 - carried_load * 0.16)
+		var wf := 1.0 / (1.0 + swamp_depth * 1.15)
+		if swamp_sink > 0.72 and int(main.inv.get("bog_pole", 0)) <= 0:
+			wf *= lerpf(0.22, 0.035, clampf((swamp_sink - 0.72) / 0.58, 0.0, 1.0))
+			running = false
 		if depth > 1.25:
 			wf = 0.45
 			running = false
@@ -509,10 +607,17 @@ func _process_main(delta: float) -> void:
 		target = d * sp_base * mag * f * wf * _sink_slow() * main.move_factor() * (tools.speed_factor() if tools != null else 1.0) * (0.5 if crouch else 1.0)
 	else:
 		running = false
+	# Без жерди глубокая трясина полностью лишает возможности выбраться движением.
+	if swamp_sink >= 1.12 and int(main.inv.get("bog_pole", 0)) <= 0:
+		target = Vector3.ZERO
+		vel = Vector3.ZERO
+		running = false
 	# крутой склон: человека тянет вниз, он теряет управление и катится
-	var s := 0.0
-	sliding = lerpf(sliding, s, minf(1.0, 4.0 * delta))
-	var accel := 11.0 * (1.0 - sliding * 0.75)
+	# Скользкая крутая поверхность: интенсивность зависит от уклона, а не обнуляется каждый кадр.
+	var s := 0.0 if airborne or depth > 0.6 else clampf((0.72 - n.y) / 0.42, 0.0, 1.0)
+	sliding = lerpf(sliding, s, minf(1.0, 5.0 * delta))
+	# Тяжёлый короб снижает не только скорость, но и отзывчивость разгона/торможения.
+	var accel := 11.0 * (1.0 - sliding * 0.75) * (1.0 - carried_load * 0.22)
 	if airborne:
 		accel = 0.5
 		target = vel
@@ -535,15 +640,17 @@ func _process_main(delta: float) -> void:
 			# упёрлись в крутую стену: если это скала, а не дерево — начинаем лезть
 			var q := position + d * 0.5
 			var nq: Vector3 = main.ground_normal(q.x, q.z)
-			if mag > 0.5 and nq.y < 0.42 and depth < 0.5 and not main.blocked(q.x, q.z, 0.2) and float(main.stamina) > 0.1:
+			if mag > 0.5 and nq.y < 0.25 and depth < 0.5 and not main.blocked(q.x, q.z, 0.2) and float(main.stamina) > 0.1:
 				state = "climb"
 			vel = Vector3.ZERO
 	position.x = p.x
 	position.z = p.z
-	# стоим на круче без опоры — съезжаем вниз, набирая скорость
-	if n.y < 0.4 and depth < 0.5 and not airborne:
-		vel += down * 9.0 * (1.0 - n.y) * delta * 3.0
-		position += down * minf(vel.length(), 6.0) * delta
+	# На крутом склоне сила тяжести постепенно тянет вниз; не телепортируем героя через препятствия.
+	if sliding > 0.05 and depth < 0.5 and not airborne:
+		vel += down * (2.6 + 9.2 * sliding) * delta
+		# Wet/icy slopes retain momentum downhill; soft ground damps the skid.
+		var skid_surface := clampf((main.weather.ice * 0.7 + main.weather.wet * 0.3) - swamp_depth * 0.45, 0.0, 1.0)
+		vel *= 1.0 - skid_surface * sliding * delta * 0.65
 	var sp := vel.length()
 	moving = sp > 0.25
 	if moving and (mag > 0.12 or sliding > 0.2):
@@ -607,6 +714,10 @@ func _process_main(delta: float) -> void:
 	climbing = lerpf(climbing, want_climb, minf(1.0, 6.0 * delta))
 	lean = lerpf(lean, 0.05 * run_mag + maxf(incline, 0.0) * 0.5 - maxf(-incline, 0.0) * 0.15, minf(1.0, 5.0 * delta))
 	var amp := 0.5 * minf(run_mag, 1.5)
+	# В трясине шаг становится коротким и тяжёлым; чем глубже увязание,
+	# тем сильнее герой пытается вытащить ноги, а не шагает обычной походкой.
+	var bog_anim := clampf(swamp_sink / 1.05, 0.0, 1.0) * clampf(swamp_depth / 0.45, 0.0, 1.0)
+	var bog_stride := 1.0 - bog_anim * 0.78
 	var sw := sin(phase)
 	if moving and signf(sw) != signf(last_sw) and main.feet != null and swimb < 0.2 and depth < 0.6:
 		var side := 1.0 if sw > 0.0 else -1.0
@@ -616,10 +727,10 @@ func _process_main(delta: float) -> void:
 	var cw := cos(phase)
 	var up := 1.0 + maxf(incline, 0.0) * 0.8
 	var br := sin(Time.get_ticks_msec() * 0.0017) * 0.012 * (1.0 - run_mag)
-	leg_l.rotation.x = sw * amp
-	leg_r.rotation.x = -sw * amp
-	knee_l.rotation.x = maxf(0.0, -cw) * amp * 1.5 * up + 0.04
-	knee_r.rotation.x = maxf(0.0, cw) * amp * 1.5 * up + 0.04
+	leg_l.rotation.x = sw * amp * bog_stride
+	leg_r.rotation.x = -sw * amp * bog_stride
+	knee_l.rotation.x = maxf(0.0, -cw) * amp * (1.5 * up + bog_anim * 1.2) + 0.04
+	knee_r.rotation.x = maxf(0.0, cw) * amp * (1.5 * up + bog_anim * 1.2) + 0.04
 	ank_l.rotation.x = -(leg_l.rotation.x + knee_l.rotation.x) * 0.7 + maxf(0.0, sw) * amp * 0.5
 	ank_r.rotation.x = -(leg_r.rotation.x + knee_r.rotation.x) * 0.7 + maxf(0.0, -sw) * amp * 0.5
 	# руки с инерцией: догоняют нужный угол, а не прыгают
@@ -631,6 +742,14 @@ func _process_main(delta: float) -> void:
 	arm_r.rotation.z = -0.05
 	elb_l.rotation.x = -0.2 - maxf(0.0, sw) * amp * 0.5
 	elb_r.rotation.x = -0.2 - maxf(0.0, -sw) * amp * 0.5
+	# В глубокой жиже руки разводятся для равновесия и работают рывками.
+	var bog_brace := bog_anim * (0.28 + 0.12 * absf(sin(Time.get_ticks_msec() * 0.006)))
+	arm_l.rotation.x = lerpf(arm_l.rotation.x, -0.85 - sw * 0.18, bog_brace)
+	arm_r.rotation.x = lerpf(arm_r.rotation.x, -0.85 + sw * 0.18, bog_brace)
+	arm_l.rotation.z = lerpf(arm_l.rotation.z, 0.42, bog_brace)
+	arm_r.rotation.z = lerpf(arm_r.rotation.z, -0.42, bog_brace)
+	elb_l.rotation.x = lerpf(elb_l.rotation.x, -0.75, bog_brace)
+	elb_r.rotation.x = lerpf(elb_r.rotation.x, -0.75, bog_brace)
 	var cl := climbing
 	if cl > 0.01:
 		# руки тянутся вперёд-вверх и перехватывают склон, колени высоко
@@ -642,7 +761,7 @@ func _process_main(delta: float) -> void:
 		leg_r.rotation.x = lerpf(leg_r.rotation.x, -sw * 0.45 - 0.45, cl)
 		knee_l.rotation.x = lerpf(knee_l.rotation.x, 0.6 + maxf(0.0, -cw) * 0.6, cl)
 		knee_r.rotation.x = lerpf(knee_r.rotation.x, 0.6 + maxf(0.0, cw) * 0.6, cl)
-	torso.rotation.x = lean + br + cl * 0.45
+	torso.rotation.x = lean + br + cl * 0.45 + bog_anim * 0.16
 	# полы кафтана идут за ногой наполовину
 	skirt_l.rotation.x = leg_l.rotation.x * 0.5
 	skirt_r.rotation.x = leg_r.rotation.x * 0.5
@@ -657,7 +776,7 @@ func _process_main(delta: float) -> void:
 	torso.rotation.y = -sw * 0.09 * run_mag
 	torso.rotation.z = sw * 0.03 * run_mag - turn
 	head_n.rotation.y = sw * 0.05 * run_mag
-	body.position.y = (absf(cw) - 0.6) * 0.05 * run_mag + minf(slope, 1.0) * 0.08 - cl * 0.15
+	body.position.y = (absf(cw) - 0.6) * 0.05 * run_mag + minf(slope, 1.0) * 0.08 - cl * 0.15 - swamp_sink * 0.42
 	# хромота: при ране ноги корпус проседает на больную сторону
 	var limp: float = 1.0 - main.move_factor()
 	if limp > 0.05:
@@ -677,7 +796,7 @@ func _update_sink(delta: float) -> void:
 func _sink_slow() -> float:
 	if main.feet == null:
 		return 1.0
-	return main.feet.slow(Vector2(sink, mud_sink))
+	return main.feet.slow(Vector2(sink, mud_sink)) / (1.0 + swamp_sink * 1.8)
 
 ## Падение: руки в стороны и вверх, ноги поджаты. Приземление: глубокий присед.
 func _pose_fall_land() -> void:
@@ -915,7 +1034,9 @@ func _animate_model(delta: float) -> void:
 	_hspeed = lerpf(_hspeed, Vector2(d.x, d.z).length() / maxf(delta, 0.001), minf(1.0, delta * 8.0))
 	# только поворот: наклоны старого тела (присед при остановке, крен) модели не нужны
 	model.rotation = Vector3(0, body.rotation.y, 0)
-	model.position = Vector3(0, -mud_sink, 0)
+	# GLB-модель должна опускаться вместе с физическим провалом в трясину,
+	# а не только с мелкой грязью из карты следов.
+	model.position = Vector3(0, -mud_sink - swamp_sink * 0.72, 0)
 	if state == "dead":
 		_play("Death01", 1.0, 0.2)
 		return
@@ -966,7 +1087,8 @@ func _animate_model(delta: float) -> void:
 			return
 	# --- /combat ---
 	if _hspeed > 2.4:
-		_play("Jog_Fwd", clampf(_hspeed / 3.6, 0.75, 1.15))
+		# Поддерживаем темп цикла бега при повышенной скорости перемещения.
+		_play("Jog_Fwd", clampf(_hspeed / 3.8, 0.85, 1.8))
 	elif _hspeed > 0.2:
 		_play("Walk", clampf(_hspeed / 1.6, 0.6, 1.25))
 	else:
@@ -1055,59 +1177,68 @@ func _pk_part(parent: Node3D, mesh: Mesh, m: Material, pos: Vector3, rot: Vector
 	parent.add_child(mi)
 	return mi
 
-## Короб: корпус 34×40×20 см, крышка со скаткой, котелок сбоку, две лямки.
+## Мягкий заплечный вещмешок: объёмный корпус из ткани, горловина, клапан,
+## кожаные усиления, прошитые швы и регулируемые плечевые ремни.
 func _build_pack(sk: Skeleton3D, ty: float, wood: Material, roll: Material, metal: Material, belt: Material) -> void:
-	var bark := HS.mat(Color(1, 1, 1), _bark_tex())
-	var rim := HS.mat(Color(0.42, 0.3, 0.18))
-	var inner := HS.mat(Color(0.12, 0.08, 0.05))
+	var canvas := HS.mat(Color(0.48, 0.31, 0.18))
+	var canvas_dark := HS.mat(Color(0.29, 0.19, 0.12))
+	var leather := HS.mat(Color(0.19, 0.12, 0.075))
+	var seam := HS.mat(Color(0.72, 0.55, 0.34))
+	var inner := HS.mat(Color(0.12, 0.085, 0.055))
 	pack = Node3D.new()
-	pack.name = "Pack"
-	var body_m := BoxMesh.new()
-	body_m.size = Vector3(0.34, 0.4, 0.2)
-	_pk_part(pack, body_m, bark, Vector3(0, 0.2, 0))
-	# обвязка: обод сверху и снизу, планки по углам
-	for yy in [0.015, 0.385]:
-		var rb := BoxMesh.new()
-		rb.size = Vector3(0.355, 0.03, 0.215)
-		_pk_part(pack, rb, rim, Vector3(0, yy, 0))
+	pack.name = "ClothTravelSack"
+	# Мешок имеет мягкое округлое сечение, расширяется в середине и стягивается у горловины.
+	var sack := _loft([
+		[0.015, 0.075, 0.065, 0.0],
+		[0.055, 0.125, 0.085, 0.0],
+		[0.15, 0.16, 0.105, 0.0],
+		[0.27, 0.155, 0.105, 0.0],
+		[0.345, 0.125, 0.09, 0.0],
+		[0.385, 0.105, 0.078, 0.0]
+	], 24, true, true)
+	_pk_part(pack, sack, canvas, Vector3(0, 0, 0))
+	# Тёмное дно и усиленная кожаная нижняя окантовка.
+	_pk_part(pack, _tor(0.105, 0.125), leather, Vector3(0, 0.045, 0), Vector3.ZERO, Vector3(1, 0.42, 0.82))
+	# Горловина: ткань собирается под шнуром, а не заканчивается жёсткой крышкой.
+	_pk_part(pack, _tor(0.078, 0.105), canvas_dark, Vector3(0, 0.374, 0), Vector3.ZERO, Vector3(1, 0.55, 0.78))
+	_pk_part(pack, _tor(0.087, 0.096), leather, Vector3(0, 0.39, 0), Vector3.ZERO, Vector3(1, 0.42, 0.78))
+	_pk_part(pack, _cyl(0.009, 0.009, 0.22), seam, Vector3(0.105, 0.375, 0.0), Vector3(0, 0, PI * 0.5))
+	# Два вертикальных шва и короткие поперечные закрепки на передней стороне.
 	for sx in [-1.0, 1.0]:
-		for sz in [-1.0, 1.0]:
-			var cb := BoxMesh.new()
-			cb.size = Vector3(0.02, 0.38, 0.02)
-			_pk_part(pack, cb, rim, Vector3(sx * 0.17, 0.2, sz * 0.1))
-	# нутро: тёмное дно у верха и пара вещей (видны, когда крышка открыта)
-	var im := BoxMesh.new()
-	im.size = Vector3(0.31, 0.01, 0.17)
-	_pk_part(pack, im, inner, Vector3(0, 0.392, 0))
-	_pk_part(pack, _cyl(0.012, 0.012, 0.22), wood, Vector3(0.05, 0.4, 0.02), Vector3(0, 0.4, PI * 0.5))
-	_pk_part(pack, _sph(), HS.mat(Color(0.5, 0.5, 0.48)), Vector3(-0.08, 0.398, -0.03), Vector3.ZERO, Vector3(0.07, 0.04, 0.06))
-	_pk_part(pack, _sph(), HS.mat(Color(0.55, 0.12, 0.14)), Vector3(-0.1, 0.4, 0.04), Vector3.ZERO, Vector3(0.05, 0.04, 0.05))
-	# котелок на ремешке сбоку
-	_pk_part(pack, _cyl(0.06, 0.055, 0.1), metal, Vector3(0.23, 0.2, 0.0))
-	_pk_part(pack, _tor(0.055, 0.065), belt, Vector3(0.23, 0.26, 0.0), Vector3(0, 0, PI * 0.5), Vector3(1, 1, 0.6))
-	# крышка: петли у дальней стенки (−Z), край к спине (+Z); на ней приторочена скатка
+		_pk_part(pack, _cyl(0.006, 0.006, 0.27), seam, Vector3(sx * 0.105, 0.19, 0.092), Vector3(0, 0, PI * 0.5))
+		for yy in [0.075, 0.31]:
+			_pk_part(pack, _cyl(0.004, 0.004, 0.09), seam, Vector3(sx * 0.105, yy, 0.092), Vector3(PI * 0.5, 0, 0))
+	# Кожаные вертикальные накладки и ремни, охватывающие мешок.
+	for sx in [-1.0, 1.0]:
+		var strap := BoxMesh.new()
+		strap.size = Vector3(0.035, 0.34, 0.012)
+		_pk_part(pack, strap, leather, Vector3(sx * 0.115, 0.2, 0.096))
+		var buckle := _tor(0.018, 0.024)
+		_pk_part(pack, buckle, metal, Vector3(sx * 0.115, 0.29, 0.108), Vector3(PI * 0.5, 0, 0), Vector3(1, 1, 0.35))
+	# Скатка/плед сверху и небольшой котелок сбоку сохраняют походный силуэт.
+	_pk_part(pack, _cyl(0.065, 0.065, 0.32), roll, Vector3(0, 0.425, -0.015), Vector3(0, 0, PI * 0.5))
+	_pk_part(pack, _cyl(0.052, 0.048, 0.09), metal, Vector3(0.205, 0.19, 0.0))
+	_pk_part(pack, _tor(0.05, 0.058), leather, Vector3(0.205, 0.235, 0.0), Vector3(0, 0, PI * 0.5), Vector3(1, 1, 0.55))
+	# Мягкий клапан на шарнире: его можно поднять при открытии вещмешка.
 	pack_lid = Node3D.new()
-	pack_lid.position = Vector3(0, 0.4, -0.105)
+	pack_lid.position = Vector3(0, 0.365, -0.075)
 	pack.add_child(pack_lid)
-	var lm := BoxMesh.new()
-	lm.size = Vector3(0.36, 0.035, 0.225)
-	_pk_part(pack_lid, lm, bark, Vector3(0, 0.017, 0.11))
-	var lr := BoxMesh.new()
-	lr.size = Vector3(0.37, 0.02, 0.03)
-	_pk_part(pack_lid, lr, rim, Vector3(0, 0.02, 0.215))
-	_pk_part(pack_lid, _cyl(0.07, 0.07, 0.46), roll, Vector3(0, 0.1, 0.1), Vector3(0, 0, PI * 0.5))
-	for sx in [-1.0, 1.0]:
-		_pk_part(pack_lid, _tor(0.068, 0.08), belt, Vector3(sx * 0.14, 0.1, 0.1), Vector3(0, 0, PI * 0.5))
-	# лямки: петли со стороны спины (+Z); снятая лямка повисает и прижимается к коробу
-	var sm := _strap_mesh(0.26, 0.36, 0.05)
+	var flap := _loft([
+		[0.0, 0.105, 0.025, 0.0],
+		[0.025, 0.14, 0.035, 0.0],
+		[0.045, 0.13, 0.03, 0.0]
+	], 20, true, true)
+	_pk_part(pack_lid, flap, canvas_dark, Vector3(0, 0.025, -0.015))
+	_pk_part(pack_lid, _tor(0.105, 0.115), leather, Vector3(0, 0.035, -0.015), Vector3.ZERO, Vector3(1, 0.35, 0.65))
+	# Лямки — широкие мягкие петли с кожаными концами; сохраняется прежняя IK-анимация снятия.
+	var sm := _strap_mesh(0.26, 0.36, 0.055)
 	for sx in [-1.0, 1.0]:
 		var sn := Node3D.new()
 		sn.position = Vector3(-sx * 0.12, 0.2, 0.1)
 		pack.add_child(sn)
-		_pk_part(sn, sm, belt, Vector3.ZERO)
+		_pk_part(sn, sm, leather, Vector3.ZERO)
 		pack_straps.append(sn)
-	pack_straps.reverse()  # [левая (+X), правая (−X)]
-	# крепление к спине
+	pack_straps.reverse()
 	var bi := sk.find_bone("spine_03")
 	pack_back = BoneAttachment3D.new()
 	pack_back.bone_name = "spine_03"
@@ -1123,8 +1254,6 @@ func _build_pack(sk: Skeleton3D, ty: float, wood: Material, roll: Material, meta
 	_pk_mod = PackMod.new()
 	_pk_mod.hero = self
 	sk.add_child(_pk_mod)
-
-## Можно ли сейчас снять короб.
 func can_open_pack() -> bool:
 	return state == "walk" and pack != null and not airborne and swimb < 0.2 and depth < 0.3 and land_t <= 0.0
 
