@@ -18,8 +18,8 @@ const PRESETS := [
 ]
 
 var main: Node3D
-var preset := 0
-var fps := 30
+var preset := 1
+var fps := 60
 var volume := 0.8
 var creative_mode := false
 var creative_btn: Button
@@ -95,12 +95,12 @@ func _corner(b: Control, x: float) -> void:
 func _load() -> void:
 	var c := ConfigFile.new()
 	if c.load(CFG) == OK:
-		preset = clampi(int(c.get_value("video", "preset", 0)), 0, 2)
-		fps = int(c.get_value("video", "fps", PRESETS[preset]["fps"]))
+		preset = clampi(int(c.get_value("video", "preset", 1)), 0, 2)
+		fps = int(c.get_value("video", "fps", 60))
 		volume = clampf(float(c.get_value("audio", "volume", 0.8)), 0.0, 1.0)
 		creative_mode = bool(c.get_value("game", "creative_mode", false))
 	else:
-		fps = int(PRESETS[preset]["fps"])
+		fps = 60
 
 func _store() -> void:
 	var c := ConfigFile.new()
@@ -287,23 +287,25 @@ func _adaptive_tick(delta: float) -> void:
 		return
 	var target_ms := 1000.0 / float(maxi(fps, 30))
 	var frame_ms := delta * 1000.0
-	_adaptive_frame_ms = lerpf(_adaptive_frame_ms, frame_ms, minf(1.0, delta * 2.5))
-	if _adaptive_frame_ms > target_ms * 1.22:
+	# Faster response to sustained frame pressure; resolution is the only
+	# adaptive graphics variable, never content/population/object counts.
+	_adaptive_frame_ms = lerpf(_adaptive_frame_ms, frame_ms, minf(1.0, delta * 4.0))
+	if _adaptive_frame_ms > target_ms * 1.08:
 		_adaptive_low_t += delta
 		_adaptive_high_t = 0.0
-	elif _adaptive_frame_ms < target_ms * 0.82:
+	elif _adaptive_frame_ms < target_ms * 0.94:
 		_adaptive_high_t += delta
 		_adaptive_low_t = 0.0
 	else:
-		_adaptive_low_t = maxf(0.0, _adaptive_low_t - delta * 0.5)
-		_adaptive_high_t = maxf(0.0, _adaptive_high_t - delta * 0.5)
+		_adaptive_low_t = maxf(0.0, _adaptive_low_t - delta * 0.35)
+		_adaptive_high_t = maxf(0.0, _adaptive_high_t - delta * 0.35)
 	var changed := false
-	if _adaptive_low_t >= 2.5 and adaptive_scale > 0.62:
-		adaptive_scale = maxf(0.62, adaptive_scale - 0.06)
+	if _adaptive_low_t >= 0.9 and adaptive_scale > 0.52:
+		adaptive_scale = maxf(0.52, adaptive_scale - 0.045)
 		_adaptive_low_t = 0.0
 		changed = true
-	elif _adaptive_high_t >= 9.0 and adaptive_scale < 1.0:
-		adaptive_scale = minf(1.0, adaptive_scale + 0.025)
+	elif _adaptive_high_t >= 5.0 and adaptive_scale < 1.0:
+		adaptive_scale = minf(1.0, adaptive_scale + 0.015)
 		_adaptive_high_t = 0.0
 		changed = true
 	if changed:
