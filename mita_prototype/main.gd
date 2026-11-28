@@ -10,6 +10,8 @@ var joystick_touch := -1
 var base_ui: Control
 var stick: ColorRect
 var run_toggle := false
+var camera: Camera3D
+var camera_offset := Vector3(0, 11, 11)
 
 func _ready():
 	_make_ground()
@@ -32,13 +34,13 @@ func _make_ground():
 	add_child(ground)
 
 func _make_camera():
-	var camera = Camera3D.new()
-	camera.position = Vector3(0, 11, 11)
+	camera = Camera3D.new()
+	camera.position = camera_offset
 	camera.rotation_degrees = Vector3(-45, 0, 0)
 	camera.projection = Camera3D.PROJECTION_ORTHOGONAL
 	camera.size = 6.2
-	add_child(camera)
 	camera.current = true
+	add_child(camera)
 
 func _make_light():
 	var light = DirectionalLight3D.new()
@@ -153,3 +155,7 @@ func _process(delta):
 		player.set_move(Vector2.ZERO)
 	player.set_running(run_toggle or Input.is_key_pressed(KEY_SHIFT))
 	player.tick_animation(delta)
+	if camera and player:
+		var target_camera_pos = player.global_position + camera_offset
+		camera.global_position = camera.global_position.lerp(target_camera_pos, min(1.0, delta * 5.0))
+		camera.look_at(player.global_position + Vector3(0, 0.9, 0), Vector3.UP)
