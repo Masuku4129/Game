@@ -1538,16 +1538,16 @@ func _update_near(force: bool = false) -> void:
 				by_key[key].append(t)
 	for m in veg.fade_list:
 		m.set_shader_parameter("near_c", c)
-		var material_id := m.get_instance_id()
-		if not _near_radius_materials.has(material_id):
+		var material_id_a := m.get_instance_id()
+		if not _near_radius_materials.has(material_id_a):
 			m.set_shader_parameter("near_r", NEAR_R)
-			_near_radius_materials[material_id] = true
+			_near_radius_materials[material_id_a] = true
 	for m in pv.fade_list:
 		m.set_shader_parameter("near_c", c)
-		var material_id := m.get_instance_id()
-		if not _near_radius_materials.has(material_id):
+		var material_id_b := m.get_instance_id()
+		if not _near_radius_materials.has(material_id_b):
 			m.set_shader_parameter("near_r", NEAR_R)
-			_near_radius_materials[material_id] = true
+			_near_radius_materials[material_id_b] = true
 	for key in near_mmi.keys():
 		if not by_key.has(key):
 			near_mmi[key].visible = false
