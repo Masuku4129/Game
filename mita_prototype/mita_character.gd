@@ -143,6 +143,7 @@ func _hair_lock(a: Vector3,b: Vector3,c: Vector3,color: Color) -> MeshInstance3D
 	st.add_vertex(b+Vector3(-0.035,0,0))
 	st.add_vertex(b+Vector3(0.035,0,0))
 	st.add_vertex(c)
+	st.generate_normals()
 	var mesh = st.commit()
 	var inst = MeshInstance3D.new()
 	inst.mesh = mesh
