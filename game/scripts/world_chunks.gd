@@ -35,6 +35,7 @@ var stream_water_material: ShaderMaterial
 var _water_state_clock := 0.0
 var _chunk_weather_clock := 0.0
 var _weather_material_cache: Dictionary = {}
+var _resource_state_cache: Dictionary = {}
 const STREAM_TREE_KINDS := ["spruce", "pine", "birch", "larch", "aspen", "fir", "cedar", "alder", "willow", "rowan"]
 
 func _process(delta: float) -> void:
@@ -325,6 +326,8 @@ func write_state(world_position: Vector3, section: String, state: Dictionary) ->
 	if not persistent.has(k):
 		persistent[k] = _create_record(c)
 	var rec: Dictionary = persistent[k]
+	if section == "resource_state":
+		_resource_state_cache.erase(k)
 	rec[section] = state.duplicate(true)
 	rec["revision"] = int(rec.get("revision", 0)) + 1
 	persistent[k] = rec
@@ -339,7 +342,11 @@ func _resource_key(world_position: Vector3, kind: String) -> String:
 	return "%d:%d:%s" % [roundi(world_position.x * 10.0), roundi(world_position.z * 10.0), kind]
 
 func is_resource_collected(world_position: Vector3, kind: String) -> bool:
-	var state := read_state(world_position, "resource_state")
+	var coord := Vector2i(floori(world_position.x / CHUNK_SIZE), floori(world_position.z / CHUNK_SIZE))
+	var k := _key(coord)
+	if not _resource_state_cache.has(k):
+		_resource_state_cache[k] = read_state(world_position, "resource_state")
+	var state: Dictionary = _resource_state_cache[k]
 	var saved: Variant = state.get(_resource_key(world_position, kind), {})
 	return saved is Dictionary and bool(saved.get("collected", false))
 
@@ -1231,6 +1238,7 @@ func to_save() -> Dictionary:
 	}
 
 func from_save(data: Dictionary) -> void:
+	_resource_state_cache.clear()
 	persistent.clear()
 	active.clear()
 	pending.clear()
