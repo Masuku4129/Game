@@ -30,7 +30,7 @@ jobs:
           cd game
           timeout 600 godot --headless --import 2>&1 | tee /tmp/import.log
           grep -E "Parse Error|Failed loading resource" /tmp/import.log || true
-      - name: Strict GDScript parse
+      - name: Сценарий: все игровые скрипты компилируются
         continue-on-error: true
         run: |
           cd game
@@ -44,31 +44,37 @@ jobs:
             fi
           done
           exit "$parse_failed"
-      - name: Gameplay regression tests
+      - name: Сценарии: окружение, столкновения животных, анимации, болота
         continue-on-error: true
         run: |
           cd game
           set +e
           for test in environment_glb_test.gd animal_collision_test.gd animal_animation_speed_test.gd wetland_biome_test.gd; do
-            echo "=== RUN $test ==="
+            case "$test" in
+              environment_glb_test.gd) title="Модели окружения загружаются" ;;
+              animal_collision_test.gd) title="Животные корректно сталкиваются с окружением" ;;
+              animal_animation_speed_test.gd) title="Анимации животных имеют корректную скорость" ;;
+              wetland_biome_test.gd) title="Болотный биом работает" ;;
+            esac
+            echo "=== СЦЕНАРИЙ: $title ($test) ==="
             timeout 180 godot --headless --script "res://tests/$test"
             echo "=== EXIT $test: $? ==="
           done
           exit 0
-      - name: Main scene smoke test
+      - name: Сценарий: главная игровая сцена запускается без ошибок
         continue-on-error: true
         run: |
           cd game
           timeout 300 godot --headless --quit-after 120 res://scenes/main.tscn 2>&1 | tee /tmp/smoke.log
           ! grep -E "SCRIPT ERROR|Parse Error|Invalid call|Nonexistent" /tmp/smoke.log
-      - name: Export Android APK
+      - name: Сценарий: Android APK успешно собирается
         continue-on-error: true
         run: |
           mkdir -p build
           cd game
           godot --headless --export-debug "Android" ../build/taiga.apk
           test -s ../build/taiga.apk
-      - name: Package source snapshot
+      - name: Сценарий: исходники упаковываются для пользователя
         continue-on-error: true
         run: |
           zip -qr build/taiga-project.zip game README.md ART_DIRECTION.md CHANGELOG.md WORLD_SURVIVAL_OVERHAUL_2026-11-27.md .github/workflows
