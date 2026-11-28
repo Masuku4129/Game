@@ -44,22 +44,30 @@ jobs:
             fi
           done
           exit "$parse_failed"
-      - name: "Сценарии: окружение, столкновения животных, анимации, болота"
+      - name: "Сценарии: полный набор игровых проверок"
         continue-on-error: true
         run: |
           cd game
           set +e
-          for test in environment_glb_test.gd animal_collision_test.gd animal_animation_speed_test.gd wetland_biome_test.gd; do
+          failures=0
+          for test in animal_animation_speed_test.gd animal_collision_test.gd animal_model_visual_test.gd animal_scheduler_test.gd environment_glb_test.gd model_geometry_test.gd rock_collision_test.gd ui_debug_overlay_test.gd wetland_biome_test.gd; do
             case "$test" in
-              environment_glb_test.gd) title="Модели окружения загружаются" ;;
+              animal_animation_speed_test.gd) title="Анимации животных имеют правильную скорость" ;;
               animal_collision_test.gd) title="Животные корректно сталкиваются с окружением" ;;
-              animal_animation_speed_test.gd) title="Анимации животных имеют корректную скорость" ;;
+              animal_model_visual_test.gd) title="3D-модели животных отображаются" ;;
+              animal_scheduler_test.gd) title="Система обновления животных работает" ;;
+              environment_glb_test.gd) title="Модели окружения загружаются" ;;
+              model_geometry_test.gd) title="Геометрия моделей корректна" ;;
+              rock_collision_test.gd) title="Коллизии камней работают" ;;
+              ui_debug_overlay_test.gd) title="Интерфейс и диагностические элементы" ;;
               wetland_biome_test.gd) title="Болотный биом работает" ;;
             esac
-            echo "=== СЦЕНАРИЙ: $title ($test) ==="
-            timeout 180 godot --headless --script "res://tests/$test"
-            echo "=== EXIT $test: $? ==="
+            echo "=== СЦЕНАРИЙ: $title ==="
+            timeout 180 godot --headless --script "res://tests/$test" 2>&1
+            rc=$?
+            if [ $rc -eq 0 ]; then echo "=== РЕЗУЛЬТАТ: PASS — $title ==="; else echo "=== РЕЗУЛЬТАТ: FAIL (код $rc) — $title ==="; failures=$((failures+1)); fi
           done
+          echo "=== ИТОГО: завершено 9 сценариев; ошибок: $failures. Остальные этапы сборки продолжаются независимо. ==="
           exit 0
       - name: "Сценарий: главная игровая сцена запускается без ошибок"
         continue-on-error: true
