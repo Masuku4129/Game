@@ -596,30 +596,48 @@ func _build_terrain_chunk(c: Vector2i) -> void:
 	var normals := PackedVector3Array()
 	var colors := PackedColorArray()
 	var uvs := PackedVector2Array()
+	var heights := PackedFloat32Array()
+	var densities := PackedFloat32Array()
+	var wetness_values := PackedFloat32Array()
+	var zones := PackedByteArray()
 	vertices.resize(side * side)
 	normals.resize(side * side)
 	colors.resize(side * side)
 	uvs.resize(side * side)
+	heights.resize(side * side)
+	densities.resize(side * side)
+	wetness_values.resize(side * side)
+	zones.resize(side * side)
+	# Sample each terrain field once per vertex and reuse it for mesh, material
+	# textures and normals. This removes the redundant second 65x65 sampling pass.
 	for z in range(side):
 		for x in range(side):
 			var wx := origin_x + float(x) * step
 			var wz := origin_z + float(z) * step
 			var index := z * side + x
 			var h: float = main.height(wx, wz)
-			vertices[index] = Vector3(float(x) * step, h, float(z) * step)
-			# Нормаль считается с тем же шагом, что у исходной сетки 512×512,
-			# поэтому освещение не выдаёт стык между центральной картой и чанком.
-			var e := step
-			normals[index] = Vector3(
-				main.height(wx - e, wz) - main.height(wx + e, wz),
-				2.0 * e,
-				main.height(wx, wz - e) - main.height(wx, wz + e)
-			).normalized()
 			var density: float = main.forest_density(wx, wz)
+			var wetness: float = clampf(main.wet_k(wx, wz, h), 0.0, 1.0)
+			var zone_id: int = main.zone(wx, wz)
 			var mud := clampf((main.WATER_Y + 1.2 - h) / 1.5, 0.0, 1.0)
 			var leaves := clampf(main.n_detail.get_noise_2d(wx * 2.0, wz * 2.0) * 0.8 + density * 0.5, 0.0, 1.0)
+			heights[index] = h
+			densities[index] = density
+			wetness_values[index] = wetness
+			zones[index] = zone_id
+			vertices[index] = Vector3(float(x) * step, h, float(z) * step)
 			colors[index] = Color(density, mud, leaves)
 			uvs[index] = Vector2(wx, wz) * 0.08
+	# Grid finite differences provide smooth normals without four repeated height
+	# noise queries per vertex; only the outer boundary samples outside the mesh.
+	for z in range(side):
+		for x in range(side):
+			var index := z * side + x
+			var h_l: float = heights[index - 1] if x > 0 else main.height(origin_x - step, origin_z + float(z) * step)
+			var h_r: float = heights[index + 1] if x < seg else main.height(origin_x + CHUNK_SIZE + step, origin_z + float(z) * step)
+			var h_n: float = heights[index - side] if z > 0 else main.height(origin_x + float(x) * step, origin_z - step)
+			var h_s: float = heights[index + side] if z < seg else main.height(origin_x + float(x) * step, origin_z + CHUNK_SIZE + step)
+			normals[index] = Vector3(h_l - h_r, 2.0 * step, h_n - h_s).normalized()
 	var indices := PackedInt32Array()
 	indices.resize(seg * seg * 6)
 	var cursor := 0
@@ -648,24 +666,19 @@ func _build_terrain_chunk(c: Vector2i) -> void:
 	field_bytes.resize(side * side * 4)
 	zone_bytes.resize(side * side * 4)
 	field_values.resize(side * side)
-	for z in range(side):
-		for x in range(side):
-			var index := z * side + x
-			var wx := origin_x + float(x) * step
-			var wz := origin_z + float(z) * step
-			var h: float = main.height(wx, wz)
-			var density: float = main.forest_density(wx, wz)
-			var mud: float = clampf(main.wet_k(wx, wz, h), 0.0, 1.0)
-			field_bytes[index * 4] = int(density * 255.0)
-			field_bytes[index * 4 + 1] = 255
-			field_bytes[index * 4 + 2] = int(mud * 255.0)
-			field_bytes[index * 4 + 3] = 255
-			var zone_id: int = main.zone(wx, wz)
-			zone_bytes[index * 4] = 255 if zone_id == 1 else 0
-			zone_bytes[index * 4 + 1] = 255 if zone_id == 2 else 0
-			zone_bytes[index * 4 + 2] = 255 if zone_id == 3 else 0
-			zone_bytes[index * 4 + 3] = 255 if zone_id == 4 else 0
-			field_values[index] = h
+	for index in range(side * side):
+		var density: float = densities[index]
+		var mud: float = wetness_values[index]
+		var zone_id: int = zones[index]
+		field_bytes[index * 4] = int(density * 255.0)
+		field_bytes[index * 4 + 1] = 255
+		field_bytes[index * 4 + 2] = int(mud * 255.0)
+		field_bytes[index * 4 + 3] = 255
+		zone_bytes[index * 4] = 255 if zone_id == 1 else 0
+		zone_bytes[index * 4 + 1] = 255 if zone_id == 2 else 0
+		zone_bytes[index * 4 + 2] = 255 if zone_id == 3 else 0
+		zone_bytes[index * 4 + 3] = 255 if zone_id == 4 else 0
+		field_values[index] = heights[index]
 	var field_tex := ImageTexture.create_from_image(Image.create_from_data(side, side, false, Image.FORMAT_RGBA8, field_bytes))
 	var zone_tex := ImageTexture.create_from_image(Image.create_from_data(side, side, false, Image.FORMAT_RGBA8, zone_bytes))
 	var hmap_tex := ImageTexture.create_from_image(Image.create_from_data(side, side, false, Image.FORMAT_RF, field_values.to_byte_array()))
