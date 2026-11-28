@@ -1149,6 +1149,13 @@ func _remove_terrain_chunk(k: String) -> void:
 		node.queue_free()
 
 func _unload_distant() -> void:
+	# Cancel an in-flight visual build if the player has already moved outside
+	# the preload ring; avoid spending CPU on scenery that will be discarded.
+	if not _building_chunk.is_empty():
+		var bc: Vector2i = _building_chunk.get("coord", center)
+		if maxi(absi(bc.x - center.x), absi(bc.y - center.y)) > PRELOAD_RADIUS:
+			_building_chunk.clear()
+			_build_stage = -1
 	for k: String in active.keys():
 		var rec: Dictionary = active[k]
 		var a: Array = rec.get("coord", [0, 0])
