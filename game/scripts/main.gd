@@ -104,7 +104,7 @@ func _ready() -> void:
 	await _make_terrain()
 	_make_water()
 	boot_label.text = "TAIGA\nСоздание леса и растительности…"
-	_scatter_all()
+	_scatter_all(boot_label)
 	grass_mesh_vars = [pv.tuft(1500), pv.tuft(1503, 1.3), pv.tuft(1504, 0.8)]
 	hero = preload("res://scripts/hero.gd").new()
 	hero.main = self
@@ -1594,7 +1594,7 @@ func _chunk_seed(cx: int, cz: int) -> int:
 	# Один детерминированный seed для каждого чанка, производный от общего seed карты.
 	return map_seed + cx * 73856093 + cz * 19349663
 
-func _scatter_all() -> void:
+func _scatter_all(progress_label: Label = null) -> void:
 	# вид, попыток на клетку 32 м, масштаб, дальность видимости, тень, правило
 	var rules := [
 		["spruce", 43, Vector2(0.95, 1.45), 110.0, true, "spruce_t"],
@@ -1688,6 +1688,8 @@ func _scatter_all() -> void:
 				pv.lod = false
 	_cliff_rocks(cache["rock"])
 	var cells := int(SIZE / CELL)
+	var progress_total := cells * cells * rules.size()
+	var progress_done := 0
 	for cz in cells:
 		for cx in cells:
 			var rng := RandomNumberGenerator.new()
@@ -1847,6 +1849,10 @@ func _scatter_all() -> void:
 						mmi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON if shadow else GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 						add_child(mmi)
 						_place_cell_records(mm, xs, r, vi, vars, is_tree, pick_kind)
+				progress_done += 1
+				if progress_label != null and is_instance_valid(progress_label):
+					var progress_pct := int(float(progress_done) * 100.0 / float(progress_total))
+					progress_label.text = "TAIGA\nСоздание леса и растительности… %d%%" % progress_pct
 				# Каждая группа вида/чанка отдаёт кадр; иначе один чанк с десятками
 				# видов растений надолго блокирует главный поток даже при async _ready().
 				await get_tree().process_frame
