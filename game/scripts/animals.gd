@@ -610,8 +610,9 @@ func _process(delta: float) -> void:
 			continue
 		var d2 := Vector2(b.position.x - hp.x, b.position.z - hp.z).length_squared()
 		b.visible = d2 < 45.0 * 45.0
-		if d2 < 50.0 * 50.0 and bird_update:
-			b.tick(bird_dt)
+		if d2 < 50.0 * 50.0:
+			if bird_update:
+				b.tick(bird_dt)
 		elif d2 < 90.0 * 90.0 and bird_slow:
 			b.tick(0.2)
 
