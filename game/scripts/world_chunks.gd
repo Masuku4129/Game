@@ -1260,6 +1260,7 @@ func _unload_distant() -> void:
 		_remove_prop_cover(k)
 		_remove_terrain_chunk(k)
 		active.erase(k)
+		_resource_state_cache.erase(k)
 	if near_tree_set_changed and main != null:
 		main._update_near(true)
 	_prune()
