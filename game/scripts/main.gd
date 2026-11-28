@@ -441,10 +441,12 @@ func _reveal_map_area() -> void:
 				chunk_stream.save_map_cell(wx, wz, key, explored_map[key])
 
 func _colony_pick_mode() -> void:
-	colony_mode = true
+	# Default to the proven legacy player mode: the colony/RTS mode is opt-in
+	# until its first-play boot, camera and touch controls are verified end-to-end.
+	colony_mode = false
 	var cf := ConfigFile.new()
 	if cf.load("user://settings.cfg") == OK:
-		colony_mode = not bool(cf.get_value("game", "hero_mode", false))
+		colony_mode = not bool(cf.get_value("game", "hero_mode", true))
 	for e: String in ["COMBAT_TEST", "TOOLS_TEST", "HUNT_TEST", "BUILD_TEST", "SAVE_TEST", "UI_SHOTS", "SHOTS", "PERF", "HERO_MODE"]:
 		if OS.get_environment(e) != "":
 			colony_mode = false
