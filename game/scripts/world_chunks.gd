@@ -197,8 +197,7 @@ func _rebuild_queue() -> void:
 		for x in range(-PRELOAD_RADIUS, PRELOAD_RADIUS + 1):
 			var c := center + Vector2i(x, z)
 			var offset := Vector2(x, z)
-			var d := offset.length_squared()
-			if d > float(PRELOAD_RADIUS * PRELOAD_RADIUS) + 0.5:
+			var d := offset.length_squared()			if d > float(PRELOAD_RADIUS * PRELOAD_RADIUS) + 0.5:
 				continue
 			if active.has(_key(c)):
 				continue
@@ -228,7 +227,7 @@ func _rebuild_queue() -> void:
 func _process_queue(delta: float) -> void:
 	# Central records are cheap, but cap the batch so a large queue cannot
 	# create dozens of dictionaries and noise samples in one frame.
-	var record_budget := 3
+	var record_budget := 1
 	while _building_chunk.is_empty() and not pending.is_empty() and record_budget > 0:
 		record_budget -= 1
 		var c: Vector2i = pending.pop_front()
@@ -236,9 +235,11 @@ func _process_queue(delta: float) -> void:
 		if active.has(k):
 			continue
 		if _inside_base_world(c):
-			# Central terrain is already represented by the main world mesh;
-			# keep only a lightweight active marker until gameplay needs state.
+			# Central terrain is already rendered. Still populate wildlife
+			# through the deterministic chunk pipeline, one chunk at a time.
 			active[k] = {"coord": [c.x, c.y], "loaded": true}
+			_building_chunk = {"coord": c, "key": k, "outside": false}
+			_build_stage = 3
 			continue
 		var record: Dictionary = persistent[k] if persistent.has(k) else _create_record(c)
 		record["last_seen"] = Time.get_unix_time_from_system()
@@ -397,8 +398,7 @@ func _apply_resource_state() -> void:
 		return
 	# Reuse the persistent cache also used by generation-time pickup lookups.
 	for cell_key in pickables.keys():
-		var entries: Array = pickables[cell_key]
-		for entry in entries.duplicate():
+		var entries: Array = pickables[cell_key]		for entry in entries.duplicate():
 			if entry.size() < 4:
 				continue
 			var p: Vector3 = entry[0]
@@ -597,8 +597,7 @@ func _build_water_surface(c: Vector2i, parent: Node3D) -> void:
 	if vertices.is_empty():
 		return
 	var arrays: Array = []
-	arrays.resize(Mesh.ARRAY_MAX)
-	arrays[Mesh.ARRAY_VERTEX] = vertices
+	arrays.resize(Mesh.ARRAY_MAX)	arrays[Mesh.ARRAY_VERTEX] = vertices
 	arrays[Mesh.ARRAY_NORMAL] = normals
 	arrays[Mesh.ARRAY_TEX_UV] = uvs
 	arrays[Mesh.ARRAY_INDEX] = indices
@@ -797,8 +796,7 @@ func _build_tree_cover(c: Vector2i) -> void:
 	var count := 2850
 	for attempt in range(count):
 		var wx := float(c.x) * CHUNK_SIZE + rng.randf_range(2.0, CHUNK_SIZE - 2.0)
-		var wz := float(c.y) * CHUNK_SIZE + rng.randf_range(2.0, CHUNK_SIZE - 2.0)
-		var density: float = main.forest_density(wx, wz)
+		var wz := float(c.y) * CHUNK_SIZE + rng.randf_range(2.0, CHUNK_SIZE - 2.0)		var density: float = main.forest_density(wx, wz)
 		if rng.randf() > clampf(density * 1.28, 0.08, 0.995):
 			continue
 		var h: float = main.height(wx, wz)
@@ -997,8 +995,7 @@ func _build_understory(c: Vector2i) -> void:
 				kind = "bush"
 			elif pick < 0.49:
 				kind = "hazel"
-			elif pick < 0.60:
-				kind = "dogrose"
+			elif pick < 0.60:				kind = "dogrose"
 			elif pick < 0.73:
 				kind = "moss"
 			elif pick < 0.82:
@@ -1197,8 +1194,7 @@ func _remove_prop_cover(k: String) -> void:
 			extent += a.distance_to(b) * 0.5
 		var sx0 := floori((center.x - extent) / 8.0)
 		var sx1 := floori((center.x + extent) / 8.0)
-		var sz0 := floori((center.z - extent) / 8.0)
-		var sz1 := floori((center.z + extent) / 8.0)
+		var sz0 := floori((center.z - extent) / 8.0)		var sz1 := floori((center.z + extent) / 8.0)
 		for gx in range(sx0, sx1 + 1):
 			for gz in range(sz0, sz1 + 1):
 				var solid_key := Vector2i(gx, gz)
