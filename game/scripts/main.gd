@@ -1552,7 +1552,8 @@ func _update_near(force: bool = false) -> void:
 			near_mmi[key] = mmi
 		var mi: MultiMeshInstance3D = near_mmi[key]
 		var xs: Array = by_key[key]
-		mi.multimesh.instance_count = xs.size()
+		if mi.multimesh.instance_count != xs.size():
+			mi.multimesh.instance_count = xs.size()
 		for i in xs.size():
 			mi.multimesh.set_instance_transform(i, xs[i])
 			mi.multimesh.set_instance_custom_data(i, Color(0.0, 1.0, 0.0, 0.0))
