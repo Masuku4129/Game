@@ -122,6 +122,7 @@ func setup(k: String, m: Node3D, mg: Node, pos: Vector3, seed_v: int, sc: float 
 	hp_left = int(TOUGH.get(k, 1)) if sc > 0.75 else 1
 	slot_a = rng.randf() * TAU
 	_build(false)
+	_cached_obstacle_radius = clampf(float(parts.get("L", 0.5)) * 0.18, 0.18, 0.75)
 	_new_wander()
 
 func _build(winter: bool) -> void:
@@ -131,6 +132,7 @@ func _build(winter: bool) -> void:
 		parts = SK.build_animal(self, kind, scale_k, winter)
 	else:
 		parts = AM.build(self, kind, scale_k, male, winter)
+	_cached_obstacle_radius = clampf(float(parts.get("L", 0.5)) * 0.18, 0.18, 0.75)
 	winter_skin = winter
 
 ## Активен ли вид сейчас (по времени суток).
@@ -1032,10 +1034,12 @@ func _sense() -> float:
 ## Застрял (упирается в склон, ствол или воду и почти не движется) — новая цель в сторону,
 ## откуда пришёл, со сменой направления обхода; долго не выходит — переносится к дому.
 ## Проверка короткого шага: коллизии, вода, границы карты и непроходимый подъём.
+var _cached_obstacle_radius := 0.35
+
 func _obstacle_radius() -> float:
-	# Approximate animal footprint by body length; prevents large species from
-	# squeezing through visually impassable gaps while keeping small animals agile.
-	return clampf(float(parts.get("L", 0.5)) * 0.18, 0.18, 0.75)
+	# Model dimensions are static for each skin; cache the footprint used by
+	# high-frequency obstacle/path probes instead of reading the parts dictionary.
+	return _cached_obstacle_radius
 
 ## Путь выхода из застревания: пока зверь внутри препятствия, первые отсчёты занятые — это
 ## нормально; но как только путь стал свободным, вновь упереться в стену уже нельзя.
