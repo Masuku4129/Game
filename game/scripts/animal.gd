@@ -913,13 +913,13 @@ func tick(delta: float) -> void:
 		var step_len := maxf(0.18, speed * delta)
 		# Try the direct path first, then progressively wider arcs. This avoids
 		# the old fixed-angle bounce that trapped animals against the same blocker.
-		var offsets := [0.0, 0.32, -0.32, 0.65, -0.65, 1.0, -1.0, 1.4, -1.4, 1.9, -1.9, 2.45, -2.45, PI]
+		var offsets := [0.0, 0.28, -0.28, 0.58, -0.58, 0.92, -0.92, 1.3, -1.3, 1.75, -1.75, 2.25, -2.25, 2.7, -2.7, PI]
 		var found := false
 		# Look beyond the animal's immediate step: a 10 cm probe cannot see a way around a boulder.
 		# Крупным животным нужен более дальний обзор: короткая проверка заставляет
 		# лося или медведя выбирать узкий проход, в который корпус физически не помещается.
 		var body_len: float = float(parts.get("L", 1.0))
-		var probe_len := maxf(1.25, minf(4.0, maxf(maxf(step_len * 7.0, to.length() * 0.12), body_len * 0.7)))
+		var probe_len := maxf(1.25, minf(5.2, maxf(maxf(step_len * 7.0, to.length() * 0.12), body_len * 0.78)))
 		# Nearby animal spacing prevents crowding/overlap during otherwise obstacle-safe
 		# steering, while allowing members of the same herd to stay comparatively close.
 		var neighbors: Array = mgr.near(position, maxf(3.0, body_len * 1.8)) if mgr != null else []
@@ -948,6 +948,17 @@ func tick(delta: float) -> void:
 				var current_bog: float = main.swamp_depth_at(position.x, position.z)
 				if probe_bog > current_bog + 0.04:
 					score -= minf(1.0, probe_bog / 0.9) * 0.32
+			# During harsh cold and gusts, steering also weighs nearby canopy cover,
+			# helping wildlife route toward sheltered forest instead of exposed ridges.
+			if main.weather != null:
+				var cold_factor: float = clampf((-float(main.weather.temp) + 2.0) / 18.0, 0.0, 1.0)
+				var wind_factor: float = clampf((float(main.weather.wind) - 0.75) / 1.6, 0.0, 1.0)
+				var shelter_factor: float = cold_factor * wind_factor
+				if shelter_factor > 0.05:
+					var route_forest: float = clampf(float(main.forest_density(probe.x, probe.z)), 0.0, 1.0)
+					var ridge_exposure: float = clampf((probe_ground - main.WATER_Y - 8.0) / 20.0, 0.0, 1.0)
+					var shelter_need: float = 0.22 if kind in ["squirrel", "hare", "roe", "deer", "muskdeer"] else 0.12
+					score += (route_forest * shelter_need - ridge_exposure * shelter_need) * shelter_factor
 			for other in neighbors:
 				if other == self or other.dead or other.state == "inlodge":
 					continue
