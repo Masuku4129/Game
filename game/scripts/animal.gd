@@ -5,6 +5,7 @@ const RP := preload("res://scripts/river_path.gd")
 
 const AM = preload("res://scripts/animal_model.gd")
 const SK = preload("res://scripts/skin.gd")
+const STEER_OFFSETS := [0.0, 0.28, -0.28, 0.58, -0.58, 0.92, -0.92, 1.3, -1.3, 1.75, -1.75, 2.25, -2.25, 2.7, -2.7, PI]
 
 # чутьё на человека (м), время активности, роль
 const SENSE := {"hare": 14.0, "squirrel": 10.0, "fox": 26.0, "roe": 36.0, "deer": 45.0, "boar": 22.0, "wolf": 55.0, "bear": 26.0, "tiger": 40.0, "beaver": 8.0}
@@ -913,7 +914,8 @@ func tick(delta: float) -> void:
 		var step_len := maxf(0.18, speed * delta)
 		# Try the direct path first, then progressively wider arcs. This avoids
 		# the old fixed-angle bounce that trapped animals against the same blocker.
-		var offsets := [0.0, 0.28, -0.28, 0.58, -0.58, 0.92, -0.92, 1.3, -1.3, 1.75, -1.75, 2.25, -2.25, 2.7, -2.7, PI]
+		# Shared immutable steering angles avoid allocating this list for each animal.
+		var offsets: Array = STEER_OFFSETS
 		var found := false
 		# Look beyond the animal's immediate step: a 10 cm probe cannot see a way around a boulder.
 		# Крупным животным нужен более дальний обзор: короткая проверка заставляет
