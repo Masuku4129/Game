@@ -80,3 +80,10 @@
 - Structure cleanup now searches footprint-local pickup/grass cells; grass clearing uses world-space cell coordinates.
 - Starting layout seed is scoped to the origin scatter cell (4,4) and grass cell (0,0) (20261129); unaffected cells keep their original deterministic hash.
 - Strict GDScript parse, gameplay regression tests, main-scene smoke run and Android export passed in GitHub Actions run #71 (`923e838f`); APK is 44,586,112 bytes. Device installation/runtime profiling remains unperformed.
+
+
+### Startup world generation — 2026-11-28
+- Removed the legacy full-map vegetation scatter from world startup. It attempted placement for every 64 m cell across the 512×512 m starting field and processed dozens of species before the player/UI could become active.
+- The 512×512 m terrain is still generated as a deterministic base field. Trees and understory are created by the existing nearby chunk streamer (64 m cells) as the player approaches; distant scenery is not generated at startup.
+- This is a startup-generation architecture change, not a density or visual-quality downgrade. Streaming load distance and chunk priority remain the source of active vegetation.
+- APK/runtime launch confirmation is still pending.
