@@ -25,7 +25,9 @@ var _sequence := 0
 var terrain_nodes: Dictionary = {}
 var terrain_materials: Dictionary = {}
 var tree_mmis: Dictionary = {}
+var tree_nodes: Dictionary = {}
 var prop_mmis: Dictionary = {}
+var prop_nodes: Dictionary = {}
 var blocker_records: Dictionary = {}
 var prop_blocker_records: Dictionary = {}
 var prop_solid_records: Dictionary = {}
@@ -855,6 +857,7 @@ func _build_tree_cover(c: Vector2i) -> void:
 		var xf := Transform3D(Basis(Vector3.UP, yaw).scaled(Vector3.ONE * scale), Vector3(wx, h, wz))
 		groups[bucket_key].transforms.append(xf)
 	var created: Array = []
+	var created_nodes: Array = []
 	var blockers_for_chunk: Array = []
 	# Tree-state belongs to one chunk. Read/deep-copy it once instead of once
 	# per generated tree instance (which scales poorly after many trees are felled).
@@ -884,6 +887,8 @@ func _build_tree_cover(c: Vector2i) -> void:
 		mmi.extra_cull_margin = 8.0
 		add_child(mmi)
 		created.append(mm)
+		created_nodes.append(mmi)
+		created_nodes.append(mmi)
 		# Подключаем деревья к общей системе рубки/поиска ближайшего дерева.
 		main._place_cell_records(mm, transforms, [kind], vi, variants, true, "")
 		# Срубленные деревья имеют стабильный ID от координат, а не от порядка
@@ -915,6 +920,7 @@ func _build_tree_cover(c: Vector2i) -> void:
 			main._add_blocker(p.x, p.z, radius)
 			blockers_for_chunk.append([Vector2i(floori(p.x / 8.0), floori(p.z / 8.0)), Vector3(p.x, p.z, radius)])
 	tree_mmis[k] = created
+	tree_nodes[k] = created_nodes
 	blocker_records[k] = blockers_for_chunk
 	if main.tools_world != null:
 		main.tools_world.restore_pending_tree_fells()
@@ -1006,6 +1012,7 @@ func _build_understory(c: Vector2i) -> void:
 		var xf := Transform3D(Basis(Vector3.UP, yaw).scaled(Vector3.ONE * scale), Vector3(wx, h, wz))
 		target_groups[bucket].transforms.append(xf)
 	var created: Array = []
+	var created_nodes: Array = []
 	var chunk_blockers: Array = []
 	var chunk_solids: Array = []
 	# Shared saved-log state for this chunk; avoid repeating a deep copy per GLB group.
@@ -1080,6 +1087,7 @@ func _build_understory(c: Vector2i) -> void:
 						main._add_blocker(p.x, p.z, radius + 0.08)
 						chunk_blockers.append([Vector2i(floori(p.x / 8.0), floori(p.z / 8.0)), obstacle])
 	prop_mmis[k] = created
+	prop_nodes[k] = created_nodes
 	prop_blocker_records[k] = chunk_blockers
 	prop_solid_records[k] = chunk_solids
 
@@ -1094,10 +1102,9 @@ func _remove_prop_cover(k: String) -> void:
 	var z0 := float(chunk_z) * CHUNK_SIZE
 	# Each chunk occupies a known spatial range. Cleanup queries those cells
 	# directly instead of scanning every global pickup/resource/log grid.
-	for mm: MultiMesh in meshes:
-		for node in get_children():
-			if node is MultiMeshInstance3D and node.multimesh == mm:
-				node.queue_free()
+	for node: Node in prop_nodes.get(k, []):
+		if is_instance_valid(node):
+			node.queue_free()
 		var gx0 := floori((x0 - 8.0) / 8.0)
 		var gx1 := floori((x0 + CHUNK_SIZE + 8.0) / 8.0)
 		var gz0 := floori((z0 - 8.0) / 8.0)
@@ -1170,6 +1177,7 @@ func _remove_prop_cover(k: String) -> void:
 				if entries.is_empty():
 					main.solids.erase(solid_key)
 	prop_mmis.erase(k)
+	prop_nodes.erase(k)
 	prop_blocker_records.erase(k)
 	prop_solid_records.erase(k)
 
@@ -1177,6 +1185,9 @@ func _remove_tree_cover(k: String) -> bool:
 	var meshes: Array = tree_mmis.get(k, [])
 	if meshes.is_empty():
 		return false
+	for node: Node in tree_nodes.get(k, []):
+		if is_instance_valid(node):
+			node.queue_free()
 	for mm: MultiMesh in meshes:
 		# Touch only spatial cells occupied by this chunk's instances.
 		var owned_cells: Dictionary = {}
@@ -1192,9 +1203,6 @@ func _remove_tree_cover(k: String) -> bool:
 					entries.remove_at(i)
 			if entries.is_empty():
 				main.tree_grid.erase(grid_key)
-		for node in get_children():
-			if node is MultiMeshInstance3D and node.multimesh == mm:
-				node.queue_free()
 	# Удаляем только блокираторы, поставленные этим чанком.
 	for item: Array in blocker_records.get(k, []):
 		var grid_key: Vector2i = item[0]
@@ -1207,7 +1215,7 @@ func _remove_tree_cover(k: String) -> bool:
 				entries.remove_at(i)
 		if entries.is_empty():
 			main.blockers.erase(grid_key)
-	tree_mmis.erase(k)
+	tree_mmis.erase(k)	tree_nodes.erase(k)
 	blocker_records.erase(k)
 	return true
 
