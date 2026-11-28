@@ -235,6 +235,19 @@ func _set_vol(v: float) -> void:
 	_store()
 	apply()
 
+func _creative_text() -> String:
+	return "Творческий режим: %s · бесплатно, мгновенная стройка, максимум характеристик" % ("включён" if creative_mode else "выключен")
+
+func _toggle_creative_mode() -> void:
+	creative_mode = not creative_mode
+	if main != null:
+		main.creative_mode = creative_mode
+	_store()
+	if creative_btn != null:
+		creative_btn.text = _creative_text()
+	if main != null:
+		main._say("Творческий режим включён" if creative_mode else "Обычный режим включён")
+
 func _save_now() -> void:
 	if main != null and main.saver != null:
 		main.saver.enabled = true
