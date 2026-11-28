@@ -624,7 +624,7 @@ func _update_sky() -> void:
 	if weather != null:
 		# глубинная дымка: в тумане и дождь начинается ближе и гуще
 		# камера ниже — видно дальше: дымка ближе, чтобы дальний край мира не появлялся на глазах
-		var low: float = clampf((45.0 - float(rig.pitch)) / 20.0, 0.0, 1.0) if rig != null else 0.0
+		var low: float = 0.0 # fixed elevated camera pitch is locked at 45 degrees
 		env.fog_depth_begin = 40.0 - low * 14.0 - fogv * 32.0 - wet_air * 12.0 - mist * 7.0
 		env.fog_depth_end = 118.0 - low * 20.0 - fogv * 58.0 - wet_air * 22.0
 		# туман в низинах: высотная дымка над рекой и в лощинах (утром и после дождя)
