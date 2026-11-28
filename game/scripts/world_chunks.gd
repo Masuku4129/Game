@@ -62,7 +62,7 @@ func _process(delta: float) -> void:
 	# One chunk is advanced through discrete generation stages per frame,
 	# preventing terrain, tree cover, understory and wildlife from all landing
 	# in the same frame.
-	_process_queue()
+	_process_queue(delta)
 	_explore_clock -= delta
 	if _explore_clock <= 0.0:
 		_explore_clock = 1.25
@@ -222,7 +222,7 @@ func _rebuild_queue() -> void:
 	for item: Dictionary in candidates:
 		pending.append(item.coord)
 
-func _process_queue() -> void:
+func _process_queue(delta: float) -> void:
 	# Central records are cheap, but cap the batch so a large queue cannot
 	# create dozens of dictionaries and noise samples in one frame.
 	var record_budget := 3
@@ -245,7 +245,9 @@ func _process_queue() -> void:
 		_building_chunk = {"coord": c, "key": k, "outside": true}
 		_build_stage = 0
 	# At most one heavy visual generation stage per frame, preserving detail.
-	if _building_chunk.is_empty():
+	# If the previous frame exceeded ~28ms, defer scenery work to avoid piling
+	# another generation spike onto a slow mobile frame; no content is discarded.
+	if delta > 0.028 or _building_chunk.is_empty():
 		return
 	var coord: Vector2i = _building_chunk["coord"]
 	match _build_stage:
