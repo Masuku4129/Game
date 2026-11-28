@@ -607,6 +607,7 @@ func _process(delta: float) -> void:
 		_bird_update_acc = fmod(_bird_update_acc, 0.033)
 	_bird_acc += delta
 	var bird_slow := _bird_acc >= 0.2
+	var bird_slow_dt := _bird_acc
 	if bird_slow:
 		_bird_acc = fmod(_bird_acc, 0.2)
 	for b in birds:
@@ -618,7 +619,7 @@ func _process(delta: float) -> void:
 			if bird_update:
 				b.tick(bird_dt)
 		elif d2 < 90.0 * 90.0 and bird_slow:
-			b.tick(0.2)
+			b.tick(bird_slow_dt)
 
 func _make_bird_mesh() -> void:
 	var m := StandardMaterial3D.new()
