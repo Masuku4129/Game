@@ -949,7 +949,7 @@ var _sky_timer := 0.0
 ## Трава клетками 32 м вокруг героя (3×3): меньше вызовов отрисовки, чем 5×5 клеток по 16 м;
 ## клетка строится по частям за несколько кадров, без рывка.
 const GCELL := 32.0
-const GRADIUS := 2
+const GRADIUS := 1
 var _gb := {}
 
 var _shot_n := 0
@@ -1260,6 +1260,8 @@ func _grass_prebuild(c: Vector3) -> void:
 				_grass_begin(k)
 				while not _gb.is_empty():
 					_grass_step()
+					if not _gb.is_empty():
+						await get_tree().process_frame
 
 func _grass_begin(k: Vector2i) -> void:
 	var rng := RandomNumberGenerator.new()
