@@ -252,6 +252,8 @@ func _spawn(k: String, p: Vector3, sc: float, grp: int, stable_id: String = "") 
 	var a := Animal.new()
 	add_child(a)
 	a.setup(k, main, self, Vector3(p.x, main.ground_at(p.x, p.z), p.z), rng.randi(), sc)
+	# Random phase spreads wildlife state updates across frames instead of a spawn burst.
+	a._acc = rng.randf_range(0.0, 0.18)
 	_spawn_serial += 1
 	a.world_id = stable_id if stable_id != "" else "base:%d" % _spawn_serial
 	a.group = grp
@@ -537,7 +539,8 @@ func _process(delta: float) -> void:
 				a.far = d2 > NEAR_R * NEAR_R
 				a._sim_tick_interval = 0.85 if a.far else (NEAR_DT if d2 < MID_R * MID_R else MID_DT)
 				if was_far and not a.far:
-					a._acc = 0.0
+					# Retain a randomized phase on detail promotion to avoid herd tick spikes.
+					a._acc = rng.randf_range(0.0, a._sim_tick_interval)
 				var show_r: float = 40.0 if a.kind in ["hare", "squirrel", "beaver"] else SHOW_R
 				a.visible = d2 < show_r * show_r and (not a.dead or a.meat > 0.0) and a.state != "sleep" and a.state != "inlodge"
 				if a.parts.has("ap"):
