@@ -462,6 +462,8 @@ func _build_bog_cover(c: Vector2i, parent: Node3D) -> void:
 	var groups: Dictionary = {}
 	var attempts := 1950
 	for n in attempts:
+		if n > 0 and n % 150 == 0:
+			await get_tree().process_frame
 		var wx := float(c.x) * CHUNK_SIZE + rng.randf_range(0.5, CHUNK_SIZE - 0.5)
 		var wz := float(c.y) * CHUNK_SIZE + rng.randf_range(0.5, CHUNK_SIZE - 0.5)
 		var wet: float = main.swamp_depth_at(wx, wz)
@@ -578,6 +580,8 @@ func _build_water_surface(c: Vector2i, parent: Node3D) -> void:
 	var uvs := PackedVector2Array()
 	var indices := PackedInt32Array()
 	for z in range(seg):
+		if z > 0 and z % 4 == 0:
+			await get_tree().process_frame
 		for x in range(seg):
 			var wx := ox + (float(x) + 0.5) * step
 			var wz := oz + (float(z) + 0.5) * step
@@ -755,9 +759,9 @@ func _build_terrain_chunk(c: Vector2i) -> void:
 	collision.shape = shape
 	body.add_child(collision)
 	root.add_child(body)
-	_build_water_surface(c, root)
-	_build_bog_cover(c, root)
-	_build_bog_water(c, root)
+	await _build_water_surface(c, root)
+	await _build_bog_cover(c, root)
+	await _build_bog_water(c, root)
 	add_child(root)
 	terrain_nodes[k] = root
 
