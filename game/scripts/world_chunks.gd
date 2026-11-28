@@ -40,6 +40,8 @@ var _weather_material_cache: Dictionary = {}
 var _resource_state_cache: Dictionary = {}
 var _chunk_stage_defer_toggle := true
 var _queue_processing := false
+var _generation_batch := 150
+var _terrain_batch_rows := 6
 const STREAM_TREE_KINDS := ["spruce", "pine", "birch", "larch", "aspen", "fir", "cedar", "alder", "willow", "rowan"]
 
 func _process(delta: float) -> void:
@@ -227,6 +229,16 @@ func _rebuild_queue() -> void:
 		pending.append(item.coord)
 
 func _process_queue(delta: float) -> void:
+	# Adapt work batch to the most recent frame cost without changing world density.
+	if delta < 0.022:
+		_generation_batch = 300
+		_terrain_batch_rows = 12
+	elif delta < 0.030:
+		_generation_batch = 200
+		_terrain_batch_rows = 8
+	else:
+		_generation_batch = 150
+		_terrain_batch_rows = 6
 	if _queue_processing:
 		return
 	_queue_processing = true
@@ -659,7 +671,7 @@ func _build_terrain_chunk(c: Vector2i) -> void:
 	# Sample each terrain field once per vertex and reuse it for mesh, material
 	# textures and normals. This removes the redundant second 65x65 sampling pass.
 	for z in range(side):
-		if z > 0 and z % 8 == 0:
+		if z > 0 and z % _terrain_batch_rows == 0:
 			await get_tree().process_frame
 		for x in range(side):
 			var wx := origin_x + float(x) * step
@@ -816,7 +828,7 @@ func _build_tree_cover(c: Vector2i) -> void:
 	var spacing_cell := 5.0
 	var count := 2850
 	for attempt in range(count):
-		if attempt > 0 and attempt % 150 == 0:
+		if attempt > 0 and attempt % _generation_batch == 0:
 			await get_tree().process_frame
 		var wx := float(c.x) * CHUNK_SIZE + rng.randf_range(2.0, CHUNK_SIZE - 2.0)
 		var wz := float(c.y) * CHUNK_SIZE + rng.randf_range(2.0, CHUNK_SIZE - 2.0)
