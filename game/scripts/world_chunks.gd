@@ -219,25 +219,24 @@ func _rebuild_queue() -> void:
 		pending.append(item.coord)
 
 func _process_queue() -> void:
-	# Stage 0: claim the next chunk and make its persistent record.
-	if _building_chunk.is_empty():
-		if pending.is_empty():
-			return
+	# Skip already-covered central-world records in one pass; only external
+	# chunks enter the staged visual pipeline.
+	while _building_chunk.is_empty() and not pending.is_empty():
 		var c: Vector2i = pending.pop_front()
 		var k := _key(c)
 		if active.has(k):
-			return
+			continue
 		var record: Dictionary = persistent[k] if persistent.has(k) else _create_record(c)
 		record["last_seen"] = Time.get_unix_time_from_system()
 		record["loaded"] = true
 		active[k] = record
 		persistent[k] = record
-		_building_chunk = {"coord": c, "key": k, "outside": not _inside_base_world(c)}
+		if _inside_base_world(c):
+			continue
+		_building_chunk = {"coord": c, "key": k, "outside": true}
 		_build_stage = 0
-	# Chunks inside the base terrain need no external visual stages.
-	if not bool(_building_chunk.get("outside", false)):
-		_building_chunk.clear()
-		_build_stage = -1
+	# At most one heavy visual generation stage per frame, preserving detail.
+	if _building_chunk.is_empty():
 		return
 	var coord: Vector2i = _building_chunk["coord"]
 	match _build_stage:
