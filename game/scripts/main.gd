@@ -138,7 +138,8 @@ func _ready() -> void:
 	# Player-follow camera and hero controls are the only supported mode.
 	rig = preload("res://scripts/camera_rig.gd").new()
 	rig.target = hero
-	add_child(rig)\n	rig.position = hero.position
+	add_child(rig)
+	rig.position = hero.position
 	player_rig = hero
 	chunk_stream = preload("res://scripts/world_chunks.gd").new()
 	chunk_stream.main = self
