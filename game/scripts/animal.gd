@@ -937,6 +937,14 @@ func tick(delta: float) -> void:
 		# steering, while allowing members of the same herd to stay comparatively close.
 		var neighbors: Array = mgr.near(position, maxf(3.0, body_len * 1.8)) if mgr != null else []
 		var avoid_strength := 1.0 if state in ["flee", "chase", "charge"] else 0.62
+		# Precompute each neighbor's footprint and group weight once per steering pass.
+		var steering_neighbors: Array[Vector4] = []
+		for other in neighbors:
+			if other == self or other.dead or other.state == "inlodge":
+				continue
+			var min_sep: float = (body_len + float(other.parts.get("L", 1.0))) * 0.22
+			var group_weight: float = 0.55 if group >= 0 and group == other.group else 1.4
+			steering_neighbors.append(Vector4(other.position.x, other.position.z, min_sep, group_weight)
 		for off in offsets:
 			var candidate: float = lerp_angle(heading, desired, 0.35) + float(off)
 			var cd := Vector3(sin(candidate), 0.0, cos(candidate))
@@ -965,17 +973,14 @@ func tick(delta: float) -> void:
 				var route_forest: float = clampf(float(main.forest_density(probe.x, probe.z)), 0.0, 1.0)
 				var ridge_exposure: float = clampf((probe_ground - main.WATER_Y - 8.0) / 20.0, 0.0, 1.0)
 					score += (route_forest * shelter_need - ridge_exposure * shelter_need) * shelter_factor
-			for other in neighbors:
-				if other == self or other.dead or other.state == "inlodge":
-					continue
-				var dx_sep: float = probe.x - other.position.x
-				var dz_sep: float = probe.z - other.position.z
+			for other_data: Vector4 in steering_neighbors:
+				var dx_sep: float = probe.x - other_data.x
+				var dz_sep: float = probe.z - other_data.y
 				var sep_sq: float = dx_sep * dx_sep + dz_sep * dz_sep
-				var min_sep := (body_len + float(other.parts.get("L", 1.0))) * 0.22
+				var min_sep: float = other_data.z
 				if sep_sq < min_sep * min_sep:
 					var sep: float = sqrt(sep_sq)
-					var same_group: bool = group >= 0 and group == other.group
-					score -= avoid_strength * (0.55 if same_group else 1.4) * (1.0 - clampf(sep / maxf(min_sep, 0.01), 0.0, 1.0))
+					score -= avoid_strength * other_data.w * (1.0 - clampf(sep / maxf(min_sep, 0.01), 0.0, 1.0))
 			if score > best_score:
 				best_score = score
 				chosen = candidate
