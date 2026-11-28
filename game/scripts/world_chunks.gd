@@ -1085,33 +1085,56 @@ func _remove_prop_cover(k: String) -> void:
 	var meshes: Array = prop_mmis.get(k, [])
 	if meshes.is_empty():
 		return
+	var coords: PackedStringArray = k.split(",")
+	var chunk_x := int(coords[0])
+	var chunk_z := int(coords[1])
+	var x0 := float(chunk_x) * CHUNK_SIZE
+	var z0 := float(chunk_z) * CHUNK_SIZE
+	# Each chunk occupies a known spatial range. Cleanup queries those cells
+	# directly instead of scanning every global pickup/resource/log grid.
 	for mm: MultiMesh in meshes:
 		for node in get_children():
 			if node is MultiMeshInstance3D and node.multimesh == mm:
 				node.queue_free()
-		for cell_key in main.pickables.keys():
-			var picks: Array = main.pickables[cell_key]
-			for i in range(picks.size() - 1, -1, -1):
-				if picks[i].size() > 2 and picks[i][2] == mm:
-					picks.remove_at(i)
-			if picks.is_empty():
-				main.pickables.erase(cell_key)
-		for cell_key in main.res_spots.keys():
-			var spots: Array = main.res_spots[cell_key]
-			for i in range(spots.size() - 1, -1, -1):
-				var p: Vector3 = spots[i][0]
-				if floori(p.x / CHUNK_SIZE) == int(k.split(",")[0]) and floori(p.z / CHUNK_SIZE) == int(k.split(",")[1]):
-					spots.remove_at(i)
-			if spots.is_empty():
-				main.res_spots.erase(cell_key)
-		for cell_key in main.fallen_spots.keys():
-			var fallen: Array = main.fallen_spots[cell_key]
-			for i in range(fallen.size() - 1, -1, -1):
-				if fallen[i].get("mm") == mm:
-					fallen.remove_at(i)
-			if fallen.is_empty():
-				main.fallen_spots.erase(cell_key)
-	# Убираем препятствия и опорные поверхности, созданные моделями этого чанка.
+		var gx0 := floori((x0 - 8.0) / 8.0)
+		var gx1 := floori((x0 + CHUNK_SIZE + 8.0) / 8.0)
+		var gz0 := floori((z0 - 8.0) / 8.0)
+		var gz1 := floori((z0 + CHUNK_SIZE + 8.0) / 8.0)
+		for gx in range(gx0, gx1 + 1):
+			for gz in range(gz0, gz1 + 1):
+				var cell_key := Vector2i(gx, gz)
+				if main.pickables.has(cell_key):
+					var picks: Array = main.pickables[cell_key]
+					for i in range(picks.size() - 1, -1, -1):
+						if picks[i].size() > 2 and picks[i][2] == mm:
+							picks.remove_at(i)
+					if picks.is_empty():
+						main.pickables.erase(cell_key)
+				if main.res_spots.has(cell_key):
+					var spots: Array = main.res_spots[cell_key]
+					for i in range(spots.size() - 1, -1, -1):
+						var p: Vector3 = spots[i][0]
+						if floori(p.x / CHUNK_SIZE) == chunk_x and floori(p.z / CHUNK_SIZE) == chunk_z:
+							spots.remove_at(i)
+					if spots.is_empty():
+						main.res_spots.erase(cell_key)
+		# Fallen-log records use 16m cells and can be offset from their origin.
+		var fx0 := floori((x0 - 12.0) / 16.0)
+		var fx1 := floori((x0 + CHUNK_SIZE + 12.0) / 16.0)
+		var fz0 := floori((z0 - 12.0) / 16.0)
+		var fz1 := floori((z0 + CHUNK_SIZE + 12.0) / 16.0)
+		for gx in range(fx0, fx1 + 1):
+			for gz in range(fz0, fz1 + 1):
+				var fallen_key := Vector2i(gx, gz)
+				if not main.fallen_spots.has(fallen_key):
+					continue
+				var fallen: Array = main.fallen_spots[fallen_key]
+				for i in range(fallen.size() - 1, -1, -1):
+					if fallen[i].get("mm") == mm:
+						fallen.remove_at(i)
+				if fallen.is_empty():
+					main.fallen_spots.erase(fallen_key)
+	# Remove blocker and solid registrations owned by this chunk.
 	for item: Array in prop_blocker_records.get(k, []):
 		var grid_key: Vector2i = item[0]
 		var obstacle: Vector3 = item[1]
@@ -1123,13 +1146,27 @@ func _remove_prop_cover(k: String) -> void:
 			if entries.is_empty():
 				main.blockers.erase(grid_key)
 	for solid: Array in prop_solid_records.get(k, []):
-		for grid_key in main.solids.keys():
-			var entries: Array = main.solids[grid_key]
-			for i in range(entries.size() - 1, -1, -1):
-				if entries[i] == solid:
-					entries.remove_at(i)
-			if entries.is_empty():
-				main.solids.erase(grid_key)
+		var center: Vector3 = solid[1]
+		var extent: float = float(solid[3]) + 0.5
+		if int(solid[0]) == 1:
+			var endpoint: Vector3 = solid[2]
+			center = (center + endpoint) * 0.5
+			extent += center.distance_to(endpoint) * 0.5
+		var sx0 := floori((center.x - extent) / 8.0)
+		var sx1 := floori((center.x + extent) / 8.0)
+		var sz0 := floori((center.z - extent) / 8.0)
+		var sz1 := floori((center.z + extent) / 8.0)
+		for gx in range(sx0, sx1 + 1):
+			for gz in range(sz0, sz1 + 1):
+				var solid_key := Vector2i(gx, gz)
+				if not main.solids.has(solid_key):
+					continue
+				var entries: Array = main.solids[solid_key]
+				for i in range(entries.size() - 1, -1, -1):
+					if entries[i] == solid:
+						entries.remove_at(i)
+				if entries.is_empty():
+					main.solids.erase(solid_key)
 	prop_mmis.erase(k)
 	prop_blocker_records.erase(k)
 	prop_solid_records.erase(k)
