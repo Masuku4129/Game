@@ -367,6 +367,19 @@ func blocked(x: float, z: float, rad: float) -> bool:
 					return true
 	return false
 
+func _resolve_world_seed() -> void:
+	if not FileAccess.file_exists(PENDING_SEED_PATH):
+		return
+	var f := FileAccess.open(PENDING_SEED_PATH, FileAccess.READ)
+	if f == null:
+		return
+	var pending := f.get_as_text().strip_edges()
+	f.close()
+	var candidate := pending.to_int()
+	if candidate > 0:
+		map_seed = candidate
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(PENDING_SEED_PATH))
+
 func _world_stream_seed(stream_id: int) -> int:
 	# Разводим независимые поля рельефа/биомов хешированием, а не соседними
 	# значениями map_seed: это сохраняет детерминизм и уменьшает корреляцию слоёв.
@@ -871,10 +884,7 @@ func _process(delta: float) -> void:
 		dead_t -= delta
 		if dead_t <= 0.0:
 			_respawn()
-	_map_reveal_t -= delta
-	if _map_reveal_t <= 0.0 and hero != null:
-		_map_reveal_t = 1.5
-		_reveal_map_area()
+	# Chunk-stream discovery records explored cells; duplicate legacy reveal loop removed.
 	_near_t -= delta
 	if _near_t <= 0.0:
 		_near_t = _near_update_interval
@@ -2356,7 +2366,6 @@ func from_save(d: Dictionary) -> void:
 	if chunk_stream != null:
 		chunk_stream.from_save(d.get("world_chunks", {}))
 	explored_map = d.get("explored_map", {}).duplicate(true)
-	_upgrade_explored_map()
 	t_hours = float(d.get("t_hours", t_hours))
 	day_count = int(d.get("day", day_count))
 	hunger = float(d.get("hunger", hunger))
