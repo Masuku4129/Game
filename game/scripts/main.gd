@@ -1866,7 +1866,7 @@ func _base_chunk_seed(cx: int, cz: int) -> int:
 	const MOD := 2147483647
 	var h := posmod(map_seed, MOD)
 	h = posmod(h + posmod(cx, MOD) * 73856093, MOD)
-	h = posmod(h + posmod(cz, MOD) * 193496663, MOD)
+	h = posmod(h + posmod(cz, MOD) * 19349663, MOD)
 	h = posmod((h ^ (h >> 13)) * 1274126177, MOD)
 	h = posmod((h ^ (h >> 16)) * 1597334677, MOD)
 	return maxi(1, h)
