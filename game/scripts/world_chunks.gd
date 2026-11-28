@@ -888,7 +888,6 @@ func _build_tree_cover(c: Vector2i) -> void:
 		add_child(mmi)
 		created.append(mm)
 		created_nodes.append(mmi)
-		created_nodes.append(mmi)
 		# Подключаем деревья к общей системе рубки/поиска ближайшего дерева.
 		main._place_cell_records(mm, transforms, [kind], vi, variants, true, "")
 		# Срубленные деревья имеют стабильный ID от координат, а не от порядка
@@ -1045,6 +1044,7 @@ func _build_understory(c: Vector2i) -> void:
 			mmi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 			add_child(mmi)
 			created.append(mm)
+			created_nodes.append(mmi)
 		# Подключаем ягоды/грибы/валежник к штатным системам сбора и инструментов.
 			main._place_cell_records(mm, transforms, [kind], vi, variants, false, "mushroom" if kind == "mushroom" else "")
 			if kind in ["fallen0", "fallen1"]:
