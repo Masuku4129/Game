@@ -219,7 +219,7 @@ func _ready() -> void:
 	# --- core: настройки (качество, кадры, звук), сохранение, справочник, меню ---
 	_core_setup(ui)
 	# --- /core ---
-		var _hx := OS.get_environment("CHIDE")
+	var _hx := OS.get_environment("CHIDE")
 	if "s" in _hx:
 		sun.shadow_enabled = false
 	if "f" in _hx:
