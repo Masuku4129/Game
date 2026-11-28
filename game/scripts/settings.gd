@@ -182,11 +182,8 @@ func _build_sheet() -> void:
 	sv.pressed.connect(_save_now)
 	var cl := _btn("Закрыть", Rect2(480, 540, 420, 84), 28)
 	cl.pressed.connect(close)
-	# --- colony: отладочный переключатель старого режима героя (джойстик, от первого лица) ---
 	creative_btn = _btn(_creative_text(), Rect2(40, 636, 860, 68), 24)
 	creative_btn.pressed.connect(_toggle_creative_mode)
-	_hero_btn = _btn(_hero_text(), Rect2(40, 718, 860, 68), 22)
-	_hero_btn.pressed.connect(_toggle_hero_mode)
 	sheet.offset_top = -430.0
 	sheet.offset_bottom = 430.0
 
