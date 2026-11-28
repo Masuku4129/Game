@@ -35,7 +35,7 @@ func _make_camera():
 	camera.position = Vector3(0, 11, 11)
 	camera.rotation_degrees = Vector3(-45, 0, 0)
 	camera.projection = Camera3D.PROJECTION_ORTHOGONAL
-	camera.size = 9
+	camera.size = 6.2
 	add_child(camera)
 	camera.current = true
 
@@ -78,7 +78,7 @@ func _make_ui():
 	base_ui.add_child(nub)
 	stick = nub
 	var hint = Label.new()
-	hint.text = "Touch joystick • Shift / RUN"
+	hint.text = "MOVE • TOUCH / RUN • SHIFT"
 	hint.position = Vector2(18, 18)
 	hint.add_theme_color_override("font_color", Color(0.68, 0.62, 0.85, 0.8))
 	base_ui.add_child(hint)
