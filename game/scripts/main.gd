@@ -131,14 +131,14 @@ func _ready() -> void:
 	# с собой только кремнёвый нож на поясе
 	inv["knife"] = 1
 	hero.tools.to_belt("knife")
-	 rig = preload("res://scripts/camera_rig.gd").new()
+	rig = preload("res://scripts/camera_rig.gd").new()
 	rig.target = hero
 	add_child(rig)
 	rig.position = hero.position
 	player_rig = hero
 	var ui := CanvasLayer.new()
 	add_child(ui)
-	 hud = preload("res://scripts/hud.gd").new()
+	hud = preload("res://scripts/hud.gd").new()
 	hud.anchor_right = 1.0
 	hud.anchor_bottom = 1.0
 	ui.add_child(hud)
