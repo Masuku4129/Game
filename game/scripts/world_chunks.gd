@@ -60,10 +60,11 @@ func _process(delta: float) -> void:
 		_refresh = 0.0
 		_rebuild_queue()
 		_unload_distant()
-	elif _refresh <= 0.0 and _building_chunk.is_empty():
-		# Re-prioritize prefetch only occasionally while stationary. Re-sorting
-		# the full candidate ring every 0.35 s was redundant CPU work.
-		_refresh = 1.0
+	elif _refresh <= 0.0 and _building_chunk.is_empty() and pending.is_empty():
+		# Rebuild the directional candidate ring only after the current queue is
+		# drained. Re-sorting an unchanged ring while chunks are still pending
+		# wastes CPU and invalidates useful work.
+		_refresh = 2.0
 		_rebuild_queue()
 	# One chunk is advanced through discrete generation stages per frame,
 	# preventing terrain, tree cover, understory and wildlife from all landing
