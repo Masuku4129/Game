@@ -767,8 +767,24 @@ func _build_terrain_chunk(c: Vector2i) -> void:
 	root.add_child(visual)
 	var body := StaticBody3D.new()
 	body.name = "TerrainCollision"
+	# Collision is sampled at half visual resolution: 4x fewer triangles,
+	# while the full-detail terrain mesh and height/material maps stay untouched.
+	var collision_faces := PackedVector3Array()
+	var collision_step := 2
+	for z in range(0, seg, collision_step):
+		for x in range(0, seg, collision_step):
+			var a := z * side + x
+			var b := a + collision_step
+			var d := a + side * collision_step
+			var e := d + collision_step
+			collision_faces.append(vertices[a])
+			collision_faces.append(vertices[b])
+			collision_faces.append(vertices[d])
+			collision_faces.append(vertices[b])
+			collision_faces.append(vertices[e])
+			collision_faces.append(vertices[d])
 	var shape := ConcavePolygonShape3D.new()
-	shape.set_faces(mesh.get_faces())
+	shape.set_faces(collision_faces)
 	var collision := CollisionShape3D.new()
 	collision.shape = shape
 	body.add_child(collision)
