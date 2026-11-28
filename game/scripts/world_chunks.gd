@@ -792,7 +792,9 @@ func _build_tree_cover(c: Vector2i) -> void:
 	rng.seed = _seed(c) ^ 0x4A17B39
 	var groups: Dictionary = {}
 	var canopy_spacing: Dictionary = {}
-	var spacing_cell := 4.0
+	# 5 m bins cover the maximum canopy spacing; only the 3x3 neighborhood
+	# can contain candidates closer than the required spacing.
+	var spacing_cell := 5.0
 	var count := 2850
 	for attempt in range(count):
 		var wx := float(c.x) * CHUNK_SIZE + rng.randf_range(2.0, CHUNK_SIZE - 2.0)
@@ -819,7 +821,9 @@ func _build_tree_cover(c: Vector2i) -> void:
 				if not canopy_spacing.has(bin_key):
 					continue
 				for existing: Vector2 in canopy_spacing[bin_key]:
-					if Vector2(wx - existing.x, wz - existing.y).length() < spacing:
+					var dx := wx - existing.x
+					var dz := wz - existing.y
+					if dx * dx + dz * dz < spacing * spacing:
 						crowded = true
 						break
 				if crowded:
