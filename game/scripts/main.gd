@@ -74,11 +74,7 @@ var fallen_spots := {}   # клетка 16 м → [{kind, mm, i, xf, a, b, r}] �
 var hunt  # --- hunt: туши, разделка, кровь, запах крови (hunt.gd) ---
 var camp  # --- build: лагерь и постройки (structures.gd) ---
 var combat  # --- combat: удары, прицел, стрелы (combat.gd) ---
-# --- colony: отряд землепроходцев, изометрическая камера, сценарий (colony.gd).
-# colony_mode = true — новая игра про острог; false — старый режим героя с джойстиком
-# (отладочный переключатель в настройках и переменная окружения HERO_MODE=1). ---
-var colony
-var colony_mode := true
+var colony = null
 
 func _ready() -> void:
 	# Видимый экран загрузки: генерация мира больше не должна выглядеть как зависание.
@@ -100,7 +96,6 @@ func _ready() -> void:
 	boot_label.add_theme_color_override("font_color", Color(0.88, 0.91, 0.78))
 	boot_ui.add_child(boot_label)
 	_resolve_world_seed()
-	_colony_pick_mode()
 	_setup_noise()
 	weather = preload("res://scripts/weather.gd").new()
 	weather.main = self
@@ -140,41 +135,28 @@ func _ready() -> void:
 	# с собой только кремнёвый нож на поясе
 	inv["knife"] = 1
 	hero.tools.to_belt("knife")
-	# --- colony: в режиме острога — изометрическая камера (rts_camera.gd) вместо
-	# привязанной к герою; поля те же, поэтому старый код работает по-прежнему ---
-	if colony_mode:
-		rig = preload("res://scripts/rts_camera.gd").new()
-		rig.main = self
-		add_child(rig)
-		rig.snap_to(hero.position, 30.0, 0.6)
-		player_rig = rig
-		hero.visible = false
-		hero.process_mode = Node.PROCESS_MODE_DISABLED
-	else:
-		rig = preload("res://scripts/camera_rig.gd").new()
-		rig.target = hero
-		add_child(rig)
-		rig.position = hero.position
-		player_rig = hero
-	# --- /colony ---
+	# Player-follow camera and hero controls are the only supported mode.
+	rig = preload("res://scripts/camera_rig.gd").new()
+	rig.target = hero
+	add_child(rig)\n	rig.position = hero.position
+	player_rig = hero
 	chunk_stream = preload("res://scripts/world_chunks.gd").new()
 	chunk_stream.main = self
 	add_child(chunk_stream)
 	var ui := CanvasLayer.new()
 	add_child(ui)
-	if not colony_mode:
-		hud = preload("res://scripts/hud.gd").new()
-		hud.anchor_right = 1.0
-		hud.anchor_bottom = 1.0
-		ui.add_child(hud)
-		joy = preload("res://scripts/joystick.gd").new()
-		joy.anchor_top = 1.0
-		joy.anchor_bottom = 1.0
-		joy.offset_left = 40.0
-		joy.offset_right = 400.0
-		joy.offset_top = -400.0
-		joy.offset_bottom = -40.0
-		ui.add_child(joy)
+	hud = preload("res://scripts/hud.gd").new()
+	hud.anchor_right = 1.0
+	hud.anchor_bottom = 1.0
+	ui.add_child(hud)
+	joy = preload("res://scripts/joystick.gd").new()
+	joy.anchor_top = 1.0
+	joy.anchor_bottom = 1.0
+	joy.offset_left = 40.0
+	joy.offset_right = 400.0
+	joy.offset_top = -400.0
+	joy.offset_bottom = -40.0
+	ui.add_child(joy)
 	act_btn = Button.new()
 	act_btn.anchor_left = 1.0
 	act_btn.anchor_right = 1.0
@@ -189,14 +171,11 @@ func _ready() -> void:
 	act_btn.visible = false
 	act_btn.pressed.connect(func(): hero.do_action())
 	ui.add_child(act_btn)
-	if colony_mode:
-		act_btn.visible = false
-	else:
-		# --- инвентарь (короб): кнопка «Рюкзак» на HUD, лист вещей, анимация снятия короба ---
-		inventory = preload("res://scripts/inventory.gd").new()
-		inventory.main = self
-		ui.add_child(inventory)
-		hud.setup(self)
+	# Backpack and HUD are always part of hero mode.
+	inventory = preload("res://scripts/inventory.gd").new()
+	inventory.main = self
+	ui.add_child(inventory)
+	hud.setup(self)
 	# --- hunt: разделка туш, кровь, запах крови (hunt.gd) ---
 	hunt = preload("res://scripts/hunt.gd").new()
 	hunt.main = self
@@ -214,12 +193,7 @@ func _ready() -> void:
 	camp.main = self
 	add_child(camp)
 	# --- /build ---
-	# --- colony: лист лагеря (camp_ui) заменён листом острога ---
-	if colony_mode and camp.ui != null:
-		camp.ui.visible = false
-		camp.ui.set_process(false)
-		camp.ui.set_process_unhandled_input(false)
-	# --- /colony ---
+	# Camp UI is kept enabled for the single-player survival mode.
 	fps_lbl = Label.new()
 	fps_lbl.anchor_left = 0.5
 	fps_lbl.anchor_right = 0.5
@@ -253,22 +227,7 @@ func _ready() -> void:
 	# --- core: настройки (качество, кадры, звук), сохранение, справочник, меню ---
 	_core_setup(ui)
 	# --- /core ---
-	# --- colony: отряд, лист острога и сценарий «Первая зима» ---
-	if colony_mode:
-		fps_lbl.offset_top = 120.0
-		fps_lbl.visible = false
-		var cl := CanvasLayer.new()
-		cl.layer = 3
-		add_child(cl)
-		colony = preload("res://scripts/colony.gd").new()
-		colony.rig = rig
-		add_child(colony)
-		colony.setup(self, cl)
-		rig.colony = colony
-		if OS.get_environment("COLONY_TEST") != "" or OS.get_environment("COLONY_SHOTS") != "":
-			var ct: Node = preload("res://scripts/colony_test.gd").new()
-			ct.set("main", self)
-			add_child(ct)
+	# Colony/RTS mode and its test harness are removed from runtime.
 	var _hx := OS.get_environment("CHIDE")
 	if "s" in _hx:
 		sun.shadow_enabled = false
@@ -292,167 +251,6 @@ func _ready() -> void:
 		pf.set("main", self)
 		add_child(pf)
 	boot_ui.queue_free()
-
-## --- colony: какой режим запускать. Старые проверки (бой, инструменты, охота, стройка,
-## сохранение, кадры, замер) идут по-прежнему от героя, поэтому для них — режим героя. ---
-func _resolve_world_seed() -> void:
-	# Новый мир получает собственный seed; продолжение читает seed до генерации рельефа.
-	if FileAccess.file_exists(PENDING_SEED_PATH):
-		var pending := FileAccess.open(PENDING_SEED_PATH, FileAccess.READ)
-		if pending != null:
-			map_seed = int(pending.get_as_text().strip_edges())
-			pending.close()
-		DirAccess.remove_absolute(ProjectSettings.globalize_path(PENDING_SEED_PATH))
-		if map_seed != 0:
-			return
-	var creative_selected := false
-	var cfg := ConfigFile.new()
-	if cfg.load("user://settings.cfg") == OK:
-		creative_selected = bool(cfg.get_value("game", "creative_mode", false))
-	var save_path := "user://creative_save.json" if creative_selected else "user://save.json"
-	if FileAccess.file_exists(save_path):
-		var sf := FileAccess.open(save_path, FileAccess.READ)
-		if sf != null:
-			var parsed: Variant = JSON.parse_string(sf.get_as_text())
-			sf.close()
-			if parsed is Dictionary:
-				var md: Dictionary = (parsed as Dictionary).get("main", {})
-				if md.has("map_seed"):
-					map_seed = int(md["map_seed"])
-					return
-	var rng := RandomNumberGenerator.new()
-	rng.randomize()
-	map_seed = int(rng.randi() & 0x7fffffff)
-	if map_seed == 0:
-		map_seed = MAP_SEED
-
-func _upgrade_explored_map() -> void:
-	# Upgrade older save files in-place so the map's richer legend works across
-	# saves made before terrain/landmark metadata was introduced.
-	for key: String in explored_map.keys():
-		var data: Variant = explored_map[key]
-		if not data is Dictionary or data.has("zone_name"):
-			continue
-		var grid: PackedStringArray = key.split(",")
-		if grid.size() != 2:
-			continue
-		var gx := int(grid[0])
-		var gz := int(grid[1])
-		var wx := (float(gx) + 0.5) * 16.0
-		var wz := (float(gz) + 0.5) * 16.0
-		var h := height(wx, wz)
-		var wl := water_level(wx, wz)
-		var zkind := int(data.get("zone", zone(wx, wz)))
-		var forest_k := forest_density(wx, wz)
-		var wet_k_value := wet_k(wx, wz, h)
-		var slope_dx := absf(height(wx + 4.0, wz) - height(wx - 4.0, wz)) / 8.0
-		var slope_dz := absf(height(wx, wz + 4.0) - height(wx, wz - 4.0)) / 8.0
-		var slope_k := sqrt(slope_dx * slope_dx + slope_dz * slope_dz)
-		var zone_name := "forest"
-		match zkind:
-			1:
-				zone_name = "burned_forest"
-			2:
-				zone_name = "bog"
-			4:
-				zone_name = "windfall"
-		data["zone_name"] = zone_name
-		data["forest_class"] = "dense_taiga" if forest_k > 0.72 else "woodland" if forest_k > 0.38 else "sparse_trees" if forest_k > 0.12 else "clearing"
-		data["terrain_class"] = "steep_slope" if slope_k > 0.42 else "rolling" if slope_k > 0.16 else "flat"
-		data["forest"] = forest_k
-		data["wetness"] = wet_k_value
-		data["slope"] = slope_k
-		var landmarks: Array[String] = data.get("landmarks", [])
-		if float(data.get("river_distance", river_dist(wx, wz))) < 12.0 and not landmarks.has("river_corridor"):
-			landmarks.append("river_corridor")
-		if h < wl + 1.0 and not landmarks.has("water_edge"):
-			landmarks.append("water_edge")
-		if wet_k_value > 0.68 and not landmarks.has("wet_ground"):
-			landmarks.append("wet_ground")
-		if slope_k > 0.5 and not landmarks.has("steep_terrain"):
-			landmarks.append("steep_terrain")
-		if forest_k < 0.15 and not landmarks.has("open_area"):
-			landmarks.append("open_area")
-		if h > WATER_Y + 12.0 and not landmarks.has("elevated_ground"):
-			landmarks.append("elevated_ground")
-		data["landmarks"] = landmarks
-		explored_map[key] = data
-		if chunk_stream != null:
-			chunk_stream.save_map_cell(wx, wz, key, data)
-
-func _reveal_map_area() -> void:
-	# Открываем только пройденную местность. Храним компактные данные по клеткам 16×16 м.
-	if chunk_stream != null:
-		chunk_stream.mark_explored(hero.position)
-	var cx := floori(hero.position.x / 16.0)
-	var cz := floori(hero.position.z / 16.0)
-	for dz in range(-2, 3):
-		for dx in range(-2, 3):
-			var gx := cx + dx
-			var gz := cz + dz
-			var key := "%d,%d" % [gx, gz]
-			if explored_map.has(key):
-				continue
-			var wx := (float(gx) + 0.5) * 16.0
-			var wz := (float(gz) + 0.5) * 16.0
-			var h := height(wx, wz)
-			var wl := water_level(wx, wz)
-			var zkind := zone(wx, wz)
-			var rd := river_dist(wx, wz)
-			var lk := lake_k(wx, wz)
-			var forest_k := forest_density(wx, wz)
-			var wet_k_value := wet_k(wx, wz, h)
-			var slope_dx := absf(height(wx + 4.0, wz) - height(wx - 4.0, wz)) / 8.0
-			var slope_dz := absf(height(wx, wz + 4.0) - height(wx, wz - 4.0)) / 8.0
-			var slope_k := sqrt(slope_dx * slope_dx + slope_dz * slope_dz)
-			var zone_name := "forest"
-			match zkind:
-				1:
-					zone_name = "burned_forest"
-				2:
-					zone_name = "bog"
-				4:
-					zone_name = "windfall"
-			var forest_class := "dense_taiga" if forest_k > 0.72 else "woodland" if forest_k > 0.38 else "sparse_trees" if forest_k > 0.12 else "clearing"
-			var terrain_class := "steep_slope" if slope_k > 0.42 else "rolling" if slope_k > 0.16 else "flat"
-			var landmarks: Array[String] = []
-			if rd < 12.0:
-				landmarks.append("river_corridor")
-			if h < wl + 1.0:
-				landmarks.append("water_edge")
-			if wet_k_value > 0.68:
-				landmarks.append("wet_ground")
-			if slope_k > 0.5:
-				landmarks.append("steep_terrain")
-			if forest_k < 0.15:
-				landmarks.append("open_area")
-			if h > WATER_Y + 12.0:
-				landmarks.append("elevated_ground")
-			explored_map[key] = {
-				"zone": zkind, "zone_name": zone_name, "forest_class": forest_class,
-				"terrain_class": terrain_class, "landmarks": landmarks,
-				"river": rd < 9.0, "lake": lk > 0.28,
-				"water": h < wl + 0.25,
-				"bog": zkind == 2 and swamp_depth_at(wx, wz) > 0.3,
-				"forest": forest_k, "wetness": wet_k_value,
-				"slope": slope_k, "elevation": int(round(h / 4.0))
-			}
-			if chunk_stream != null:
-				chunk_stream.save_map_cell(wx, wz, key, explored_map[key])
-
-func _colony_pick_mode() -> void:
-	# Default to the proven legacy player mode: the colony/RTS mode is opt-in
-	# until its first-play boot, camera and touch controls are verified end-to-end.
-	colony_mode = false
-	var cf := ConfigFile.new()
-	if cf.load("user://settings.cfg") == OK:
-		colony_mode = not bool(cf.get_value("game", "hero_mode", true))
-	for e: String in ["COMBAT_TEST", "TOOLS_TEST", "HUNT_TEST", "BUILD_TEST", "SAVE_TEST", "UI_SHOTS", "SHOTS", "PERF", "HERO_MODE"]:
-		if OS.get_environment(e) != "":
-			colony_mode = false
-	for e2: String in ["COLONY_TEST", "COLONY_SHOTS"]:
-		if OS.get_environment(e2) != "":
-			colony_mode = true
 
 func _find_start() -> Vector3:
 	for r in range(0, 120, 3):
