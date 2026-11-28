@@ -219,9 +219,11 @@ func _rebuild_queue() -> void:
 		pending.append(item.coord)
 
 func _process_queue() -> void:
-	# Skip already-covered central-world records in one pass; only external
-	# chunks enter the staged visual pipeline.
-	while _building_chunk.is_empty() and not pending.is_empty():
+	# Central records are cheap, but cap the batch so a large queue cannot
+	# create dozens of dictionaries and noise samples in one frame.
+	var record_budget := 3
+	while _building_chunk.is_empty() and not pending.is_empty() and record_budget > 0:
+		record_budget -= 1
 		var c: Vector2i = pending.pop_front()
 		var k := _key(c)
 		if active.has(k):
