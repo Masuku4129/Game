@@ -1054,17 +1054,17 @@ func _build_understory(c: Vector2i) -> void:
 			main._place_cell_records(mm, transforms, [kind], vi, variants, false, "mushroom" if kind == "mushroom" else "")
 			if kind in ["fallen0", "fallen1"]:
 				var fallen_state: Dictionary = chunk_fallen_state
+				var fallen_spec: Array = variants[vi]
 				for i in transforms.size():
 					var origin: Vector3 = transforms[i].origin
 					var fallen_id := "%d_%d" % [int(round(origin.x * 4.0)), int(round(origin.z * 4.0))]
 					var saved_fallen: Variant = fallen_state.get(fallen_id, {})
 					if saved_fallen is Dictionary and bool(saved_fallen.get("done", false)):
 						mm.set_instance_transform(i, Transform3D(Basis().scaled(Vector3(0.0001, 0.0001, 0.0001)), origin - Vector3(0, 500, 0)))
-						var fallen_spec: Array = variants[vi]
-					var fallen_xf: Transform3D = transforms[i]
-					var fallen_a: Vector3 = fallen_xf * Vector3(float(fallen_spec[4]), float(fallen_spec[3]), 0.0)
-					var fallen_b: Vector3 = fallen_xf * Vector3(float(fallen_spec[4]) + float(fallen_spec[1]) * 0.85, 0.12, 0.0)
-					var fallen_cell := Vector2i(floori((fallen_a.x + fallen_b.x) * 0.5 / 16.0), floori((fallen_a.z + fallen_b.z) * 0.5 / 16.0))
+						var fallen_xf: Transform3D = transforms[i]
+						var fallen_a: Vector3 = fallen_xf * Vector3(float(fallen_spec[4]), float(fallen_spec[3]), 0.0)
+						var fallen_b: Vector3 = fallen_xf * Vector3(float(fallen_spec[4]) + float(fallen_spec[1]) * 0.85, 0.12, 0.0)
+						var fallen_cell := Vector2i(floori((fallen_a.x + fallen_b.x) * 0.5 / 16.0), floori((fallen_a.z + fallen_b.z) * 0.5 / 16.0))
 						for fallen_rec: Dictionary in main.fallen_spots.get(fallen_cell, []):
 							if fallen_rec.get("mm") == mm and int(fallen_rec.get("i", -1)) == i:
 								fallen_rec["done"] = true
