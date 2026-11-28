@@ -22,7 +22,7 @@ func _process(delta: float) -> void:
 		position.x = lerpf(position.x, tp.x, 1.0 - exp(-FOLLOW_XZ * delta))
 		position.z = lerpf(position.z, tp.z, 1.0 - exp(-FOLLOW_XZ * delta))
 		position.y = lerpf(position.y, tp.y, 1.0 - exp(-FOLLOW_Y * delta))
-	_update()
+	# Fixed camera orientation; update only the rig position each frame.
 
 func _update() -> void:
 	cam.position = Vector3(0, sin(deg_to_rad(PITCH)) * DISTANCE, cos(deg_to_rad(PITCH)) * DISTANCE)
