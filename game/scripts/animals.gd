@@ -478,9 +478,10 @@ func _rebuild_grid() -> void:
 		if a.dead or a.state == "inlodge":
 			continue
 		var k := Vector2i(floori(a.position.x / GC), floori(a.position.z / GC))
-		if not grid.has(k):
-			grid[k] = []
-		grid[k].append(a)
+		var cell: Array = grid.get(k, [])
+		if cell.is_empty():
+			grid[k] = cell
+		cell.append(a)
 
 ## Звери в ячейках, перекрывающих круг радиуса r (без точной проверки расстояния).
 func near(p: Vector3, r: float) -> Array:
@@ -534,7 +535,10 @@ func _process(delta: float) -> void:
 		for a in list:
 			a._acc += animal_dt
 			if classify_now:
-				var d2 := Vector2(a.position.x - hp.x, a.position.z - hp.z).length_squared()
+
+				var animal_dx: float = a.position.x - hp.x
+				var animal_dz: float = a.position.z - hp.z
+				var d2: float = animal_dx * animal_dx + animal_dz * animal_dz
 				var was_far: bool = a.far
 				a.far = d2 > NEAR_R * NEAR_R
 				a._sim_tick_interval = 0.85 if a.far else (NEAR_DT if d2 < MID_R * MID_R else MID_DT)
@@ -564,7 +568,10 @@ func _process(delta: float) -> void:
 	for b in birds:
 		if not bird_update and not bird_slow:
 			continue
-		var d2 := Vector2(b.position.x - hp.x, b.position.z - hp.z).length_squared()
+
+		var bird_dx: float = b.position.x - hp.x
+		var bird_dz: float = b.position.z - hp.z
+		var d2: float = bird_dx * bird_dx + bird_dz * bird_dz
 		b.visible = d2 < 45.0 * 45.0
 		if d2 < 50.0 * 50.0:
 			if bird_update:
