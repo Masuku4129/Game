@@ -13,13 +13,11 @@ var list: Array = []
 var birds: Array = []
 var groups := {}
 var rng := RandomNumberGenerator.new()
-var _far_acc := 0.0
 var _bird_acc := 0.0
 var _classify_acc := 0.0
 var _spawn_serial := 0
 var streamed_chunks: Dictionary = {}
 var pending_saved_animals: Dictionary = {}
-var _far_i := 0
 var bird_mesh := {}
 # сетка зверей (ячейка GC м), перестраивается раз в 0,5 с: соседей ищем только в ближних ячейках
 const GC := 32.0
@@ -595,16 +593,6 @@ func _process(delta: float) -> void:
 		# редким шагом; ближние животные сохраняют 30/12.5 Гц.
 		if a._acc >= a._sim_tick_interval:
 			a.tick(a._acc)
-			a._acc = 0.0
-	# perf: дальние (за NEAR_R) — по кругу, каждый примерно раз в секунду
-	var per := maxi(1, n / 60)
-	for k in per:
-		if n == 0:
-			break
-		_far_i = (_far_i + 1) % n
-		var a = list[_far_i]
-		if a.far and a._acc > 0.0:
-			a.tick(minf(a._acc, 2.0))
 			a._acc = 0.0
 	# perf: птицы вблизи — каждый кадр, дальше 50 м — раз в 0,2 с (накопленным шагом)
 	_bird_acc += delta
