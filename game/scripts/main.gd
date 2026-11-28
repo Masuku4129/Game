@@ -109,8 +109,11 @@ func _ready() -> void:
 	boot_label.text = "TAIGA\nФормирование рельефа…"
 	await _make_terrain()
 	_make_water()
-	boot_label.text = "TAIGA\nСоздание леса и растительности…"
-	await _scatter_all()
+	boot_label.text = "TAIGA\nПодготовка первой области…"
+	# Avoid the old global 8×8 vegetation scatter during world creation.
+	# The 512×512 terrain remains deterministic and is generated once; trees and
+	# understory are now exclusively produced by the nearby 64 m streaming system.
+	# This removes the expensive whole-world placement/occupancy pass from startup.
 	grass_mesh_vars = [pv.tuft(1500), pv.tuft(1503, 1.3), pv.tuft(1504, 0.8)]
 	hero = preload("res://scripts/hero.gd").new()
 	hero.main = self
