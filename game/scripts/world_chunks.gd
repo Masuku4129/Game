@@ -4,11 +4,14 @@ extends Node
 
 const CHUNK_SIZE := 64.0
 const ACTIVE_RADIUS := 2
-const PRELOAD_RADIUS := 5
+const PRELOAD_RADIUS := 2 # Diagnostic build: load a compact local area, then expand as the player moves.
 const LOAD_BUDGET := 1
 const MAX_SAVED_CHUNKS := 4096
 const TERRAIN_SEGMENTS := 64
 const BASE_HALF_EXTENT := 256.0
+const WORLD_HALF_EXTENT := 512.0 # finite 1 km x 1 km world
+const WORLD_CHUNK_MIN := -8
+const WORLD_CHUNK_MAX := 7
 
 var main: Node3D
 var active: Dictionary = {}
@@ -202,6 +205,8 @@ func _rebuild_queue() -> void:
 	for z in range(-PRELOAD_RADIUS, PRELOAD_RADIUS + 1):
 		for x in range(-PRELOAD_RADIUS, PRELOAD_RADIUS + 1):
 			var c := center + Vector2i(x, z)
+			if c.x < WORLD_CHUNK_MIN or c.x > WORLD_CHUNK_MAX or c.y < WORLD_CHUNK_MIN or c.y > WORLD_CHUNK_MAX:
+				continue
 			var offset := Vector2(x, z)
 			var d := offset.length_squared()
 			if d > float(PRELOAD_RADIUS * PRELOAD_RADIUS) + 0.5:
@@ -255,11 +260,12 @@ func _process_queue(delta: float) -> void:
 		if active.has(k):
 			continue
 		if _inside_base_world(c):
-			# Central terrain is already rendered. Still populate wildlife
-			# through the deterministic chunk pipeline, one chunk at a time.
+			 # Central terrain is already rendered. Build vegetation and wildlife in
+			# these chunks too: the previous stage=3 shortcut skipped both tree
+			# cover and understory, leaving the central map grass-only.
 			active[k] = {"coord": [c.x, c.y], "loaded": true}
 			_building_chunk = {"coord": c, "key": k, "outside": false}
-			_build_stage = 3
+			_build_stage = 1
 			continue
 		var record: Dictionary = persistent[k] if persistent.has(k) else _create_record(c)
 		record["last_seen"] = Time.get_unix_time_from_system()
