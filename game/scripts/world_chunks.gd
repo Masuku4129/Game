@@ -5,7 +5,7 @@ extends Node
 const CHUNK_SIZE := 64.0
 const ACTIVE_RADIUS := 2
 const PRELOAD_RADIUS := 5
-const LOAD_BUDGET := 3
+const LOAD_BUDGET := 1
 const MAX_SAVED_CHUNKS := 4096
 const TERRAIN_SEGMENTS := 64
 const BASE_HALF_EXTENT := 256.0
