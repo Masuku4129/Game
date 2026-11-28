@@ -228,13 +228,16 @@ func _process_queue() -> void:
 		var k := _key(c)
 		if active.has(k):
 			continue
+		if _inside_base_world(c):
+			# Central terrain is already represented by the main world mesh;
+			# keep only a lightweight active marker until gameplay needs state.
+			active[k] = {"coord": [c.x, c.y], "loaded": true}
+			continue
 		var record: Dictionary = persistent[k] if persistent.has(k) else _create_record(c)
 		record["last_seen"] = Time.get_unix_time_from_system()
 		record["loaded"] = true
 		active[k] = record
 		persistent[k] = record
-		if _inside_base_world(c):
-			continue
 		_building_chunk = {"coord": c, "key": k, "outside": true}
 		_build_stage = 0
 	# At most one heavy visual generation stage per frame, preserving detail.
