@@ -267,7 +267,7 @@ func _process_queue(delta: float) -> void:
 	var coord: Vector2i = _building_chunk["coord"]
 	match _build_stage:
 		0:
-			_build_terrain_chunk(coord)
+			await _build_terrain_chunk(coord)
 			_build_stage = 1
 		1:
 			await _build_tree_cover(coord)
@@ -653,6 +653,8 @@ func _build_terrain_chunk(c: Vector2i) -> void:
 	# Sample each terrain field once per vertex and reuse it for mesh, material
 	# textures and normals. This removes the redundant second 65x65 sampling pass.
 	for z in range(side):
+		if z > 0 and z % 8 == 0:
+			await get_tree().process_frame
 		for x in range(side):
 			var wx := origin_x + float(x) * step
 			var wz := origin_z + float(z) * step
@@ -673,6 +675,8 @@ func _build_terrain_chunk(c: Vector2i) -> void:
 	# Grid finite differences provide smooth normals without four repeated height
 	# noise queries per vertex; only the outer boundary samples outside the mesh.
 	for z in range(side):
+		if z > 0 and z % 8 == 0:
+			await get_tree().process_frame
 		for x in range(side):
 			var index := z * side + x
 			var h_l: float = heights[index - 1] if x > 0 else main.height(origin_x - step, origin_z + float(z) * step)
