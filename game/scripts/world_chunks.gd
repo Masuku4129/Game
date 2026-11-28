@@ -4,7 +4,7 @@ extends Node
 
 const CHUNK_SIZE := 64.0
 const ACTIVE_RADIUS := 2
-const PRELOAD_RADIUS := 2 # Diagnostic build: load a compact local area, then expand as the player moves.
+const PRELOAD_RADIUS := 2 # Finite 1 km map: only nearby foliage/animals stream; terrain is fixed.
 const LOAD_BUDGET := 1
 const MAX_SAVED_CHUNKS := 4096
 const TERRAIN_SEGMENTS := 64
