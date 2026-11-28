@@ -156,25 +156,21 @@ func _sync_chunk_weather() -> void:
 	var w = main.weather
 	var freeze_now := clampf(-float(w.temp) * 0.5, 0.0, 1.0)
 	var rain_now := float(w.precip) if float(w.temp) >= 0.5 else 0.0
-	var snow_depth_now := float(w.snow) * 0.42
-	var mud_depth_now := float(w.wet) * 0.24
 	var values := {
 		"snow": w.snow, "wet": w.wet, "autumn": w.autumn,
 		"leaf_drop": w.leaf_drop, "wind": w.wind, "blossom": w.blossom,
 		"freeze": freeze_now, "rain": rain_now,
-		"snow_m": snow_depth_now, "mud_m": mud_depth_now
+		"snow_m": float(w.snow) * 0.42, "mud_m": float(w.wet) * 0.24
 	}
-	# Update only materials whose parameters changed. A per-material cache also
-	# ensures newly streamed chunks receive current weather immediately.
+	# Per-material cache: update only changed materials, then record the exact
+	# values written to each one. New streamed materials have no cache entry.
 	for material: ShaderMaterial in terrain_materials.values():
 		var material_id := material.get_instance_id()
 		if _weather_material_cache.get(material_id, {}) == values:
 			continue
 		for parameter: String in values:
 			material.set_shader_parameter(parameter, values[parameter])
-		_weather_material_cache.clear()
-		for material: ShaderMaterial in terrain_materials.values():
-			_weather_material_cache[material.get_instance_id()] = values.duplicate()
+		_weather_material_cache[material.get_instance_id()] = values.duplicate()
 
 func _key(c: Vector2i) -> String:
 	return "%d,%d" % [c.x, c.y]
