@@ -39,6 +39,7 @@ var _chunk_weather_clock := 0.0
 var _weather_material_cache: Dictionary = {}
 var _resource_state_cache: Dictionary = {}
 var _chunk_stage_defer_toggle := true
+var _queue_processing := false
 const STREAM_TREE_KINDS := ["spruce", "pine", "birch", "larch", "aspen", "fir", "cedar", "alder", "willow", "rowan"]
 
 func _process(delta: float) -> void:
@@ -226,6 +227,9 @@ func _rebuild_queue() -> void:
 		pending.append(item.coord)
 
 func _process_queue(delta: float) -> void:
+	if _queue_processing:
+		return
+	_queue_processing = true
 	# Central records are cheap, but cap the batch so a large queue cannot
 	# create dozens of dictionaries and noise samples in one frame.
 	var record_budget := 1
@@ -253,10 +257,12 @@ func _process_queue(delta: float) -> void:
 	# If the previous frame exceeded ~28ms, defer scenery work to avoid piling
 	# another generation spike onto a slow mobile frame; no content is discarded.
 	if _building_chunk.is_empty():
+		_queue_processing = false
 		return
 	if delta > 0.035:
 		_chunk_stage_defer_toggle = not _chunk_stage_defer_toggle
 		if _chunk_stage_defer_toggle:
+			_queue_processing = false
 			return
 	var coord: Vector2i = _building_chunk["coord"]
 	match _build_stage:
@@ -264,16 +270,17 @@ func _process_queue(delta: float) -> void:
 			_build_terrain_chunk(coord)
 			_build_stage = 1
 		1:
-			_build_tree_cover(coord)
+			await _build_tree_cover(coord)
 			_build_stage = 2
 		2:
-			_build_understory(coord)
+			await _build_understory(coord)
 			_build_stage = 3
 		3:
 			if main.animals != null:
 				main.animals.populate_stream_chunk(coord, _seed(coord))
 			_building_chunk.clear()
 			_build_stage = -1
+	_queue_processing = false
 
 func _create_record(c: Vector2i) -> Dictionary:
 	var rng := RandomNumberGenerator.new()
@@ -799,6 +806,8 @@ func _build_tree_cover(c: Vector2i) -> void:
 	var spacing_cell := 5.0
 	var count := 2850
 	for attempt in range(count):
+		if attempt > 0 and attempt % 150 == 0:
+			await get_tree().process_frame
 		var wx := float(c.x) * CHUNK_SIZE + rng.randf_range(2.0, CHUNK_SIZE - 2.0)
 		var wz := float(c.y) * CHUNK_SIZE + rng.randf_range(2.0, CHUNK_SIZE - 2.0)
 		var density: float = main.forest_density(wx, wz)
@@ -961,6 +970,8 @@ func _build_understory(c: Vector2i) -> void:
 	# Низкорослые GLB-модели заполняют просветы между деревьями.
 	# Плотность привязана к лесу и болотному микрорельефу, а не к квадратному биому.
 	for attempt in range(2900):
+		if attempt > 0 and attempt % 150 == 0:
+			await get_tree().process_frame
 		var wx := float(c.x) * CHUNK_SIZE + rng.randf_range(1.0, CHUNK_SIZE - 1.0)
 		var wz := float(c.y) * CHUNK_SIZE + rng.randf_range(1.0, CHUNK_SIZE - 1.0)
 		var density: float = main.forest_density(wx, wz)
