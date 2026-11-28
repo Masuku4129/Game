@@ -15,6 +15,7 @@ var groups := {}
 var rng := RandomNumberGenerator.new()
 var _bird_acc := 0.0
 var _classify_acc := 0.0
+var _bird_update_acc := 0.0
 var _spawn_serial := 0
 var streamed_chunks: Dictionary = {}
 var pending_saved_animals: Dictionary = {}
@@ -595,15 +596,22 @@ func _process(delta: float) -> void:
 			a.tick(a._acc)
 			a._acc = 0.0
 	# perf: птицы вблизи — каждый кадр, дальше 50 м — раз в 0,2 с (накопленным шагом)
+	_bird_update_acc += delta
+	var bird_update := _bird_update_acc >= 0.033
+	var bird_dt := _bird_update_acc
+	if bird_update:
+		_bird_update_acc = fmod(_bird_update_acc, 0.033)
 	_bird_acc += delta
 	var bird_slow := _bird_acc >= 0.2
 	if bird_slow:
-		_bird_acc = 0.0
+		_bird_acc = fmod(_bird_acc, 0.2)
 	for b in birds:
+		if not bird_update and not bird_slow:
+			continue
 		var d2 := Vector2(b.position.x - hp.x, b.position.z - hp.z).length_squared()
 		b.visible = d2 < 45.0 * 45.0
-		if d2 < 50.0 * 50.0:
-			b.tick(delta)
+		if d2 < 50.0 * 50.0 and bird_update:
+			b.tick(bird_dt)
 		elif d2 < 90.0 * 90.0 and bird_slow:
 			b.tick(0.2)
 
