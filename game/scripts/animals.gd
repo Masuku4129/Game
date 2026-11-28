@@ -30,63 +30,22 @@ var carcasses: Array = []
 var fish: Node3D
 
 func populate() -> void:
+	# Mobile-first population: do not instantiate the entire ecosystem at startup.
+	# Animals are created deterministically by nearby chunk streaming instead.
 	rng.seed = int(main.get("map_seed")) + 7741
 	var start: Vector3 = main.hero.position
-	# заяц: опушки и поляны
-	for i in 50:
-		_spawn("hare", _spot(func(x, z): return main.forest_density(x, z) < 0.55, start, 25.0), 1.0, -1)
-	# белка: у деревьев
-	for i in 80:
-		var p := _spot(func(x, z): return main.nearest_tree(Vector3(x, 0, z), 6.0) != Vector3.INF, start, 15.0)
-		_spawn("squirrel", p, 1.0, -1)
-	for i in 12:
-		_spawn("fox", _spot(func(x, z): return main.forest_density(x, z) < 0.6, start, 50.0), 1.0, -1)
-	# первая встреча: пара косуль на опушке недалеко от старта
-	var c0 := _spot(func(x, z): return main.forest_density(x, z) < 0.5 and Vector2(x - start.x, z - start.z).length() < 70.0, start, 35.0)
-	for k in 2:
-		_spawn("roe", _near(c0, 4.0), rng.randf_range(0.9, 1.05), 99)
-	# водопои: звери держатся у реки
+	_make_bird_mesh()
+	# Ambient birds are intentionally local; distant flocks are streamed later.
 	for gi in 4:
-		var c := _spot(func(x, z): return main.river_dist(x, z) < 32.0 and main.river_dist(x, z) > 20.0 and main.height(x, z) > main.WATER_Y + 0.4, start, 50.0)
-		for k in rng.randi_range(2, 3):
-			_spawn("roe", _near(c, 5.0), rng.randf_range(0.9, 1.05), 110 + gi)
-	# косули — группы по 2–3, олени — стада 4–5
-	for gi in 10:
-		var c := _spot(func(x, z): return main.forest_density(x, z) < 0.7, start, 60.0)
-		for k in rng.randi_range(2, 3):
-			_spawn("roe", _near(c, 6.0), rng.randf_range(0.9, 1.05), 100 + gi)
-	for gi in 5:
-		var c := _spot(func(x, z): return main.forest_density(x, z) < 0.5 and main.normal_at(x, z).y > 0.9, start, 80.0)
-		for k in rng.randi_range(4, 5):
-			_spawn("deer", _near(c, 8.0), rng.randf_range(0.85, 1.05), 200 + gi)
-	# кабаны с поросятами
-	for gi in 7:
-		var c := _spot(func(x, z): return main.forest_density(x, z) > 0.4, start, 70.0)
-		_spawn("boar", c, 1.0, 300 + gi)
-		_spawn("boar", _near(c, 4.0), 0.85, 300 + gi)
-		for k in 3:
-			_spawn("boar", _near(c, 4.0), 0.4, 300 + gi)
-	# волчья стая с логовом вдали от старта
-	var den := _spot(func(x, z): return main.forest_density(x, z) > 0.5 and main.normal_at(x, z).y > 0.85, start, 150.0)
-	_den(den, 1.6, 0.9)
-	for k in 5:
-		var w = _spawn("wolf", _near(den, 5.0), rng.randf_range(0.9, 1.05) if k > 0 else 1.1, 400)
-		w.home_r = 170.0
-	var den2 := _spot(func(x, z): return main.forest_density(x, z) > 0.5 and main.normal_at(x, z).y > 0.85 and den.distance_to(Vector3(x, den.y, z)) > 180.0, start, 150.0)
-	_den(den2, 1.6, 0.9)
-	for k in 4:
-		var w2 = _spawn("wolf", _near(den2, 5.0), rng.randf_range(0.9, 1.05) if k > 0 else 1.1, 401)
-		w2.home_r = 170.0
-	# медведи: берлоги в каменистой местности
-	for bi in 3:
-		var bden := _spot(func(x, z): return main.biome(x, z) > 0.2 and main.normal_at(x, z).y > 0.8, start, 100.0)
-		_den(bden, 2.2, 1.3)
-		_spawn("bear", _near(bden, 3.0), 1.0 if bi == 0 else 0.9, -1)
-	# тигры: юго-восток
-	for ti in 2:
-		var tp := _spot(func(x, z): return x > 60.0 and z > 60.0, start, 120.0)
-		_spawn("tiger", tp, 1.0, -1)
-	# бобры: по 3 у каждой хатки (колонии — в beavers.gd)
+		var c := start + Vector3(rng.randf_range(-32.0, 32.0), 0.0, rng.randf_range(-32.0, 32.0))
+		c.y = main.ground_at(c.x, c.z)
+		for k in rng.randi_range(3, 5):
+			var b := Bird.new()
+			b.setup(self, _near(c, 3.0), rng.randi())
+			add_child(b)
+			birds.append(b)
+	# Keep beaver dam associations intact; their population is small and tied
+	# directly to the generated lodge records.
 	for ci in main.beavers.colonies.size():
 		var col: Dictionary = main.beavers.colonies[ci]
 		var lp: Vector3 = col["lodge"]
@@ -95,19 +54,8 @@ func populate() -> void:
 			bv.home = lp
 			bv.door = col.get("door", Vector3.INF)
 			col["beavers"].append(bv)
-	# птицы: стайки
-	_make_bird_mesh()
-	for gi in 28:
-		var c := _spot(func(x, z): return true, start, 10.0)
-		for k in rng.randi_range(4, 9):
-			var b := Bird.new()
-			b.setup(self, _near(c, 3.0), rng.randi())
-			add_child(b)
-			birds.append(b)
-
-	_populate_taiga(start)
 	_rebuild_grid()
-	# рыба в реке
+	# Fish remain initialized at startup; fish system has its own lightweight update.
 	fish = preload("res://scripts/fish.gd").new()
 	fish.main = main
 	add_child(fish)
@@ -197,8 +145,7 @@ func populate_stream_chunk(coord: Vector2i, chunk_seed: int) -> void:
 		var secondary_count := rng.randi_range(1, 2)
 		for secondary_i in range(secondary_count):
 			var secondary_pos := secondary_center if secondary_i == 0 else _near(secondary_center, 5.5)
-			_spawn(secondary_kind, secondary_pos, rng.randf_range(0.84, 1.06), group_id + 4, "chunk:%s:secondary:%d" % [key, secondary_i])
-	# Riparian encounters are independent of the forest/open-ground pairing:
+			_spawn(secondary_kind, secondary_pos, rng.randf_range(0.84, 1.06), group_id + 4, "chunk:%s:secondary:%d" % [key, secondary_i])	# Riparian encounters are independent of the forest/open-ground pairing:
 	# small water-edge populations can occur even in otherwise inland chunks
 	# that include a narrow stream corridor.
 	if not waterside_candidates.is_empty() and rng.randf() < 0.16:
@@ -397,8 +344,7 @@ func nearest_of(a: Node3D, kinds: Array, r: float) -> Node3D:
 		var d: float = a.position.distance_to(o.position)
 		if d < bd:
 			bd = d
-			best = o
-	return best
+			best = o	return best
 
 func pack_hunt(a: Node3D, prey: Node3D) -> void:
 	if a.group < 0 or not groups.has(a.group):
@@ -597,8 +543,7 @@ func _process(delta: float) -> void:
 			# Close wildlife keeps the same sim interval; far wildlife remains
 			# lower-frequency, with all elapsed time passed to the state machine.
 			if a._acc >= a._sim_tick_interval:
-				a.tick(a._acc)
-				a._acc = 0.0
+				a.tick(a._acc)				a._acc = 0.0
 	# perf: птицы вблизи — каждый кадр, дальше 50 м — раз в 0,2 с (накопленным шагом)
 	_bird_update_acc += delta
 	var bird_update := _bird_update_acc >= 0.033
@@ -797,8 +742,7 @@ const TAIGA_PREDS := {"hare": ["lynx", "wolverine"], "roe": ["lynx"], "beaver": 
 func _populate_taiga(start: Vector3) -> void:
 	# лоси: поймы, болотистые берега и редколесье; быки поодиночке, лосихи с лосятами
 	var mc := _spot_ring(func(x, z): return main.forest_density(x, z) < 0.65, start, 60.0, 110.0)
-	_taiga_moose(mc, 700)
-	for gi in 9:
+	_taiga_moose(mc, 700)	for gi in 9:
 		var c := _spot(func(x, z): return main.river_dist(x, z) < 35.0 or main.forest_density(x, z) < 0.4, start, 80.0)
 		_taiga_moose(c, 701 + gi)
 	# рыси: густой лес, поодиночке
