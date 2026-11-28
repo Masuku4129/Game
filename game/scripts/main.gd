@@ -359,6 +359,57 @@ func blocked(x: float, z: float, rad: float) -> bool:
 					return true
 	return false
 
+func _resolve_world_seed() -> void:
+	# Новый мир получает собственный seed; продолжение читает seed до генерации рельефа.
+	if FileAccess.file_exists(PENDING_SEED_PATH):
+		var pending := FileAccess.open(PENDING_SEED_PATH, FileAccess.READ)
+		if pending != null:
+			map_seed = int(pending.get_as_text().strip_edges())
+			pending.close()
+		DirAccess.remove_absolute(ProjectSettings.globalize_path(PENDING_SEED_PATH))
+		if map_seed != 0:
+			return
+	var creative_selected := false
+	var cfg := ConfigFile.new()
+	if cfg.load("user://settings.cfg") == OK:
+		creative_selected = bool(cfg.get_value("game", "creative_mode", false))
+	var save_path := "user://creative_save.json" if creative_selected else "user://save.json"
+	if FileAccess.file_exists(save_path):
+		var sf := FileAccess.open(save_path, FileAccess.READ)
+		if sf != null:
+			var parsed: Variant = JSON.parse_string(sf.get_as_text())
+			sf.close()
+			if parsed is Dictionary:
+				var md: Dictionary = (parsed as Dictionary).get("main", {})
+				if md.has("map_seed"):
+					map_seed = int(md["map_seed"])
+					return
+	var rng := RandomNumberGenerator.new()
+	rng.randomize()
+	map_seed = int(rng.randi() & 0x7fffffff)
+	if map_seed == 0:
+		map_seed = MAP_SEED
+
+func _reveal_map_area() -> void:
+	# Открываем только пройденную местность. Храним компактные данные по клеткам 16×16 м.
+	var cx := floori(hero.position.x / 16.0)
+	var cz := floori(hero.position.z / 16.0)
+	for dz in range(-2, 3):
+		for dx in range(-2, 3):
+			var gx := cx + dx
+			var gz := cz + dz
+			var key := "%d,%d" % [gx, gz]
+			if explored_map.has(key):
+				continue
+			var wx := (float(gx) + 0.5) * 16.0
+			var wz := (float(gz) + 0.5) * 16.0
+			explored_map[key] = {
+				"zone": zone(wx, wz),
+				"river": river_dist(wx, wz) < 9.0,
+				"lake": lake_k(wx, wz) > 0.28,
+				"water": height(wx, wz) < water_level(wx, wz) + 0.25
+			}
+
 func _setup_noise() -> void:
 	n_hill.seed = map_seed + 1640; n_hill.frequency = 0.004; n_hill.fractal_octaves = 4
 	n_cliff.seed = map_seed + 77; n_cliff.frequency = 0.0045; n_cliff.fractal_octaves = 2
