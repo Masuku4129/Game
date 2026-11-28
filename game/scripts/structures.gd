@@ -499,15 +499,23 @@ func _clear_area(circles: Array, clear_snow: bool) -> void:
 				if Vector2(o.x - c.x, o.z - c.y).length() < c.z:
 					mm.set_instance_transform(i, Transform3D(Basis().scaled(Vector3(0.001, 0.001, 0.001)), o - Vector3(0, 5, 0)))
 					break
-	# подбираемое под постройкой исчезает
-	for k in main.pickables.keys():
-		var arr: Array = main.pickables[k]
-		for it in arr.duplicate():
-			var q: Vector3 = it[0]
-			for c: Vector3 in circles:
-				if Vector2(q.x - c.x, q.z - c.y).length() < c.z:
-					arr.erase(it)
-					break
+	# Pickups are indexed on the same 8m grid; inspect only cells under the footprint.
+	var pick_x0 := floori(lo.x / 8.0)
+	var pick_x1 := floori(hi.x / 8.0)
+	var pick_z0 := floori(lo.y / 8.0)
+	var pick_z1 := floori(hi.y / 8.0)
+	for gx in range(pick_x0, pick_x1 + 1):
+		for gz in range(pick_z0, pick_z1 + 1):
+			var pick_cell := Vector2i(gx, gz)
+			if not main.pickables.has(pick_cell):
+				continue
+			var arr: Array = main.pickables[pick_cell]
+			for it in arr.duplicate():
+				var q: Vector3 = it[0]
+				for circle: Vector3 in circles:
+					if Vector2(q.x - circle.x, q.z - circle.y).length() < circle.z:
+						arr.erase(it)
+						break
 	# клетки травы перестроятся без травы под постройкой
 	for k in main.grass_cells.keys():
 		var x0: float = k.x * main.GCELL - main.SIZE * 0.5
