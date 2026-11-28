@@ -233,7 +233,7 @@ func _ready() -> void:
 			m.visible = false
 	if "a" in _hx:
 		animals.visible = false
-	# --- /colony ---
+	
 	_update_near(true)
 	# Grass cells are built incrementally by _process after the world becomes playable.
 	# Do not synchronously prebuild the 5x5 ring here; it stalls the launch screen.
@@ -1464,11 +1464,7 @@ func tree_radius_at(p: Vector3) -> float:
 
 ## Удар зверя: часть тела, кровотечение, переломы, отбрасывание.
 func hurt(amount: float, from: Vector3, kind: String) -> void:
-	# --- colony: бьют не героя, а того из отряда, кто ближе и слабее ---
-	if colony != null:
-		colony.hurt_nearest(amount, from, kind)
-		return
-	# --- /colony ---
+	# Damage is applied to the player.
 	# В творческом режиме урон не должен даже кратковременно запускать смерть,
 	# отбрасывание, кровотечение или прерывание текущего действия.
 	if creative_mode:
