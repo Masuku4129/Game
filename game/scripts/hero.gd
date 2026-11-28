@@ -519,10 +519,16 @@ func _stand_up() -> void:
 	state = "walk"
 	position = stand_pos
 
+const WORLD_HALF_EXTENT := 512.0
+const WORLD_EDGE_MARGIN := 0.35
+
 func _process(delta: float) -> void:
 	if tools != null:
 		tools.process(delta)
 	_process_main(delta)
+	# Diagnostic map is finite: prevent walking beyond the 1 km square edge.
+	position.x = clampf(position.x, -WORLD_HALF_EXTENT + WORLD_EDGE_MARGIN, WORLD_HALF_EXTENT - WORLD_EDGE_MARGIN)
+	position.z = clampf(position.z, -WORLD_HALF_EXTENT + WORLD_EDGE_MARGIN, WORLD_HALF_EXTENT - WORLD_EDGE_MARGIN)
 	_animate_model(delta)
 
 func _process_main(delta: float) -> void:
