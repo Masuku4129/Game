@@ -1171,7 +1171,12 @@ func _unload_distant() -> void:
 		if maxi(absi(c.x - center.x), absi(c.y - center.y)) <= PRELOAD_RADIUS:
 			continue
 		rec["loaded"] = false
-		persistent[k] = rec
+		# Lightweight central markers are not save records; retain only records
+		# that have a deterministic seed and meaningful persistent state.
+		if rec.has("seed"):
+			persistent[k] = rec
+		else:
+			persistent.erase(k)
 		_remove_tree_cover(k)
 		_remove_prop_cover(k)
 		_remove_terrain_chunk(k)
