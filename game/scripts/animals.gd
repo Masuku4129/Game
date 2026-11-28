@@ -527,7 +527,7 @@ func _process(delta: float) -> void:
 		_classify_acc += animal_dt
 		var classify_now := _classify_acc >= 0.15
 		if classify_now:
-			_classify_acc = fmod(_classify_acc, 0.1)
+			_classify_acc = fmod(_classify_acc, 0.15)
 		for a in list:
 			a._acc += animal_dt
 			if classify_now:
