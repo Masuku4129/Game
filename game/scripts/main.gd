@@ -73,11 +73,7 @@ var fallen_spots := {}   # клетка 16 м → [{kind, mm, i, xf, a, b, r}] �
 var hunt  # --- hunt: туши, разделка, кровь, запах крови (hunt.gd) ---
 var camp  # --- build: лагерь и постройки (structures.gd) ---
 var combat  # --- combat: удары, прицел, стрелы (combat.gd) ---
-# --- colony: отряд землепроходцев, изометрическая камера, сценарий (colony.gd).
-# colony_mode = true — новая игра про острог; false — старый режим героя с джойстиком
-# (отладочный переключатель в настройках и переменная окружения HERO_MODE=1). ---
-var colony
-var colony_mode := true
+# Player-controlled wilderness survival.ar colony_mode := false
 
 func _ready() -> void:
 	# Видимый экран загрузки: генерация мира больше не должна выглядеть как зависание.
@@ -99,7 +95,6 @@ func _ready() -> void:
 	boot_label.add_theme_color_override("font_color", Color(0.88, 0.91, 0.78))
 	boot_ui.add_child(boot_label)
 	_resolve_world_seed()
-	_colony_pick_mode()
 	_setup_noise()
 	weather = preload("res://scripts/weather.gd").new()
 	weather.main = self
