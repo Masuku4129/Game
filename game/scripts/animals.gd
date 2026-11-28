@@ -344,7 +344,8 @@ func nearest_of(a: Node3D, kinds: Array, r: float) -> Node3D:
 		var d: float = a.position.distance_to(o.position)
 		if d < bd:
 			bd = d
-			best = o	return best
+			best = o
+	return best
 
 func pack_hunt(a: Node3D, prey: Node3D) -> void:
 	if a.group < 0 or not groups.has(a.group):
@@ -742,7 +743,8 @@ const TAIGA_PREDS := {"hare": ["lynx", "wolverine"], "roe": ["lynx"], "beaver": 
 func _populate_taiga(start: Vector3) -> void:
 	# лоси: поймы, болотистые берега и редколесье; быки поодиночке, лосихи с лосятами
 	var mc := _spot_ring(func(x, z): return main.forest_density(x, z) < 0.65, start, 60.0, 110.0)
-	_taiga_moose(mc, 700)	for gi in 9:
+	_taiga_moose(mc, 700)
+	for gi in 9:
 		var c := _spot(func(x, z): return main.river_dist(x, z) < 35.0 or main.forest_density(x, z) < 0.4, start, 80.0)
 		_taiga_moose(c, 701 + gi)
 	# рыси: густой лес, поодиночке
