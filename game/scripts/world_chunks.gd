@@ -34,6 +34,7 @@ var _far_mesh_cache: Dictionary = {}
 var stream_water_material: ShaderMaterial
 var _water_state_clock := 0.0
 var _chunk_weather_clock := 0.0
+var _last_chunk_weather_values: Dictionary = {}
 const STREAM_TREE_KINDS := ["spruce", "pine", "birch", "larch", "aspen", "fir", "cedar", "alder", "willow", "rowan"]
 
 func _process(delta: float) -> void:
@@ -157,17 +158,20 @@ func _sync_chunk_weather() -> void:
 	var rain_now := float(w.precip) if float(w.temp) >= 0.5 else 0.0
 	var snow_depth_now := float(w.snow) * 0.42
 	var mud_depth_now := float(w.wet) * 0.24
+	var values := {
+		"snow": w.snow, "wet": w.wet, "autumn": w.autumn,
+		"leaf_drop": w.leaf_drop, "wind": w.wind, "blossom": w.blossom,
+		"freeze": freeze_now, "rain": rain_now,
+		"snow_m": snow_depth_now, "mud_m": mud_depth_now
+	}
+	# Weather can tick often, but material writes are only needed when shader
+	# inputs actually change. Avoid touching every streamed material on steady weather.
+	if values == _last_chunk_weather_values:
+		return
+		_last_chunk_weather_values = values.duplicate()
 	for material: ShaderMaterial in terrain_materials.values():
-		material.set_shader_parameter("snow", w.snow)
-		material.set_shader_parameter("wet", w.wet)
-		material.set_shader_parameter("autumn", w.autumn)
-		material.set_shader_parameter("leaf_drop", w.leaf_drop)
-		material.set_shader_parameter("wind", w.wind)
-		material.set_shader_parameter("blossom", w.blossom)
-		material.set_shader_parameter("freeze", freeze_now)
-		material.set_shader_parameter("rain", rain_now)
-		material.set_shader_parameter("snow_m", snow_depth_now)
-		material.set_shader_parameter("mud_m", mud_depth_now)
+		for parameter: String in values:
+			material.set_shader_parameter(parameter, values[parameter])
 
 func _key(c: Vector2i) -> String:
 	return "%d,%d" % [c.x, c.y]
