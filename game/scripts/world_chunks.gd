@@ -994,6 +994,8 @@ func _build_understory(c: Vector2i) -> void:
 	var created: Array = []
 	var chunk_blockers: Array = []
 	var chunk_solids: Array = []
+	# Shared saved-log state for this chunk; avoid repeating a deep copy per GLB group.
+	var chunk_fallen_state := read_state(Vector3(float(c.x) * CHUNK_SIZE, 0.0, float(c.y) * CHUNK_SIZE), "fallen_state")
 	for patch_groups in [groups, meadow_groups, wet_groups]:
 		for bucket: String in patch_groups:
 			var group: Dictionary = patch_groups[bucket]
@@ -1025,7 +1027,7 @@ func _build_understory(c: Vector2i) -> void:
 		# Подключаем ягоды/грибы/валежник к штатным системам сбора и инструментов.
 			main._place_cell_records(mm, transforms, [kind], vi, variants, false, "mushroom" if kind == "mushroom" else "")
 			if kind in ["fallen0", "fallen1"]:
-				var fallen_state := read_state(Vector3(float(c.x) * CHUNK_SIZE, 0.0, float(c.y) * CHUNK_SIZE), "fallen_state")
+				var fallen_state: Dictionary = chunk_fallen_state
 				for i in transforms.size():
 					var origin: Vector3 = transforms[i].origin
 					var fallen_id := "%d_%d" % [int(round(origin.x * 4.0)), int(round(origin.z * 4.0))]
