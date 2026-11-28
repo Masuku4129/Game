@@ -247,7 +247,7 @@ func _process_queue(delta: float) -> void:
 	# At most one heavy visual generation stage per frame, preserving detail.
 	# If the previous frame exceeded ~28ms, defer scenery work to avoid piling
 	# another generation spike onto a slow mobile frame; no content is discarded.
-	if delta > 0.028 or _building_chunk.is_empty():
+	if delta > 0.035 or _building_chunk.is_empty():
 		return
 	var coord: Vector2i = _building_chunk["coord"]
 	match _build_stage:
