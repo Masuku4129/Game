@@ -341,16 +341,8 @@ func _reveal_map_area() -> void:
 			}
 
 func _colony_pick_mode() -> void:
-	colony_mode = true
-	var cf := ConfigFile.new()
-	if cf.load("user://settings.cfg") == OK:
-		colony_mode = not bool(cf.get_value("game", "hero_mode", false))
-	for e: String in ["COMBAT_TEST", "TOOLS_TEST", "HUNT_TEST", "BUILD_TEST", "SAVE_TEST", "UI_SHOTS", "SHOTS", "PERF", "HERO_MODE"]:
-		if OS.get_environment(e) != "":
-			colony_mode = false
-	for e2: String in ["COLONY_TEST", "COLONY_SHOTS"]:
-		if OS.get_environment(e2) != "":
-			colony_mode = true
+	# The classic player-controlled survival mode is the only game mode.
+	colony_mode = false
 
 func _find_start() -> Vector3:
 	for r in range(0, 120, 3):
