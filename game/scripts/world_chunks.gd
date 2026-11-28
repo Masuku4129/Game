@@ -197,7 +197,8 @@ func _rebuild_queue() -> void:
 		for x in range(-PRELOAD_RADIUS, PRELOAD_RADIUS + 1):
 			var c := center + Vector2i(x, z)
 			var offset := Vector2(x, z)
-			var d := offset.length_squared()			if d > float(PRELOAD_RADIUS * PRELOAD_RADIUS) + 0.5:
+			var d := offset.length_squared()
+			if d > float(PRELOAD_RADIUS * PRELOAD_RADIUS) + 0.5:
 				continue
 			if active.has(_key(c)):
 				continue
@@ -398,7 +399,8 @@ func _apply_resource_state() -> void:
 		return
 	# Reuse the persistent cache also used by generation-time pickup lookups.
 	for cell_key in pickables.keys():
-		var entries: Array = pickables[cell_key]		for entry in entries.duplicate():
+		var entries: Array = pickables[cell_key]
+		for entry in entries.duplicate():
 			if entry.size() < 4:
 				continue
 			var p: Vector3 = entry[0]
@@ -798,7 +800,8 @@ func _build_tree_cover(c: Vector2i) -> void:
 	var count := 2850
 	for attempt in range(count):
 		var wx := float(c.x) * CHUNK_SIZE + rng.randf_range(2.0, CHUNK_SIZE - 2.0)
-		var wz := float(c.y) * CHUNK_SIZE + rng.randf_range(2.0, CHUNK_SIZE - 2.0)		var density: float = main.forest_density(wx, wz)
+		var wz := float(c.y) * CHUNK_SIZE + rng.randf_range(2.0, CHUNK_SIZE - 2.0)
+		var density: float = main.forest_density(wx, wz)
 		if rng.randf() > clampf(density * 1.28, 0.08, 0.995):
 			continue
 		var h: float = main.height(wx, wz)
@@ -999,7 +1002,8 @@ func _build_understory(c: Vector2i) -> void:
 				kind = "bush"
 			elif pick < 0.49:
 				kind = "hazel"
-			elif pick < 0.60:				kind = "dogrose"
+			elif pick < 0.60:
+				kind = "dogrose"
 			elif pick < 0.73:
 				kind = "moss"
 			elif pick < 0.82:
@@ -1198,7 +1202,8 @@ func _remove_prop_cover(k: String) -> void:
 			extent += a.distance_to(b) * 0.5
 		var sx0 := floori((center.x - extent) / 8.0)
 		var sx1 := floori((center.x + extent) / 8.0)
-		var sz0 := floori((center.z - extent) / 8.0)		var sz1 := floori((center.z + extent) / 8.0)
+		var sz0 := floori((center.z - extent) / 8.0)
+		var sz1 := floori((center.z + extent) / 8.0)
 		for gx in range(sx0, sx1 + 1):
 			for gz in range(sz0, sz1 + 1):
 				var solid_key := Vector2i(gx, gz)
