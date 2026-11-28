@@ -12,7 +12,6 @@ extends Node3D
 
 const IT = preload("res://scripts/items.gd")
 const GEO = preload("res://scripts/build_geo.gd")
-const COLGEO = preload("res://scripts/colony_geo.gd")  # colony
 
 ## Что можно построить. cost — сразу при постановке; у избы — вносится на стройку.
 const DEFS := {
@@ -24,39 +23,11 @@ const DEFS := {
 	"cache": {"name": "Схрон", "cost": {"branch": 4, "spruce_twigs": 6, "pebble": 6}, "desc": "Яма под жердями, лапником и камнями. Хранилище 30 кг; звери почти не разоряют, не гниёт.", "cap": 30.0},
 	"chop_block": {"name": "Колода", "cost": {"firewood": 2, "plank": 1}, "desc": "Чурбак и доска на чурках: верстак под небом. Утварь ножом, доски топором."},
 	"cabin": {"name": "Изба", "cost": {}, "need": {"log": 24, "moss": 10, "clay": 8, "plank": 10, "pebble": 12}, "work": 3.0, "desc": "Сруб в обло с печью. Припасы вносят на стройку, затем «Строить».", "cap": 20.0},
-	# --- colony: постройки острога. need — припасы со склада, work — часы работы строителя;
-	# ставит их colony.build_confirm(), геометрию делает colony_geo.gd. ---
-	"storehouse": {"name": "Амбар", "cost": {}, "need": {"log": 8, "plank": 3}, "work": 2.5, "desc": "Сруб на стойках: общий запас острога, добычу сносят сюда.", "cap": 200.0},
-	"dugout": {"name": "Землянка", "cost": {}, "need": {"log": 6, "moss": 4, "spruce_twigs": 4}, "work": 2.2, "desc": "Врытая в землю клеть с печуркой: тепло и без ветра.", "cap": 40.0, "warm": 0.22, "wind": 0.2},
-	"palisade": {"name": "Острожная стена", "cost": {}, "need": {"log": 4}, "work": 1.0, "desc": "Прясло стоячего тына: 3 м заострённых брёвен."},
-	"tower": {"name": "Башня", "cost": {}, "need": {"log": 10, "plank": 3}, "work": 3.5, "desc": "Острожная башня с помостом: видно далеко."},
-	"rack": {"name": "Сушило", "cost": {"branch": 3, "fiber": 2}, "desc": "Вялить рыбу и мясо впрок."},
-}
+	}
 ## Чертежи: у здания несколько наборов припасов (какой ресурс есть — из того и строим).
-const VARIANTS := {
-	"storehouse": [
-		{"name": "брёвна и доски", "need": {"log": 8, "plank": 3}},
-		{"name": "только брёвна", "need": {"log": 12, "moss": 3}},
-		{"name": "камень и брёвна", "need": {"log": 5, "pebble": 12, "plank": 2}},
-	],
-	"dugout": [
-		{"name": "мох и лапник", "need": {"log": 6, "moss": 4, "spruce_twigs": 4}},
-		{"name": "глиняная", "need": {"log": 4, "clay": 6, "branch": 4}},
-		{"name": "каменная", "need": {"log": 4, "pebble": 14, "moss": 3}},
-	],
-	"tower": [
-		{"name": "с досками", "need": {"log": 10, "plank": 3}},
-		{"name": "из одних брёвен", "need": {"log": 16, "branch": 4}},
-	],
-	"palisade": [
-		{"name": "брёвна", "need": {"log": 4}},
-		{"name": "жерди и камень", "need": {"branch": 10, "pebble": 6}},
-	],
-}
+const VARIANTS := {}
 
 const ORDER := ["campfire", "leanto", "tree_shelter", "snow_shelter", "cache", "chop_block", "cabin"]
-## --- colony: порядок построек в листе острога ---
-const ORDER_COLONY := ["campfire", "leanto", "dugout", "storehouse", "rack", "cache", "chop_block", "palisade", "tower", "cabin", "snow_shelter"]
 
 var main: Node3D
 var geo
@@ -193,18 +164,6 @@ static func footprint(type: String) -> Array:
 			var a := _rect(2.55, 2.75, 0.0)
 			a.append(Vector3(0, 2.95, 0.6))
 			return a
-		# --- colony ---
-		"storehouse":
-			return _rect(1.45, 1.25, 0.0)
-		"dugout":
-			return _rect(1.75, 1.5, -0.3)
-		"palisade":
-			return [Vector3(-1.2, 0, 0.34), Vector3(-0.6, 0, 0.34), Vector3(0, 0, 0.34), Vector3(0.6, 0, 0.34), Vector3(1.2, 0, 0.34)]
-		"tower":
-			return _rect(1.35, 1.35, 0.0)
-		"rack":
-			return [Vector3(-1.15, 0, 0.3), Vector3(1.15, 0, 0.3)]
-		# --- /colony ---
 	return [Vector3(0, 0, 1.0)]
 
 static func _rect(hx: float, hz: float, cz: float) -> Array:
@@ -274,17 +233,6 @@ func _rebuild(s: Dictionary) -> void:
 			n = geo.cache()
 		"chop_block":
 			n = geo.chop_block()
-		# --- colony: острог — амбар, землянка, стена, башня, сушило (colony_geo.gd) ---
-		"storehouse", "dugout", "palisade", "tower", "rack":
-			var stage_c := String(s.get("stage", "done"))
-			var pr: float = 1.0 if stage_c == "done" else float(s.get("prog", 0.0))
-			n = Node3D.new()
-			var part: Node3D = COLGEO.make(geo, String(s["type"]), pr)
-			if part != null:
-				n.add_child(part)
-			if stage_c != "done":
-				n.add_child(geo.site_stock(s.get("have", {})))
-		# --- /colony ---
 		"cabin":
 			n = Node3D.new()
 			var gh := _cabin_gh(s)
@@ -403,35 +351,6 @@ func _register(s: Dictionary) -> void:
 		"chop_block":
 			_add_block(s, Vector3.ZERO, 0.32)
 			_add_seat(s, Vector3(0, 0.36, 0.75), PI)
-		# --- colony: столкновения построек острога ---
-		"storehouse", "tower":
-			var hh: float = 1.45 if String(s["type"]) == "storehouse" else 1.35
-			var hd: float = 1.25 if String(s["type"]) == "storehouse" else 1.35
-			var x2 := -hh
-			while x2 <= hh + 0.01:
-				_add_block(s, Vector3(x2, 0, -hd), 0.26)
-				if absf(x2) > 0.5 or String(s["type"]) == "tower":
-					_add_block(s, Vector3(x2, 0, hd), 0.26)
-				x2 += 0.5
-			var z2 := -hd
-			while z2 <= hd + 0.01:
-				_add_block(s, Vector3(-hh, 0, z2), 0.26)
-				_add_block(s, Vector3(hh, 0, z2), 0.26)
-				z2 += 0.5
-		"dugout":
-			for k in 7:
-				_add_block(s, Vector3(-1.6 + k * 0.53, 0, 1.3), 0.26)
-			for k in 5:
-				_add_block(s, Vector3(-1.7, 0, -1.5 + k * 0.7), 0.3)
-				_add_block(s, Vector3(1.7, 0, -1.5 + k * 0.7), 0.3)
-			_add_seat(s, Vector3(0, 0.3, 0.2), 0.0)
-		"palisade":
-			for k in 9:
-				_add_block(s, Vector3(-1.33 + k * 0.33, 0, 0.0), 0.22)
-		"rack":
-			_add_block(s, Vector3(-1.15, 0, 0), 0.12)
-			_add_block(s, Vector3(1.15, 0, 0), 0.12)
-		# --- /colony ---
 		"cabin":
 			if String(s["stage"]) == "done" or String(s["stage"]) == "building":
 				var hx := GEO.CW * 0.5
@@ -1064,10 +983,6 @@ func start_building(s: Dictionary) -> void:
 func _build_step(s: Dictionary, dh: float) -> void:
 	if String(s["stage"]) != "building":
 		return
-	# --- colony: стройку ведёт строитель отряда (colony.build_progress) ---
-	if main.get("colony") != null and main.colony != null:
-		return
-	# --- /colony ---
 	var hp: Vector3 = main.hero.position
 	if Vector2(hp.x - s["pos"].x, hp.z - s["pos"].z).length() > 20.0:
 		return
