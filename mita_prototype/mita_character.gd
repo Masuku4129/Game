@@ -80,23 +80,27 @@ func _build_character():
 		head.add_child(_ellipsoid(Vector3(x,0.02,0.0),Vector3(0.055,0.09,0.045),Color(0.73,0.57,0.58)))
 	# Eyes, brows and subtle nose/mouth
 	for x in [-0.095,0.095]:
-		head.add_child(_ellipsoid(Vector3(x,-0.025,0.205),Vector3(0.042,0.066,0.022),Color(0.16,0.12,0.36)))
-		head.add_child(_ellipsoid(Vector3(x-0.01,-0.005,0.226),Vector3(0.013,0.021,0.008),Color(0.95,0.91,1.0)))
+		# layered anime eyes: sclera, iris, pupil, specular glints
+		head.add_child(_ellipsoid(Vector3(x,-0.025,0.205),Vector3(0.047,0.069,0.024),Color(0.94,0.88,0.92)))
+		head.add_child(_ellipsoid(Vector3(x,-0.028,0.226),Vector3(0.031,0.052,0.012),Color(0.24,0.19,0.62)))
+		head.add_child(_ellipsoid(Vector3(x,-0.035,0.237),Vector3(0.018,0.035,0.009),Color(0.075,0.045,0.23)))
+		head.add_child(_ellipsoid(Vector3(x-0.011,-0.004,0.242),Vector3(0.009,0.014,0.005),Color(0.98,0.96,1.0)))
+		head.add_child(_ellipsoid(Vector3(x+0.013,-0.049,0.242),Vector3(0.005,0.008,0.004),Color(0.72,0.66,1.0)))
 		head.add_child(_box(Vector3(x,-0.105,0.202),Vector3(0.06,0.012,0.01),Color(0.22,0.16,0.28)))
 	head.add_child(_ellipsoid(Vector3(0,-0.08,0.22),Vector3(0.018,0.025,0.012),Color(0.7,0.49,0.5)))
 	head.add_child(_box(Vector3(0,-0.16,0.205),Vector3(0.045,0.008,0.009),Color(0.4,0.22,0.28)))
 	# Crown cap and front bangs as layered pointed mesh locks
 	head.add_child(_ellipsoid(Vector3(0,0.19,-0.015),Vector3(0.24,0.19,0.22),Color(0.018,0.014,0.034)))
-	for i in range(5):
-		var x = (i-2)*0.085
+	for i in range(7):
+		var x = (i-3)*0.067
 		var bang = _hair_lock(Vector3(x,0.115,0.19),Vector3(x*0.9,-0.12,0.225),Vector3(x*0.7,-0.27,0.18),Color(0.02,0.015,0.045))
 		head.add_child(bang)
 	# Back hair: 8 flowing, tapered locks with blue-violet sheen
-	for i in range(8):
-		var x = (i-3.5)*0.062
+	for i in range(12):
+		var x = (i-5.5)*0.052
 		var top = Vector3(x,0.12,-0.13)
 		var mid = Vector3(x*1.12,-0.28,-0.15)
-		var end = Vector3(x*1.22,-0.68-abs(x)*0.25,-0.11)
+		var end = Vector3(x*1.22,-0.70-abs(x)*0.30,-0.11)
 		head.add_child(_hair_lock(top,mid,end,Color(0.018,0.014,0.038)))
 		head.add_child(_hair_lock(top+Vector3(0.012,0.0,0.018),mid+Vector3(0.014,0.01,0.018),end+Vector3(0.012,0.04,0.02),Color(0.075,0.045,0.19)))
 	# Pants and two-piece legs with knee joints, socks/shoes
