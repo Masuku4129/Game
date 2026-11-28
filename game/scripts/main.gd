@@ -1977,171 +1977,171 @@ func _scatter_all() -> void:
 	cell_order.sort_custom(func(a: Vector2i, b: Vector2i) -> bool:
 		return a.distance_squared_to(Vector2i(cells / 2, cells / 2)) < b.distance_squared_to(Vector2i(cells / 2, cells / 2)))
 
-		for cell: Vector2i in cell_order:
-			var cx: int = cell.x
-			var cz: int = cell.y
-			var rng := RandomNumberGenerator.new()
-			# Fresh layout is scoped to the start cell only; neighboring cells
-			# retain their previous deterministic seeds and vegetation patterns.
-			rng.seed = START_WORLD_CHUNK_SEED if cx == cells / 2 and cz == cells / 2 else _base_chunk_seed(cx, cz)
-			var x0 := cx * CELL - SIZE * 0.5
-			var z0 := cz * CELL - SIZE * 0.5
-			for r in rules:
-				var vars: Array = cache[r[0]]
-				var per_var := []
-				for v in vars:
-					per_var.append([])
-				var pick_kind: String = r[0] if r[0] in PICK else ""
-				var attempt_multiplier := 4
-				if r[0] in FOREST_DENSITY_SPECIES:
-					attempt_multiplier = int(round(4.0 * FOREST_DENSITY_MULTIPLIER))
-				for k in int(r[1]) * attempt_multiplier:
-					var x := x0 + rng.randf() * CELL
-					var z := z0 + rng.randf() * CELL
-					if not _accept(r[5], x, z, rng):
+	for cell: Vector2i in cell_order:
+		var cx: int = cell.x
+		var cz: int = cell.y
+		var rng := RandomNumberGenerator.new()
+		# Fresh layout is scoped to the start cell only; neighboring cells
+		# retain their previous deterministic seeds and vegetation patterns.
+		rng.seed = START_WORLD_CHUNK_SEED if cx == cells / 2 and cz == cells / 2 else _base_chunk_seed(cx, cz)
+		var x0 := cx * CELL - SIZE * 0.5
+		var z0 := cz * CELL - SIZE * 0.5
+		for r in rules:
+			var vars: Array = cache[r[0]]
+			var per_var := []
+			for v in vars:
+				per_var.append([])
+			var pick_kind: String = r[0] if r[0] in PICK else ""
+			var attempt_multiplier := 4
+			if r[0] in FOREST_DENSITY_SPECIES:
+				attempt_multiplier = int(round(4.0 * FOREST_DENSITY_MULTIPLIER))
+			for k in int(r[1]) * attempt_multiplier:
+				var x := x0 + rng.randf() * CELL
+				var z := z0 + rng.randf() * CELL
+				if not _accept(r[5], x, z, rng):
+					continue
+				var vi := rng.randi() % vars.size()
+				var sc: Vector2 = r[2]
+				var s := rng.randf_range(sc.x, sc.y)
+				var kind: String = r[0]
+				var b := Basis(Vector3.UP, rng.randf() * TAU).scaled(Vector3(s, s * rng.randf_range(0.9, 1.1), s))
+				if kind == "slab":
+					b = b.scaled(Vector3(1.0, 0.35, 1.0))
+				# место занято (ствол, камень, поваленное дерево) — не ставим
+				var occ_r := _occ_radius(kind, vars[vi], s)
+				var by: float = height(x, z) - 0.05
+				var o := Vector3(x, by, z)
+				# широкие вещи не висят над склоном: опора — самая низкая точка под ними
+				var foot: float = FOOT_R.get(kind, 0.0) * s
+				if kind in ROCKISH:
+					var rv: Vector3 = _rock_half_extents(vars[vi])
+					foot = (rv.x + rv.z) * 0.35 * s
+				if foot > 0.0:
+					var hm := by + 0.05
+					for k2 in 6:
+						var a2 := TAU * k2 / 6.0
+						hm = minf(hm, height(x + cos(a2) * foot, z + sin(a2) * foot))
+					o.y = hm - 0.05
+				# плоские мелочи ложатся по склону
+				if kind in HUG:
+					var nrm := normal_at(x, z)
+					if nrm.y < 0.999:
+						b = Basis(Quaternion(Vector3.UP, nrm)) * b
+				var fall_len := 0.0
+				if kind == "fallen0" or kind == "fallen1":
+					var fv: Array = vars[vi]
+					fall_len = float(fv[1]) * s
+					var ax0: Vector3 = b.x.normalized()
+					var x0f: float = float(fv[4]) * s
+					var pr := o + ax0 * x0f
+					var pt := o + ax0 * (x0f + fall_len)
+					if not _occ_free_line(pr, pt, float(fv[2]) * s + 0.3):
 						continue
-					var vi := rng.randi() % vars.size()
-					var sc: Vector2 = r[2]
-					var s := rng.randf_range(sc.x, sc.y)
-					var kind: String = r[0]
-					var b := Basis(Vector3.UP, rng.randf() * TAU).scaled(Vector3(s, s * rng.randf_range(0.9, 1.1), s))
-					if kind == "slab":
-						b = b.scaled(Vector3(1.0, 0.35, 1.0))
-					# место занято (ствол, камень, поваленное дерево) — не ставим
-					var occ_r := _occ_radius(kind, vars[vi], s)
-					var by: float = height(x, z) - 0.05
-					var o := Vector3(x, by, z)
-					# широкие вещи не висят над склоном: опора — самая низкая точка под ними
-					var foot: float = FOOT_R.get(kind, 0.0) * s
-					if kind in ROCKISH:
-						var rv: Vector3 = _rock_half_extents(vars[vi])
-						foot = (rv.x + rv.z) * 0.35 * s
-					if foot > 0.0:
-						var hm := by + 0.05
-						for k2 in 6:
-							var a2 := TAU * k2 / 6.0
-							hm = minf(hm, height(x + cos(a2) * foot, z + sin(a2) * foot))
-						o.y = hm - 0.05
-					# плоские мелочи ложатся по склону
-					if kind in HUG:
-						var nrm := normal_at(x, z)
-						if nrm.y < 0.999:
-							b = Basis(Quaternion(Vector3.UP, nrm)) * b
-					var fall_len := 0.0
-					if kind == "fallen0" or kind == "fallen1":
-						var fv: Array = vars[vi]
-						fall_len = float(fv[1]) * s
-						var ax0: Vector3 = b.x.normalized()
-						var x0f: float = float(fv[4]) * s
-						var pr := o + ax0 * x0f
-						var pt := o + ax0 * (x0f + fall_len)
-						if not _occ_free_line(pr, pt, float(fv[2]) * s + 0.3):
-							continue
-						var hr := height(pr.x, pr.z)
-						var ht := height(pt.x, pt.z)
-						b = Basis(ax0.cross(Vector3.UP).normalized(), atan2(ht - hr, fall_len)) * b
-						o.y = hr - 0.05
-					elif kind == "mosslog":
-						var hl: float = float(vars[vi][1]) * 0.5 * s
-						var axm: Vector3 = b.x.normalized()
-						if not _occ_free_line(o - axm * hl, o + axm * hl, float(vars[vi][2]) * s + 0.3):
-							continue
-						var ha := height(o.x - axm.x * hl, o.z - axm.z * hl)
-						var hb2 := height(o.x + axm.x * hl, o.z + axm.z * hl)
-						b = Basis(axm.cross(Vector3.UP).normalized(), atan2(hb2 - ha, hl * 2.0)) * b
-						o.y = (ha + hb2) * 0.5 - 0.08
-					elif occ_r > 0.0:
-						if not _occ_free(x, z, occ_r):
-							continue
-						_occ_add(x, z, occ_r)
-					per_var[vi].append(Transform3D(b, o))
-					if kind in ROCKISH:
-						# камень — твёрдый купол: на него можно встать или залезть
-						var rsc: Vector3 = _rock_half_extents(vars[vi])
-						var hr2: float = (rsc.x + rsc.z) * 0.6 * s
-						var ht2: float = rsc.y * 0.9 * b.y.length()
-						if ht2 > 0.12:
-							_add_solid([0, o, Vector3.ZERO, hr2, ht2])
-						# высокий камень (выше пояса) — преграда для людей и зверей; низкий можно перешагнуть
-						if ht2 > 0.85:
-							_add_blocker(o.x, o.z, maxf(hr2 * 0.96 + 0.12, 0.55))
-					elif kind == "stump":
-						_add_solid([2, o, Vector3.ZERO, 0.45 * s, 0.75 * s])
-						_add_seat(Vector3(x, height(x, z) + 0.7 * s, z), rng.randf() * TAU)
-					elif kind == "stump_rot" or kind == "stump_mush":
-						var sh: float = float(vars[vi][1]) * s
-						_add_solid([2, o, Vector3.ZERO, 0.42 * s, sh])
-						_add_seat(Vector3(x, height(x, z) + sh - 0.05, z), rng.randf() * TAU)
-					elif kind == "mosslog":
-						# колода: по ней можно пройти и на неё сесть
-						var xl := Transform3D(b, o)
-						var hl2: float = float(vars[vi][1]) * 0.5
-						var rl: float = float(vars[vi][2])
-						var la := xl * Vector3(-hl2, rl * 0.8, 0)
-						var lb := xl * Vector3(hl2, rl * 0.7, 0)
-						_add_solid([1, la, lb, rl * s * 0.95, 0.0])
-						_occ_add_line(la, lb, rl * s + 0.2)
-						var lm := la.lerp(lb, 0.5)
-						var axl: Vector3 = b.x.normalized()
-						_add_seat(Vector3(lm.x, solid_top(lm.x, lm.z), lm.z), atan2(axl.z, -axl.x))
-					elif fall_len > 0.0:
-						# по стволу можно пройти: две капсулы (комель толще), сиденье у комля
-						var fv2: Array = vars[vi]
-						var xf := Transform3D(b, o)
-						var r0: float = float(fv2[2]) * s
-						var yb: float = float(fv2[3])
-						var x0b: float = float(fv2[4])
-						var Lm: float = float(fv2[1])
-						var pa := xf * Vector3(x0b, yb - r0 / s * 0.2, 0)
-						var pm := xf * Vector3(x0b + Lm * 0.5, r0 / s * 0.9 + 0.08 - r0 / s * 0.2, 0)
-						var pe := xf * Vector3(x0b + Lm * 0.85, 0.12, 0)
-						_add_solid([1, pa, pm, r0 * 0.95, 0.0])
-						_add_solid([1, pm, pe, r0 * 0.55, 0.0])
-						_occ_add_line(pa, pe, r0 + 0.2)
-						var ax: Vector3 = b.x.normalized()
-						_add_blocker(pa.x - ax.x * 0.3, pa.z - ax.z * 0.3, 1.0 if kind == "fallen0" else 0.5)
-						var ps := xf * Vector3(x0b + Lm * 0.3, 0, 0)
-						_add_seat(Vector3(ps.x, solid_top(ps.x, ps.z), ps.z), atan2(ax.z, -ax.x))
-					else:
-						var br: float = BLOCK_R.get(kind, 0.0)
-						if br > 0.0 and not (kind in ["spruce", "birch"] and s < 0.5):
-							_add_blocker(x, z, br * s)
-				# мелочь у земли — не больше двух вариантов в клетке: каждый вариант это отдельные
-				# вызовы отрисовки, а различие мелких кустиков в кадре почти не видно
-				# (камни и прочее — не больше четырёх)
-				var nv: int = 2 if float(r[3]) <= 66.0 else 4
-				if pick_kind == "" and not cache_lod.has(r[0]) and vars.size() > nv:
-					for vi in range(nv, vars.size()):
-						per_var[vi % nv].append_array(per_var[vi])
-						per_var[vi] = []
-				for vi in vars.size():
-					if per_var[vi].is_empty():
+					var hr := height(pr.x, pr.z)
+					var ht := height(pt.x, pt.z)
+					b = Basis(ax0.cross(Vector3.UP).normalized(), atan2(ht - hr, fall_len)) * b
+					o.y = hr - 0.05
+				elif kind == "mosslog":
+					var hl: float = float(vars[vi][1]) * 0.5 * s
+					var axm: Vector3 = b.x.normalized()
+					if not _occ_free_line(o - axm * hl, o + axm * hl, float(vars[vi][2]) * s + 0.3):
 						continue
-					var is_tree: bool = cache_lod.has(r[0])
-					# мелочь — клетками 32 м (лучше отсекается камерой), деревья — 64 м (меньше вызовов)
-					var fine: bool = true
-					# мелочь у земли (дальность по правилу до 66 м) тает к 44 м: дальше её не разглядеть,
-					# а при низкой камере там уже дымка; так в кадре вдвое меньше клеток мелочи
-					# всё остальное тает к 95 м — там уже сплошная дымка (fog_depth_end ≤ 100)
-					# кусты и стланик (до 85 м) — к 62 м
-					var far: float = minf(float(r[3]), 125.0) if is_tree else (minf(float(r[3]), 95.0) if float(r[3]) > 85.0 else (minf(float(r[3]), 62.0) if float(r[3]) > 66.0 else minf(float(r[3]), 44.0)))
-					for xs: Array in _split_cell(per_var[vi], x0, z0, fine):
-						var mm := _vis_multimesh(cache_lod[r[0]][vi][0] if is_tree else vars[vi][0], xs, far, is_tree)
-						var mmi := MultiMeshInstance3D.new()
-						mmi.multimesh = mm
-						# клетка видна, пока хоть один её экземпляр может быть виден; каждый экземпляр
-						# растворяется сам по своей дальности (шейдер), поэтому клетки не «щёлкают»
-						mmi.visibility_range_end = far + (34.0 if is_tree else (23.0 if fine else 46.0))
-						# тени только у крупного (деревья, валуны, стволы); мелочь без теней — вдвое меньше вызовов
-						# у деревьев тень бросает детальная ближняя модель (_update_near), дальняя — нет:
-						# дальше NEAR_R теней всё равно нет (directional_shadow_max_distance)
-						var shadow: bool = r[4] and float(r[3]) > 80.0 and not is_tree
-						mmi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON if shadow else GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-						add_child(mmi)
-						_place_cell_records(mm, xs, r, vi, vars, is_tree, pick_kind)
-				# Каждая группа вида/чанка отдаёт кадр; иначе один чанк с десятками
-				# видов растений надолго блокирует главный поток даже при async _ready().
-				await get_tree().process_frame
+					var ha := height(o.x - axm.x * hl, o.z - axm.z * hl)
+					var hb2 := height(o.x + axm.x * hl, o.z + axm.z * hl)
+					b = Basis(axm.cross(Vector3.UP).normalized(), atan2(hb2 - ha, hl * 2.0)) * b
+					o.y = (ha + hb2) * 0.5 - 0.08
+				elif occ_r > 0.0:
+					if not _occ_free(x, z, occ_r):
+						continue
+					_occ_add(x, z, occ_r)
+				per_var[vi].append(Transform3D(b, o))
+				if kind in ROCKISH:
+					# камень — твёрдый купол: на него можно встать или залезть
+					var rsc: Vector3 = _rock_half_extents(vars[vi])
+					var hr2: float = (rsc.x + rsc.z) * 0.6 * s
+					var ht2: float = rsc.y * 0.9 * b.y.length()
+					if ht2 > 0.12:
+						_add_solid([0, o, Vector3.ZERO, hr2, ht2])
+					# высокий камень (выше пояса) — преграда для людей и зверей; низкий можно перешагнуть
+					if ht2 > 0.85:
+						_add_blocker(o.x, o.z, maxf(hr2 * 0.96 + 0.12, 0.55))
+				elif kind == "stump":
+					_add_solid([2, o, Vector3.ZERO, 0.45 * s, 0.75 * s])
+					_add_seat(Vector3(x, height(x, z) + 0.7 * s, z), rng.randf() * TAU)
+				elif kind == "stump_rot" or kind == "stump_mush":
+					var sh: float = float(vars[vi][1]) * s
+					_add_solid([2, o, Vector3.ZERO, 0.42 * s, sh])
+					_add_seat(Vector3(x, height(x, z) + sh - 0.05, z), rng.randf() * TAU)
+				elif kind == "mosslog":
+					# колода: по ней можно пройти и на неё сесть
+					var xl := Transform3D(b, o)
+					var hl2: float = float(vars[vi][1]) * 0.5
+					var rl: float = float(vars[vi][2])
+					var la := xl * Vector3(-hl2, rl * 0.8, 0)
+					var lb := xl * Vector3(hl2, rl * 0.7, 0)
+					_add_solid([1, la, lb, rl * s * 0.95, 0.0])
+					_occ_add_line(la, lb, rl * s + 0.2)
+					var lm := la.lerp(lb, 0.5)
+					var axl: Vector3 = b.x.normalized()
+					_add_seat(Vector3(lm.x, solid_top(lm.x, lm.z), lm.z), atan2(axl.z, -axl.x))
+				elif fall_len > 0.0:
+					# по стволу можно пройти: две капсулы (комель толще), сиденье у комля
+					var fv2: Array = vars[vi]
+					var xf := Transform3D(b, o)
+					var r0: float = float(fv2[2]) * s
+					var yb: float = float(fv2[3])
+					var x0b: float = float(fv2[4])
+					var Lm: float = float(fv2[1])
+					var pa := xf * Vector3(x0b, yb - r0 / s * 0.2, 0)
+					var pm := xf * Vector3(x0b + Lm * 0.5, r0 / s * 0.9 + 0.08 - r0 / s * 0.2, 0)
+					var pe := xf * Vector3(x0b + Lm * 0.85, 0.12, 0)
+					_add_solid([1, pa, pm, r0 * 0.95, 0.0])
+					_add_solid([1, pm, pe, r0 * 0.55, 0.0])
+					_occ_add_line(pa, pe, r0 + 0.2)
+					var ax: Vector3 = b.x.normalized()
+					_add_blocker(pa.x - ax.x * 0.3, pa.z - ax.z * 0.3, 1.0 if kind == "fallen0" else 0.5)
+					var ps := xf * Vector3(x0b + Lm * 0.3, 0, 0)
+					_add_seat(Vector3(ps.x, solid_top(ps.x, ps.z), ps.z), atan2(ax.z, -ax.x))
+				else:
+					var br: float = BLOCK_R.get(kind, 0.0)
+					if br > 0.0 and not (kind in ["spruce", "birch"] and s < 0.5):
+						_add_blocker(x, z, br * s)
+			# мелочь у земли — не больше двух вариантов в клетке: каждый вариант это отдельные
+			# вызовы отрисовки, а различие мелких кустиков в кадре почти не видно
+			# (камни и прочее — не больше четырёх)
+			var nv: int = 2 if float(r[3]) <= 66.0 else 4
+			if pick_kind == "" and not cache_lod.has(r[0]) and vars.size() > nv:
+				for vi in range(nv, vars.size()):
+					per_var[vi % nv].append_array(per_var[vi])
+					per_var[vi] = []
+			for vi in vars.size():
+				if per_var[vi].is_empty():
+					continue
+				var is_tree: bool = cache_lod.has(r[0])
+				# мелочь — клетками 32 м (лучше отсекается камерой), деревья — 64 м (меньше вызовов)
+				var fine: bool = true
+				# мелочь у земли (дальность по правилу до 66 м) тает к 44 м: дальше её не разглядеть,
+				# а при низкой камере там уже дымка; так в кадре вдвое меньше клеток мелочи
+				# всё остальное тает к 95 м — там уже сплошная дымка (fog_depth_end ≤ 100)
+				# кусты и стланик (до 85 м) — к 62 м
+				var far: float = minf(float(r[3]), 125.0) if is_tree else (minf(float(r[3]), 95.0) if float(r[3]) > 85.0 else (minf(float(r[3]), 62.0) if float(r[3]) > 66.0 else minf(float(r[3]), 44.0)))
+				for xs: Array in _split_cell(per_var[vi], x0, z0, fine):
+					var mm := _vis_multimesh(cache_lod[r[0]][vi][0] if is_tree else vars[vi][0], xs, far, is_tree)
+					var mmi := MultiMeshInstance3D.new()
+					mmi.multimesh = mm
+					# клетка видна, пока хоть один её экземпляр может быть виден; каждый экземпляр
+					# растворяется сам по своей дальности (шейдер), поэтому клетки не «щёлкают»
+					mmi.visibility_range_end = far + (34.0 if is_tree else (23.0 if fine else 46.0))
+					# тени только у крупного (деревья, валуны, стволы); мелочь без теней — вдвое меньше вызовов
+					# у деревьев тень бросает детальная ближняя модель (_update_near), дальняя — нет:
+					# дальше NEAR_R теней всё равно нет (directional_shadow_max_distance)
+					var shadow: bool = r[4] and float(r[3]) > 80.0 and not is_tree
+					mmi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON if shadow else GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+					add_child(mmi)
+					_place_cell_records(mm, xs, r, vi, vars, is_tree, pick_kind)
+			# Каждая группа вида/чанка отдаёт кадр; иначе один чанк с десятками
+			# видов растений надолго блокирует главный поток даже при async _ready().
+			await get_tree().process_frame
 
 ## Разбить экземпляры клетки 64 м на четыре клетки 32 м (fine) или оставить одной группой.
 func _split_cell(xs: Array, x0: float, z0: float, fine: bool) -> Array:
