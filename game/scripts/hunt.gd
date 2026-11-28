@@ -87,7 +87,7 @@ func setup() -> void:
 ## Редкая находка на болоте: один путник на карту, если сработал шанс генерации.
 ## Позиция детерминирована seed карты; при загрузке сохранения находка восстанавливается из loot pile.
 func _spawn_rare_swamp_traveler() -> void:
-	if bool(main.get("colony_mode")):
+	if (main.get("colony_mode") == true):
 		return
 	var srng := RandomNumberGenerator.new()
 	srng.seed = traveler_seed
