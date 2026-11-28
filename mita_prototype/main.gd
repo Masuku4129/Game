@@ -96,11 +96,11 @@ func _input(event):
 			move_vector = Vector2.ZERO
 			stick.position = Vector2(72, -128)
 			player.set_move(Vector2.ZERO)
-		elif event is InputEventScreenDrag and event.index == joystick_touch:
-			_update_stick(event.position)
-		elif event is InputEventKey:
-			if event.keycode == KEY_SHIFT:
-				player.set_running(event.pressed)
+	elif event is InputEventScreenDrag and event.index == joystick_touch:
+		_update_stick(event.position)
+	elif event is InputEventKey:
+		if event.keycode == KEY_SHIFT:
+			player.set_running(event.pressed)
 
 func _update_stick(pos: Vector2):
 	var delta = pos - joystick_center
