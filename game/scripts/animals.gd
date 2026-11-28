@@ -15,6 +15,7 @@ var groups := {}
 var rng := RandomNumberGenerator.new()
 var _bird_acc := 0.0
 var _classify_acc := 0.0
+var _animal_update_acc := 0.0
 var _bird_update_acc := 0.0
 var _spawn_serial := 0
 var streamed_chunks: Dictionary = {}
@@ -569,32 +570,35 @@ func _process(delta: float) -> void:
 		for i in range(carcasses.size() - 1, -1, -1):
 			if carcasses[i].meat <= 0.0:
 				carcasses.remove_at(i)
-	# Классификацию дальности и видимости достаточно обновлять 10 Гц:
-	# это убирает повторные distance/visibility обращения на каждом кадре.
-	_classify_acc += delta
-	var classify_now := _classify_acc >= 0.1
-	if classify_now:
-		_classify_acc = fmod(_classify_acc, 0.1)
-	_far_acc += delta
-	var n := list.size()
-	for a in list:
-		a._acc += delta
+	# Animal orchestration is capped at 30 Hz; simulation time accumulates,
+	# so intervals remain consistent while per-frame list traversal is reduced.
+	_animal_update_acc += delta
+	var animal_update := _animal_update_acc >= 0.033
+	if animal_update:
+		var animal_dt := _animal_update_acc
+		_animal_update_acc = fmod(_animal_update_acc, 0.033)
+		_classify_acc += animal_dt
+		var classify_now := _classify_acc >= 0.1
 		if classify_now:
-			var d2 := Vector2(a.position.x - hp.x, a.position.z - hp.z).length_squared()
-			var was_far: bool = a.far
-			a.far = d2 > NEAR_R * NEAR_R
-			a._sim_tick_interval = 0.72 if a.far else (NEAR_DT if d2 < MID_R * MID_R else MID_DT)
-			if was_far and not a.far:
+			_classify_acc = fmod(_classify_acc, 0.1)
+		for a in list:
+			a._acc += animal_dt
+			if classify_now:
+				var d2 := Vector2(a.position.x - hp.x, a.position.z - hp.z).length_squared()
+				var was_far: bool = a.far
+				a.far = d2 > NEAR_R * NEAR_R
+				a._sim_tick_interval = 0.72 if a.far else (NEAR_DT if d2 < MID_R * MID_R else MID_DT)
+				if was_far and not a.far:
+					a._acc = 0.0
+				var show_r: float = 40.0 if a.kind in ["hare", "squirrel", "beaver"] else SHOW_R
+				a.visible = d2 < show_r * show_r and (not a.dead or a.meat > 0.0) and a.state != "sleep" and a.state != "inlodge"
+				if a.parts.has("ap"):
+					a.parts["ap"].active = a.visible and not a.dead and not a.far
+			# Close wildlife keeps the same sim interval; far wildlife remains
+			# lower-frequency, with all elapsed time passed to the state machine.
+			if a._acc >= a._sim_tick_interval:
+				a.tick(a._acc)
 				a._acc = 0.0
-			var show_r: float = 40.0 if a.kind in ["hare", "squirrel", "beaver"] else SHOW_R
-			a.visible = d2 < show_r * show_r and (not a.dead or a.meat > 0.0) and a.state != "sleep" and a.state != "inlodge"
-			if a.parts.has("ap"):
-				a.parts["ap"].active = a.visible and not a.dead and not a.far
-		# Дальняя фауна продолжает менять состояние и перемещаться упрощённым
-		# редким шагом; ближние животные сохраняют 30/12.5 Гц.
-		if a._acc >= a._sim_tick_interval:
-			a.tick(a._acc)
-			a._acc = 0.0
 	# perf: птицы вблизи — каждый кадр, дальше 50 м — раз в 0,2 с (накопленным шагом)
 	_bird_update_acc += delta
 	var bird_update := _bird_update_acc >= 0.033
