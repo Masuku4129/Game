@@ -1946,8 +1946,17 @@ func _scatter_all() -> void:
 				pv.lod = false
 	_cliff_rocks(cache["rock"])
 	var cells := int(SIZE / CELL)
-	for cz in cells:
-		for cx in cells:
+		# Scatter nearer the world origin first: the start area is populated before distant cells.
+		# Cell seeds remain independent, so traversal order does not alter placement.
+		var cell_order: Array[Vector2i] = []
+		for cz in cells:
+			for cx in cells:
+				cell_order.append(Vector2i(cx, cz))
+		cell_order.sort_custom(func(a: Vector2i, b: Vector2i) -> bool:
+			return a.distance_squared_to(Vector2i(cells / 2, cells / 2)) < b.distance_squared_to(Vector2i(cells / 2, cells / 2)))
+		for cell: Vector2i in cell_order:
+			var cx: int = cell.x
+			var cz: int = cell.y
 			var rng := RandomNumberGenerator.new()
 			rng.seed = _chunk_seed(cx, cz)
 			var x0 := cx * CELL - SIZE * 0.5
