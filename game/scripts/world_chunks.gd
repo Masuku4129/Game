@@ -91,7 +91,9 @@ func _record_exploration(player_pos: Vector3) -> void:
 		for x in range(gx - radius_cells, gx + radius_cells + 1):
 			var wx := (float(x) + 0.5) * step
 			var wz := (float(z) + 0.5) * step
-			if Vector2(wx - player_pos.x, wz - player_pos.z).length() > MAP_DISCOVERY_RADIUS:
+			var discover_dx := wx - player_pos.x
+			var discover_dz := wz - player_pos.z
+			if discover_dx * discover_dx + discover_dz * discover_dz > MAP_DISCOVERY_RADIUS * MAP_DISCOVERY_RADIUS:
 				continue
 			var key := "%d:%d" % [x, z]
 			var coord := Vector2i(floori(wx / CHUNK_SIZE), floori(wz / CHUNK_SIZE))
