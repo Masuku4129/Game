@@ -16,6 +16,8 @@ var persistent: Dictionary = {}
 var pending: Array[Vector2i] = []
 var center := Vector2i(1 << 20, 1 << 20)
 var _refresh := 1.0
+var _building_chunk: Dictionary = {}
+var _build_stage := -1
 var _explore_clock := 0.0
 const MAP_SAMPLE_STEP := 16.0
 const MAP_DISCOVERY_RADIUS := 25.0
@@ -45,12 +47,19 @@ func _process(delta: float) -> void:
 	_refresh -= delta
 	var p: Vector3 = main.rig.position
 	var next := Vector2i(floori(p.x / CHUNK_SIZE), floori(p.z / CHUNK_SIZE))
-	if next != center or _refresh <= 0.0:
+	if next != center:
 		center = next
-		_refresh = 0.35
+		_refresh = 0.0
 		_rebuild_queue()
 		_unload_distant()
-	# Drain chunk-generation work every frame, not only on refresh ticks.
+	elif _refresh <= 0.0 and _building_chunk.is_empty():
+		# Re-prioritize prefetch only occasionally while stationary. Re-sorting
+		# the full candidate ring every 0.35 s was redundant CPU work.
+		_refresh = 1.0
+		_rebuild_queue()
+	# One chunk is advanced through discrete generation stages per frame,
+	# preventing terrain, tree cover, understory and wildlife from all landing
+	# in the same frame.
 	_process_queue()
 	_explore_clock -= delta
 	if _explore_clock <= 0.0:
@@ -210,30 +219,42 @@ func _rebuild_queue() -> void:
 		pending.append(item.coord)
 
 func _process_queue() -> void:
-	var budget := LOAD_BUDGET
-	while budget > 0 and not pending.is_empty():
+	# Stage 0: claim the next chunk and make its persistent record.
+	if _building_chunk.is_empty():
+		if pending.is_empty():
+			return
 		var c: Vector2i = pending.pop_front()
 		var k := _key(c)
 		if active.has(k):
-			continue
-		var record: Dictionary
-		if persistent.has(k):
-			record = persistent[k]
-		else:
-			record = _create_record(c)
+			return
+		var record: Dictionary = persistent[k] if persistent.has(k) else _create_record(c)
 		record["last_seen"] = Time.get_unix_time_from_system()
 		record["loaded"] = true
 		active[k] = record
 		persistent[k] = record
-		# Центральный участок уже покрыт основной высокодетальной сеткой.
-		# За его границей создаём продолжение теми же функциями рельефа и материалом.
-		if not _inside_base_world(c):
-			_build_terrain_chunk(c)
-			_build_tree_cover(c)
-			_build_understory(c)
+		_building_chunk = {"coord": c, "key": k, "outside": not _inside_base_world(c)}
+		_build_stage = 0
+	# Chunks inside the base terrain need no external visual stages.
+	if not bool(_building_chunk.get("outside", false)):
+		_building_chunk.clear()
+		_build_stage = -1
+		return
+	var coord: Vector2i = _building_chunk["coord"]
+	match _build_stage:
+		0:
+			_build_terrain_chunk(coord)
+			_build_stage = 1
+		1:
+			_build_tree_cover(coord)
+			_build_stage = 2
+		2:
+			_build_understory(coord)
+			_build_stage = 3
+		3:
 			if main.animals != null:
-				main.animals.populate_stream_chunk(c, _seed(c))
-		budget -= 1
+				main.animals.populate_stream_chunk(coord, _seed(coord))
+			_building_chunk.clear()
+			_build_stage = -1
 
 func _create_record(c: Vector2i) -> Dictionary:
 	var rng := RandomNumberGenerator.new()
