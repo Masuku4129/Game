@@ -1009,6 +1009,7 @@ func _shots() -> void:
 
 var _dbgf := 0
 var _visual_uniform_t := 0.0 # perf: ограничиваем частоту динамических uniforms
+var _grass_defer_toggle := false
 var _last_veg_hero_pos := Vector3(INF, INF, INF)
 var _last_veg_cam_pos := Vector3(INF, INF, INF)
 var _last_water_hero_pos := Vector3(INF, INF, INF)
@@ -1101,8 +1102,11 @@ func _process(delta: float) -> void:
 	# Incomplete grass cells advance only on frames with spare time. The same
 	# strip size/density is retained; generation yields during slow mobile frames.
 	if not _gb.is_empty():
-		if delta <= 0.035:
-			_grass_step()
+		if delta > 0.035:
+			_grass_defer_toggle = not _grass_defer_toggle
+			if _grass_defer_toggle:
+				return
+		_grass_step()
 		return
 	grass_timer -= delta
 	if grass_timer > 0.0:
