@@ -474,7 +474,7 @@ func _build_bog_cover(c: Vector2i, parent: Node3D) -> void:
 	var groups: Dictionary = {}
 	var attempts := 1950
 	for n in attempts:
-		if n > 0 and n % 150 == 0:
+		if n > 0 and n % _generation_batch == 0:
 			await get_tree().process_frame
 		var wx := float(c.x) * CHUNK_SIZE + rng.randf_range(0.5, CHUNK_SIZE - 0.5)
 		var wz := float(c.y) * CHUNK_SIZE + rng.randf_range(0.5, CHUNK_SIZE - 0.5)
