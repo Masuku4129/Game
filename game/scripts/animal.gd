@@ -944,7 +944,7 @@ func tick(delta: float) -> void:
 				continue
 			var min_sep: float = (body_len + float(other.parts.get("L", 1.0))) * 0.22
 			var group_weight: float = 0.55 if group >= 0 and group == other.group else 1.4
-			steering_neighbors.append(Vector4(other.position.x, other.position.z, min_sep, group_weight)
+			steering_neighbors.append(Vector4(other.position.x, other.position.z, min_sep, group_weight))
 		for off in offsets:
 			var candidate: float = lerp_angle(heading, desired, 0.35) + float(off)
 			var cd := Vector3(sin(candidate), 0.0, cos(candidate))
@@ -972,7 +972,7 @@ func tick(delta: float) -> void:
 			if shelter_factor > 0.05:
 				var route_forest: float = clampf(float(main.forest_density(probe.x, probe.z)), 0.0, 1.0)
 				var ridge_exposure: float = clampf((probe_ground - main.WATER_Y - 8.0) / 20.0, 0.0, 1.0)
-					score += (route_forest * shelter_need - ridge_exposure * shelter_need) * shelter_factor
+				score += (route_forest * shelter_need - ridge_exposure * shelter_need) * shelter_factor
 			for other_data: Vector4 in steering_neighbors:
 				var dx_sep: float = probe.x - other_data.x
 				var dz_sep: float = probe.z - other_data.y
