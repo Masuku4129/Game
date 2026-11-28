@@ -38,7 +38,7 @@ var _water_state_clock := 0.0
 var _chunk_weather_clock := 0.0
 var _weather_material_cache: Dictionary = {}
 var _resource_state_cache: Dictionary = {}
-var _chunk_stage_defer_toggle := false
+var _chunk_stage_defer_toggle := true
 const STREAM_TREE_KINDS := ["spruce", "pine", "birch", "larch", "aspen", "fir", "cedar", "alder", "willow", "rowan"]
 
 func _process(delta: float) -> void:
