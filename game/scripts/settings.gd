@@ -35,8 +35,6 @@ var adaptive_scale := 1.0
 var _adaptive_low_t := 0.0
 var _adaptive_high_t := 0.0
 var _adaptive_frame_ms := 16.7
-var _hero_btn: Button      # colony: режим героя (отладка)
-var hero_mode := false     # colony: читается при запуске (main._colony_pick_mode)
 
 class GearBtn extends Button:
 	var kind := "gear"   # gear | book
@@ -100,7 +98,6 @@ func _load() -> void:
 		preset = clampi(int(c.get_value("video", "preset", 0)), 0, 2)
 		fps = int(c.get_value("video", "fps", PRESETS[preset]["fps"]))
 		volume = clampf(float(c.get_value("audio", "volume", 0.8)), 0.0, 1.0)
-		hero_mode = bool(c.get_value("game", "hero_mode", false))  # colony
 		creative_mode = bool(c.get_value("game", "creative_mode", false))
 	else:
 		fps = int(PRESETS[preset]["fps"])
@@ -110,7 +107,6 @@ func _store() -> void:
 	c.set_value("video", "preset", preset)
 	c.set_value("video", "fps", fps)
 	c.set_value("audio", "volume", volume)
-	c.set_value("game", "hero_mode", hero_mode)  # colony
 	c.set_value("game", "creative_mode", creative_mode)
 	c.save(CFG)
 
@@ -242,32 +238,6 @@ func _set_vol(v: float) -> void:
 	_store()
 	apply()
 
-# --- colony: старый режим героя — для отладки; меняется при следующем запуске ---
-func _hero_text() -> String:
-	return "Режим героя (отладка): %s · нужен перезапуск" % ("да" if hero_mode else "нет")
-
-func _creative_text() -> String:
-	return "Творческий режим: %s · бесплатно, мгновенная стройка, максимум характеристик" % ("включён" if creative_mode else "выключен")
-
-func _toggle_creative_mode() -> void:
-	creative_mode = not creative_mode
-	if main != null:
-		main.creative_mode = creative_mode
-	_store()
-	if creative_btn != null:
-		creative_btn.text = _creative_text()
-	if main != null:
-		main._say("Творческий режим включён" if creative_mode else "Обычный режим включён")
-
-func _toggle_hero_mode() -> void:
-	hero_mode = not hero_mode
-	_store()
-	if _hero_btn != null:
-		_hero_btn.text = _hero_text()
-	if main != null:
-		main._say("Режим героя включён — перезапустите игру" if hero_mode else "Режим острога — перезапустите игру")
-# --- /colony ---
-
 func _save_now() -> void:
 	if main != null and main.saver != null:
 		main.saver.enabled = true
@@ -298,8 +268,7 @@ func _process(delta: float) -> void:
 		return
 	_adaptive_tick(delta)
 	var inv_open: bool = main.inventory != null and (main.inventory.is_open() or main.hero.pack_stage != "")
-	# colony: в режиме острога шестерёнка всегда на месте
-	gear.visible = main.colony != null or (not inv_open and main.hero.state != "dead")
+	gear.visible = not inv_open and main.hero.state != "dead"
 
 func _adaptive_tick(delta: float) -> void:
 	# Адаптация только по фактическому frame time: это не датчик температуры и
