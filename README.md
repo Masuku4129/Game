@@ -69,3 +69,14 @@
 - Оттепель и дождь уменьшают покров; сильный ветер и тепло топящейся печи ускоряют сход/таяние.
 - При накоплении массы снег периодически соскальзывает с обоих скатов: короткий эффект снежных комьев, уменьшение слоя на крыше и постепенное образование снежных валов у карнизов.
 - Снежная накладка скрывается при входе внутрь избы вместе с кровлей.
+
+
+### Mobile optimization pass — 2026-11-28
+- Animal manager traversal is capped at 30 Hz with accumulated simulation time; close/far tiers and animal detail are preserved.
+- Streamed chunk work and grass-cell generation yield under slow frames and alternate their work to avoid piling generation spikes.
+- Weather shader updates are cached per terrain material; chunk unload removes cache entries.
+- Tree/fallen/resource state reads are reused per chunk; tree felling and vegetation teardown use local spatial cells instead of global-grid scans.
+- Streamed vegetation nodes are tracked directly for teardown; near-tree MultiMesh buffers avoid redundant resize/custom-data updates.
+- Structure cleanup now searches footprint-local pickup/grass cells; grass clearing uses world-space cell coordinates.
+- Starting layout seed is scoped to the origin scatter cell (4,4) and grass cell (0,0) (20261129); unaffected cells keep their original deterministic hash.
+- APK, strict parser, regression suite and main-scene smoke run still pending for this pass.
