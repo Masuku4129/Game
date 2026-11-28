@@ -1098,9 +1098,11 @@ func _process(delta: float) -> void:
 			act_btn.text = lbl
 	if player_rig == null:
 		return
-	# недостроенная клетка травы: следующая полоса за кадр
+	# Incomplete grass cells advance only on frames with spare time. The same
+	# strip size/density is retained; generation yields during slow mobile frames.
 	if not _gb.is_empty():
-		_grass_step()
+		if delta <= 0.028:
+			_grass_step()
 		return
 	grass_timer -= delta
 	if grass_timer > 0.0:
