@@ -7,7 +7,6 @@ const SEG := 384
 const WATER_Y := -2.0
 const CELL := 64.0
 const MAP_SEED := 20261127 # fallback для старых сохранений
-const CHUNK_SEED_REVISION := 0x4C8E2A71 # world seed revision: fresh chunk terrain and vegetation layout
 const PENDING_SEED_PATH := "user://pending_world_seed.txt"
 var map_seed: int = MAP_SEED
 var explored_map: Dictionary = {}
@@ -1860,7 +1859,7 @@ func _chunk_seed(cx: int, cz: int) -> int:
 	const MOD := 2147483647
 	# Ревизия полностью меняет размещение растительности в каждом чанке,
 	# сохраняя при этом высоту рельефа и общий seed мира.
-	var h := posmod(map_seed ^ CHUNK_SEED_REVISION, MOD)
+	var h := posmod(map_seed, MOD)
 	h = posmod(h + posmod(cx, MOD) * 73856093, MOD)
 	h = posmod(h + posmod(cz, MOD) * 19349663, MOD)
 	h = posmod((h ^ (h >> 13)) * 1274126177, MOD)
@@ -1976,7 +1975,9 @@ func _scatter_all() -> void:
 			var cx: int = cell.x
 			var cz: int = cell.y
 			var rng := RandomNumberGenerator.new()
-			rng.seed = _chunk_seed(cx, cz)
+			# Fresh layout is scoped to the start cell only; neighboring cells
+			# retain their previous deterministic seeds and vegetation patterns.
+			rng.seed = 20261129 if cx == cells / 2 and cz == cells / 2 else _chunk_seed(cx, cz)
 			var x0 := cx * CELL - SIZE * 0.5
 			var z0 := cz * CELL - SIZE * 0.5
 			for r in rules:
