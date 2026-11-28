@@ -1034,11 +1034,11 @@ func _build_understory(c: Vector2i) -> void:
 					var saved_fallen: Variant = fallen_state.get(fallen_id, {})
 					if saved_fallen is Dictionary and bool(saved_fallen.get("done", false)):
 						mm.set_instance_transform(i, Transform3D(Basis().scaled(Vector3(0.0001, 0.0001, 0.0001)), origin - Vector3(0, 500, 0)))
-						for cell_key in main.fallen_spots:
-							for fallen_rec: Dictionary in main.fallen_spots[cell_key]:
-								if fallen_rec.get("mm") == mm and int(fallen_rec.get("i", -1)) == i:
-									fallen_rec["done"] = true
-									break
+						var fallen_cell := Vector2i(floori((a.x + b.x) * 0.5 / 16.0), floori((a.z + b.z) * 0.5 / 16.0))
+						for fallen_rec: Dictionary in main.fallen_spots.get(fallen_cell, []):
+							if fallen_rec.get("mm") == mm and int(fallen_rec.get("i", -1)) == i:
+								fallen_rec["done"] = true
+								break
 			if kind == "rock":
 				var bounds: AABB = (variants[vi][0] as Mesh).get_aabb()
 				for xf: Transform3D in transforms:
