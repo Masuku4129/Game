@@ -2280,7 +2280,7 @@ func _core_setup(_ui: CanvasLayer) -> void:
 		st.set("main", self)
 		st.set("mode", OS.get_environment("SAVE_TEST"))
 		add_child(st)
-	if DisplayServer.get_name() == "headless" or OS.get_environment("SHOTS") != "" or OS.get_environment("COLONY_SHOTS") != "" or OS.get_environment("COLONY_TEST") != "" or OS.get_environment("UI_SHOTS") != "" or auto != "":
+	if DisplayServer.get_name() == "headless" or OS.get_environment("SHOTS") != "" or OS.get_environment("UI_SHOTS") != "" or auto != "":
 		if auto == "load":
 			saver.load_game()
 		saver.enabled = auto != ""
