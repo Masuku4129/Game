@@ -184,8 +184,8 @@ func _build_sheet() -> void:
 	cl.pressed.connect(close)
 	creative_btn = _btn(_creative_text(), Rect2(40, 636, 860, 68), 24)
 	creative_btn.pressed.connect(_toggle_creative_mode)
-	sheet.offset_top = -430.0
-	sheet.offset_bottom = 430.0
+	sheet.offset_top = -330.0
+	sheet.offset_bottom = 330.0
 
 func _label(t: String, p: Vector2, fs: int) -> Label:
 	var l := Label.new()
