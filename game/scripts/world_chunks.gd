@@ -1100,11 +1100,12 @@ func _remove_prop_cover(k: String) -> void:
 	var chunk_z := int(coords[1])
 	var x0 := float(chunk_x) * CHUNK_SIZE
 	var z0 := float(chunk_z) * CHUNK_SIZE
-	# Each chunk occupies a known spatial range. Cleanup queries those cells
-	# directly instead of scanning every global pickup/resource/log grid.
+	# Free registered nodes directly; no global scene-child search per mesh.
 	for node: Node in prop_nodes.get(k, []):
 		if is_instance_valid(node):
 			node.queue_free()
+	# Query only spatial cells occupied by this chunk's generated objects.
+	for mm: MultiMesh in meshes:
 		var gx0 := floori((x0 - 8.0) / 8.0)
 		var gx1 := floori((x0 + CHUNK_SIZE + 8.0) / 8.0)
 		var gz0 := floori((z0 - 8.0) / 8.0)
@@ -1127,7 +1128,7 @@ func _remove_prop_cover(k: String) -> void:
 							spots.remove_at(i)
 					if spots.is_empty():
 						main.res_spots.erase(cell_key)
-		# Fallen-log records use 16m cells and can be offset from their origin.
+		# Fallen-log records are keyed at 16m with a modest offset from origin.
 		var fx0 := floori((x0 - 12.0) / 16.0)
 		var fx1 := floori((x0 + CHUNK_SIZE + 12.0) / 16.0)
 		var fz0 := floori((z0 - 12.0) / 16.0)
@@ -1155,12 +1156,13 @@ func _remove_prop_cover(k: String) -> void:
 			if entries.is_empty():
 				main.blockers.erase(grid_key)
 	for solid: Array in prop_solid_records.get(k, []):
-		var center: Vector3 = solid[1]
+		var a: Vector3 = solid[1]
+		var center := a
 		var extent: float = float(solid[3]) + 0.5
 		if int(solid[0]) == 1:
-			var endpoint: Vector3 = solid[2]
-			center = (center + endpoint) * 0.5
-			extent += center.distance_to(endpoint) * 0.5
+			var b: Vector3 = solid[2]
+			center = (a + b) * 0.5
+			extent += a.distance_to(b) * 0.5
 		var sx0 := floori((center.x - extent) / 8.0)
 		var sx1 := floori((center.x + extent) / 8.0)
 		var sz0 := floori((center.z - extent) / 8.0)
@@ -1215,7 +1217,8 @@ func _remove_tree_cover(k: String) -> bool:
 				entries.remove_at(i)
 		if entries.is_empty():
 			main.blockers.erase(grid_key)
-	tree_mmis.erase(k)	tree_nodes.erase(k)
+	tree_mmis.erase(k)
+	tree_nodes.erase(k)
 	blocker_records.erase(k)
 	return true
 
